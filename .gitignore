@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.ruff_cache/
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.venv
+env/
+venv/
+ENV/
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads & vector store
+uploads/
+vectorstore/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Project specific
+backend/study_copilot.db
+backend/uploads/
+backend/vectorstore/
+backend/test2.py
+backend/fix_rag.py

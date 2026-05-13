@@ -1,0 +1,13 @@
+{
+  "name": "study-copilot",
+  "version": "1.0.0",
+  "description": "AI-powered study assistant with document analysis",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "preview": "cd frontend && npm run preview"
+  },
+  "keywords": ["ai", "study", "education"],
+  "author": "",
+  "license": "MIT"
+}
