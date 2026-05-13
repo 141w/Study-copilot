@@ -66,3 +66,5 @@ backend/uploads/
 backend/vectorstore/
 backend/test2.py
 backend/fix_rag.py
+TODO.md
+DESIGN.md
