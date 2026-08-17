@@ -1,6 +1,10 @@
 import json
+import logging
 import re
+
 from app.core.llm import LLM
+
+logger = logging.getLogger(__name__)
 
 
 class QuizGenerator:
@@ -9,7 +13,7 @@ class QuizGenerator:
             self.llm = LLM(
                 api_key=llm_config.get("api_key"),
                 base_url=llm_config.get("base_url"),
-                model=llm_config.get("model_name")
+                model=llm_config.get("model_name"),
             )
         else:
             self.llm = LLM()
@@ -31,11 +35,11 @@ class QuizGenerator:
                     # 确保答案是单个字母
                     ans = d.get("answer", "").strip()
                     # 提取字母
-                    letter = re.findall(r'[A-D]', ans)
+                    letter = re.findall(r"[A-D]", ans)
                     d["answer"] = letter[0] if letter else ans
                 return data[:count]
         except Exception as e:
-            print(f"[ERROR] generate_choice: {e}")
+            logger.error(f"generate_choice: {e}")
             pass
         return []
 
@@ -55,21 +59,21 @@ class QuizGenerator:
                     d["question_type"] = "short_answer"
                     # 清理答案文字
                     ans = d.get("answer", "")
-                    ans = re.sub(r'^答案[：:]\s*', '', ans).strip()
+                    ans = re.sub(r"^答案[：:]\s*", "", ans).strip()
                     d["answer"] = ans
                 return data[:count]
         except Exception as e:
-            print(f"[ERROR] generate_short_answer: {e}")
+            logger.error(f"generate_short_answer: {e}")
             pass
         return []
 
     async def generate_quizzes(self, context, choice_count=3, short_answer_count=2):
-        print(f"[DEBUG] QuizGenerator using model: {self.llm.model}")
+        logger.debug(f"QuizGenerator using model: {self.llm.model}")
         result = []
         result.extend(await self.generate_choice(context, choice_count))
-        print(f"[DEBUG] choice result: {result}")
+        logger.debug(f"choice result: {result}")
         result.extend(await self.generate_short_answer(context, short_answer_count))
-        print(f"[DEBUG] short_answer result: {result}")
+        logger.debug(f"short_answer result: {result}")
         return result
 
 

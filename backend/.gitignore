@@ -22,6 +22,7 @@ MANIFEST
 *.log
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 .env
 .venv
@@ -35,3 +36,4 @@ uploads/
 vectorstore/
 study_copilot.db
 .DS_Store
+.embedding_cache/

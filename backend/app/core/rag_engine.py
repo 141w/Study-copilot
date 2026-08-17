@@ -1,18 +1,25 @@
 """
 RAG Engine for Study Copilot
 """
-from typing import List, Dict, Any, Optional
-from app.core.vector_store import DocumentVectorStore
-from app.core.llm import LLM
-from app.config import settings
+
+import logging
 import re
-import pickle
-import os
-import asyncio
+from collections.abc import AsyncGenerator
+
+logger = logging.getLogger(__name__)
+
+from app.config import settings
+from app.core.adaptive_retriever import adaptive_retriever
+from app.core.answer_reflector import answer_reflector
+from app.core.embedder import embedder
+from app.core.llm import LLM
+from app.core.query_router import QueryType, query_router
+from app.core.retrieval_grader import retrieval_grader
+from app.core.vector_store import DocumentVectorStore
 
 
-def extract_source_indices(text: str) -> List[int]:
-    pattern = r'\[来源(\d+)\]'
+def extract_source_indices(text: str) -> list[int]:
+    pattern = r"\[来源(\d+)\]"
     matches = re.findall(pattern, text)
     indices = set()
     for m in matches:
@@ -28,14 +35,306 @@ class RAGEngine:
         self.top_k = settings.top_k if hasattr(settings, "top_k") else 5
         self._vector_store_cache = {}
         self._reranker = None
-        
+        self._reranker_loaded = False
+
+    # Chinese pronouns/reference words that indicate the query depends on prior context
+    _REWRITE_TRIGGER_WORDS = [
+        "它",
+        "这个",
+        "那个",
+        "上述",
+        "之前",
+        "上面",
+        "前面",
+        "上述内容",
+        "该",
+        "此",
+        "其",
+    ]
+
+    def _needs_rewrite(self, query: str) -> bool:
+        """Rule-based check: only rewrite if the query contains pronouns/reference words."""
+        for word in self._REWRITE_TRIGGER_WORDS:
+            if word in query:
+                return True
+        return False
+
+    async def _rewrite_query(
+        self, query: str, history: list[dict], user_config: dict | None = None
+    ) -> str:
+        """Rewrite a follow-up query into a standalone question using conversation history."""
+        try:
+            history_parts = []
+            for msg in history[-10:]:
+                role_label = "User" if msg.get("role") == "user" else "AI"
+                history_parts.append(f"{role_label}: {msg.get('content', '')}")
+            history_text = "\n".join(history_parts)
+            rewrite_prompt = (
+                "你是一个查询改写助手。请根据对话历史，将用户的追问改写为一个独立的、完整的问题，"
+                "使其在不依赖上下文的情况下也能被理解。\n\n"
+                "改写要求：\n"
+                "1. 将代词（它、这个、那个等）替换为具体指代的内容\n"
+                "2. 补全省略的主语、宾语等关键信息\n"
+                "3. 保持原问题的意图不变，不要添加额外信息\n"
+                "4. 只输出改写后的问题，不要解释\n\n"
+                f"对话历史：\n{history_text}\n\n"
+                f"用户追问：{query}\n\n"
+                "改写后的独立问题："
+            )
+            if user_config:
+                llm = LLM(
+                    api_key=user_config.get("api_key"),
+                    base_url=user_config.get("base_url"),
+                    model=user_config.get("model_name"),
+                )
+            else:
+                llm = LLM()
+            rewrite_messages = [{"role": "user", "content": rewrite_prompt}]
+            rewritten_query = await llm.chat(rewrite_messages, temperature=0.0, max_tokens=256)
+            rewritten_query = rewritten_query.strip()
+            if rewritten_query:
+                return rewritten_query
+        except Exception as e:
+            logger.warning(f"Query rewrite failed: {e}")
+        return query
+
+    def _get_llm(self, user_config=None):
+        """创建一个 LLM 实例（复用配置）"""
+        cfg = user_config or {}
+        return LLM(
+            api_key=cfg.get("api_key"),
+            base_url=cfg.get("base_url"),
+            model=cfg.get("model_name"),
+        )
+
+    async def _build_history_context(self, history: list[dict] | None, llm: LLM) -> list[dict]:
+        """构建对话历史上下文：短对话直接用，长对话生成摘要。
+
+        策略：
+        - <= 10 条：直接使用完整历史
+        - > 10 条：早期历史 → LLM 摘要，最近 5 条完整保留
+        """
+        if not history or len(history) <= 10:
+            return history or []
+
+        early_history = history[:-5]
+        recent_history = history[-5:]
+
+        # 对早期历史生成摘要
+        try:
+            history_text = "\n".join(
+                f"{'用户' if m.get('role') == 'user' else 'AI'}: {m.get('content', '')[:150]}"
+                for m in early_history[-15:]  # 最多取 15 条做摘要
+            )
+            prompt = (
+                "请用 1-2 句话概括以下对话的主要内容和结论，作为后续对话的上下文参考：\n\n"
+                f"{history_text}\n\n摘要："
+            )
+            summary = await llm.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=150,
+            )
+            logger.info("[RAG] History summarized: %s...", (summary or "")[:80])
+            return [
+                {"role": "system", "content": f"之前的对话摘要：{summary}"},
+                *recent_history,
+            ]
+        except Exception as e:
+            logger.warning("[RAG] History summarization failed: %s, using truncation", e)
+            return history[-10:]
+
+    # ── Agentic RAG methods ──────────────────────────────────────────
+
+    async def _corrective_retrieve(
+        self, doc_ids, query, user_config=None, top_k=5
+    ) -> tuple[list[dict], list[dict]]:
+        """带纠错的检索流程。
+
+        Returns:
+            (retrieved, thinking_events) — 检索结果列表和思考事件列表。
+        """
+        thinking_events: list[dict] = []
+
+        # 第一次检索
+        retrieved = await self.retrieve(doc_ids, query, top_k)
+        quality = await retrieval_grader.grade(query, retrieved, user_config)
+
+        thinking_events.append({
+            "type": "thinking",
+            "step": "retrieval_check",
+            "detail": f"检索到 {len(retrieved)} 条结果，质量：{quality.quality}（{quality.reason}，得分 {quality.score:.2f}）",
+        })
+
+        if quality.is_good:
+            return retrieved, thinking_events
+
+        # 检索质量差 → 改写查询重试一次
+        logger.info("Retrieval quality poor (%s), rewriting query...", quality.reason)
+        thinking_events.append({
+            "type": "thinking",
+            "step": "retrieval_retry",
+            "detail": f"检索质量不佳（{quality.reason}），正在改写查询重试...",
+        })
+
+        rewritten = await self._rewrite_query(query, [], user_config)
+        retrieved_retry = await self.retrieve(doc_ids, rewritten, top_k)
+        quality_retry = await retrieval_grader.grade(query, retrieved_retry, user_config)
+
+        thinking_events.append({
+            "type": "thinking",
+            "step": "retrieval_check",
+            "detail": f"重试检索到 {len(retrieved_retry)} 条结果，质量：{quality_retry.quality}（{quality_retry.reason}，得分 {quality_retry.score:.2f}）",
+        })
+
+        if quality_retry.is_good:
+            return retrieved_retry, thinking_events
+
+        # 两次都不行 → 返回空
+        return [], thinking_events
+
+    async def _direct_answer(self, query, user_config=None) -> str:
+        """不依赖文档，直接用 LLM 回答通用问题。"""
+        if user_config:
+            llm = LLM(
+                api_key=user_config.get("api_key"),
+                base_url=user_config.get("base_url"),
+                model=user_config.get("model_name"),
+            )
+        else:
+            llm = LLM()
+
+        messages = [
+            {"role": "system", "content": "你是一个学习助手。请直接回答用户的问题。"},
+            {"role": "user", "content": query},
+        ]
+        return await llm.chat(messages, temperature=0.7, max_tokens=1024)
+
+    async def _summarize_docs(self, doc_ids, user_config=None) -> dict:
+        """检索全部文档内容并生成摘要。返回与 ask() 相同的格式。"""
+        # 用通用查询检索全部 chunks
+        all_results = await self.retrieve(doc_ids, "文档内容总结", top_k=100)
+
+        if not all_results:
+            return {
+                "answer": "未找到任何文档内容，请先上传文档。",
+                "sources": [],
+                "used_source_indices": [],
+                "context_used": False,
+            }
+
+        ctx = self.build_context(all_results, max_context_tokens=12000)
+        sources_text = self.build_sources_text(all_results)
+
+        if user_config:
+            llm = LLM(
+                api_key=user_config.get("api_key"),
+                base_url=user_config.get("base_url"),
+                model=user_config.get("model_name"),
+            )
+        else:
+            llm = LLM()
+
+        messages = [
+            {
+                "role": "system",
+                "content": "你是一个专业的学习助手。请根据提供的文档内容，生成一份结构清晰、重点突出的摘要。",
+            },
+            {
+                "role": "user",
+                "content": f"请总结以下文档内容：\n\n{ctx}",
+            },
+        ]
+        answer = await llm.chat(messages, temperature=0.3, max_tokens=2048)
+
+        sources_list = []
+        for i, r in enumerate(all_results[:10]):
+            chunk = r.get("chunk", {})
+            page = chunk.get("page", "")
+            if page is None:
+                page = ""
+            elif not isinstance(page, str):
+                page = str(page)
+            sources_list.append({
+                "index": i + 1,
+                "document_id": chunk.get("document_id", ""),
+                "page": page,
+                "source": chunk.get("source", ""),
+                "text": chunk.get("text", ""),
+                "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
+            })
+
+        return {
+            "answer": answer,
+            "sources": sources_list,
+            "used_source_indices": [],
+            "filtered_sources": sources_list,
+            "context_used": True,
+        }
+
+    def deduplicate_results(self, results: list[dict]) -> list[dict]:
+        """Deduplicate chunks with >90% text overlap (first 100 chars match).
+
+        When two chunks overlap, keep the one with lower distance (higher relevance).
+        """
+        if not results:
+            return results
+
+        seen_prefixes: dict[str, dict] = {}  # prefix -> best result
+        deduped = []
+
+        for r in results:
+            text = r.get("chunk", {}).get("text", "")
+            prefix = text[:100]
+            if not prefix:
+                deduped.append(r)
+                continue
+
+            dist = r.get("distance", float("inf"))
+            if prefix in seen_prefixes:
+                existing = seen_prefixes[prefix]
+                existing_dist = existing.get("distance", float("inf"))
+                if dist < existing_dist:
+                    # Replace with the more relevant (lower distance) result
+                    deduped.remove(existing)
+                    deduped.append(r)
+                    seen_prefixes[prefix] = r
+                # else: keep existing, skip this duplicate
+            else:
+                seen_prefixes[prefix] = r
+                deduped.append(r)
+
+        return deduped
+
     async def retrieve(self, doc_ids, query, top_k=5):
+        # Over-fetch from FAISS so reranker has more candidates
+        fetch_k = top_k * 2
         all_results = []
         for doc_id in doc_ids:
             store = await self._get_vector_store(doc_id)
-            results = await store.search(query, top_k)
+            results = await store.search(query, fetch_k)
             all_results.extend(results)
         all_results.sort(key=lambda x: x.get("distance", float("inf")))
+
+        # Fix 3: Filter out low-relevance results (distance > 0.85)
+        all_results = [r for r in all_results if r.get("distance", float("inf")) <= 0.85]
+
+        # Deduplicate chunks with similar text content before reranking
+        all_results = self.deduplicate_results(all_results)
+
+        # Fix 1: Apply CrossEncoder reranking
+        reranker = self._ensure_reranker()
+        if reranker and len(all_results) > 0:
+            try:
+                texts = [r.get("chunk", {}).get("text", "") for r in all_results]
+                pairs = [[query, t] for t in texts]
+                scores = reranker.predict(pairs)
+                for i, score in enumerate(scores):
+                    all_results[i]["reranker_score"] = float(score)
+                all_results.sort(key=lambda x: x.get("reranker_score", float("-inf")), reverse=True)
+            except Exception as e:
+                logger.warning(f"Reranking failed, using original order: {e}")
+
         return all_results[:top_k]
 
     async def _get_vector_store(self, doc_id):
@@ -45,7 +344,28 @@ class RAGEngine:
             self._vector_store_cache[doc_id] = store
         return self._vector_store_cache[doc_id]
 
-    def build_context(self, chunks):
+    def _ensure_reranker(self):
+        if not self._reranker_loaded:
+            try:
+                from sentence_transformers import CrossEncoder
+
+                self._reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+                logger.info("CrossEncoder reranker loaded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to load CrossEncoder reranker: {e}")
+                self._reranker = None
+            finally:
+                self._reranker_loaded = True
+        return self._reranker
+
+    def build_context(self, chunks, max_context_tokens: int = 3000):
+        """Build context string from retrieved chunks with token-aware truncation.
+
+        Estimates token count as len(text)/2 for Chinese text. If the total
+        exceeds *max_context_tokens*, drops the lowest-relevance chunks
+        (assumed to be at the end of the list after reranking) until under budget.
+        """
+        # Build per-chunk source blocks
         parts = []
         for i, r in enumerate(chunks):
             chunk = r.get("chunk", {})
@@ -53,11 +373,27 @@ class RAGEngine:
             page = chunk.get("page", "")
             source = chunk.get("source", "")
             attrs = f'index="{i + 1}"'
-            if page:
+            if page is not None and page != "":
                 attrs += f' page="{page}"'
             if source:
                 attrs += f' file="{source}"'
             parts.append(f"<source {attrs}>\n{txt}\n</source>")
+
+        # Token-aware truncation: estimate tokens and drop tail chunks if over budget
+        def _estimate_tokens(text: str) -> int:
+            return max(1, len(text) // 2)
+
+        total_tokens = _estimate_tokens("\n\n".join(parts))
+        if total_tokens > max_context_tokens:
+            # Drop chunks from the end (lowest relevance after reranking) until under budget
+            while parts and _estimate_tokens("\n\n".join(parts)) > max_context_tokens:
+                parts.pop()
+            joined = "\n\n".join(parts)
+            logger.info(
+                f"Context truncated to {len(parts)} chunks "
+                f"(~{_estimate_tokens(joined)} tokens, budget={max_context_tokens})"
+            )
+
         return "\n\n".join(parts)
 
     def build_sources_text(self, retrieved):
@@ -68,7 +404,7 @@ class RAGEngine:
             page = chunk.get("page", "")
             source = chunk.get("source", "")
             preview = txt[:80] + "..." if len(txt) > 80 else txt
-            source_id = f"来源{i+1}"
+            source_id = f"来源{i + 1}"
             if page:
                 source_id += f" (第{page}页)"
             if source:
@@ -77,24 +413,25 @@ class RAGEngine:
         return "\n".join(parts)
 
     async def generate_answer(self, query, context, sources_text="", history=None, llm_config=None):
-        num_sources = sources_text.count("\n") + 1 if sources_text else 0
-        prompt = f"""Answer based on the provided documents. Cite sources as [来源1], [来源2], etc.
-        
-Documents:
-{context}
-
-Sources:
-{sources_text}
-
-Question: {query}
-Answer:"""
-
-        messages = [{"role": "user", "content": prompt}]
+        system_prompt = (
+            "你是一个专业的学习助手。请根据提供的文档内容准确回答用户的问题。\n\n"
+            "要求：\n"
+            "1. 仅根据提供的文档内容回答，不要编造信息\n"
+            "2. 如果文档中没有相关信息，请明确说明\n"
+            "3. 引用来源时使用 [来源1], [来源2] 等格式\n"
+            "4. 回答要结构清晰，重点突出\n"
+            "5. 如果问题涉及多个方面，分点回答"
+        )
+        user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
         if llm_config:
             llm = LLM(
                 api_key=llm_config.get("api_key"),
                 base_url=llm_config.get("base_url"),
-                model=llm_config.get("model_name")
+                model=llm_config.get("model_name"),
             )
             temperature = llm_config.get("temperature", 0.7)
             max_tokens = llm_config.get("max_tokens")
@@ -102,70 +439,89 @@ Answer:"""
         else:
             llm = LLM()
             answer = await llm.chat(messages)
-        return answer, []
+        return answer
 
-    async def generate_answer_stream(self, query, context, sources_text="", history=None, llm_config=None):
-        num_sources = sources_text.count("\n") + 1 if sources_text else 0
-        prompt = f"""Answer based on the provided documents. Cite sources as [来源1], [来源2], etc.
-        
-Documents:
-{context}
-
-Sources:
-{sources_text}
-
-Question: {query}
-Answer:"""
-
-        messages = [{"role": "user", "content": prompt}]
+    async def generate_answer_stream(
+        self, query, context, sources_text="", history=None, llm_config=None
+    ):
+        system_prompt = (
+            "你是一个专业的学习助手。请根据提供的文档内容准确回答用户的问题。\n\n"
+            "要求：\n"
+            "1. 仅根据提供的文档内容回答，不要编造信息\n"
+            "2. 如果文档中没有相关信息，请明确说明\n"
+            "3. 引用来源时使用 [来源1], [来源2] 等格式\n"
+            "4. 回答要结构清晰，重点突出\n"
+            "5. 如果问题涉及多个方面，分点回答"
+        )
+        user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
         if llm_config:
             llm = LLM(
                 api_key=llm_config.get("api_key"),
                 base_url=llm_config.get("base_url"),
-                model=llm_config.get("model_name")
+                model=llm_config.get("model_name"),
             )
             temperature = llm_config.get("temperature", 0.7)
             max_tokens = llm_config.get("max_tokens")
-            async for token in llm.chat_stream(messages, temperature=temperature, max_tokens=max_tokens):
+            async for token in llm.chat_stream(
+                messages, temperature=temperature, max_tokens=max_tokens
+            ):
                 yield token
         else:
             llm = LLM()
             async for token in llm.chat_stream(messages):
                 yield token
 
-    async def ask(self, doc_ids, query, history=None, user_config: Optional[dict] = None):
-        final_query = query
-        if history and isinstance(history, list) and len(history) > 0:
-            try:
-                history_parts = []
-                for msg in history:
-                    role_label = "User" if msg.get("role") == "user" else "AI"
-                    history_parts.append(f"{role_label}: {msg.get('content', '')}")
-                history_text = "\n".join(history_parts)
-                rewrite_prompt = f"""Rewrite this follow-up question as a standalone query based on the history.
-History: {history_text}
-Question: {query}
-Rewritten:"""
-                if user_config:
-                    llm = LLM(
-                        api_key=user_config.get("api_key"),
-                        base_url=user_config.get("base_url"),
-                        model=user_config.get("model_name")
-                    )
-                else:
-                    llm = LLM()
-                rewrite_messages = [{"role": "user", "content": rewrite_prompt}]
-                rewritten_query = await llm.chat(rewrite_messages, temperature=0.0, max_tokens=256)
-                rewritten_query = rewritten_query.strip()
-                if rewritten_query:
-                    final_query = rewritten_query
-            except Exception as e:
-                print(f"Query rewrite failed: {e}")
+    async def ask(self, doc_ids, query, history=None, user_config: dict | None = None):
+        # 检查是否需要切换 Embedding 模型
+        if user_config and user_config.get("embedding_model"):
+            if user_config["embedding_model"] != embedder.model_name:
+                embedder.reload_model(
+                    user_config["embedding_model"], user_config.get("embedding_dimension", 768)
+                )
 
-        retrieved = await self.retrieve(doc_ids, final_query, self.top_k * 2)
+        # ── Step 1: 意图理解 + 上下文改写（一次 LLM 调用）──
+        llm = self._get_llm(user_config)
+        analysis = await query_router.analyze(query, doc_ids, history, llm)
+        route = analysis.intent
+        final_query = analysis.standalone_query
+        logger.info("[RAG] Intent: %s, Query: '%s'", route.value, final_query[:50])
+
+        if route == QueryType.OUT_OF_SCOPE:
+            return {
+                "answer": "这个问题超出了我的知识范围，请问一些与学习相关的问题。",
+                "sources": [],
+                "used_source_indices": [],
+                "context_used": False,
+            }
+
+        if route == QueryType.DIRECT_ANSWER:
+            answer = await self._direct_answer(final_query, user_config)
+            return {
+                "answer": answer,
+                "sources": [],
+                "used_source_indices": [],
+                "context_used": False,
+            }
+
+        if route == QueryType.SUMMARY:
+            return await self._summarize_docs(doc_ids, user_config)
+
+        # ── Step 2: RAG 路径（自适应检索 + 答案反思） ──
+        # final_query 已在 Step 1 中由 analyze() 处理好
+        strategy = await adaptive_retriever.select_strategy(final_query, llm)
+        logger.info("[RAG] Adaptive strategy selected: %s", strategy.value)
+
+        retrieved, _thinking = await adaptive_retriever.retrieve_adaptive(
+            doc_ids, final_query, strategy, self, user_config
+        )
+
         if not retrieved:
             return {
-                "answer": "Please upload documents first.",
+                "answer": "文档中没有找到与您问题相关的内容，请尝试换个方式提问。",
                 "sources": [],
                 "used_source_indices": [],
                 "context_used": False,
@@ -173,8 +529,25 @@ Rewritten:"""
 
         ctx = self.build_context(retrieved)
         sources_text = self.build_sources_text(retrieved)
-        truncated_history = history[-10:] if history and len(history) > 10 else history
-        answer = await self.generate_answer(final_query, ctx, sources_text, truncated_history, llm_config=user_config)
+        history_context = await self._build_history_context(history, llm)
+        answer = await self.generate_answer(
+            final_query, ctx, sources_text, history_context, llm_config=user_config
+        )
+
+        # 答案反思：评估答案质量，不合格则重新生成
+        try:
+            evaluation = await answer_reflector.evaluate(
+                final_query, ctx, answer, llm
+            )
+            if not evaluation.get("pass", True):
+                logger.info("[RAG] Answer reflection failed (%s), refining...", evaluation.get("reason"))
+                answer = await answer_reflector.refine(
+                    final_query, ctx, answer,
+                    evaluation.get("suggestions", ""), llm,
+                )
+        except Exception as e:
+            logger.warning("[RAG] Reflection error for '%s': %s", query[:30], e)
+
         used_indices = extract_source_indices(answer)
 
         sources_list = []
@@ -182,16 +555,20 @@ Rewritten:"""
             chunk = r.get("chunk", {})
             chunk_text = chunk.get("text", "")
             page = chunk.get("page", "")
-            if page is not None and not isinstance(page, str):
+            if page is None:
+                page = ""
+            elif not isinstance(page, str):
                 page = str(page)
-            sources_list.append({
-                "index": i + 1,
-                "document_id": chunk.get("document_id", ""),
-                "page": page,
-                "source": chunk.get("source", ""),
-                "text": chunk_text,
-                "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
-            })
+            sources_list.append(
+                {
+                    "index": i + 1,
+                    "document_id": chunk.get("document_id", ""),
+                    "page": page,
+                    "source": chunk.get("source", ""),
+                    "text": chunk_text,
+                    "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
+                }
+            )
 
         if used_indices:
             filtered_sources = [s for s in sources_list if s["index"] in used_indices]
@@ -206,38 +583,82 @@ Rewritten:"""
             "context_used": True,
         }
 
-    async def ask_stream(self, doc_ids, query, history=None, user_config: Optional[dict] = None):
-        final_query = query
-        if history and isinstance(history, list) and len(history) > 0:
-            try:
-                history_parts = []
-                for msg in history[-10:]:
-                    role_label = "User" if msg.get("role") == "user" else "AI"
-                    history_parts.append(f"{role_label}: {msg.get('content', '')}")
-                history_text = "\n".join(history_parts)
-                rewrite_prompt = f"""Rewrite this follow-up question as a standalone query.
-History: {history_text}
-Question: {query}
-Rewritten:"""
-                if user_config:
-                    llm = LLM(
-                        api_key=user_config.get("api_key"),
-                        base_url=user_config.get("base_url"),
-                        model=user_config.get("model_name")
-                    )
-                else:
-                    llm = LLM()
-                rewrite_messages = [{"role": "user", "content": rewrite_prompt}]
-                rewritten_query = await llm.chat(rewrite_messages, temperature=0.0, max_tokens=256)
-                rewritten_query = rewritten_query.strip()
-                if rewritten_query:
-                    final_query = rewritten_query
-            except Exception as e:
-                print(f"Query rewrite failed: {e}")
+    async def ask_stream(self, doc_ids, query, history=None, user_config: dict | None = None):
+        # 检查是否需要切换 Embedding 模型
+        if user_config and user_config.get("embedding_model"):
+            if user_config["embedding_model"] != embedder.model_name:
+                embedder.reload_model(
+                    user_config["embedding_model"], user_config.get("embedding_dimension", 768)
+                )
 
-        retrieved = await self.retrieve(doc_ids, final_query, self.top_k * 2)
+        # ── Step 1: 意图理解 + 上下文改写（一次 LLM 调用）──
+        llm = self._get_llm(user_config)
+        analysis = await query_router.analyze(query, doc_ids, history, llm)
+        route = analysis.intent
+        final_query = analysis.standalone_query
+        logger.info("[RAG] Intent: %s, Query: '%s'", route.value, final_query[:50])
+
+        if route == QueryType.OUT_OF_SCOPE:
+            yield {
+                "type": "answer",
+                "content": "这个问题超出了我的知识范围，请问一些与学习相关的问题。",
+            }
+            return
+
+        if route == QueryType.DIRECT_ANSWER:
+            # 流式直接回答（不走检索）
+            messages = [
+                {"role": "system", "content": "你是一个学习助手。请直接回答用户的问题。"},
+                {"role": "user", "content": final_query},
+            ]
+            async for token in llm.chat_stream(messages):
+                yield {"type": "token", "content": token}
+            return
+
+        if route == QueryType.SUMMARY:
+            # 流式总结：检索全部文档，流式生成摘要
+            all_results = await self.retrieve(doc_ids, "文档内容总结", top_k=100)
+            if not all_results:
+                yield {"type": "answer", "content": "未找到任何文档内容，请先上传文档。"}
+                return
+            ctx = self.build_context(all_results, max_context_tokens=12000)
+            sources_text = self.build_sources_text(all_results)
+            sources_list = []
+            for i, r in enumerate(all_results[:10]):
+                chunk = r.get("chunk", {})
+                sources_list.append({
+                    "index": i + 1,
+                    "document_id": chunk.get("document_id", ""),
+                    "page": str(chunk.get("page", "")),
+                    "source": chunk.get("source", ""),
+                    "text": chunk.get("text", ""),
+                    "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
+                })
+            yield {"type": "sources", "sources": sources_list, "filtered_sources": sources_list}
+            async for token in self.generate_answer_stream(
+                "请总结文档内容", ctx, sources_text, llm_config=user_config
+            ):
+                yield {"type": "token", "content": token}
+            return
+
+        # ── Step 2: RAG 路径（自适应检索 + 答案反思） ──
+        # final_query 已在 Step 1 中由 analyze() 处理好
+        strategy = await adaptive_retriever.select_strategy(final_query, llm)
+        logger.info("[RAG] Adaptive strategy selected: %s", strategy.value)
+
+        retrieved, thinking_events = await adaptive_retriever.retrieve_adaptive(
+            doc_ids, final_query, strategy, self, user_config
+        )
+
+        # 先输出思考过程
+        for event in thinking_events:
+            yield event
+
         if not retrieved:
-            yield {"type": "answer", "content": "Please upload documents first."}
+            yield {
+                "type": "answer",
+                "content": "文档中没有找到与您问题相关的内容，请尝试换个方式提问。",
+            }
             return
 
         ctx = self.build_context(retrieved)
@@ -248,22 +669,52 @@ Rewritten:"""
             chunk = r.get("chunk", {})
             chunk_text = chunk.get("text", "")
             page = chunk.get("page", "")
-            if page is not None and not isinstance(page, str):
+            if page is None:
+                page = ""
+            elif not isinstance(page, str):
                 page = str(page)
-            sources_list.append({
-                "index": i + 1,
-                "document_id": chunk.get("document_id", ""),
-                "page": page,
-                "source": chunk.get("source", ""),
-                "text": chunk_text,
-                "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
-            })
+            sources_list.append(
+                {
+                    "index": i + 1,
+                    "document_id": chunk.get("document_id", ""),
+                    "page": page,
+                    "source": chunk.get("source", ""),
+                    "text": chunk_text,
+                    "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
+                }
+            )
 
         yield {"type": "sources", "sources": sources_list, "filtered_sources": sources_list}
 
-        truncated_history = history[-10:] if history and len(history) > 10 else history
-        async for token in self.generate_answer_stream(final_query, ctx, sources_text, truncated_history, llm_config=user_config):
+        # 流式生成答案，收集完整答案用于反思
+        answer_parts = []
+        history_context = await self._build_history_context(history, llm)
+        async for token in self.generate_answer_stream(
+            final_query, ctx, sources_text, history_context, llm_config=user_config
+        ):
+            answer_parts.append(token)
             yield {"type": "token", "content": token}
+
+        # 答案反思：评估答案质量，不合格则重新生成
+        full_answer = "".join(answer_parts)
+        try:
+            evaluation = await answer_reflector.evaluate(
+                final_query, ctx, full_answer, llm
+            )
+            if not evaluation.get("pass", True):
+                logger.info("[RAG] Answer reflection failed (%s), refining...", evaluation.get("reason"))
+                yield {"type": "thinking", "step": "reflection_fail",
+                       "detail": f"答案质量不佳（{evaluation.get('reason', '')}），正在重新生成..."}
+                refined = await answer_reflector.refine(
+                    final_query, ctx, full_answer,
+                    evaluation.get("suggestions", ""), llm,
+                )
+                yield {"type": "answer_refined", "content": refined}
+            else:
+                yield {"type": "thinking", "step": "reflection_pass",
+                       "detail": "答案质量检查通过"}
+        except Exception as e:
+            logger.warning("[RAG] Reflection error for '%s': %s", query[:30], e)
 
 
 rag_engine = RAGEngine()

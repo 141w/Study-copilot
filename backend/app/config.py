@@ -1,6 +1,6 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
-import os
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -10,17 +10,20 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-3.5-turbo"
 
     # Embedding配置
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    embedding_dimension: int = 384
+    # 可用模型：
+    #   - shibing624/text2vec-base-chinese (768维, 中文优化)
+    #   - BAAI/bge-m3 (1024维, 多语言, 更强)
+    embedding_model: str = "shibing624/text2vec-base-chinese"
+    embedding_dimension: int = 768
 
     # JWT配置
-    jwt_secret_key: str = "study-copilot-secret-key-change-in-production"
+    jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
     # 数据库
-    database_url: str = "sqlite+aiosqlite:///./study_copilot.db"
+    database_url: str = "postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot"
 
     # 文件上传
     upload_dir: str = "./uploads"
@@ -34,12 +37,13 @@ class Settings(BaseSettings):
     app_name: str = "Study Copilot"
     app_version: str = "1.0.0"
     debug: bool = True
+    encryption_key: str = ""
 
     class Config:
         env_file = ".env"
 
 
-@lru_cache()
+@lru_cache
 def get_settings():
     return Settings()
 

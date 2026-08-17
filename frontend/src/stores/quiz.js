@@ -42,8 +42,6 @@ export const useQuizStore = defineStore('quiz', () => {
         quiz.result = result
       }
 
-      await fetchQuizHistory()
-
       return result
     } catch (error) {
       console.error('Error submitting answer:', error)
@@ -53,7 +51,7 @@ export const useQuizStore = defineStore('quiz', () => {
   
   async function fetchQuizHistory() {
     try {
-      const response = await api.get('/quiz/history')
+      const response = await api.get('/quiz/result-history')
       quizResults.value = response.data
     } catch (error) {
       console.error('Error fetching quiz history:', error)

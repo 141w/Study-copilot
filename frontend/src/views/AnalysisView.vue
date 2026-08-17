@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-4xl mx-auto px-6 py-8">
+  <div ref="contentRef" class="max-w-4xl mx-auto px-6 py-8">
     <h1 class="text-2xl font-semibold text-gray-900 mb-8">学习分析</h1>
 
     <!-- Tabs -->
@@ -81,7 +81,18 @@
       <div class="card p-6 mb-8">
         <h2 class="font-semibold text-gray-900 mb-4">整体掌握情况</h2>
 
-        <div class="grid grid-cols-3 gap-6">
+        <div v-if="stats.total_quizzes === 0" class="text-center py-8">
+          <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <p class="text-gray-500 mb-4">暂无统计数据</p>
+          <p class="text-sm text-gray-400">完成一些练习后，这里会显示你的学习分析</p>
+          <button @click="$router.push('/quiz')" class="btn-primary mt-4">
+            开始练习
+          </button>
+        </div>
+
+        <div v-else class="grid grid-cols-3 gap-6">
           <div class="text-center">
             <div class="text-3xl font-semibold text-[#010120]">{{ stats.total_quizzes }}</div>
             <div class="text-sm text-gray-500 mt-1">总做题数</div>
@@ -101,7 +112,7 @@
         </div>
 
         <!-- Progress Bar -->
-        <div class="mt-6">
+        <div v-if="stats.total_quizzes > 0" class="mt-6">
           <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
               class="h-full bg-gradient-to-r from-[#ef2cc1] to-[#fc4c02] transition-all duration-500"
@@ -173,13 +184,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated } from 'vue'
+import { ref, onMounted, onActivated, onUnmounted } from 'vue'
+import gsap from 'gsap'
 import api from '../services/api'
 import { useQuizStore } from '../stores/quiz'
 
 const loading = ref(false)
 const activeTab = ref('history')
 const quizStore = useQuizStore()
+const contentRef = ref(null)
+let ctx = null
 const stats = ref({
   total_quizzes: 0,
   correct_count: 0,
@@ -253,16 +267,28 @@ function accuracyColor(rate) {
 
 onMounted(async () => {
   await refreshData()
+  // Entrance animation
+  if (contentRef.value) {
+    ctx = gsap.context(() => {
+      gsap.from(contentRef.value, { y: 20, opacity: 0, duration: 0.5, ease: 'power2.out' })
+    }, contentRef.value)
+  }
 })
 
 onActivated(async () => {
   await refreshData()
 })
 
+onUnmounted(() => {
+  ctx?.revert()
+})
+
 async function refreshData() {
-  await quizStore.fetchQuizHistory()
-  await loadHistory()
-  await loadStats()
-  await analyzeWeakness()
+  await Promise.all([
+    quizStore.fetchQuizHistory(),
+    loadHistory(),
+    loadStats(),
+    analyzeWeakness()
+  ])
 }
 </script>

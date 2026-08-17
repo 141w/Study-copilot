@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  db:
+    image: postgres:16-alpine
+    container_name: study-copilot-db
+    environment:
+      POSTGRES_DB: study_copilot
+      POSTGRES_USER: study_user
+      POSTGRES_PASSWORD: study123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U study_user -d study_copilot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # 后端 API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: study-copilot-backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://study_user:study123@db:5432/study_copilot
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-in-production}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/vectorstore:/app/vectorstore
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # 前端
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: study-copilot-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

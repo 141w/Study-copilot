@@ -11,6 +11,7 @@ export const useChatStore = defineStore('chat', () => {
   const streamingContent = ref('') // 新增：流式内容暂存
   const streamingSources = ref([]) // 新增：流式来源信息
   const isStreaming = ref(false) // 新增：是否正在流式输出
+  const abortController = ref(null) // 用于取消流式请求
   const config = reactive({
     apiKey: localStorage.getItem('llmApiKey') || '',
     baseUrl: localStorage.getItem('llmBaseUrl') || 'https://api.openai.com/v1',
@@ -27,9 +28,10 @@ export const useChatStore = defineStore('chat', () => {
       sessions.value = response.data
     } catch (error) {
       console.error('Error fetching sessions:', error)
+      throw error
     }
   }
-  
+
   async function fetchHistory(sessionId) {
     loading.value = true
     try {
@@ -38,6 +40,7 @@ export const useChatStore = defineStore('chat', () => {
       currentSession.value = sessionId
     } catch (error) {
       console.error('Error fetching history:', error)
+      throw error
     } finally {
       loading.value = false
     }
@@ -99,6 +102,10 @@ export const useChatStore = defineStore('chat', () => {
     streamingContent.value = ''
     streamingSources.value = []
 
+    // 创建 AbortController 用于取消流式请求
+    const controller = new AbortController()
+    abortController.value = controller
+
     // 先添加用户消息
     messages.value.push({
       id: Date.now(),
@@ -124,7 +131,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const token = localStorage.getItem('token')
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
-      
+
       const response = await fetch('/api/chat/ask', {
         method: 'POST',
         headers: {
@@ -136,7 +143,8 @@ export const useChatStore = defineStore('chat', () => {
           document_ids: documentIds,
           session_id: sessionId || currentSession.value,
           stream: true
-        })
+        }),
+        signal: controller.signal
       })
 
       if (!response.ok) {
@@ -150,15 +158,21 @@ export const useChatStore = defineStore('chat', () => {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        
+
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() // 保留未完成的行
-        
+
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6))
-            
+            let data
+            try {
+              data = JSON.parse(line.slice(6))
+            } catch (e) {
+              console.warn('Malformed SSE data, skipping line:', line, e)
+              continue
+            }
+
             if (data.type === 'sources') {
               streamingSources.value = data.sources
               // 更新临时消息的来源信息
@@ -174,6 +188,33 @@ export const useChatStore = defineStore('chat', () => {
               if (msgIdx !== -1) {
                 messages.value[msgIdx].content = streamingContent.value
               }
+            } else if (data.type === 'answer') {
+              // 非流式答案（DIRECT_ANSWER / OUT_OF_SCOPE / SUMMARY 路径）
+              streamingContent.value = data.content
+              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+              if (msgIdx !== -1) {
+                messages.value[msgIdx].content = data.content
+              }
+            } else if (data.type === 'thinking') {
+              // 思考过程事件（Agentic RAG）
+              // 可选：存储到消息的 thinking 数组中
+              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+              if (msgIdx !== -1) {
+                if (!messages.value[msgIdx].thinking) {
+                  messages.value[msgIdx].thinking = []
+                }
+                messages.value[msgIdx].thinking.push({
+                  step: data.step,
+                  detail: data.detail
+                })
+              }
+            } else if (data.type === 'answer_refined') {
+              // 答案反思后修正（替换已流式输出的内容）
+              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+              if (msgIdx !== -1) {
+                messages.value[msgIdx].content = data.content
+                streamingContent.value = data.content
+              }
             } else if (data.type === 'done') {
               // 流式结束，更新最终状态
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
@@ -188,6 +229,18 @@ export const useChatStore = defineStore('chat', () => {
       currentSession.value = sessionId || currentSession.value
       return { success: true }
     } catch (error) {
+      if (error.name === 'AbortError') {
+        // 用户主动取消，不是错误 — 保留已流式传输的内容
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) {
+          messages.value[msgIdx].isStreaming = false
+          // 如果没有任何内容，移除占位消息
+          if (!messages.value[msgIdx].content) {
+            messages.value = messages.value.filter(m => m.id !== tempMsgId)
+          }
+        }
+        return { success: false, cancelled: true }
+      }
       console.error('Error in streaming ask:', error)
       // 移除临时消息
       messages.value = messages.value.filter(m => m.id !== tempMsgId)
@@ -195,6 +248,13 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       loading.value = false
       isStreaming.value = false
+      abortController.value = null
+    }
+  }
+
+  function cancelStream() {
+    if (abortController.value) {
+      abortController.value.abort()
     }
   }
 
@@ -236,6 +296,7 @@ export const useChatStore = defineStore('chat', () => {
     fetchHistory,
     askQuestion,
     askQuestionStream,
+    cancelStream,
     deleteSession,
     updateSessionTitle,
     clearMessages,

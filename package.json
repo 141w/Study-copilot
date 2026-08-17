@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
-    "preview": "cd frontend && npm run preview"
+    "preview": "cd frontend && npm run preview",
+    "start": "bash start.sh",
+    "stop": "bash stop.sh"
   },
   "keywords": ["ai", "study", "education"],
   "author": "",

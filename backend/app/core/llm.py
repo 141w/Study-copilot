@@ -1,21 +1,32 @@
-from openai import AsyncOpenAI
-from typing import List, Dict, Optional, AsyncGenerator
-from app.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
 import asyncio
+from collections.abc import AsyncGenerator
+
+import httpx
+from openai import AsyncOpenAI
+
+from app.config import settings
 
 
 class LLM:
     def __init__(self, api_key=None, base_url=None, model=None):
+        # 创建不使用代理的 httpx 客户端（避免 VPN 劫持）
+        http_client = httpx.AsyncClient(
+            proxy=None,
+            transport=httpx.AsyncHTTPTransport(proxy=None),
+        )
         self.client = AsyncOpenAI(
             api_key=api_key or settings.openai_api_key,
             base_url=base_url or settings.openai_base_url,
-            timeout=120.0,  # 2分钟超时
+            timeout=120.0,
+            http_client=http_client,
         )
         self.model = model or settings.openai_model
 
-    async def generate(
-        self, prompt, system_prompt=None, temperature=0.7, max_tokens=None
-    ):
+    async def generate(self, prompt, system_prompt=None, temperature=0.7, max_tokens=None):
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -43,8 +54,8 @@ class LLM:
             except Exception as e:
                 if attempt == max_retries - 1:
                     raise  # 最后一次重试失败，抛出异常
-                print(f"Chat attempt {attempt + 1} failed: {e}. Retrying...")
-                await asyncio.sleep(2 ** attempt)  # 指数退避
+                logger.warning(f"Chat attempt {attempt + 1} failed: {e}. Retrying...")
+                await asyncio.sleep(2**attempt)  # 指数退避
         return ""  # 不应该到达这里
 
     async def chat_stream(

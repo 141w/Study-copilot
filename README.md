@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="License">
 </p>
 
-基于 **FastAPI + Vue3** 构建的 AI 学习助手，融合 RAG（检索增强生成）、LLM 智能问答与自动出题功能，帮助用户从 PDF 文档中高效提取知识、生成练习题并追踪学习进度。
+基于 **FastAPI + Vue3** 构建的 AI 学习助手，融合 **Agentic RAG**（智能体检索增强生成）、LLM 智能问答与自动出题功能，帮助用户从 PDF 文档中高效提取知识、生成练习题并追踪学习进度。
 
 ---
 
@@ -37,14 +37,30 @@
 | 功能模块 | 功能描述 | 状态 |
 |---------|---------|------|
 | 智能文档解析 | 支持 PDF/DOCX/PPTX 上传，Docling/PyMuPDF 提取文本，自动处理复杂排版和表格 | ✅ 稳定 |
-| RAG 智能问答 | 基于 FAISS 向量检索 + LLM，支持流式输出和引用溯源 | ✅ 稳定 |
+| RAG 智能问答 | Agentic RAG 架构：查询路由、上下文感知改写、自适应检索、纠错检索、会话摘要、答案自我反思，支持流式输出和引用溯源 | ✅ 稳定 |
 | AI 自动出题 | 根据文档内容自动生成选择题、简答题，带答案解析 | ✅ 稳定 |
 | 错题分析与学习报告 | 智能分析答题结果，识别知识薄弱点，提供个性化学习建议 | ✅ 稳定 |
-| 多轮对话 | 支持上下文感知的连续问答，自动查询重写解决指代问题 | ✅ 稳定 |
+| 多轮对话 | Agentic RAG 上下文感知：意图分类 + 隐式引用改写 + 会话摘要，支持"那它的税率？"这类追问 | ✅ 稳定 |
 | 引用溯源 | 正文引用序号与来源卡片双向联动，支持点击跳转 | ✅ 稳定 |
 | 用户系统 | 完整 JWT 认证体系，支持多用户隔离和数据管理 | ✅ 稳定 |
 | 多 LLM 提供商 | 支持 OpenRouter / OpenAI / Anthropic / Google Gemini / 自定义端点 | ✅ 稳定 |
 | 流式输出 | 问答过程实时流式输出，前端打字机效果 | ✅ 稳定 |
+| 模拟考试模式 | 做完全部题目再交卷，显示总分和正确率 | ✅ 新增 |
+| 错题重做 | 从错题本加载错题，一键重新练习 | ✅ 新增 |
+| 对话导出 | 将问答对话导出为 Markdown 文件 | ✅ 新增 |
+| 响应式布局 | 移动端侧边栏折叠，适配小屏幕 | ✅ 新增 |
+| GSAP 动画 | 页面入场动画、滚动渐现、消息滑入 | ✅ 新增 |
+| 笔记系统 | 手动/AI 笔记，标签管理，语义搜索 | ✅ v2 |
+| 课程空间 | 按课程组织文档和笔记 | ✅ v2 |
+| 内容转换 | 8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释） | ✅ v2 |
+| URL 导入 | 从网页链接提取内容并导入 | ✅ v2 |
+| TTS 语音 | Edge TTS 朗读答案和笔记 | ✅ v2 |
+| 异步任务 | 批量操作，后台任务队列 | ✅ v2 |
+| 凭证加密 | Fernet 加密存储 API Key | ✅ v2 |
+| TypeScript | 前端渐进式 TypeScript 支持，类型安全 | ✅ v3 |
+| 组件复用 | BaseDialog、BaseButton 等通用组件 | ✅ v3 |
+| Prompt 模板化 | Jinja2 模板管理 LLM prompt | ✅ v3 |
+| 设计系统 | CSS 变量系统（间距、字体、颜色、样式） | ✅ v3 |
 
 ### 应用场景
 
@@ -91,9 +107,9 @@
 │  │  └─────────────┘  └─────────────┘                         │    │
 │  └────────────────────────────────────────────────────────────┘    │
 │                              │                                    │
-│  ┌─────────────┐  ┌─────────────────┐  ┌─────────────────┐       │
-│  │ SQLite 数据库│  │ 文件存储        │  │ 向量索引存储    │       │
-│  └─────────────┘  └─────────────────┘  └─────────────────┘       │
+│  ┌──────────────┐  ┌─────────────────┐  ┌─────────────────┐       │
+│  │PostgreSQL 数据库│  │ 文件存储        │  │ 向量索引存储    │       │
+│  └──────────────┘  └─────────────────┘  └─────────────────┘       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -107,11 +123,12 @@
 |-----|------|---------|
 | **FastAPI** | Web 框架 | ≥ 0.109 |
 | **SQLAlchemy** | ORM 数据库（异步模式） | ≥ 2.0 |
-| **SQLite / aiosqlite** | 轻量数据库 | 内置 |
+| **PostgreSQL** | 关系型数据库 | ≥ 16 |
+| **asyncpg** | PostgreSQL 异步驱动 | ≥ 0.29 |
 | **PyMuPDF** | PDF 文本提取 | - |
 | **Docling** | AI 文档解析（IBM 开源） | ≥ 2.0 |
 | **FAISS** | 向量相似度检索 | ≥ 1.7.4 |
-| **sentence-transformers** | 文本向量化（HuggingFace） | ≥ 2.2 |
+| **sentence-transformers** | 文本向量化 text2vec-base-chinese / BGE-M3（前端可切换） | ≥ 2.2 |
 | **CrossEncoder** | 检索结果重排序 | - |
 | **OpenAI SDK** | LLM 调用 | ≥ 1.10 |
 | **python-jose** | JWT 令牌 | ≥ 3.3 |
@@ -120,6 +137,8 @@
 | **python-docx** | DOCX 解析 | ≥ 1.1 |
 | **python-pptx** | PPTX 解析 | ≥ 0.6 |
 | **slowapi** | 接口限流 | - |
+| **Alembic** | 数据库迁移管理 | ≥ 1.12 |
+| **pytest** | 后端测试框架 | ≥ 7.0 |
 
 ### 前端技术
 
@@ -133,6 +152,18 @@
 | **Axios** | HTTP 客户端 |
 | **markdown-it** | Markdown 渲染 |
 | **highlight.js** | 代码高亮 |
+| **GSAP** | 页面动画与交互效果 |
+| **Vitest** | 前端测试框架 |
+
+### DevOps / 工具链
+
+| 技术 | 用途 |
+|-----|------|
+| **Alembic** | 数据库迁移（Schema 版本管理） |
+| **pytest** | 后端单元/集成测试 |
+| **Vitest** | 前端单元测试 |
+| **GitHub Actions** | CI/CD 自动化流水线 |
+| **Ruff** | Python 代码检查与格式化 |
 
 ---
 
@@ -142,12 +173,29 @@
 study-copilot/
 ├── backend/                         # 后端服务
 │   ├── app/
+│   │   ├── services/               # 业务服务层
+│   │   │   ├── auth_service.py     # 认证服务
+│   │   │   ├── document_service.py # 文档服务
+│   │   │   ├── chat_service.py     # 问答服务
+│   │   │   ├── quiz_service.py     # 测验服务
+│   │   │   ├── note_service.py     # 笔记服务
+│   │   │   ├── course_service.py   # 课程空间服务
+│   │   │   ├── transform_service.py # 内容转换服务
+│   │   │   ├── task_service.py     # 异步任务服务
+│   │   │   ├── config_service.py   # 配置服务
+│   │   │   └── analysis_service.py # 分析服务
+│   │   │
 │   │   ├── api/                    # API 路由层
 │   │   │   ├── auth.py            # 用户认证（注册/登录/JWT 刷新）
 │   │   │   ├── document.py        # 文档上传/解析/删除/级联清理
 │   │   │   ├── chat.py            # RAG 问答接口（含流式 SSE）
 │   │   │   ├── quiz.py            # 出题/答题/判分/错题本
 │   │   │   ├── analysis.py        # 学习分析/知识掌握/进度统计
+│   │   │   ├── notes.py           # 笔记 CRUD + 标签管理
+│   │   │   ├── courses.py         # 课程空间 CRUD
+│   │   │   ├── transform.py       # 内容转换接口
+│   │   │   ├── tts.py             # 文本转语音接口
+│   │   │   ├── tasks.py           # 异步任务管理接口
 │   │   │   └── config.py          # LLM 配置存储
 │   │   │
 │   │   ├── core/                   # 核心业务逻辑
@@ -155,17 +203,30 @@ study-copilot/
 │   │   │   ├── pdf_parser.py      # PDF 解析封装
 │   │   │   ├── chunker.py         # 文本分块（固定/语义两种策略）
 │   │   │   ├── vector_store.py    # FAISS 向量存储
-│   │   │   ├── rag_engine.py      # RAG 问答引擎（检索+重排序+引用过滤）
+│   │   │   ├── rag_engine.py      # Agentic RAG 引擎（路由+自适应检索+反思）
+│   │   │   ├── query_router.py    # 查询路由（意图分类+上下文改写）
+│   │   │   ├── retrieval_grader.py # 检索质量评估
+│   │   │   ├── adaptive_retriever.py # 自适应检索（4种策略）
+│   │   │   ├── query_decomposer.py # 查询分解+实体提取
+│   │   │   ├── answer_reflector.py # 答案自我反思
 │   │   │   ├── quiz_generator.py  # AI 出题生成
 │   │   │   ├── llm.py             # LLM 调用封装（含重试机制）
 │   │   │   ├── embedder.py        # 文本向量化
+│   │   │   ├── encryption.py      # Fernet 凭证加密
+│   │   │   ├── tts.py             # Edge TTS 语音合成
+│   │   │   ├── url_extractor.py   # 网页内容提取
+│   │   │   ├── transformations.py # 内容转换引擎
 │   │   │   ├── config.py          # 用户 LLM 配置管理
 │   │   │   ├── rate_limit.py      # 接口限流
 │   │   │   └── exceptions.py      # 全局异常处理
 │   │   │
 │   │   ├── db/                     # 数据库层
 │   │   │   ├── database.py        # SQLAlchemy 异步配置 + 数据模型
+│   │   │   ├── migrations.py      # 数据库迁移辅助
 │   │   │   └── __init__.py
+│   │   │
+│   │   ├── exceptions.py           # 自定义异常类
+│   │   ├── exception_handlers.py   # 全局异常处理器
 │   │   │
 │   │   ├── utils/                  # 工具函数
 │   │   │   ├── auth.py            # 密码哈希/Token 验证
@@ -184,6 +245,10 @@ study-copilot/
 ├── frontend/                        # 前端应用
 │   ├── src/
 │   │   ├── views/                  # 页面组件
+│   │   │   ├── NotesView.vue      # 笔记管理
+│   │   │   ├── CourseListView.vue  # 课程空间列表
+│   │   │   ├── CourseDetailView.vue # 课程空间详情
+│   │   │   ├── TasksView.vue      # 异步任务管理
 │   │   │   ├── HomeView.vue       # 首页
 │   │   │   ├── LoginView.vue      # 登录页
 │   │   │   ├── RegisterView.vue   # 注册页
@@ -195,10 +260,20 @@ study-copilot/
 │   │   │   └── ModelConfigView.vue # 模型配置
 │   │   │
 │   │   ├── components/             # 公共组件
+│   │   │   ├── NoteEditor.vue     # 笔记编辑器（Markdown + AI）
+│   │   │   ├── NoteCard.vue       # 笔记卡片
+│   │   │   ├── CourseCard.vue     # 课程空间卡片
+│   │   │   ├── TTSPlayer.vue     # 语音播放器
+│   │   │   ├── TaskPanel.vue     # 任务状态面板
+│   │   │   ├── TransformDialog.vue # 内容转换对话框
+│   │   │   ├── UrlImportDialog.vue # URL 导入对话框
 │   │   │   ├── common/            # 通用组件（Header/Sidebar/Toast）
 │   │   │   └── chat/              # 聊天组件（Message/Input）
 │   │   │
 │   │   ├── stores/                 # Pinia 状态管理
+│   │   │   ├── note.js            # 笔记状态
+│   │   │   ├── course.js          # 课程空间状态
+│   │   │   ├── sidebar.js         # 侧边栏状态
 │   │   │   ├── auth.js            # 认证状态
 │   │   │   ├── document.js        # 文档状态
 │   │   │   ├── chat.js            # 问答状态（含流式）
@@ -220,10 +295,46 @@ study-copilot/
 │   ├── postcss.config.js
 │   └── package.json
 │
+├── alembic/                          # 数据库迁移
+│   ├── alembic.ini                 # Alembic 配置
+│   ├── versions/                   # 迁移脚本
+│   └── env.py                      # Alembic 环境配置
+│
+├── tests/                            # 后端测试
+│   ├── conftest.py                 # 测试配置与 fixtures
+│   ├── test_auth.py                # 认证测试
+│   ├── test_document.py            # 文档测试
+│   ├── test_chat.py                # 问答测试
+│   ├── test_quiz.py                # 测验测试
+│   ├── test_notes.py               # 笔记测试
+│   ├── test_courses.py             # 课程空间测试
+│   ├── test_transform.py           # 内容转换测试
+│   ├── test_tts.py                 # TTS 测试
+│   ├── test_tasks.py               # 异步任务测试
+│   ├── test_encryption.py          # 加密测试
+│   └── test_url_extractor.py       # URL 提取测试
+│
+├── docs/                             # 项目文档
+│   ├── 0-START-HERE/              # 快速入门
+│   ├── 1-INSTALLATION/            # 安装指南
+│   ├── 2-ARCHITECTURE/            # 架构文档
+│   ├── 3-API-REFERENCE/           # API 参考
+│   └── 4-DEVELOPMENT/             # 开发文档
+│
+├── scripts/
+│   └── run_all_tests.sh            # 一键运行全部测试
+│
+├── pyproject.toml                    # Python 项目配置（Ruff、pytest）
+├── .github/
+│   └── workflows/
+│       └── test.yml               # CI/CD 测试流水线
+│
 ├── .gitignore                       # Git 忽略规则
 ├── package.json                     # 根目录脚本
 ├── LICENSE                          # MIT 许可证
-└── README.md                        # 项目文档
+├── README.md                        # 项目文档
+├── CLAUDE.md                        # AI 辅助开发指南
+└── CONTRIBUTING.md                  # 贡献指南
 ```
 
 ---
@@ -237,7 +348,8 @@ study-copilot/
 | **Python** | ≥ 3.11 | 推荐 3.12 |
 | **Node.js** | ≥ 18 | 推荐 20 LTS |
 | **npm** | ≥ 9 | - |
-| **内存** | 推荐 8GB+ | Docling OCR 需要更多 |
+| **PostgreSQL** | ≥ 16 | 通过 Homebrew 安装 |
+| **内存** | 推荐 8GB+ | Embedding 模型需要更多 |
 
 ### 1. 克隆项目
 
@@ -246,35 +358,58 @@ git clone git@github.com:141w/Study-copilot.git
 cd study-copilot
 ```
 
-### 2. 后端设置
+### 2. 安装 PostgreSQL
+
+```bash
+# macOS
+brew install postgresql@16
+brew services start postgresql@16
+
+# 创建数据库和用户
+psql postgres -c "CREATE DATABASE study_copilot;"
+psql postgres -c "CREATE USER study_user WITH PASSWORD 'study123';"
+psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE study_copilot TO study_user;"
+psql study_copilot -c "GRANT ALL ON SCHEMA public TO study_user;"
+```
+
+### 3. 后端设置
 
 ```bash
 cd backend
 
-# 创建虚拟环境（Windows）
-python -m venv venv
-venv\Scripts\activate
-
-# 或（Linux/Mac）
-python -m venv venv
-source venv/bin/activate
+# 创建 conda 环境（推荐）
+conda create -n study-c python=3.11
+conda activate study-c
 
 # 安装依赖
-pip install -r requirements.txt
-
-# 可选的 OCR 增强（用于扫描件 PDF）
-pip install "docling[ocr]"
+pip install -r requirements.txt "pydantic[email]"
 ```
 
-### 3. 配置环境变量
+### 4. 配置环境变量
 
-创建 `backend/.env` 文件：
+复制 `.env.example` 并修改：
+
+```bash
+cp .env.example .env
+```
+
+主要配置项：
 
 ```env
 # ==================== LLM 配置 ====================
-# 方案一: OpenRouter（推荐，便宜且支持更多模型）
-OPENAI_API_KEY=sk-or-v1-xxxxxxxxxxxx
+OPENAI_API_KEY=sk-or-...xxxx
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_MODEL=openai/gpt-4o-mini
+
+# ==================== 数据库 ====================
+DATABASE_URL=postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot
+
+# ==================== Embedding ====================
+# 支持 text2vec-base-chinese (768维) 或 BAAI/bge-m3 (1024维)
+# 切换模型后需重新上传文档以生成对应维度的向量索引
+EMBEDDING_MODEL=shibing624/text2vec-base-chinese
+EMBEDDING_DIMENSION=768
+```
 OPENAI_MODEL=openai/gpt-4o-mini
 
 # 方案二: OpenAI 官方
@@ -308,36 +443,25 @@ APP_VERSION=1.0.0
 DEBUG=True
 ```
 
-### 4. 启动后端
+### 5. 一键启动（推荐）
 
 ```bash
-# 启动（开发模式，热重载）
-python run.py
+# macOS 一键启动（自动检查依赖、启动 PostgreSQL、启动前后端）
+./start.sh
 
-# 或直接使用 uvicorn
-uvicorn app.main:app --reload --port 8000
+# 停止所有服务
+./stop.sh
 ```
 
-- 后端地址: http://localhost:8000
-- API 文档: http://localhost:8000/docs
-- 健康检查: http://localhost:8000/health
-
-### 5. 启动前端
+### 6. 手动启动
 
 ```bash
-cd frontend
+# 启动后端
+cd backend && python run.py
 
-# 安装依赖
-npm install
-
-# 开发模式启动（热重载）
-npm run dev
-
-# 构建生产版本
-npm run build
+# 启动前端（新终端）
+cd frontend && npm run dev
 ```
-
-前端地址: http://localhost:3000
 
 ---
 
@@ -428,7 +552,6 @@ npm run build
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
 | `/api/quiz/generate` | POST | 根据文档生成题目 | JWT |
-| `/api/quiz/{id}` | GET | 获取题目详情 | JWT |
 | `/api/quiz/submit` | POST | 提交答案（自动判分） | JWT |
 | `/api/quiz/result-history` | GET | 答题历史记录 | JWT |
 | `/api/quiz/wrong-questions` | GET | 获取错题列表 | JWT |
@@ -447,6 +570,53 @@ npm run build
 |------|------|------|------|
 | `/api/config/llm` | GET | 获取用户的 LLM 配置 | JWT |
 | `/api/config/llm` | POST | 保存 LLM 配置到服务端 | JWT |
+| `/api/config/llm/with-secret` | GET | 获取含敏感字段的配置（前端同步配置） | JWT |
+
+### 笔记接口
+
+| 接口 | 方法 | 功能 | 认证 |
+|------|------|------|------|
+| `/api/notes/` | GET | 获取笔记列表（支持标签/课程筛选） | JWT |
+| `/api/notes/` | POST | 创建笔记（手动/AI 生成） | JWT |
+| `/api/notes/{id}` | GET | 获取笔记详情 | JWT |
+| `/api/notes/{id}` | PUT | 更新笔记内容 | JWT |
+| `/api/notes/{id}` | DELETE | 删除笔记 | JWT |
+| `/api/notes/tags/all` | GET | 获取所有标签 | JWT |
+| `/api/notes/tags/all` | GET | 获取所有标签 | JWT |
+| `/api/notes/search` | POST | 语义搜索笔记 | JWT |
+
+
+### 课程空间接口
+
+| 接口 | 方法 | 功能 | 认证 |
+|------|------|------|------|
+| `/api/courses/` | GET | 获取课程空间列表 | JWT |
+| `/api/courses/` | POST | 创建课程空间 | JWT |
+| `/api/courses/{id}` | GET | 获取课程空间详情（含文档和笔记） | JWT |
+| `/api/courses/{id}` | PUT | 更新课程空间 | JWT |
+| `/api/courses/{id}` | DELETE | 删除课程空间 | JWT |
+
+### 内容转换接口
+
+| 接口 | 方法 | 功能 | 认证 |
+|------|------|------|------|
+| `/api/transform/` | POST | 执行内容转换（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释） | JWT |
+| `/api/transform/transformations` | GET | 获取支持的转换类型列表 | JWT |
+
+### TTS 语音接口
+
+| 接口 | 方法 | 功能 | 认证 |
+|------|------|------|------|
+| `/api/tts/synthesize` | POST | 文本转语音（返回音频流） | JWT |
+| `/api/tts/voices` | GET | 获取可用语音列表 | JWT |
+
+### 异步任务接口
+
+| 接口 | 方法 | 功能 | 认证 |
+|------|------|------|------|
+| `/api/tasks/` | GET | 获取任务列表 | JWT |
+| `/api/tasks/{id}` | GET | 获取任务状态和结果 | JWT |
+| `/api/tasks/{id}` | DELETE | 取消任务 | JWT |
 
 ---
 
@@ -482,27 +652,57 @@ npm run build
 
 **代码位置：** `backend/app/core/chunker.py`
 
-### 3. RAG 问答引擎
+### 3. Agentic RAG 问答引擎
 
-完整的 RAG 管道：
+基于 Agentic RAG 论文实现的四层智能问答架构：
 
 ```
-用户提问 ──► 查询重写 ──► 问题向量化 ──►
-FAISS 检索 ──► CrossEncoder 重排序 ──►
-构建 Prompt（含上下文截断）──► LLM 生成 ──►
-提取引用来源 ──► 返回结果 + 过滤后的来源
+用户提问
+  ↓
+Step 1: 查询路由（QueryRouter.analyze）
+  ├─ 规则匹配：闲聊/总结/无文档 → 快速分流
+  └─ LLM 分类 + 上下文改写（一次调用，JSON 输出）
+  ↓
+Step 2: 自适应检索（AdaptiveRetriever）
+  ├─ SINGLE: 简单事实题，top-1 直取
+  ├─ STANDARD: 标准问答，top-5 + rerank
+  ├─ MULTI_HOP: 复杂问题，分解子问题 + 多次检索
+  └─ COMPARE: 对比题，提取实体 + 分别检索
+  ↓
+Step 3: 会话摘要（_build_history_context）
+  ├─ <= 10 条：完整历史
+  └─ > 10 条：早期摘要 + 最近 5 条
+  ↓
+Step 4: 答案生成 + 自我反思
+  ├─ LLM 生成答案（流式输出）
+  └─ AnswerReflector 评估质量 → 不合格则重新生成
+  ↓
+返回答案 + 来源 + 思考过程
 ```
 
 **关键特性：**
 
-- **流式输出**：通过 SSE（Server-Sent Events）实现实时流式响应
-- **查询重写**：多轮对话中自动将指代性问句（如"它的原理是什么"）重写为独立查询
-- **检索重排序**：集成 CrossEncoder 对 FAISS 检索结果重排，提升准确率
-- **引用溯源**：自动提取 LLM 回答中的 `[来源N]` 标记，返回真实的来源片段列表
-- **多轮上下文截断**：保留最近 10 轮对话，避免超出 LLM 上下文窗口
-- **向量缓存持久化**：使用 pickle 缓存向量索引到本地文件，服务重启无需重新加载
+- **查询路由**：规则优先 + LLM 兜底，自动识别问题类型（文档问答/直接回答/总结/闲聊）
+- **上下文感知改写**：一次 LLM 调用同时完成意图分类和隐式引用改写（如"那它的税率？"→"增值税的税率"）
+- **自适应检索**：根据问题复杂度自动选择检索策略，支持多跳推理和对比分析
+- **纠错检索**：检索质量评估，不合格时自动改写查询重试
+- **会话摘要**：长对话自动生成早期摘要，保持上下文连贯
+- **答案反思**：生成后自我评估，不合格则自动修正
+- **流式输出**：通过 SSE 实现实时流式响应，支持 token/thinking/answer_refined 事件
+- **LLM 实例复用**：一次请求只创建一个 LLM 实例，减少 3-4 次冗余调用
 
-**代码位置：** `backend/app/core/rag_engine.py`
+**代码位置：** `backend/app/core/rag_engine.py`、`query_router.py`、`adaptive_retriever.py`、`retrieval_grader.py`、`answer_reflector.py`
+
+### Embedding 模型
+
+支持两种 Embedding 模型，可在前端「模型配置」页面切换：
+
+| 模型 | 维度 | 特点 | 适用场景 |
+|------|------|------|---------|
+| text2vec-base-chinese | 768 | 中文优化，速度快 | 纯中文文档 |
+| BGE-M3 | 1024 | 多语言，精度更高 | 中英混排、学术论文 |
+
+切换后下次问答自动加载新模型。注意：不同模型向量维度不同，切换后需重新上传文档生成向量索引。
 
 ### 4. AI 出题生成
 
@@ -559,13 +759,18 @@ FAISS 检索 ──► CrossEncoder 重排序 ──►
 - **前端**：使用 `fetchEventSource` 或 `ReadableStream` 接收流式数据
 - **接口**：`POST /api/chat/ask/stream`
 
-### 查询重写（Query Rewriting）
+### 上下文感知改写（Context-Aware Rewrite）
 
-多轮对话中，用户的后续问题往往是依赖上下文的指代性问句（如"它怎么实现的"）。查询重写功能自动将这些问句转化为独立、完整的查询，确保检索阶段不会丢失上下文。
+多轮对话中，用户的后续问题往往是依赖上下文的指代性问句（如"那它的税率？"）。系统通过 Agentic RAG 的 `QueryRouter.analyze()` 方法，在一次 LLM 调用中同时完成：
 
-- 使用 LLM 将用户问题 + 历史对话重新表述
-- 重写后的查询用于 FAISS 检索
-- 不影响对话展示（用户看到的仍是原始问题）
+1. **意图分类**：判断问题类型（文档问答/直接回答/总结/闲聊）
+2. **上下文改写**：将隐式引用改写为独立完整的问题
+
+例如：
+- 用户问："什么是增值税？" → AI 回答
+- 用户追问："那它的税率？" → 自动改写为"增值税的税率是多少？"
+
+**会话摘要**：超过 10 条对话时，自动生成早期对话摘要，保持长对话连贯性。
 
 ### 检索重排序（Rerank）
 
@@ -634,6 +839,62 @@ LLM 调用失败时自动重试：
 
 ## 开发指南
 
+### 测试
+
+#### 后端测试（pytest）
+
+```bash
+cd backend
+pytest tests/ -v                     # 运行全部测试
+pytest tests/test_auth.py -v         # 运行单个测试文件
+pytest tests/ -v --tb=short          # 简化错误输出
+```
+
+#### 前端测试（Vitest）
+
+```bash
+cd frontend
+npx vitest run                       # 运行全部测试
+npx vitest run --watch               # 监听模式
+npx vitest run --coverage            # 生成覆盖率报告
+```
+
+#### 一键测试
+
+```bash
+./scripts/run_all_tests.sh           # 同时运行前后端测试
+```
+
+### 数据库迁移（Alembic）
+
+```bash
+cd backend
+# 生成迁移脚本（自动检测模型变更）
+alembic revision --autogenerate -m "描述变更内容"
+
+# 执行迁移
+alembic upgrade head
+
+# 回滚迁移
+alembic downgrade -1
+
+# 查看迁移历史
+alembic history
+```
+
+### CI/CD 流水线
+
+项目使用 GitHub Actions 实现自动化 CI/CD：
+
+- **触发条件**：push 到 `main`/`develop` 分支，或创建 Pull Request
+- **流水线步骤**：
+  1. 安装后端依赖并运行 `pytest`
+  2. 安装前端依赖并运行 `vitest`
+  3. 代码质量检查（`ruff check`）
+  4. 构建前端产物验证
+
+配置文件位于 `.github/workflows/` 目录。
+
 ### 代码格式化
 
 ```bash
@@ -674,6 +935,11 @@ ruff format .
 | `Quiz` | `quizzes` | 生成的题目 |
 | `QuizResult` | `quiz_results` | 答题结果 |
 | `UserLLMConfig` | `user_llm_configs` | 用户 LLM 配置 |
+| `CourseSpace` | `course_spaces` | 课程空间 |
+| `Note` | `notes` | 笔记 |
+| `Tag` | `tags` | 标签 |
+| `AsyncTask` | `async_tasks` | 异步任务 |
+| `note_tags` | `note_tags` | 笔记-标签关联表 |
 
 ---
 
@@ -750,7 +1016,68 @@ ruff format .
 
 ## 更新日志
 
-### v1.0.0 (2025-04)
+### v3.0.0 (2026-07) — TypeScript & 代码质量升级
+
+#### 核心升级
+- **TypeScript 迁移**：前端渐进式 TypeScript 支持，类型安全，IDE 提示增强
+- **组件复用**：提取 BaseDialog、BaseButton、LoadingSpinner、IconButton 等通用组件
+- **Prompt 模板化**：30+ 个 LLM prompt 迁移为 Jinja2 模板，易于维护和迭代
+- **设计系统**：完整的 CSS 变量系统（间距、字体、颜色、组件样式）
+- **Composables**：useApi、useMarkdown 等可复用逻辑封装
+
+#### 新增文件
+- `frontend/src/components/common/BaseDialog.vue` — 通用对话框
+- `frontend/src/components/common/BaseButton.vue` — 通用按钮
+- `frontend/src/components/common/LoadingSpinner.vue` — 加载动画
+- `frontend/src/components/common/IconButton.vue` — 图标按钮
+- `frontend/src/composables/useApi.ts` — 统一 API 请求处理
+- `frontend/src/composables/useMarkdown.js` — Markdown 渲染
+- `frontend/src/types/api.ts` — API 响应类型
+- `frontend/src/types/models.ts` — 核心数据模型
+- `frontend/tsconfig.json` — TypeScript 配置
+- `backend/app/core/template_manager.py` — Jinja2 模板管理器
+- `backend/app/templates/` — 30 个 Prompt 模板文件
+
+#### 改进
+- TransformDialog、UrlImportDialog 使用 BaseDialog 组件
+- NoteCard、CourseCard、ChatMessage 添加 TypeScript 类型
+- LoginView 使用 TypeScript
+- variables.css 完善设计系统
+
+### v2.1.0 (2026-06) — Agentic RAG
+
+#### 核心升级
+- **Agentic RAG 架构**：基于论文实现四层智能问答（查询路由 → 自适应检索 → 会话摘要 → 答案反思）
+- **查询路由**：规则优先 + LLM 兜底，自动识别问题类型
+- **上下文感知改写**：一次 LLM 调用同时完成意图分类和隐式引用改写
+- **自适应检索**：4 种策略（SINGLE/STANDARD/MULTI_HOP/COMPARE），根据问题复杂度自动选择
+- **纠错检索**：检索质量评估，不合格时自动改写查询重试
+- **会话摘要**：长对话自动生成早期摘要，保持上下文连贯
+- **答案反思**：生成后自我评估，不合格则自动修正
+- **LLM 实例复用**：减少 3-4 次冗余调用
+
+#### 新增文件
+- `query_router.py` — 查询路由（意图分类 + 上下文改写）
+- `retrieval_grader.py` — 检索质量评估
+- `adaptive_retriever.py` — 自适应检索器
+- `query_decomposer.py` — 查询分解 + 实体提取
+- `answer_reflector.py` — 答案自我反思
+
+### v2.0.0 (2025-06)
+
+#### 新增功能
+- **笔记系统**：手动/AI 笔记，标签管理，语义搜索
+- **课程空间**：按课程组织文档和笔记
+- **内容转换**：8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释）
+- **URL 导入**：从网页链接提取内容
+- **TTS 语音**：Edge TTS 朗读答案和笔记
+- **异步任务**：批量操作，后台任务队列
+- **凭证加密**：Fernet 加密存储 API Key
+- **数据库迁移**：Alembic 迁移管理
+- **CI/CD**：GitHub Actions 自动测试
+- **代码质量**：Ruff linter 集成
+
+#### v1.0.0 初始功能
 
 #### 初始完成的功能
 - 基于 FastAPI + Vue3 的完整架构

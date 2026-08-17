@@ -3,7 +3,8 @@
     <h1 class="text-2xl font-semibold text-gray-900 mb-8">上传文档</h1>
     
 <!-- Upload Area -->
-    <div 
+    <div
+      ref="uploadArea"
       class="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center mb-8"
       :class="{ 'border-[#010120] bg-gray-50': isDragging }"
       @dragover.prevent="isDragging = true"
@@ -23,11 +24,12 @@
         ref="fileInput"
         @change="handleFileSelect"
       />
-      <button 
+      <button
         @click="$refs.fileInput.click()"
+        :disabled="uploading"
         class="btn-secondary"
       >
-        选择文件
+        {{ uploading ? '上传中...' : '选择文件' }}
       </button>
       <p class="text-sm text-gray-400 mt-4">支持 PDF、DOCX、PPTX 格式，最大 50MB</p>
       <div class="flex justify-center gap-4 mt-3">
@@ -37,8 +39,27 @@
       </div>
     </div>
 
+    <!-- URL Import Button -->
+    <div class="flex justify-center mb-8">
+      <button
+        @click="showUrlDialog = true"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:text-[#010120] hover:border-[#010120] transition-all"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+        从网页 URL 导入
+      </button>
+    </div>
+
+    <!-- URL Import Dialog -->
+    <UrlImportDialog
+      v-model:visible="showUrlDialog"
+      @imported="onUrlImported"
+    />
+
     <!-- Document List -->
-    <div class="card">
+    <div ref="docList" class="card">
       <div class="p-4 border-b border-gray-100">
         <h2 class="font-semibold text-gray-900">我的文档</h2>
       </div>
@@ -89,19 +110,30 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import gsap from 'gsap'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
+import UrlImportDialog from '../components/UrlImportDialog.vue'
 
 const documentStore = useDocumentStore()
 const toastStore = useToastStore()
 const isDragging = ref(false)
+const uploading = ref(false)
 const fileInput = ref(null)
+const uploadArea = ref(null)
+const docList = ref(null)
+const showUrlDialog = ref(false)
+let ctx = null
 
 function handleDrop(e) {
   isDragging.value = false
   const files = e.dataTransfer.files
   if (files.length > 0) {
+    if (files[0].size > 50 * 1024 * 1024) {
+      toastStore.error('文件大小超过 50MB 限制')
+      return
+    }
     uploadFile(files[0])
   }
 }
@@ -109,18 +141,36 @@ function handleDrop(e) {
 function handleFileSelect(e) {
   const files = e.target.files
   if (files.length > 0) {
+    if (files[0].size > 50 * 1024 * 1024) {
+      toastStore.error('文件大小超过 50MB 限制')
+      return
+    }
     uploadFile(files[0])
   }
 }
 
 async function uploadFile(file) {
+  uploading.value = true
   try {
-    await documentStore.uploadDocument(file)
-    toastStore.success('文档上传成功')
+    const result = await documentStore.uploadDocument(file)
+    const chunkCount = result?.chunk_count ?? 0
+    toastStore.success(`文档上传成功！共生成 ${chunkCount} 个知识块`)
   } catch (error) {
     console.error('Upload failed:', error)
-    const message = error.response?.data?.detail || '上传失败，请重试'
+    const detail = error.response?.data?.detail || ''
+    let message
+    if (detail.includes('文档解析失败')) {
+      message = '无法解析此文档，请确认文件未损坏'
+    } else if (detail.includes('文档内容不足')) {
+      message = '文档内容太少，无法生成知识块'
+    } else if (detail.includes('文件过大')) {
+      message = '文件超过 50MB 限制'
+    } else {
+      message = '上传失败，请重试'
+    }
     toastStore.error(message)
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -148,5 +198,29 @@ function statusText(status) {
 
 onMounted(() => {
   documentStore.fetchDocuments()
+
+  ctx = gsap.context(() => {
+    gsap.from(uploadArea.value, {
+      y: 20,
+      opacity: 0,
+      duration: 0.5,
+      ease: 'power2.out'
+    })
+
+    const cards = docList.value?.querySelectorAll('.divide-y > div')
+    if (cards?.length) {
+      gsap.from(cards, {
+        y: 10,
+        opacity: 0,
+        duration: 0.4,
+        stagger: 0.05,
+        ease: 'power2.out'
+      })
+    }
+  })
+})
+
+onUnmounted(() => {
+  ctx?.revert()
 })
 </script>

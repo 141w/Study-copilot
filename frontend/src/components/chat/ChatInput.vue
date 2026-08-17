@@ -10,16 +10,22 @@
         :disabled="disabled"
       />
       <button
+        v-if="loading"
+        @click="stopStream"
+        class="px-6 py-3 bg-red-500 text-white rounded-lg font-medium transition-all hover:bg-red-600"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+      <button
+        v-else
         @click="sendMessage"
         :disabled="disabled || !inputText.trim()"
         class="px-6 py-3 bg-[#010120] text-white rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <svg v-if="!loading" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-        </svg>
-        <svg v-else class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
       </button>
     </div>
@@ -34,7 +40,7 @@ const props = defineProps({
   disabled: Boolean
 })
 
-const emit = defineEmits(['send'])
+const emit = defineEmits(['send', 'stop'])
 
 const inputText = ref('')
 
@@ -43,5 +49,9 @@ function sendMessage() {
     emit('send', inputText.value.trim())
     inputText.value = ''
   }
+}
+
+function stopStream() {
+  emit('stop')
 }
 </script>

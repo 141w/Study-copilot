@@ -1,9 +1,10 @@
 import os
 import uuid
-import aiofiles
 from pathlib import Path
-from typing import Optional
+
+import aiofiles
 from fastapi import UploadFile
+
 from app.config import settings
 
 

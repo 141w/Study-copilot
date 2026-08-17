@@ -120,7 +120,7 @@
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   适配器 (适配器模式)
                 </label>
-                <select 
+                <select
                   v-model="config.adapter"
                   class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                 >
@@ -128,6 +128,32 @@
                   <option value="lora">LoRA 适配器</option>
                   <option value="ia3">IA³ 适配器</option>
                 </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Embedding 模型
+                </label>
+                <select
+                  v-model="config.embeddingModel"
+                  @change="onEmbeddingModelChange"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                >
+                  <option value="shibing624/text2vec-base-chinese">text2vec-base-chinese (中文, 768维)</option>
+                  <option value="BAAI/bge-m3">bge-m3 (多语言, 1024维)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Embedding 维度
+                </label>
+                <input
+                  :value="config.embeddingDimension"
+                  type="text"
+                  disabled
+                  class="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                />
               </div>
 
               <div>
@@ -231,7 +257,9 @@ const config = ref({
   modelName: 'gpt-4o-mini',
   temperature: 0.7,
   maxTokens: 2048,
-  adapter: 'none'
+  adapter: 'none',
+  embeddingModel: 'shibing624/text2vec-base-chinese',
+  embeddingDimension: 768
 })
 
 const configHistory = ref([])
@@ -253,18 +281,32 @@ function onProviderChange() {
   const defaults = providerDefaults[config.value.provider]
   config.value.baseUrl = defaults.baseUrl
   config.value.modelName = defaults.model
+  // Regenerate fit scores when provider changes
+  regenerateFitScores()
 }
 
-const fitScores = computed(() => {
+const embeddingDimensionMap = {
+  'shibing624/text2vec-base-chinese': 768,
+  'BAAI/bge-m3': 1024
+}
+
+function onEmbeddingModelChange() {
+  config.value.embeddingDimension = embeddingDimensionMap[config.value.embeddingModel] || 768
+}
+
+// Stable fit scores — generated once and only regenerated on provider/adapter changes
+const fitScores = ref({ openrouter: 80, custom: 85 })
+
+function regenerateFitScores() {
   let score = 80
   if (config.value.provider === 'openrouter') score += 10
   if (config.value.adapter !== 'none') score += 5
   if (config.value.temperature >= 0.5 && config.value.temperature <= 0.8) score += 10
-  return {
+  fitScores.value = {
     openrouter: score,
     custom: Math.min(100, score + Math.floor(Math.random() * 10))
   }
-})
+}
 
 async function saveConfig() {
   try {
@@ -273,8 +315,10 @@ async function saveConfig() {
       api_key: config.value.apiKey,
       base_url: config.value.baseUrl,
       model_name: config.value.modelName,
-      temperature: Math.round(config.value.temperature * 10),
-      max_tokens: config.value.maxTokens
+      temperature: config.value.temperature,
+      max_tokens: config.value.maxTokens,
+      embedding_model: config.value.embeddingModel,
+      embedding_dimension: config.value.embeddingDimension
     })
     alert('配置保存成功！')
   } catch (error) {
@@ -291,7 +335,9 @@ function resetConfig() {
     modelName: defaults.model,
     temperature: 0.7,
     maxTokens: 2048,
-    adapter: 'none'
+    adapter: 'none',
+    embeddingModel: 'shibing624/text2vec-base-chinese',
+    embeddingDimension: 768
   }
   chatStore.config.apiKey = ''
   chatStore.config.baseUrl = defaults.baseUrl
@@ -307,6 +353,9 @@ function formatTime(timestamp) {
 }
 
 onMounted(async () => {
+  // Generate stable fit scores once on mount
+  regenerateFitScores()
+
   const dbConfig = await configStore.fetchLLMConfigWithSecret()
   if (dbConfig && dbConfig.id) {
     config.value = {
@@ -314,9 +363,11 @@ onMounted(async () => {
       baseUrl: dbConfig.base_url || '',
       provider: dbConfig.provider,
       modelName: dbConfig.model_name,
-      temperature: dbConfig.temperature / 10,
+      temperature: dbConfig.temperature,
       maxTokens: dbConfig.max_tokens,
-      adapter: 'none'
+      adapter: 'none',
+      embeddingModel: dbConfig.embedding_model || 'shibing624/text2vec-base-chinese',
+      embeddingDimension: dbConfig.embedding_dimension || 768
     }
   } else {
     const defaults = providerDefaults.openrouter
@@ -327,7 +378,9 @@ onMounted(async () => {
       modelName: defaults.model,
       temperature: 0.7,
       maxTokens: 2048,
-      adapter: 'none'
+      adapter: 'none',
+      embeddingModel: 'shibing624/text2vec-base-chinese',
+      embeddingDimension: 768
     }
   }
 })

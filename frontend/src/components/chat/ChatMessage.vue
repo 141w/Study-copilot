@@ -21,8 +21,9 @@
         ? 'bg-[#010120] text-white rounded-br-sm' 
         : 'bg-gray-50 text-gray-900 border border-gray-100 rounded-bl-sm'"
     >
-      <!-- Copy button -->
-      <div v-if="message.role === 'assistant'" class="flex justify-end mb-1">
+      <!-- Copy & Speak buttons -->
+      <div v-if="message.role === 'assistant'" class="flex justify-end items-center gap-2 mb-1">
+        <TTSPlayer :text="message.content" />
         <button 
           @click="copyContent"
           class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
@@ -85,22 +86,21 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { useDocumentStore } from '../../stores/document'
 import { useToastStore } from '../../stores/toast'
+import TTSPlayer from '../TTSPlayer.vue'
+import type { ChatMessage as ChatMessageType } from '../../types/models'
 
-const props = defineProps({
-  message: {
-    type: Object,
-    required: true
-  }
-})
+const props = defineProps<{
+  message: ChatMessageType
+}>()
 
 const documentStore = useDocumentStore()
 const toastStore = useToastStore()
-const expandedSources = reactive({})
+const expandedSources = reactive<Record<number, boolean>>({})
 const expanded = ref(false)
 const copied = ref(false)
 
@@ -122,16 +122,16 @@ const hasCode = computed(() => {
   return props.message.content.includes('```') || props.message.content.includes('`')
 })
 
-function toggleSource(idx) {
+function toggleSource(idx: number): void {
   expandedSources[idx] = !expandedSources[idx]
 }
 
-function getDocName(docId) {
+function getDocName(docId?: string): string {
   const doc = documentStore.documents.find(d => d.id === docId)
   return doc ? doc.filename : `文档 ${docId?.substring(0, 8)}`
 }
 
-async function copyContent() {
+async function copyContent(): Promise<void> {
   try {
     await navigator.clipboard.writeText(props.message.content)
     copied.value = true

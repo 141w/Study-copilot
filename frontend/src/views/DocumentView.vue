@@ -46,6 +46,15 @@
         </div>
         <div class="flex items-center gap-3">
           <button
+            @click="openTransform"
+            class="p-2 text-gray-400 hover:text-purple-600 transition-colors"
+            title="内容转换"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </button>
+          <button
             @click="copyAllText"
             class="p-2 text-gray-400 hover:text-[#010120] transition-colors"
             title="复制全文"
@@ -165,6 +174,14 @@
     >
       {{ toast.message }}
     </div>
+
+    <!-- Transform Dialog -->
+    <TransformDialog
+      v-model:visible="showTransformDialog"
+      :source-text="transformDocText"
+      :source-title="transformDocTitle"
+      :document-id="selectedDoc?.id"
+    />
   </div>
 </template>
 
@@ -172,10 +189,13 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuizStore } from '../stores/quiz'
+import { useDocumentStore } from '../stores/document'
+import TransformDialog from '../components/TransformDialog.vue'
 import api from '../services/api'
 
 const router = useRouter()
 const quizStore = useQuizStore()
+const documentStore = useDocumentStore()
 
 const loading = ref(false)
 const documents = ref([])
@@ -187,6 +207,11 @@ const pageSize = 15
 const contentRef = ref(null)
 const showBackToTop = ref(false)
 const toast = ref({ show: false, message: '' })
+
+// Transform dialog state
+const showTransformDialog = ref(false)
+const transformDocText = ref('')
+const transformDocTitle = ref('')
 
 const filteredChunks = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -216,8 +241,8 @@ function cleanText(text) {
 async function fetchDocuments() {
   loading.value = true
   try {
-    const response = await api.get('/documents')
-    documents.value = response.data
+    await documentStore.fetchDocuments()
+    documents.value = documentStore.documents
   } catch (error) {
     console.error('Failed to fetch documents:', error)
   } finally {
@@ -319,6 +344,15 @@ async function generateQuiz(chunk) {
   } catch (error) {
     showToast('生成失败，请重试')
   }
+}
+
+function openTransform() {
+  if (!selectedDoc.value) return
+  // Combine all chunks as the source text
+  const allText = chunks.value.map(c => c.text).join('\n\n')
+  transformDocText.value = allText
+  transformDocTitle.value = selectedDoc.value.filename
+  showTransformDialog.value = true
 }
 
 onMounted(() => {

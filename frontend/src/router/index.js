@@ -52,6 +52,34 @@ const routes = [
     name: 'documents',
     component: () => import('../views/DocumentView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/courses',
+    name: 'courses',
+    component: () => import('../views/CourseListView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/courses/:id',
+    name: 'course-detail',
+    component: () => import('../views/CourseDetailView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/notes',
+    name: 'notes',
+    component: () => import('../views/NotesView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/tasks',
+    name: 'tasks',
+    component: () => import('../views/TasksView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 

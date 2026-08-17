@@ -1,14 +1,12 @@
-from fastapi import Request, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.db import get_db, UserLLMConfig
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import UserLLMConfig
 
 
 async def get_user_llm_config(db: AsyncSession, user_id: str) -> dict:
     """获取用户的LLM配置"""
-    result = await db.execute(
-        select(UserLLMConfig).where(UserLLMConfig.user_id == user_id)
-    )
+    result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user_id))
     config = result.scalar_one_or_none()
 
     if not config:
@@ -20,7 +18,9 @@ async def get_user_llm_config(db: AsyncSession, user_id: str) -> dict:
         "base_url": config.base_url,
         "model_name": config.model_name,
         "temperature": config.temperature / 10,
-        "max_tokens": config.max_tokens
+        "max_tokens": config.max_tokens,
+        "embedding_model": config.embedding_model,
+        "embedding_dimension": config.embedding_dimension,
     }
 
 

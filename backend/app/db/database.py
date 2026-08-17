@@ -1,13 +1,24 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, ForeignKey
-from datetime import datetime
+from datetime import UTC, datetime
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+    text,
+)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base, relationship
+
 from app.config import settings
 
 engine = create_async_engine(settings.database_url, echo=settings.debug)
-AsyncSessionLocal = async_sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 Base = declarative_base()
 
@@ -19,7 +30,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
     is_active = Column(Boolean, default=True)
 
 
@@ -33,7 +44,7 @@ class Document(Base):
     status = Column(String, default="pending")
     chunk_count = Column(Integer, default=0)
     file_size = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
     vectorstore_path = Column(String, nullable=True)
 
 
@@ -43,7 +54,7 @@ class ChatSession(Base):
     id = Column(String, primary_key=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
 
 class Message(Base):
@@ -54,7 +65,7 @@ class Message(Base):
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     sources = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
 
 class Quiz(Base):
@@ -67,7 +78,7 @@ class Quiz(Base):
     options = Column(Text, nullable=True)
     answer = Column(Text, nullable=False)
     explanation = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
 
 class QuizResult(Base):
@@ -78,7 +89,7 @@ class QuizResult(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     user_answer = Column(Text, nullable=False)
     is_correct = Column(Boolean, nullable=False)
-    submitted_at = Column(DateTime, default=datetime.utcnow)
+    submitted_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
 
 class UserLLMConfig(Base):
@@ -90,10 +101,101 @@ class UserLLMConfig(Base):
     api_key = Column(String, nullable=True)
     base_url = Column(String, nullable=True)
     model_name = Column(String, default="gpt-4o-mini")
-    temperature = Column(Integer, default=7)
+    temperature = Column(Float, default=0.7)
     max_tokens = Column(Integer, default=2048)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    embedding_model = Column(String, default="shibing624/text2vec-base-chinese")
+    embedding_dimension = Column(Integer, default=768)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
+# ── Note system & Course Space models ───────────────────────────────────
+
+note_tags = Table(
+    "note_tags",
+    Base.metadata,
+    Column("note_id", String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", String, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class CourseSpace(Base):
+    """A course space groups notes, documents, and chat sessions for a specific course."""
+
+    __tablename__ = "course_spaces"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    color = Column(String, nullable=True, default="#6366f1")
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )
+
+    # relationships
+    notes = relationship("Note", back_populates="course_space", cascade="all, delete-orphan")
+
+
+class Tag(Base):
+    """Reusable tag for categorizing notes."""
+
+    __tablename__ = "tags"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    # relationships
+    notes = relationship("Note", secondary=note_tags, back_populates="tags")
+
+
+class Note(Base):
+    """A note belonging to a user, optionally linked to a course space and tagged."""
+
+    __tablename__ = "notes"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    course_space_id = Column(String, ForeignKey("course_spaces.id"), nullable=True, index=True)
+    title = Column(String, nullable=False)
+    content = Column(Text, nullable=False, default="")
+    note_type = Column(String, default="markdown")  # markdown / plain
+    is_pinned = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )
+
+    # relationships
+    course_space = relationship("CourseSpace", back_populates="notes")
+    tags = relationship("Tag", secondary=note_tags, back_populates="notes")
+
+
+class AsyncTask(Base):
+    """Tracks long-running background tasks (document processing, quiz generation, etc.)."""
+
+    __tablename__ = "async_tasks"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    task_type = Column(String, nullable=False)  # e.g., "document_process", "quiz_generate"
+    status = Column(String, default="pending")  # pending / running / completed / failed / cancelled
+    progress = Column(Float, default=0.0)  # 0.0 ~ 1.0
+    result = Column(Text, nullable=True)  # JSON-encoded result data
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    completed_at = Column(DateTime, nullable=True)
 
 
 async def get_db():
@@ -107,3 +209,19 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def ensure_current_schema() -> None:
+    """Lightweight schema bootstrap for fresh databases.
+
+    Pre Alembic from failing on an empty database when the initial migration
+    does not create the base tables. This still relies on the ORM models for
+    the actual schema and does not mutate existing data.
+    """
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            text("SELECT to_regclass('public.users') AS users_exists")
+        )
+        row = result.first()
+        if row is None or not row.users_exists:
+            await conn.run_sync(Base.metadata.create_all)
