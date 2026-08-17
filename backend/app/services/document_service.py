@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.task_worker import enqueue
 from app.core.chunker import (
     create_chunker,
     deduplicate_chunks,

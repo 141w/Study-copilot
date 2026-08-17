@@ -33,7 +33,15 @@ async def lifespan(app: FastAPI):
         await ensure_current_schema()
     await run_migrations()
     logger.info("Database migrations complete.")
+
+    # Start background task worker
+    from app.core.task_worker import start_worker
+    await start_worker()
     yield
+
+    # Stop background task worker
+    from app.core.task_worker import stop_worker
+    await stop_worker()
 
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)

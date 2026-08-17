@@ -3,6 +3,7 @@ Async Tasks API endpoints.
 """
 
 from fastapi import APIRouter, Depends
+from fastapi import Body
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +34,21 @@ class TaskListResponse(BaseModel):
     total: int
 
 
-# ── Endpoints ──────────────────────────────────────────────────────────────
+# ── Endpoints ──
+
+@router.post("", response_model=TaskResponse, status_code=201)
+async def create_task_endpoint(
+    task_type: str = Body(...),
+    payload: dict = Body(default={}),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create and enqueue an async task."""
+    from app.core.task_worker import enqueue
+    task = await task_service.create_task(db, current_user.id, task_type, payload)
+    await enqueue(task.id, current_user.id, task_type, payload)
+    return TaskResponse(**task_service.format_task(task))
+────────────────────────────────────────────────────────────
 
 
 @router.get("", response_model=TaskListResponse)
