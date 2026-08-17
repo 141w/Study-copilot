@@ -13,16 +13,15 @@ import logging
 from enum import Enum
 
 from app.core.llm import LLM
+from app.core.template_manager import render_template
 
 logger = logging.getLogger(__name__)
-
 
 class QueryType(str, Enum):
     RAG_QA = "rag_qa"
     DIRECT_ANSWER = "direct"
     SUMMARY = "summary"
     OUT_OF_SCOPE = "out_of_scope"
-
 
 # ── 关键词规则（优先级高于 LLM，节省一次调用） ──────────────────────
 
@@ -39,13 +38,11 @@ _CHITCHAT_KEYWORDS = [
     "早上好", "晚上好", "下午好",
 ]
 
-
 class QueryAnalysis:
     """查询分析结果"""
     def __init__(self, intent: QueryType, standalone_query: str):
         self.intent = intent
         self.standalone_query = standalone_query
-
 
 class QueryRouter:
     """查询路由器 — 规则优先 + LLM 兜底（同时输出意图和改写查询）"""
@@ -135,15 +132,8 @@ class QueryRouter:
             return QueryType.RAG_QA
 
         try:
-            prompt = (
-                "判断问题类型，只输出一个词：\n"
-                "- rag_qa: 文档问答\n"
-                "- direct: 通用概念解释\n"
-                "- summary: 总结文档\n"
-                "- out_of_scope: 闲聊\n\n"
-                f"问题：{query}\n类型："
-            )
-            response = await llm.chat(
+            prompt = render_template("router/classify_intent.jinja2", query=query)
+                        response = await llm.chat(
                 [{"role": "user", "content": prompt}],
                 temperature=0.0,
                 max_tokens=10,
@@ -193,6 +183,5 @@ class QueryRouter:
         # 解析失败，用规则判断意图
         logger.warning("[Router] Failed to parse LLM response: %s", response[:100])
         return QueryAnalysis(QueryType.RAG_QA, original_query)
-
 
 query_router = QueryRouter()

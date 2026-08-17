@@ -12,10 +12,10 @@ import logging
 from enum import Enum
 
 from app.core.llm import LLM
+from app.core.template_manager import render_template
 from app.core.query_decomposer import query_decomposer
 
 logger = logging.getLogger(__name__)
-
 
 class RetrievalStrategy(str, Enum):
     SINGLE = "single"
@@ -23,25 +23,13 @@ class RetrievalStrategy(str, Enum):
     MULTI_HOP = "multi_hop"
     COMPARE = "compare"
 
-
 class AdaptiveRetriever:
     """根据查询复杂度选择检索策略"""
-
-    STRATEGY_PROMPT = (
-        "判断以下问题的复杂度，选择最合适的检索策略：\n\n"
-        "- single: 简单事实题（\"什么是...\"、\"定义是...\"、\"...的公式是什么\"）\n"
-        "- standard: 标准问答（\"解释...\"、\"描述...\"、\"如何...\"）\n"
-        "- multi_hop: 需要综合多个知识点（\"分析...\"、\"论述...\"、\"为什么...的原因和影响\"）\n"
-        "- compare: 对比类问题（\"比较A和B\"、\"区别是什么\"、\"...和...的异同\"）\n\n"
-        "只输出策略名称（single / standard / multi_hop / compare），不要解释。\n\n"
-        "问题：{query}\n"
-        "策略："
-    )
 
     async def select_strategy(self, query: str, llm: LLM) -> RetrievalStrategy:
         """用 LLM 判断查询复杂度，返回最优检索策略。"""
         try:
-            prompt = self.STRATEGY_PROMPT.format(query=query)
+            prompt = render_template("retriever/strategy_select.jinja2", query=query)
             response = await llm.chat(
                 [{"role": "user", "content": prompt}],
                 temperature=0.0,
@@ -215,6 +203,5 @@ class AdaptiveRetriever:
         })
 
         return merged, thinking_events
-
 
 adaptive_retriever = AdaptiveRetriever()

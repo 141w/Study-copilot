@@ -3,9 +3,9 @@ import logging
 import re
 
 from app.core.llm import LLM
+from app.core.template_manager import render_template
 
 logger = logging.getLogger(__name__)
-
 
 class QuizGenerator:
     def __init__(self, llm_config=None):
@@ -75,6 +75,5 @@ class QuizGenerator:
         result.extend(await self.generate_short_answer(context, short_answer_count))
         logger.debug(f"short_answer result: {result}")
         return result
-
 
 quiz_generator = QuizGenerator()

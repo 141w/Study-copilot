@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.core.adaptive_retriever import adaptive_retriever
+from app.core.template_manager import render_template
 from app.core.answer_reflector import answer_reflector
 from app.core.embedder import embedder
 from app.core.llm import LLM
 from app.core.query_router import QueryType, query_router
 from app.core.retrieval_grader import retrieval_grader
 from app.core.vector_store import DocumentVectorStore
-
 
 def extract_source_indices(text: str) -> list[int]:
     pattern = r"\[来源(\d+)\]"
@@ -28,7 +28,6 @@ def extract_source_indices(text: str) -> list[int]:
         except ValueError:
             continue
     return sorted(list(indices))
-
 
 class RAGEngine:
     def __init__(self):
@@ -69,18 +68,7 @@ class RAGEngine:
                 role_label = "User" if msg.get("role") == "user" else "AI"
                 history_parts.append(f"{role_label}: {msg.get('content', '')}")
             history_text = "\n".join(history_parts)
-            rewrite_prompt = (
-                "你是一个查询改写助手。请根据对话历史，将用户的追问改写为一个独立的、完整的问题，"
-                "使其在不依赖上下文的情况下也能被理解。\n\n"
-                "改写要求：\n"
-                "1. 将代词（它、这个、那个等）替换为具体指代的内容\n"
-                "2. 补全省略的主语、宾语等关键信息\n"
-                "3. 保持原问题的意图不变，不要添加额外信息\n"
-                "4. 只输出改写后的问题，不要解释\n\n"
-                f"对话历史：\n{history_text}\n\n"
-                f"用户追问：{query}\n\n"
-                "改写后的独立问题："
-            )
+            rewrite_prompt = render_template("rag/query_rewrite.jinja2", history_text=history_text, query=query)
             if user_config:
                 llm = LLM(
                     api_key=user_config.get("api_key"),
@@ -413,15 +401,7 @@ class RAGEngine:
         return "\n".join(parts)
 
     async def generate_answer(self, query, context, sources_text="", history=None, llm_config=None):
-        system_prompt = (
-            "你是一个专业的学习助手。请根据提供的文档内容准确回答用户的问题。\n\n"
-            "要求：\n"
-            "1. 仅根据提供的文档内容回答，不要编造信息\n"
-            "2. 如果文档中没有相关信息，请明确说明\n"
-            "3. 引用来源时使用 [来源1], [来源2] 等格式\n"
-            "4. 回答要结构清晰，重点突出\n"
-            "5. 如果问题涉及多个方面，分点回答"
-        )
+        system_prompt = render_template("rag/main_qa_system.jinja2")
         user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
         messages = [
             {"role": "system", "content": system_prompt},
@@ -444,15 +424,7 @@ class RAGEngine:
     async def generate_answer_stream(
         self, query, context, sources_text="", history=None, llm_config=None
     ):
-        system_prompt = (
-            "你是一个专业的学习助手。请根据提供的文档内容准确回答用户的问题。\n\n"
-            "要求：\n"
-            "1. 仅根据提供的文档内容回答，不要编造信息\n"
-            "2. 如果文档中没有相关信息，请明确说明\n"
-            "3. 引用来源时使用 [来源1], [来源2] 等格式\n"
-            "4. 回答要结构清晰，重点突出\n"
-            "5. 如果问题涉及多个方面，分点回答"
-        )
+        system_prompt = render_template("rag/main_qa_system.jinja2")
         user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
         messages = [
             {"role": "system", "content": system_prompt},
@@ -715,6 +687,5 @@ class RAGEngine:
                        "detail": "答案质量检查通过"}
         except Exception as e:
             logger.warning("[RAG] Reflection error for '%s': %s", query[:30], e)
-
 
 rag_engine = RAGEngine()

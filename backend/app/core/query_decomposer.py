@@ -8,15 +8,14 @@ Query Decomposer — 将复杂查询分解为多个可独立检索的子问题
 import logging
 
 from app.core.llm import LLM
+from app.core.template_manager import render_template
 
 logger = logging.getLogger(__name__)
-
 
 class QueryDecomposer:
     """将复杂查询分解为多个可独立检索的子问题"""
 
-    DECOMPOSE_PROMPT = (
-        "将以下复杂问题分解为2-4个独立的子问题，"
+    DECOMPOSE_PROMPT = render_template("decomposer/decompose.jinja2")
         "每个子问题应该能独立检索文档找到答案。\n\n"
         "要求：\n"
         "1. 每个子问题保持完整，不依赖其他子问题\n"
@@ -42,7 +41,7 @@ class QueryDecomposer:
         如果分解失败或结果为空，返回原始查询作为单元素列表。
         """
         try:
-            prompt = self.DECOMPOSE_PROMPT.format(query=query)
+            prompt = render_template(self.DECOMPOSE_PROMPT_TEMPLATE, query=query)
             response = await llm.chat(
                 [{"role": "user", "content": prompt}],
                 temperature=0.0,
@@ -67,7 +66,7 @@ class QueryDecomposer:
         如果提取失败，返回空列表。
         """
         try:
-            prompt = self.EXTRACT_ENTITIES_PROMPT.format(query=query)
+            prompt = render_template(self.EXTRACT_ENTITIES_PROMPT_TEMPLATE, query=query)
             response = await llm.chat(
                 [{"role": "user", "content": prompt}],
                 temperature=0.0,
@@ -85,6 +84,5 @@ class QueryDecomposer:
         except Exception as e:
             logger.warning("[Decomposer] Entity extraction failed: %s", e)
             return []
-
 
 query_decomposer = QueryDecomposer()

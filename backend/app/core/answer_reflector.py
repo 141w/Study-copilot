@@ -10,39 +10,16 @@ import json
 import logging
 
 from app.core.llm import LLM
+from app.core.template_manager import render_template
 
 logger = logging.getLogger(__name__)
-
 
 class AnswerReflector:
     """答案质量反思器"""
 
-    REFLECT_PROMPT = (
-        "你是一个答案质量评估器。请评估以下答案是否满足要求。\n\n"
-        "评估标准：\n"
-        "1. 答案是否基于提供的文档内容？（不是→失败）\n"
-        "2. 是否有明显的信息编造？（有→失败）\n"
-        "3. 引用的来源是否合理？（不合理→失败）\n"
-        "4. 回答是否完整覆盖了问题？（不完整→需补充）\n\n"
-        "文档内容：\n{context}\n\n"
-        "问题：{query}\n"
-        "答案：{answer}\n\n"
-        "请输出 JSON 格式：\n"
-        '{{"pass": true/false, "reason": "原因", "suggestions": "改进建议"}}'
-    )
+    REFLECT_PROMPT = (render_template("reflector/evaluate.jinja2", context=context, query=query, answer=answer)
 
-    REFINE_PROMPT = (
-        "请根据以下反馈改进你的答案。\n\n"
-        "原始问题：{query}\n"
-        "参考文档：\n{context}\n\n"
-        "原始答案：{answer}\n"
-        "改进建议：{feedback}\n\n"
-        "要求：\n"
-        "1. 基于文档内容改进，不要编造信息\n"
-        "2. 保持引用来源的格式 [来源1], [来源2]\n"
-        "3. 只输出改进后的答案，不要解释改进过程\n\n"
-        "改进后的答案："
-    )
+    REFINE_PROMPT = (render_template("reflector/refine.jinja2", query=query, context=context, answer=answer, feedback=feedback)
 
     async def evaluate(
         self, query: str, context: str, answer: str, llm: LLM
@@ -53,7 +30,7 @@ class AnswerReflector:
             {"pass": bool, "reason": str, "suggestions": str}
         """
         try:
-            prompt = self.REFLECT_PROMPT.format(
+            prompt = render_template(self.REFLECT_PROMPT_TEMPLATE, 
                 context=context[:4000], query=query, answer=answer
             )
             response = await llm.chat(
@@ -72,7 +49,7 @@ class AnswerReflector:
     ) -> str:
         """根据反馈重新生成答案。"""
         try:
-            prompt = self.REFINE_PROMPT.format(
+            prompt = render_template(self.REFINE_PROMPT_TEMPLATE, 
                 query=query, context=context[:4000], answer=answer, feedback=feedback
             )
             refined = await llm.chat(
@@ -140,6 +117,5 @@ class AnswerReflector:
                 pass
 
         return {"pass": passed, "reason": reason or "parse_failed", "suggestions": suggestions}
-
 
 answer_reflector = AnswerReflector()

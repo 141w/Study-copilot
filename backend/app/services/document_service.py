@@ -65,7 +65,7 @@ async def upload_document(
     logger.info("Starting document upload: %s", filename)
 
     # Save file to disk
-    uploads_dir = "./uploads"
+    uploads_dir = settings.upload_dir
     user_dir = os.path.join(uploads_dir, user.id)
     os.makedirs(user_dir, exist_ok=True)
 
