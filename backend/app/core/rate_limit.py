@@ -82,29 +82,7 @@ def get_user_identifier(request: Request) -> str:
     return client.host if client else "unknown"
 
 
-async def rate_limit_exceeded_handler(request: Request, exc):
-    """处理限流异常"""
-    return JSONResponse(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        content={
-            "error": "请求过于频繁，请稍后再试",
-            "detail": str(exc),
-            "retry_after": str(exc.detail) if hasattr(exc, "detail") else "60",
-        },
-    )
 
 
-DEFAULT_RATE_LIMITS = {
-    "auth": {"login": "10/hour", "register": "5/hour", "refresh": "20/hour"},
-    "document": {"upload": "10/hour", "list": "60/hour", "delete": "30/hour"},
-    "chat": {"ask": "30/hour"},
-    "quiz": {"generate": "20/hour", "submit": "60/hour"},
-    "analysis": {"wrong": "30/hour", "knowledge": "60/hour", "progress": "60/hour"},
-}
 
 
-def create_rate_limit_key(endpoint: str, user_id: str | None = None) -> str:
-    """创建限流key"""
-    if user_id:
-        return f"rate_limit:{user_id}:{endpoint}"
-    return f"rate_limit:ip:unknown:{endpoint}"
