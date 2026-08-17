@@ -39,6 +39,18 @@ class TagResponse(BaseModel):
     created_at: str
 
 
+class NoteSearchRequest(BaseModel):
+    """Request for semantic note search."""
+    query: str
+    top_k: int = 5
+
+
+
+class NoteSearchRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
+
 class NoteResponse(BaseModel):
     id: str
     title: str
@@ -172,6 +184,19 @@ async def delete_note(
 ):
     await note_service.delete_note(db, current_user, note_id)
     return {"message": "删除成功"}
+
+
+
+
+@router.post("/search", response_model=list[dict])
+async def search_notes(
+    req: NoteSearchRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Semantic search across user notes."""
+    results = await note_service.search_notes(db, current_user, req.query, req.top_k)
+    return results
 
 
 # ── Tag Endpoints ───────────────────────────────────────────────────────

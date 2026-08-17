@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db import Note, Tag, User
+from app.core.vector_store import DocumentVectorStore
 from app.exceptions import NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -170,3 +171,56 @@ async def delete_note(
     await db.delete(note)
     await db.commit()
     logger.info("Deleted note %s", note_id)
+
+
+
+async def search_notes(
+    db: AsyncSession,
+    user: User,
+    query: str,
+    top_k: int = 10,
+) -> list[dict]:
+    """Semantic search across user notes using FAISS vector index."""
+    from app.core.vector_store import DocumentVectorStore
+    from app.core.embedder import embedder
+
+    store = DocumentVectorStore(f"notes_{user.id}", vectorstore_dir="./vectorstore/notes")
+    await store.load()
+
+    if not store._store or not store._store.chunks:
+        return []
+
+    results = await store.search(query, top_k * 2)
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    note_ids = [r.get("chunk", {}).get("document_id", "") for r in results]
+    note_ids = [nid for nid in note_ids if nid][:top_k]
+
+    if not note_ids:
+        return []
+
+    q = await db.execute(
+        select(Note).options(selectinload(Note.tags)).where(
+            Note.id.in_(note_ids), Note.user_id == user.id
+        )
+    )
+    notes_map = {n.id: n for n in q.scalars().all()}
+
+    out = []
+    for r in results:
+        nid = r.get("chunk", {}).get("document_id", "")
+        note = notes_map.get(nid)
+        if note:
+            out.append({
+                "id": note.id,
+                "title": note.title,
+                "content": note.content[:300],
+                "course_space_id": note.course_space_id,
+                "tags": [t.name for t in note.tags],
+                "score": 1.0 - float(r.get("distance", 1)),
+            })
+        if len(out) >= top_k:
+            break
+    return out
