@@ -184,6 +184,10 @@
 </template>
 
 <script setup>
+import { defineOptions } from 'vue'
+
+defineOptions({ name: 'AnalysisView' })
+
 import { ref, onMounted, onActivated, onUnmounted } from 'vue'
 import gsap from 'gsap'
 import api from '../services/api'

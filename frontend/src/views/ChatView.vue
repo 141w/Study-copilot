@@ -305,6 +305,10 @@
 </template>
 
 <script setup>
+import { defineOptions } from 'vue'
+
+defineOptions({ name: 'ChatView' })
+
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChatStore } from '../stores/chat'

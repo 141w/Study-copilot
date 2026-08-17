@@ -232,6 +232,10 @@
 </template>
 
 <script setup>
+import { defineOptions } from 'vue'
+
+defineOptions({ name: 'QuizView' })
+
 import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import gsap from 'gsap'
 import { useQuizStore } from '../stores/quiz'

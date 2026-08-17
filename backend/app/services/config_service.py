@@ -39,7 +39,13 @@ async def create_or_update_llm_config(
     embedding_dimension: int,
 ) -> dict:
     """Create or upsert LLM config for user."""
-    # Normalize temperature: DB stores multiplied int (7 for 0.7).
+    # TEMPERATURE CONVENTION (keep in sync with frontend)
+    # DB stores temperature * 10 as integer
+    # Write: value <= 1  -> multiply by 10; value > 1  -> store as-is
+    # Read:  divide by 10
+    # Frontend config.ts also multiplies by 10 before PUT.
+    #
+        # Normalize temperature: DB stores multiplied int (7 for 0.7).
     # Accept both decimal (<=1) and already-multiplied (>1) inputs.
     normalized_temperature = float(round(temperature * 10) if temperature <= 1 else round(temperature))
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
@@ -102,7 +108,13 @@ async def update_llm_config(
     embedding_dimension: int,
 ) -> dict:
     """Update existing LLM config. Raises NotFoundError if none exists."""
-    # Normalize temperature: DB stores multiplied int (7 for 0.7).
+    # TEMPERATURE CONVENTION (keep in sync with frontend)
+    # DB stores temperature * 10 as integer
+    # Write: value <= 1  -> multiply by 10; value > 1  -> store as-is
+    # Read:  divide by 10
+    # Frontend config.ts also multiplies by 10 before PUT.
+    #
+        # Normalize temperature: DB stores multiplied int (7 for 0.7).
     # Accept both decimal (<=1) and already-multiplied (>1) inputs.
     normalized_temperature = float(round(temperature * 10) if temperature <= 1 else round(temperature))
 

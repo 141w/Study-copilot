@@ -38,7 +38,11 @@ export const useConfigStore = defineStore('config', () => {
   async function saveLLMConfig(configData: LLMConfig): Promise<LLMConfig> {
     loading.value = true
     try {
-      // DB stores temperature as integer (7 for 0.7), so multiply by 10 when saving
+      // TEMPERATURE CONVENTION (must match backend)
+      // Backend stores temperature * 10 as integer in DB
+      // Frontend sends * 10; Backend divides by 10 on read.
+      // See backend/app/services/config_service.py for details.
+            // DB stores temperature as integer (7 for 0.7), so multiply by 10 when saving
       const payload = {
         ...configData,
         temperature: Math.round((configData.temperature || 0.7) * 10)

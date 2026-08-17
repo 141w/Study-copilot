@@ -15,6 +15,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# TODO: Add periodic cleanup of generated mp3 files (older than 24h)
 # TTS output directory
 TTS_DIR = os.path.join(settings.upload_dir, "tts")
 
