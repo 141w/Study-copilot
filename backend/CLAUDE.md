@@ -11,7 +11,7 @@ backend/
 │   │   ├── __init__.py
 │   │   ├── auth.py             # POST /register, /login, GET /me, POST /refresh
 │   │   ├── document.py         # POST /upload, GET /, DELETE /{id}
-│   │   ├── chat.py             # POST /ask, /ask/stream, GET /history
+│   │   ├── chat.py             # POST /ask (stream:true), GET /history
 │   │   ├── quiz.py             # POST /generate, /submit, GET /wrong-questions
 │   │   ├── analysis.py         # POST /wrong, GET /knowledge, /progress
 │   │   ├── notes.py            # CRUD notes + tags + semantic search
@@ -236,7 +236,7 @@ pytest tests/ -v           # Run tests
 | GET | `/api/documents/{id}` | Get document detail |
 | DELETE | `/api/documents/{id}` | Delete document |
 | POST | `/api/chat/ask` | Non-streaming RAG Q&A |
-| POST | `/api/chat/ask/stream` | Streaming RAG Q&A (SSE) |
+| POST | `/api/chat/ask` (stream:true) | Streaming RAG Q&A (SSE) |
 | GET | `/api/chat/history` | List chat sessions |
 | GET | `/api/chat/history/{id}` | Get session messages |
 | PUT | `/api/chat/history/{id}` | Update session title |
@@ -245,8 +245,8 @@ pytest tests/ -v           # Run tests
 | POST | `/api/quiz/submit` | Submit quiz answers |
 | GET | `/api/quiz/result-history` | Get quiz result history |
 | GET | `/api/quiz/wrong-questions` | Get wrong questions for review |
-| POST | `/api/analysis/record-wrong` | Record a wrong answer |
-| GET | `/api/analysis/knowledge-gaps` | Get knowledge gap analysis |
+| POST | `/api/analysis/wrong` | Analyze wrong answers |
+| GET | `/api/analysis/knowledge` | Get knowledge stats |
 | GET | `/api/analysis/progress` | Get learning progress |
 | GET | `/api/notes` | List notes (with filters) |
 | POST | `/api/notes` | Create note |
@@ -261,8 +261,8 @@ pytest tests/ -v           # Run tests
 | PUT | `/api/courses/{id}` | Update course space |
 | DELETE | `/api/courses/{id}` | Delete course space |
 | POST | `/api/transform` | Transform content (8 types) |
-| GET | `/api/transform/types` | List available transformation types |
-| POST | `/api/tts/synthesize` | Synthesize speech from text |
+| GET | `/api/transform/transformations` | List available transformation types |
+| POST | `/api/tts/generate` | Synthesize speech from text |
 | GET | `/api/tts/voices` | List available TTS voices |
 | GET | `/api/tasks` | List user's tasks (filterable by status) |
 | GET | `/api/tasks/{id}` | Get task status |

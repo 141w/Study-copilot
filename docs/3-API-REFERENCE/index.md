@@ -174,7 +174,7 @@ Authorization: Bearer <access_token>
 
 ### Ask Question (Streaming)
 ```
-POST /api/chat/ask/stream
+POST /api/chat/ask (stream: true)
 Authorization: Bearer <access_token>
 ```
 
@@ -414,7 +414,7 @@ Authorization: Bearer ***
 
 ### Search Notes
 ```
-POST /api/notes/search
+POST /api/notes/search — not implemented — ❌ not implemented
 Authorization: Bearer ***
 ```
 
@@ -511,7 +511,7 @@ Authorization: Bearer ***
 
 ### Synthesize Speech
 ```
-POST /api/tts/synthesize
+POST /api/tts/generate
 Authorization: Bearer ***
 ```
 

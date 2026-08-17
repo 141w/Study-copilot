@@ -543,7 +543,7 @@ cd frontend && npm run dev
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
 | `/api/chat/ask` | POST | 提问（普通响应） | JWT |
-| `/api/chat/ask/stream` | POST | 提问（流式 SSE 响应） | JWT |
+| `/api/chat/ask` (stream: true) | POST | 提问（流式 SSE 响应） | JWT |
 | `/api/chat/history` | GET | 获取对话历史列表 | JWT |
 | `/api/chat/history/{id}` | GET | 获取对话详情 | JWT |
 
@@ -583,7 +583,6 @@ cd frontend && npm run dev
 | `/api/notes/{id}` | DELETE | 删除笔记 | JWT |
 | `/api/notes/tags/all` | GET | 获取所有标签 | JWT |
 | `/api/notes/tags/all` | GET | 获取所有标签 | JWT |
-| `/api/notes/search` | POST | 语义搜索笔记 | JWT |
 
 
 ### 课程空间接口
@@ -607,7 +606,7 @@ cd frontend && npm run dev
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
-| `/api/tts/synthesize` | POST | 文本转语音（返回音频流） | JWT |
+| `/api/tts/generate` | POST | 文本转语音（返回音频流） | JWT |
 | `/api/tts/voices` | GET | 获取可用语音列表 | JWT |
 
 ### 异步任务接口
@@ -757,7 +756,7 @@ Step 4: 答案生成 + 自我反思
 
 - **后端**：使用 `StreamingResponse` + `EventSourceResponse`
 - **前端**：使用 `fetchEventSource` 或 `ReadableStream` 接收流式数据
-- **接口**：`POST /api/chat/ask/stream`
+- **接口**：`POST /api/chat/ask` (stream: true)
 
 ### 上下文感知改写（Context-Aware Rewrite）
 
@@ -1008,7 +1007,7 @@ ruff format .
 - 网络代理拦截了 SSE
 
 **解决方案：**
-- 确认后端 `/api/chat/ask/stream` 可用
+- 确认后端 `/api/chat/ask` (stream: true) 可用
 - 检查控制台有无 CORS 错误
 - 尝试使用普通模式（非流式）
 

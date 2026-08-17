@@ -39,7 +39,7 @@ This file provides architectural guidance for contributors working on Study Copi
 ```
 ┌──────────────────────────────────────────────┐
 │          Frontend (Vue3 + Vite)              │
-│          frontend/ @ port 5173               │
+│          frontend/ @ port 3000               │
 ├──────────────────────────────────────────────┤
 │ - 13 views (Home, Login, Upload, Document, Chat, Quiz, Analysis, ModelConfig, CourseList, CourseDetail, Notes, Tasks, Register) │
 │ - 15 Pinia stores                             │

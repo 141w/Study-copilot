@@ -82,16 +82,16 @@ class TestRAGEngine:
     def test_needs_rewrite_empty_string(self, engine):
         assert engine._needs_rewrite("") is False
 
-    # _deduplicate_results
+    # deduplicate_results
     def test_deduplicate_empty(self, engine):
-        assert engine._deduplicate_results([]) == []
+        assert engine.deduplicate_results([]) == []
 
     def test_deduplicate_no_dupes(self, engine):
         results = [
             {"chunk": {"text": "aaa"}, "distance": 0.1},
             {"chunk": {"text": "bbb"}, "distance": 0.2},
         ]
-        assert len(engine._deduplicate_results(results)) == 2
+        assert len(engine.deduplicate_results(results)) == 2
 
     def test_deduplicate_keeps_lower_distance(self, engine):
         text = "x" * 150
@@ -99,13 +99,13 @@ class TestRAGEngine:
             {"chunk": {"text": text}, "distance": 0.5},
             {"chunk": {"text": text}, "distance": 0.1},
         ]
-        deduped = engine._deduplicate_results(results)
+        deduped = engine.deduplicate_results(results)
         assert len(deduped) == 1
         assert deduped[0]["distance"] == 0.1
 
     def test_deduplicate_empty_text(self, engine):
         results = [{"chunk": {"text": ""}, "distance": 0.1}]
-        assert len(engine._deduplicate_results(results)) == 1
+        assert len(engine.deduplicate_results(results)) == 1
 
     def test_deduplicate_three_dupes_keeps_best(self, engine):
         text = "y" * 120
@@ -114,7 +114,7 @@ class TestRAGEngine:
             {"chunk": {"text": text}, "distance": 0.1},
             {"chunk": {"text": text}, "distance": 0.3},
         ]
-        deduped = engine._deduplicate_results(results)
+        deduped = engine.deduplicate_results(results)
         assert len(deduped) == 1
         assert deduped[0]["distance"] == 0.1
 
@@ -124,7 +124,7 @@ class TestRAGEngine:
             {"chunk": {"text": "unique_b"}, "distance": 0.2},
             {"chunk": {"text": "unique_c"}, "distance": 0.3},
         ]
-        deduped = engine._deduplicate_results(results)
+        deduped = engine.deduplicate_results(results)
         assert [r["chunk"]["text"] for r in deduped] == ["unique_a", "unique_b", "unique_c"]
 
     # build_context
@@ -725,7 +725,7 @@ class TestRAGEngineExtended:
         preview = text.split(": ", 1)[-1]
         assert len(preview) <= 84  # 80 chars + "..."
 
-    # deduplicate_results edge cases
+    # deduplicate edge cases
     def test_deduplicate_short_text_no_dedup(self, engine):
         """Text shorter than 100 chars uses full text as prefix, should still deduplicate."""
         text = "short"
@@ -733,7 +733,7 @@ class TestRAGEngineExtended:
             {"chunk": {"text": text}, "distance": 0.5},
             {"chunk": {"text": text}, "distance": 0.1},
         ]
-        deduped = engine._deduplicate_results(results)
+        deduped = engine.deduplicate_results(results)
         assert len(deduped) == 1
         assert deduped[0]["distance"] == 0.1
 
@@ -745,7 +745,7 @@ class TestRAGEngineExtended:
             {"chunk": {"text": text_a}, "distance": 0.1},
             {"chunk": {"text": text_b}, "distance": 0.2},
         ]
-        deduped = engine._deduplicate_results(results)
+        deduped = engine.deduplicate_results(results)
         assert len(deduped) == 2
 
     # _needs_rewrite edge cases

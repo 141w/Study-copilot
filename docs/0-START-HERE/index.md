@@ -48,7 +48,7 @@ cp .env.example .env  # Edit .env with your API keys
 ```
 
 Once running:
-- **Frontend**: http://localhost:5173
+- **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 

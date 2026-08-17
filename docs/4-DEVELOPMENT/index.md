@@ -30,7 +30,7 @@ npm install
 npm run dev
 ```
 
-The frontend runs at `http://localhost:5173` with Vite HMR.
+The frontend runs at `http://localhost:3000` with Vite HMR.
 
 ### Running Both (macOS)
 

@@ -6,6 +6,17 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
+// Mock axios to avoid isURLSameOrigin crash in jsdom with spaces in path
+vi.mock('../services/api', () => ({
+  default: {
+    get: vi.fn().mockResolvedValue({ data: {} }),
+    post: vi.fn().mockResolvedValue({ data: {} }),
+    put: vi.fn().mockResolvedValue({ data: {} }),
+    delete: vi.fn().mockResolvedValue({ data: {} }),
+    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+  },
+}))
+
 // Mock localStorage
 const localStorageMock = (() => {
   let store = {}

@@ -138,7 +138,7 @@ Core types defined in `src/types/`:
 - `models.ts` — Data models (User, Document, ChatMessage, Note, Course, Quiz, Task, etc.)
 
 ### Streaming (SSE)
-Chat uses native `fetch` with `ReadableStream` for real-time token delivery from `/api/chat/ask/stream`. Supports:
+Chat uses native `fetch` with `ReadableStream` for real-time token delivery from `/api/chat/ask` (stream: true). Supports:
 - `sources` event — initial source documents
 - `token` event — streaming tokens
 - `answer` event — complete answer (for fast paths)
@@ -164,7 +164,7 @@ Vue Router with lazy-loaded routes and navigation guards:
 ```bash
 cd frontend
 npm install
-npm run dev        # Vite dev server on port 5173
+npm run dev        # Vite dev server on port 3000
 npx vitest run     # Run tests
 npx vitest         # Watch mode
 ```

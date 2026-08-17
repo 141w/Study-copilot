@@ -121,7 +121,7 @@ cd frontend && npm run dev
 
 ## 6. Verify Installation
 
-- **Frontend**: http://localhost:5173
+- **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **Swagger Docs**: http://localhost:8000/docs
 - **Health Check**: `curl http://localhost:8000/docs` should return the API docs page
@@ -143,5 +143,5 @@ model = SentenceTransformer("shibing624/text2vec-base-chinese")
 ### Port Already in Use
 ```bash
 lsof -i :8000   # Check backend port
-lsof -i :5173   # Check frontend port
+lsof -i :3000   # Check frontend port
 ```

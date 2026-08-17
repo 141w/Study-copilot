@@ -28,7 +28,7 @@ This file provides architectural guidance for contributors working on Study Copi
 ```
 ┌──────────────────────────────────────────────┐
 │          Frontend (Vue3 + Vite)              │
-│          frontend/ @ port 5173               │
+│          frontend/ @ port 3000               │
 ├──────────────────────────────────────────────┤
 │ - Auth, Document, Chat, Quiz, Analysis views │
 │ - Pinia state management                     │
