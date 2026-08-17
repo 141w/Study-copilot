@@ -97,3 +97,5 @@ backend/uploads/tts/*.mp3
 
 # IDE
 .idea/
+frontend/node_modules/
+frontend/dist/
