@@ -120,7 +120,7 @@ async def upload_document(
 
         # Build vector store
         logger.info("Building vector store...")
-        store = DocumentVectorStore(doc_id, retrieval_type=DocumentVectorStore.RETRIEVAL_TYPE_FAISS)
+        store = DocumentVectorStore(doc_id, retrieval_type=DocumentVectorStore.RETRIEVAL_TYPE_HYBRID)
         await store.add_chunks(chunks)
 
         # Persist to DB

@@ -242,15 +242,24 @@ class BM25VectorStore(BaseVectorStore):
 
         return True
 
+    @staticmethod
+    def _tokenize(text: str) -> list[str]:
+        """Tokenize for BM25: jieba for Chinese, regex for English."""
+        import re
+        if any("一" <= c <= "鿿" for c in text):
+            try:
+                import jieba
+                return list(jieba.cut(text))
+            except ImportError:
+                pass
+        return re.findall(r"[a-zA-Z0-9]+(?:'[a-zA-Z]+)?", text.lower())
+
     async def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """BM25关键词检索"""
         if not self._bm25 or not self._corpus:
             return []
 
-        # 分词处理
-        import re
-
-        tokens = re.findall(r"\w+", query.lower())
+        tokens = self._tokenize(query)
 
         if not tokens:
             return []

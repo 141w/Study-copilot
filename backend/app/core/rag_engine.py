@@ -36,28 +36,6 @@ class RAGEngine:
         self._reranker = None
         self._reranker_loaded = False
 
-    # Chinese pronouns/reference words that indicate the query depends on prior context
-    _REWRITE_TRIGGER_WORDS = [
-        "它",
-        "这个",
-        "那个",
-        "上述",
-        "之前",
-        "上面",
-        "前面",
-        "上述内容",
-        "该",
-        "此",
-        "其",
-    ]
-
-    def _needs_rewrite(self, query: str) -> bool:
-        """Rule-based check: only rewrite if the query contains pronouns/reference words."""
-        for word in self._REWRITE_TRIGGER_WORDS:
-            if word in query:
-                return True
-        return False
-
     async def _rewrite_query(
         self, query: str, history: list[dict], user_config: dict | None = None
     ) -> str:
@@ -490,6 +468,19 @@ class RAGEngine:
         retrieved, _thinking = await adaptive_retriever.retrieve_adaptive(
             doc_ids, final_query, strategy, self, user_config
         )
+
+        # Step 3: Corrective retrieval — grade quality, retry if poor
+        if retrieved:
+            quality = await retrieval_grader.grade(final_query, retrieved, user_config)
+            if not quality.is_good:
+                logger.info("[RAG] Retrieval %s (%s), attempting corrective...",
+                            quality.quality, quality.reason)
+                corrected, _ = await self._corrective_retrieve(
+                    doc_ids, final_query, user_config, top_k=5
+                )
+                if corrected:
+                    retrieved = corrected
+                    logger.info("[RAG] Corrective improved: %d chunks", len(corrected))
 
         if not retrieved:
             return {
