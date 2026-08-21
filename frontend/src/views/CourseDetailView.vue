@@ -74,7 +74,50 @@
         </button>
       </div>
 
-      <!-- Documents Tab removed — backend API not implemented yet -->
+      <!-- Documents Tab -->
+      <div v-if="activeTab === 'documents'">
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-sm text-gray-500">课程关联的文档</p>
+          <button @click="showAddDocDialog = true" class="btn-secondary text-sm">添加文档</button>
+        </div>
+
+        <div v-if="courseDocuments.length === 0" class="text-center py-12">
+          <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <p class="text-gray-500 mb-4">此课程暂无文档</p>
+          <button @click="showAddDocDialog = true" class="btn-secondary text-sm">添加第一个文档</button>
+        </div>
+
+        <div v-else class="card divide-y divide-gray-100">
+          <div
+            v-for="doc in courseDocuments"
+            :key="doc.id"
+            class="p-4 flex items-center gap-4"
+          >
+            <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-medium text-gray-900 truncate">{{ doc.filename }}</h3>
+              <p class="text-sm text-gray-500">{{ doc.chunk_count }} chunks · {{ doc.status }}</p>
+            </div>
+            <button
+              @click="removeDoc(doc.id)"
+              class="text-gray-400 hover:text-red-500 transition-colors"
+              title="从课程移除"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- Notes Tab -->
       <div v-if="activeTab === 'notes'">
@@ -120,6 +163,7 @@
             <NoteCard
               v-else
               :note="note"
+              :course-name="course?.name"
               @click="openEditNote(note)"
               @edit="openEditNote(note)"
               @delete="confirmDeleteNote(note)"
@@ -128,6 +172,33 @@
         </div>
       </div>
     </template>
+
+    <!-- Add Document Dialog -->
+    <Teleport to="body">
+      <div v-if="showAddDocDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/40" @click="showAddDocDialog = false"></div>
+        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-4">添加文档到课程</h2>
+          <div v-if="availableDocs.length === 0" class="text-sm text-gray-500 py-4 text-center">
+            没有可添加的文档，请先上传文档
+          </div>
+          <div v-else class="space-y-2 max-h-64 overflow-y-auto mb-4">
+            <label
+              v-for="doc in availableDocs"
+              :key="doc.id"
+              class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:border-[#010120] transition-colors"
+            >
+              <input type="radio" :value="doc.id" v-model="selectedDocId" class="accent-[#010120]" />
+              <span class="text-sm text-gray-900 truncate">{{ doc.filename }}</span>
+            </label>
+          </div>
+          <div class="flex items-center justify-end gap-3">
+            <button @click="showAddDocDialog = false" class="btn-secondary">取消</button>
+            <button @click="addDoc" :disabled="!selectedDocId" class="btn-primary">添加</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Delete Note Confirmation -->
     <Teleport to="body">
@@ -147,10 +218,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '../stores/course'
 import { useNoteStore } from '../stores/note'
+import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
 import NoteCard from '../components/NoteCard.vue'
 import NoteEditor from '../components/NoteEditor.vue'
@@ -160,6 +232,7 @@ const route = useRoute()
 const router = useRouter()
 const courseStore = useCourseStore()
 const noteStore = useNoteStore()
+const documentStore = useDocumentStore()
 const toast = useToastStore()
 
 const pageContainer = ref(null)
@@ -167,6 +240,11 @@ const courseHeader = ref(null)
 const activeTab = ref('documents')
 const showNewNote = ref(false)
 const editingNoteId = ref(null)
+
+// Documents tab
+const courseDocuments = ref([])
+const showAddDocDialog = ref(false)
+const selectedDocId = ref(null)
 
 // New note form
 const newNoteTitle = ref('')
@@ -189,10 +267,15 @@ const courseId = computed(() => route.params.id)
 const course = computed(() => courseStore.currentCourse)
 const loading = computed(() => courseStore.loading)
 const courseNotes = computed(() =>
-  noteStore.notes.filter(n => n.course_id === courseId.value)
+  noteStore.notes.filter(n => n.course_space_id === courseId.value)
 )
+const availableDocs = computed(() => {
+  const inCourse = new Set(courseDocuments.value.map(d => d.id))
+  return documentStore.documents.filter(d => d.status === 'ready' && !inCourse.has(d.id))
+})
 
 const tabs = computed(() => [
+  { key: 'documents', label: '课程文档', count: courseDocuments.value.length },
   { key: 'notes', label: '课程笔记', count: courseNotes.value.length }
 ])
 
@@ -204,6 +287,33 @@ async function loadCourseData() {
   }
 }
 
+async function loadCourseDocuments() {
+  try {
+    courseDocuments.value = await courseStore.fetchCourseDocuments(courseId.value)
+  } catch (e) {
+    courseDocuments.value = []
+  }
+}
+
+async function addDoc() {
+  if (!selectedDocId.value) return
+  try {
+    await courseStore.addDocumentToCourse(courseId.value, selectedDocId.value)
+    toast.success('文档已添加到课程')
+    showAddDocDialog.value = false
+    selectedDocId.value = null
+    await loadCourseDocuments()
+  } catch (e) {
+    toast.error('添加失败')
+  }
+}
+
+async function removeDoc(docId) {
+  try {
+    await courseStore.removeDocumentFromCourse(courseId.value, docId)
+    toast.success('文档已从课程移除')
+    await loadCourseDocuments()
+  } catch (e) {
     toast.error('移除失败')
   }
 }
@@ -303,7 +413,11 @@ async function doDeleteNote() {
 
 onMounted(async () => {
   await loadCourseData()
-  await noteStore.fetchNotes()
+  await Promise.all([
+    noteStore.fetchNotes(),
+    documentStore.fetchDocuments(),
+    loadCourseDocuments()
+  ])
 
   // Restore draft if exists
   const draft = localStorage.getItem(`note_draft_${courseId.value}`)

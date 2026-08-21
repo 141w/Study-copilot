@@ -178,6 +178,13 @@ async function deleteDoc(docId) {
   await documentStore.deleteDocument(docId)
 }
 
+// 修复（2026-08-19）：模板绑定了 @imported="onUrlImported" 但函数未定义，
+// URL 导入成功后列表不刷新、无提示。补上 handler。
+function onUrlImported(doc) {
+  toastStore.success(`URL 导入成功：${doc?.filename || '文档已加入列表'}`)
+  documentStore.fetchDocuments()
+}
+
 function statusColor(status) {
   switch (status) {
     case 'ready': return 'text-green-500'

@@ -78,7 +78,6 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-   - backend API not implemented yet
   async function fetchCourseDocuments(courseId) {
     try {
       const response = await api.get(`/courses/${courseId}/documents`)
@@ -89,8 +88,6 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  
-    
   async function addDocumentToCourse(courseId, documentId) {
     try {
       const response = await api.post(`/courses/${courseId}/documents`, { document_id: documentId })
@@ -101,7 +98,6 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-   - backend API not implemented yet
   async function removeDocumentFromCourse(courseId, documentId) {
     try {
       await api.delete(`/courses/${courseId}/documents/${documentId}`)
@@ -110,8 +106,6 @@ export const useCourseStore = defineStore('course', () => {
       throw error
     }
   }
-
-  
 
   function selectCourse(course) {
     currentCourse.value = course
@@ -126,9 +120,9 @@ export const useCourseStore = defineStore('course', () => {
     createCourse,
     updateCourse,
     deleteCourse,
-    fetchCourseDocuments — not implemented
-    addDocumentToCourse — not implemented
-    removeDocumentFromCourse — not implemented
+    fetchCourseDocuments,
+    addDocumentToCourse,
+    removeDocumentFromCourse,
     selectCourse
   }
 })

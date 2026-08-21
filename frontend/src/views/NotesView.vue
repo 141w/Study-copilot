@@ -121,6 +121,7 @@
         <NoteCard
           v-else
           :note="note"
+          :course-name="courseNameFor(note)"
           @click="openEditNote(note)"
           @edit="openEditNote(note)"
           @delete="confirmDeleteNote(note)"
@@ -194,6 +195,12 @@ const courses = computed(() => courseStore.courses)
 const hasActiveFilters = computed(() =>
   searchInput.value.trim() || selectedCourseId.value || selectedTag.value
 )
+
+function courseNameFor(note) {
+  if (!note.course_space_id) return ''
+  const c = courses.value.find(c => c.id === note.course_space_id)
+  return c ? c.name : ''
+}
 
 function onSearchInput() {
   clearTimeout(searchDebounce)
@@ -272,7 +279,7 @@ function openEditNote(note) {
   editNoteTitle.value = note.title || ''
   editNoteContent.value = note.content || ''
   editNoteTags.value = [...(note.tags || [])]
-  editNoteCourseId.value = note.course_id || ''
+  editNoteCourseId.value = note.course_space_id || ''
 }
 
 function cancelEdit() {

@@ -7,7 +7,7 @@ beforeEach(() => {
 })
 
 // Mock axios to avoid isURLSameOrigin crash in jsdom with spaces in path
-vi.mock('../services/api', () => ({
+vi.mock('@/services/api', () => ({
   default: {
     get: vi.fn().mockResolvedValue({ data: {} }),
     post: vi.fn().mockResolvedValue({ data: {} }),

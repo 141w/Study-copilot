@@ -128,16 +128,11 @@ export const useChatStore = defineStore('chat', () => {
       isStreaming: true // 标记为流式加载中
     })
 
-    try {
-      const token = localStorage.getItem('token')
+    async function doFetch(token) {
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
-
-      const response = await fetch('/api/chat/ask', {
+      return await fetch('/api/chat/ask', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...headers
-        },
+        headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({
           question,
           document_ids: documentIds,
@@ -146,6 +141,32 @@ export const useChatStore = defineStore('chat', () => {
         }),
         signal: controller.signal
       })
+    }
+
+    try {
+      let token = localStorage.getItem('token')
+      let response = await doFetch(token)
+
+      // Auto-refresh on 401: try refreshing the token once
+      if (response.status === 401) {
+        const refreshToken = localStorage.getItem('refreshToken')
+        if (refreshToken) {
+          try {
+            const refreshResp = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${refreshToken}` }
+            })
+            if (refreshResp.ok) {
+              const data = await refreshResp.json()
+              localStorage.setItem('token', data.access_token)
+              localStorage.setItem('refreshToken', data.refresh_token)
+              response = await doFetch(data.access_token)
+            }
+          } catch (_) {
+            // refresh failed, fall through to original error
+          }
+        }
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -173,8 +194,19 @@ export const useChatStore = defineStore('chat', () => {
               continue
             }
 
-            if (data.type === 'sources') {
+            if (data.type === 'session') {
+              // 后端下发的会话 ID —— 多轮追问的关键：
+              // 新对话时后端创建 session 后立即通知前端，
+              // 后续消息才能带上同一 session_id 形成上下文
+              if (data.session_id) {
+                currentSession.value = data.session_id
+              }
+            } else if (data.type === 'sources') {
               streamingSources.value = data.sources
+              // sources 事件也携带 session_id（兼容旧路径）
+              if (data.session_id) {
+                currentSession.value = data.session_id
+              }
               // 更新临时消息的来源信息
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
@@ -221,12 +253,23 @@ export const useChatStore = defineStore('chat', () => {
               if (msgIdx !== -1) {
                 messages.value[msgIdx].isStreaming = false
               }
+              // 新会话首次回答完成后，刷新历史列表让侧栏能看到它
+              if (
+                currentSession.value &&
+                !sessions.value.some(s => s.session_id === currentSession.value)
+              ) {
+                fetchSessions().catch(() => {})
+              }
             }
           }
         }
       }
 
-      currentSession.value = sessionId || currentSession.value
+      // 仅当调用方显式指定 session 时才覆盖；
+      // 否则保留后端通过 session/sources 事件下发的 currentSession
+      if (sessionId) {
+        currentSession.value = sessionId
+      }
       return { success: true }
     } catch (error) {
       if (error.name === 'AbortError') {

@@ -25,15 +25,9 @@ export const useConfigStore = defineStore('config', () => {
     }
   }
 
-  async function fetchLLMConfigWithSecret(): Promise<LLMConfig | null> {
-    try {
-      const response = await api.get<LLMConfig>('/config/llm/with-secret')
-      return response.data
-    } catch (error) {
-      console.error('Failed to fetch LLM config with secret:', error)
-      return null
-    }
-  }
+  // 安全修复（2026-08-19）：不再提供 fetchLLMConfigWithSecret。
+  // 后端已移除 /config/llm/with-secret 端点（明文 Key 出网风险）；
+  // 聊天/出题/转换所需的 Key 由后端服务端自行解密使用，前端永不需要明文。
 
   async function saveLLMConfig(configData: LLMConfig): Promise<LLMConfig> {
     loading.value = true
@@ -67,10 +61,8 @@ export const useConfigStore = defineStore('config', () => {
       chatStore.config.modelName = configData.model_name
       chatStore.config.temperature = configData.temperature || 0.7
       chatStore.config.maxTokens = configData.max_tokens || 2048
-      if (configData.api_key) {
-        chatStore.config.apiKey = configData.api_key
-        chatStore.config.baseUrl = configData.base_url || ''
-      }
+      // apiKey 不再同步到 chatStore：请求不携带 Key，后端服务端自行解密使用
+      chatStore.config.baseUrl = configData.base_url || ''
 
       return response.data
     } catch (error) {
@@ -82,18 +74,18 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   async function syncToChatStore(): Promise<void> {
-    const config = await fetchLLMConfigWithSecret()
+    // 改用不含明文的 /config/llm；apiKey 不再下发（后端服务端使用）
+    const config = await fetchLLMConfig()
     if (config && config.provider) {
       const chatStore = useChatStore()
       chatStore.config.provider = config.provider
-      chatStore.config.apiKey = config.api_key || ''
       chatStore.config.baseUrl = config.base_url || ''
-      chatStore.config.modelName = config.model
+      chatStore.config.modelName = config.model_name
       chatStore.config.temperature = config.temperature || 0.7
       chatStore.config.maxTokens = config.max_tokens || 2048
 
       localStorage.setItem('llmProvider', config.provider)
-      localStorage.setItem('llmModel', config.model)
+      localStorage.setItem('llmModel', config.model_name)
       localStorage.setItem('llmTemperature', (config.temperature || 0.7).toString())
       localStorage.setItem('llmMaxTokens', (config.max_tokens || 2048).toString())
     }
@@ -102,7 +94,6 @@ export const useConfigStore = defineStore('config', () => {
   return {
     loading,
     fetchLLMConfig,
-    fetchLLMConfigWithSecret,
     saveLLMConfig,
     syncToChatStore
   }

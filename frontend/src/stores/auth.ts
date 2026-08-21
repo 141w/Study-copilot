@@ -12,13 +12,11 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value)
 
   async function login(username: string, password: string): Promise<AuthTokens> {
-    const formData = new FormData()
-    formData.append('username', username)
-    formData.append('password', password)
+    const params = new URLSearchParams()
+    params.append('username', username)
+    params.append('password', password)
 
-    const response = await api.post<AuthTokens>('/auth/login', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    const response = await api.post<AuthTokens>('/auth/login', params)
 
     token.value = response.data.access_token
     refreshToken.value = response.data.refresh_token

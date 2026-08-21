@@ -25,9 +25,10 @@ export interface Document {
 export interface Source {
   index: number
   text: string
-  page?: number
+  page?: string
   document_id?: string
-  document_name?: string
+  source?: string
+  relevance_score?: number
 }
 
 export interface ChatMessage {
@@ -44,9 +45,7 @@ export interface ChatMessage {
 export interface ChatSession {
   id: string
   title: string
-  document_id: string
   created_at: string
-  updated_at: string
   message_count?: number
 }
 
@@ -54,9 +53,9 @@ export interface Note {
   id: string
   title: string
   content: string
-  note_type: 'manual' | 'ai'
-  course_id?: string
-  document_id?: string
+  note_type: 'markdown' | 'plain'
+  course_space_id?: string
+  is_pinned?: boolean
   tags: string[]
   created_at: string
   updated_at: string
@@ -74,18 +73,12 @@ export interface Course {
 
 export interface Quiz {
   id: string
-  document_id: string
-  questions: Question[]
-  created_at: string
-}
-
-export interface Question {
-  id: string
-  type: 'multiple_choice' | 'short_answer'
+  question_type: 'choice' | 'short_answer'
   question: string
-  options?: string[]
-  answer: string
-  explanation?: string
+  options?: string[] | null
+  answer?: string | null
+  explanation?: string | null
+  document_id?: string
 }
 
 export interface QuizResult {
@@ -117,12 +110,19 @@ export interface Task {
 }
 
 export interface LLMConfig {
+  id?: string
   provider: string
-  api_key: string
-  base_url: string
+  /** 保存时提交用；GET 响应永不返回明文（安全修复 2026-08-19） */
+  api_key?: string
+  base_url?: string
   model_name: string
   temperature?: number
   max_tokens?: number
+  embedding_model?: string
+  embedding_dimension?: number
+  /** GET /config/llm 返回：是否已保存 Key + 掩码展示值 */
+  has_api_key?: boolean
+  api_key_masked?: string
 }
 
 export interface Transformation {

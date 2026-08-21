@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run --config vitest.config.js",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "axios": "^1.6.8",
@@ -26,7 +27,7 @@
     "jsdom": "^29.1.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
-    "typescript": "^7.0.2",
+    "typescript": "^5.9.3",
     "vite": "^5.2.8",
     "vitest": "^4.1.9",
     "vue-tsc": "^3.3.10"

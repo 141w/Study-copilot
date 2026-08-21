@@ -130,7 +130,25 @@
                 <span>思考中...</span>
               </div>
               <div v-else class="prose prose-sm max-w-none" v-html="renderMarkdown(msg.content)"></div>
-              
+
+              <!-- 消息操作栏：朗读 + 复制（仅助手消息、非流式中、有内容时显示） -->
+              <div
+                v-if="msg.role === 'assistant' && !msg.isStreaming && msg.content"
+                class="flex items-center gap-3 mt-2 pt-2 border-t border-[var(--border-default)]"
+              >
+                <TTSPlayer :text="msg.content" />
+                <button
+                  @click="copyMessage(msg)"
+                  class="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  title="复制回答"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>{{ copiedMsgId === msg.id ? '已复制' : '复制' }}</span>
+                </button>
+              </div>
+
               <!-- Sources -->
               <div v-if="msg.sources && msg.sources.length > 0 && (!msg.isStreaming || msg.content)" class="mt-3 pt-3 border-t border-[var(--border-default)]">
                 <div class="flex items-center gap-2 mb-2">
@@ -314,8 +332,8 @@ import { useRoute } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import { useDocumentStore } from '../stores/document'
 import ChatInput from '../components/chat/ChatInput.vue'
-import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+import TTSPlayer from '../components/TTSPlayer.vue'
+import { useMarkdown } from '../composables/useMarkdown'
 import gsap from 'gsap'
 
 const chatStore = useChatStore()
@@ -324,6 +342,19 @@ const selectedDocs = ref([])
 const showHistory = ref(false)
 const messagesRef = ref(null)
 const route = useRoute()
+
+// 复制消息状态
+const copiedMsgId = ref(null)
+
+async function copyMessage(msg) {
+  try {
+    await navigator.clipboard.writeText(msg.content)
+    copiedMsgId.value = msg.id
+    setTimeout(() => { copiedMsgId.value = null }, 2000)
+  } catch (e) {
+    console.error('Copy failed:', e)
+  }
+}
 
 // Edit state
 const editingSessionId = ref(null)
@@ -336,25 +367,11 @@ const deleteModal = ref({
   title: ''
 })
 
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: true,
-  highlight: function (str, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        return '<pre class="hljs"><code>' +
-               hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
-               '</code></pre>'
-      } catch (__) {}
-    }
-    return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>'
-  }
-})
+const { renderMarkdown: renderMarkdownBase } = useMarkdown()
 
 function renderMarkdown(text) {
   if (!text) return ''
-  let rendered = md.render(text)
+  let rendered = renderMarkdownBase(text)
   rendered = rendered.replace(/\[来源(\d+)\]/g, (match, num) => {
     return `<sup class="source-badge" data-index="${num}">[${num}]</sup>`
   })

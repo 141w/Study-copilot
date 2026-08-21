@@ -10,15 +10,21 @@ export const useNoteStore = defineStore('note', () => {
   const filterTag = ref(null)
   const searchQuery = ref('')
 
+  // Normalize a note's tags to string names (backend may return strings or {id,name} objects)
+  function tagNames(note) {
+    if (!note.tags) return []
+    return note.tags.map(t => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
+  }
+
   const filteredNotes = computed(() => {
     let result = notes.value
 
     if (filterCourseId.value) {
-      result = result.filter(n => n.course_id === filterCourseId.value)
+      result = result.filter(n => n.course_space_id === filterCourseId.value)
     }
 
     if (filterTag.value) {
-      result = result.filter(n => n.tags && n.tags.includes(filterTag.value))
+      result = result.filter(n => tagNames(n).includes(filterTag.value))
     }
 
     if (searchQuery.value.trim()) {
@@ -35,9 +41,7 @@ export const useNoteStore = defineStore('note', () => {
   const allTags = computed(() => {
     const tagSet = new Set()
     notes.value.forEach(n => {
-      if (n.tags) {
-        n.tags.forEach(t => tagSet.add(t))
-      }
+      tagNames(n).forEach(t => tagSet.add(t))
     })
     return Array.from(tagSet).sort()
   })

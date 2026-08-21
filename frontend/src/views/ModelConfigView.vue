@@ -81,6 +81,9 @@
                   :placeholder="apiKeyPlaceholder"
                   class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                 />
+                <p v-if="savedKeyMasked" class="mt-1.5 text-xs text-gray-500">
+                  已保存：{{ savedKeyMasked }}（留空保存 = 保留原 Key，输入新值 = 覆盖）
+                </p>
               </div>
 
               <div>
@@ -264,6 +267,9 @@ const config = ref({
 
 const configHistory = ref([])
 
+// 已保存 Key 的掩码展示值（如 sk-***xyz）；输入框留空保存 = 保留原 Key
+const savedKeyMasked = ref('')
+
 const providerDefaults = {
   openrouter: { baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', apiKey: 'sk-or-...' },
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKey: 'sk-...' },
@@ -356,10 +362,13 @@ onMounted(async () => {
   // Generate stable fit scores once on mount
   regenerateFitScores()
 
-  const dbConfig = await configStore.fetchLLMConfigWithSecret()
+  // 安全修复（2026-08-19）：改用不含明文的 /config/llm。
+  // 已保存的 Key 只显示掩码；留空保存 = 保留原 Key（后端已支持）。
+  const dbConfig = await configStore.fetchLLMConfig()
   if (dbConfig && dbConfig.id) {
+    savedKeyMasked.value = dbConfig.api_key_masked || ''
     config.value = {
-      apiKey: dbConfig.api_key || '',
+      apiKey: '',
       baseUrl: dbConfig.base_url || '',
       provider: dbConfig.provider,
       modelName: dbConfig.model_name,

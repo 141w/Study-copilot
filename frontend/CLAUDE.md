@@ -24,12 +24,16 @@ frontend/
 │   ├── components/
 │   │   ├── chat/
 │   │   │   ├── ChatInput.vue    # Message input with document selector
-│   │   │   ├── ChatMessage.vue  # Message bubble with citations (TypeScript)
 │   │   ├── common/
 │   │   │   ├── AppHeader.vue    # Top navigation bar
 │   │   │   ├── AppSidebar.vue   # Side navigation with routes
 │   │   │   ├── BaseButton.vue   # ✨ Reusable button component
 │   │   │   ├── BaseDialog.vue   # ✨ Reusable dialog component
+│   │   │   ├── BaseInput.vue    # ✨ Reusable input component
+│   │   │   ├── BaseList.vue     # ✨ Reusable list component
+│   │   │   ├── BaseSelect.vue   # ✨ Reusable select component
+│   │   │   ├── BaseTable.vue    # ✨ Reusable table component
+│   │   │   ├── BaseTextarea.vue # ✨ Reusable textarea component
 │   │   │   ├── IconButton.vue   # ✨ Icon button component
 │   │   │   ├── LoadingSpinner.vue # ✨ Loading spinner component
 │   │   │   ├── Toast.vue        # Toast notification queue
@@ -43,13 +47,13 @@ frontend/
 │   ├── stores/               # Pinia stores (TypeScript)
 │   │   ├── auth.ts           # Login state, tokens, user info
 │   │   ├── chat.js           # Messages, streaming, conversations
-│   │   ├── document.ts       # Document list, upload state
-│   │   ├── quiz.js           # Quiz state, answers, results
-│   │   ├── analysis.js       # Learning analytics data
 │   │   ├── config.ts         # LLM configuration
-│   │   ├── note.js           # Notes list, tags, search, filters
 │   │   ├── course.js         # Course spaces, document associations
+│   │   ├── document.ts       # Document list, upload state
+│   │   ├── note.js           # Notes list, tags, search, filters
+│   │   ├── quiz.js           # Quiz state, answers, results
 │   │   ├── sidebar.ts        # Sidebar navigation state
+│   │   ├── theme.ts          # Light/dark theme state
 │   │   ├── toast.ts          # Toast notification queue
 │   ├── services/
 │   │   └── api.ts            # Axios instance with JWT interceptors
@@ -68,7 +72,6 @@ frontend/
 │   └── main.js               # App bootstrap
 ├── tests/                    # Vitest test suite
 │   ├── components/
-│   │   ├── ChatMessage.test.js
 │   │   ├── UploadView.test.js
 │   ├── stores/
 │   │   ├── auth.test.js

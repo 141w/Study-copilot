@@ -41,8 +41,8 @@
 
     <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
       <span class="text-xs text-gray-400">{{ formatDate(note.updated_at || note.created_at) }}</span>
-      <span v-if="note.course_name" class="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
-        {{ note.course_name }}
+      <span v-if="courseName" class="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+        {{ courseName }}
       </span>
     </div>
   </div>
@@ -54,6 +54,7 @@ import type { Note } from '../types/models'
 
 const props = defineProps<{
   note: Note
+  courseName?: string
 }>()
 
 defineEmits<{
