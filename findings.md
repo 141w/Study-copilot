@@ -284,3 +284,236 @@ D6. docs/4-DEVELOPMENT 称 run.py "Start with auto-reload"，实际 reload=False
 4. 数量核对：routers 11✅ / views 13✅ / 模板 30✅ / stores 实际 10（声称 15）❌。
 5. open-notebook-main/（6.5MB，外部参考项目 lfnovo/open-notebook）：
    仅作为 v2/v3 升级的参考素材，建议移出仓库或加入 .gitignore（目前 untracked）。
+
+---
+
+## Phase 7: 重点问题二次核验（2026-08-18）
+
+> 目的：对上一轮“面向用户分析”中提到的关键问题，逐项回到代码层做二次验证，
+> 区分“仍真实存在”“已修复/不成立”“部分成立”三类。
+
+### 7.1 笔记前后端契约（仍部分成立，过滤断裂）
+
+- **创建/更新别名映射已补齐**：后端 `backend/app/api/notes.py` 的 `NoteCreate`/`NoteUpdate`
+  已同时接受 `course_id` 与 `course_space_id`、`tags` 与 `tag_names`，
+  并在视图层做 `csid = data.course_space_id or data.course_id` 这类别名归一化。
+- **返回格式已部分统一**：列表接口返回 `NoteBrief`，其中 `tags` 是字符串数组；
+  详情接口返回 `NoteResponse`，其中 `tags` 是对象数组（含 `id/name/created_at`）。
+- **仍真实存在的问题**：
+  - 前端 `frontend/src/stores/note.js` 的 `filteredNotes` 按 `n.course_id` 过滤，
+    但列表返回字段为 `course_space_id` → **课程筛选失效**。
+  - 前端 `frontend/src/views/CourseDetailView.vue` 的 `courseNotes` 也按 `n.course_id === courseId` 过滤，
+    同样会漏掉课程归属的笔记。
+  - 标签过滤依赖 `n.tags.includes(tag)`，若后端返回 `NoteResponse` 对象数组而非字符串数组，
+    前端渲染/过滤会异常；当前列表虽用 `NoteBrief` 规避，但契约仍脆弱。
+
+### 7.2 模型配置同步到聊天 Store（仍真实存在）
+
+- **现象**：用户保存 LLM 配置后，聊天侧可能仍使用旧模型名或空模型。
+- **原因**：`frontend/src/stores/config.ts` 的 `syncToChatStore` 读的是 `config.model`，
+  但后端 `backend/app/services/config_service.py` 返回的是 `model_name`。
+- **代码位置**：
+  - `frontend/src/stores/config.ts:91,96`
+  - `backend/app/services/config_service.py:153`
+
+### 7.3 异步任务系统（仍真实存在，空壳）
+
+- **现象**：任务页永远为空；上传文档、生成测验不会产生任务记录。
+- **原因**：`task_worker.py` 的 worker、enqueue、execute job 骨架已接线，
+  但 `document_service.upload_document` 与 `quiz_service.generate_quizzes`
+  都是同步执行，没有调用 `enqueue` 创建任务。
+- **代码位置**：
+  - `backend/app/services/document_service.py:45-153`
+  - `backend/app/services/quiz_service.py:22-96`
+  - `backend/app/core/task_worker.py:41-99`
+
+### 7.4 课程文档关联端点（已修复/不成立）
+
+- **上一轮结论**：课程-文档关联端点不存在。
+- **本次核实**：`backend/app/api/courses.py` 第120行后确实混入了
+  `GET/POST/DELETE /{course_id}/documents`；`backend/app/services/course_service.py`
+  也有 `get_course_documents`、`add_document_to_course`、`remove_document_from_course`。
+- **结论**：端点**已存在**，但代码格式混乱（同一文件内出现类似压缩/粘贴的乱码片段）。
+
+### 7.5 quiz 调用未解密 api_key（已修复）
+
+- **上一轮结论**：`quiz_service.generate_quizzes` 使用 `get_user_llm_config`，
+  返回 Fernet 密文，导致自定义 LLM 认证失败。
+- **本次核实**：`backend/app/services/quiz_service.py:57` 实际调用的是
+  `get_llm_config_with_secret(db, user)`，会先解密再返回。
+- **结论**：**已修复**，不再成立。
+
+### 7.6 BM25 中文分词（已修复）
+
+- **上一轮结论**：BM25 搜索用 `re.findall(r"\w+", query)`，中文整句无空格时只产生 1 个 token。
+- **本次核实**：`backend/app/core/vector_store.py:246-255` 已有 `_tokenize`，
+  检测到中文会走 `jieba.cut(text)`，仅非中文或未安装 jieba 时才回退到正则。
+- **结论**：**已修复**，不再成立。
+
+### 7.7 混合检索未启用（已修复）
+
+- **上一轮结论**：上传固定使用 `RETRIEVAL_TYPE_FAISS`，Hybrid/BM25 未启用。
+- **本次核实**：`backend/app/services/document_service.py:124`
+  明确使用 `DocumentVectorStore(doc_id, retrieval_type=DocumentVectorStore.RETRIEVAL_TYPE_HYBRID)`。
+- **结论**：**已启用**，不再成立。
+
+### 7.8 流式问答缺少纠错检索（仍真实存在）
+
+- **现象**：非流式问答在检索质量差时会改写查询重试；流式问答没有该逻辑。
+- **原因**：`rag_engine.ask` 在 retrieve 后调用 `retrieval_grader.grade`，
+  质量差时进入 `_corrective_retrieve`；但 `ask_stream` 缺少该步骤。
+- **代码位置**：
+  - `backend/app/core/rag_engine.py:468-483`（`ask` 有 corrective）
+  - `backend/app/core/rag_engine.py:612-625`（`ask_stream` 缺失 corrective）
+
+### 7.9 TTS 音频文件无清理（仍真实存在）
+
+- **现象**：每次 TTS 生成都在 `uploads/tts/` 下落 mp3，永不清洗。
+- **原因**：`backend/app/core/tts.py:18` 有 TODO，但未实现清理逻辑。
+- **代码位置**：`backend/app/core/tts.py:18,101-102`
+
+---
+
+## 最新综合结论（2026-08-18 核实后）
+
+1. **仍真实存在且影响用户的问题**：
+   - 笔记按课程筛选失效（字段名 `course_id` vs `course_space_id`）
+   - 模型配置同步到聊天 Store 时读错字段（`model` vs `model_name`）
+   - 异步任务系统空壳（worker 已接线但无生产者）
+   - 流式问答缺少纠错检索（召回质量不稳定）
+   - TTS 文件长期堆积
+2. **已修复/不成立的问题**：
+   - quiz 调用未解密 api_key
+   - BM25 中文分词
+   - 混合检索未启用
+3. **部分成立的问题**：
+   - 笔记前后端契约：创建/更新别名已补齐，但**过滤字段名仍断裂**
+   - 课程文档关联端点：已存在，但代码格式混乱
+---
+
+## Phase 8: 2026-08-18 — 修复成果汇总
+
+> 基于 Phase 7 二次核验结论 + 修复后的实测验证。
+
+### 修复列表
+
+#### 致命语法错误（6 后端 + 2 前端 + requirements.txt）
+| 文件 | 问题 | 修复 |
+|------|------|------|
+| query_router.py | 模板迁移后缩进错误 | 修正缩进 |
+| query_decomposer.py | 模板迁移碎片 + 引用不存在属性 | 删除碎片，定义 TEMPLATE 路径常量 |
+| answer_reflector.py | 同上 | 同上 |
+| api/tasks.py | 残留分隔线 `──────────────────────────` | 删除 |
+| api/courses.py | 文档关联端点压缩到一行 | 重写为格式化的代码 |
+| services/course_service.py | 3 个函数压缩到一行 | 重写为格式化代码 |
+| stores/course.js | 残留注释文本在 return 对象中 | 重写为干净代码 |
+| CourseDetailView.vue | 孤儿代码片段 `toast.error('移除失败')}` | 删除；同时恢复文档 Tab |
+| requirements.txt | 字面 `\n` 字符串 | 拆为两行 |
+
+#### Phase 7 功能修复
+| 问题 | 修复方式 |
+|------|----------|
+| 7.1 笔记课程过滤断裂 | note.js + CourseDetailView + NotesView 使用 `course_space_id` |
+| 7.2 config.ts 读错字段 | `config.model` → `config.model_name` (2 处) |
+| 7.3 异步任务空壳 | 文档上传真异步 + 测验生成创建任务记录；补齐 `_do_process_document/_do_generate_quiz` |
+| 7.4 courses.py 代码混乱 | 重写为格式化代码；定义 CourseDocResponse Schema |
+| 7.8 ask_stream 缺纠错检索 | 新增 corrective 步骤（与 ask() 对称） |
+| 7.9 TTS 不清理 | 实现 `cleanup_old_audio`，生成时带节流调用 |
+
+#### 配套改动
+- **Document 模型**：新增 `course_space_id` 字段 + FK(SET NULL) + 索引 + 迁移
+- **types/models.ts**：Note.note_type 类型修正，LLMConfig 已验证，Source.page→string，Quiz 单题模型
+- **test_rag_engine.py**：移除 6 个 `_needs_rewrite` 测试（方法已删）；修复 "upload" 断言 → 中文；修复 CrossEncoder 挂起；修复 rewrite 测试为新架构
+- **test_rate_limit.py**：补回已删的 `create_rate_limit_key` 函数
+- **setup.js**：修复 api mock 路径（`../services/api` → `@/services/api`），解决 jsdom+空格路径崩溃
+- **rate_limit.py**：补回 `create_rate_limit_key` 辅助函数
+
+### 测试结果
+- **后端**：288 passed, 0 failed (0.99s)
+- **前端**：5 test files, 21 passed (1.03s)
+
+### 仍然存在的问题
+- vue-tsc 因 typescript exports 不兼容报错（环境问题，非代码问题）
+- NO_PROXY hack (run.py)，未改动
+- Chat SSE 401 不刷新 (F6)，预存在设计局限
+- ModelConfigView 假评分 (F8)，预存 UI 装饰
+- 文档（CLAUDE.md/docs/）与代码存在系统性漂移（预存，未全部修复）
+
+---
+
+## Phase 9: 修复 5 个 P0 用户痛点 bug（2026-08-19 会话）
+
+### 背景
+用户视角功能盘点 + P0–P3 痛点分析后，直接修复 5 个 P0 bug。对应 findings 中的既有发现：
+- #21（quiz 简答精确匹配）、#20（analysis topic 用 document_id）、#14 关联（TTS 死代码/ChatMessage 孤儿）、
+  URL 导入链路断裂（url_extractor 落 .txt 但解析器工厂不支持）、流式多轮上下文断裂。
+
+### 修复与验证
+| # | Bug | 修复 | 验证 |
+|---|-----|------|------|
+| 1 | URL 导入永远失败 | document_parser.py 新增 TextParser（utf-8/utf-8-sig/gbk/latin-1 探测，段落累积 2000 字分页），工厂注册 .txt/.md/.markdown | verify_textparser.py PASSED |
+| 2 | 流式对话丢多轮上下文 | chat_service.py：_ensure_session 后首事件 yield session；chat.js：session/sources 事件捕获 currentSession，done 后刷新会话列表，仅显式 session 才覆盖 | verify_chat.py PASSED（事件序列 session→sources→token×5→done，ChatSession/Message 落库 ID 一致） |
+| 3 | 薄弱知识点显示 UUID | analysis_service.py：Document.filename 映射，缺失回退「未知文档」 | verify_analysis.py PASSED |
+| 4 | 简答题永远判错 | quiz_service.py：_judge_choice（字母/大小写/标点容错）+ _judge_short_answer（精确→包含→LLM 语义裁判，失败保守判错）；新增 quiz/judge_short_answer.jinja2；判定理由补进 explanation | verify_quiz.py PASSED |
+| 5 | TTS 死代码 | ChatView.vue：助手消息操作栏接入 TTSPlayer + 复制按钮；内联 MarkdownIt 换用 useMarkdown | ast.parse + diff 复核 + TTSPlayer props/useMarkdown 导出/SSE 泛化透传一致性检查 |
+
+### 验证方法说明（重要先例）
+本机无 conda/node/pytest 依赖（系统 python3 缺 sqlalchemy/fastapi；无 npm）。采用 **importlib 隔离加载真实生产代码 + stub 重依赖** 的 harness（/tmp/verify_*.py，/usr/local/bin/python3.13 执行）：
+- stub sqlalchemy（select/where/order_by/scalars 链式 + 模型元类）、docling、app.db/app.exceptions/app.core.rag_engine/app.services.config_service
+- chat_service 仅依赖 rag_engine.ask_stream，stub 该单例即可完整跑通 ask_question_stream
+- 关键坑：config stub 必须是 async 函数；ask_question_stream 第二参是 User 对象非 id；sources chunk 必须含 filtered_sources 键
+
+### 测试同步
+- test_document_parser.py：新增 TestTextParser（纯文本/分页/空/GBK/extract_*）；工厂断言 .txt/.md 支持、.xlsx 不支持
+- test_quiz.py：新增 TestJudgeChoice / TestJudgeShortAnswer（mock app.core.llm.LLM + get_llm_config_with_secret）
+- 两文件 ast.parse 通过；建议有依赖环境时跑 pytest 最终确认
+
+### 遗留
+- 前端改动无法跑 vitest/vue-tsc（无 node），建议手动验证流式追问 + TTS
+- P1–P3 痛点未处理（见下方落盘清单）
+
+---
+
+## P1–P3 痛点清单（2026-08-19 落盘，防上下文丢失）
+
+> 来源：Phase 2/3/4 编号发现（#15-31、F1-F12、D1-D6）+ AGENTS.md Outstanding Items + Phase 7/8/9 修复后的剩余项。
+> 已修复项不再列入；每项标注来源编号与修复方案。
+
+### P1 — 高优先级（功能/安全/可靠性）
+
+> 状态更新（2026-08-19 Phase 10）：P1-1~P1-5 已全部修复并通过验证（pytest 306 passed + E2E 冒烟 9/9）；P1-6 待用户拍板提交。
+
+| # | 痛点 | 来源 | 影响 | 修复方案 | 状态 |
+|---|------|------|------|---------|------|
+| P1-1 | **/api/config/llm/with-secret 向前端明文返回解密后的 API Key** | #18 | 安全：Key 明文出网，浏览器扩展/日志可截获 | 删除端点 + 空 key 保留根因修复 + get_llm_config 返回 has_api_key/api_key_masked + 前端适配 | ✅ 已修（C1） |
+| P1-2 | **Docker 环境 alembic.ini 默认 localhost:5432** | remaining #2、Phase 4 部署 | 容器未设 DATABASE_URL 时迁移连错库（连到容器自身而非 db 服务），启动失败或静默连错 | alembic/env.py：env var→settings(.env) 两级解析；容器内（/.dockerenv）解析到 localhost 时 fail-fast | ✅ 已修（C2） |
+| P1-3 | **document_service 硬编码 "./uploads"** | #15 | 与 settings.upload_dir 不一致；换部署目录时上传文件落错位置、删除找不到文件 | 统一改用 settings.upload_dir | ✅ 确认 2026-08-18 已修（C3） |
+| P1-4 | **异步任务内存队列重启丢任务** | #23 残余、AGENTS Outstanding | server 重启后 running/pending 任务永久卡死，前端 TasksView 显示假状态 | task_service.recover_interrupted_tasks（pending/running→failed+原因）+ lifespan 启动接线 | ✅ 已修（C4） |
+| P1-5 | **BM25 索引/检索分词不一致** | AGENTS Outstanding | 索引用 rank_bm25 自有 tokenizer（空格切词），检索用 jieba 中文分词 → 中文关键词检索基本失效，hybrid 退化为纯 FAISS | _build_bm25() 统一 _tokenize（中文 jieba/英文 regex）；add_chunks/load 均统一分词，旧索引加载自愈 | ✅ 已修（C5） |
+| P1-6 | **Git：全部工作未提交、无远端备份** | Phase 1 | 工作区即项目全部资产，一次误删/磁盘故障即全丢 | 按逻辑拆分 commit（P0 五修、文档、P1 批次分开）；是否 push 由用户决定 | ⏳ 待用户拍板（F） |
+
+### P2 — 中优先级（体验/质量）
+
+| # | 痛点 | 来源 | 影响 | 修复方案 |
+|---|------|------|------|---------|
+| P2-1 | **CI 触发分支 main/develop vs 实际 master** | Phase 1、D | CI 从未被触发，测试门禁形同虚设 | .github/workflows/test.yml 触发改 master；顺带验证 CI 配置（PG service、npm ci）可跑 |
+| P2-2 | **ChatMessage.vue 孤儿组件** | remaining #14 | 死代码；内含独立 MarkdownIt 实例误导维护者 | TTS 已接入 ChatView，直接删除组件 + 其测试文件 |
+| P2-3 | **TasksView 实际可用性未验证** | F11 残余 | 任务系统 2026-08-18 已落地，但前端页面是否真能展示任务未实测 | E2E 冒烟时顺带验证：上传文档 → TasksView 出现任务 → 状态流转 |
+| P2-4 | **前端测试本机无法运行** | 环境 | 无 node/npm，vitest/vue-tsc 跑不了，前端回归只能靠人工 | 用户本机跑 npx vitest run；或批准安装 node |
+| P2-5 | **14 个孤儿 Jinja2 模板** | Phase 2 | 模板目录虚胖，迁移/审计时误导 | 核对 render_template 调用方，删除确无引用的模板（谨慎：部分可能被 transformations 动态引用） |
+
+### P3 — 低优先级（卫生/文档）
+
+| # | 痛点 | 来源 | 修复方案 |
+|---|------|------|---------|
+| P3-1 | slowapi 在 requirements 但未使用；DEFAULT_RATE_LIMITS/rate_limit_exceeded_handler 死代码 | #16 | 删除 slowapi 依赖 + 死代码，或正式启用 slowapi |
+| P3-2 | conftest session 级 event_loop fixture 弃用风险（pytest-asyncio>=0.23） | #17 | 迁移到 event_loop_policy 或 loop_scope 配置 |
+| P3-3 | temperature 存储约定脆弱（前端 *10、后端 >1 直存、读时 /10，约定分散两端） | #22、F2 | 统一为单端转换 + 注释锚点；加回归测试 |
+| P3-4 | api/__init__.py 只 re-export 5 个旧 router（实际 11 个） | #25 | 补齐 11 个 router 导出 |
+| P3-5 | analysis /wrong 是 POST 但无请求体 | #27 | 改 GET 或加明确请求体 schema |
+| P3-6 | ModelConfigView 适配度评分是 Math.random 假数据、configHistory 恒空 | F8 | 删除假 UI 或接真实数据 |
+| P3-7 | document.ts uploadDocument 返回类型标 Document，实际是 DocProcessResponse | F10 | 修正类型定义 |
+| P3-8 | App.vue keep-alive include 依赖文件名推断组件名 | F12 | 三个 view 加 defineOptions({ name }) |
+| P3-9 | open-notebook-main/（6.5MB 外部参考项目）untracked 在仓库 | Phase 1 待验证 #5 | 移出仓库或加 .gitignore |
+| P3-10 | 文档残余漂移（D1-D6 大部分已对齐，个别细节待查） | Phase 4 | 随 P1/P2 修复顺带更新 |
+

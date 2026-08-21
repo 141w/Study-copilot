@@ -7,8 +7,7 @@ All endpoints are prefixed with `/api`. Authentication uses JWT Bearer tokens un
 ### Register
 ```
 POST /api/auth/register
-```
-Create a new user account.
+```Create a new user account.
 
 **Request Body:**
 ```json
@@ -32,8 +31,7 @@ Create a new user account.
 ### Login
 ```
 POST /api/auth/login
-```
-Authenticate and receive JWT tokens.
+```Authenticate and receive JWT tokens.
 
 **Request Body:**
 ```json
@@ -57,10 +55,7 @@ Authenticate and receive JWT tokens.
 ### Get Current User
 ```
 GET /api/auth/me
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK`
+Authorization: Bearer *** `...ponse:** `200 OK`
 ```json
 {
   "id": "uuid",
@@ -74,10 +69,7 @@ Authorization: Bearer <access_token>
 ### Refresh Token
 ```
 POST /api/auth/refresh
-Authorization: Bearer <refresh_token>
-```
-
-**Response:** `200 OK` — New access token pair.
+Authorization: Bearer *** `...esponse:** `200 OK` — New access token pair.
 
 ---
 
@@ -87,10 +79,7 @@ Authorization: Bearer <refresh_token>
 ```
 POST /api/documents/upload
 Content-Type: multipart/form-data
-Authorization: Bearer <access_token>
-```
-
-**Form Fields:**
+Authorization: Bearer *** Body:**
 | Field | Type | Description |
 |-------|------|-------------|
 | `file` | File | PDF, DOCX, or PPTX (max 50MB) |
@@ -101,38 +90,33 @@ Authorization: Bearer <access_token>
   "id": "uuid",
   "filename": "lecture-notes.pdf",
   "status": "processing",
+  "task_id": "uuid",
   "created_at": "2025-01-01T00:00:00Z"
 }
 ```
+
+**Note:** Upload is now asynchronous. The response includes a `task_id` for tracking processing progress via `GET /api/tasks/{task_id}`.
 
 ---
 
 ### List Documents
 ```
 GET /api/documents
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK` — Array of document objects.
+Authorization: Bearer *** `...esponse:** `200 OK` — Array of document objects.
 
 ---
 
 ### Get Document
 ```
 GET /api/documents/{document_id}
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK` — Document detail with metadata.
+Authorization: Bearer *** `...esponse:** `200 OK` — Document detail with metadata.
 
 ---
 
 ### Delete Document
 ```
 DELETE /api/documents/{document_id}
-Authorization: Bearer <access_token>
-```
-Cascading delete: removes file, vector index, and related quiz/chat data.
+Authorization: Bearer *** `...ascading delete: removes file, vector index, and related quiz/chat data.
 
 **Response:** `204 No Content`
 
@@ -143,10 +127,7 @@ Cascading delete: removes file, vector index, and related quiz/chat data.
 ### Ask Question
 ```
 POST /api/chat/ask
-Authorization: Bearer <access_token>
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "document_id": "uuid",
@@ -175,10 +156,7 @@ Authorization: Bearer <access_token>
 ### Ask Question (Streaming)
 ```
 POST /api/chat/ask (stream: true)
-Authorization: Bearer <access_token>
-```
-
-Same request body as `/ask`. Returns `text/event-stream` (SSE):
+Authorization: Bearer *** `...ame request body as `/ask`. Returns `text/event-stream` (SSE):
 
 ```
 data: {"type": "token", "content": "Based"}
@@ -192,20 +170,14 @@ data: {"type": "done"}
 ### Chat History
 ```
 GET /api/chat/history
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK` — Array of conversation summaries.
+Authorization: Bearer *** `...esponse:** `200 OK` — Array of conversation summaries.
 
 ---
 
 ### Chat Detail
 ```
 GET /api/chat/history/{conversation_id}
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK` — Full conversation with messages and citations.
+Authorization: Bearer *** `...esponse:** `200 OK` — Full conversation with messages and citations.
 
 ---
 
@@ -214,10 +186,7 @@ Authorization: Bearer <access_token>
 ### Generate Quiz
 ```
 POST /api/quiz/generate
-Authorization: Bearer <access_token>
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "document_id": "uuid",
@@ -250,10 +219,7 @@ Authorization: Bearer <access_token>
 ### Submit Answers
 ```
 POST /api/quiz/submit
-Authorization: Bearer <access_token>
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "quiz_id": "uuid",
@@ -270,20 +236,14 @@ Authorization: Bearer <access_token>
 ### Result History
 ```
 GET /api/quiz/result-history
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK` — Array of past quiz results.
+Authorization: Bearer *** `...esponse:** `200 OK` — Array of past quiz results.
 
 ---
 
 ### Wrong Questions (Error Book)
 ```
 GET /api/quiz/wrong-questions
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK` — Array of incorrectly answered questions.
+Authorization: Bearer *** `...esponse:** `200 OK` — Array of incorrectly answered questions.
 
 ---
 
@@ -292,10 +252,7 @@ Authorization: Bearer <access_token>
 ### Wrong Answer Analysis
 ```
 POST /api/analysis/wrong
-Authorization: Bearer <access_token>
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "document_id": "uuid"
@@ -309,20 +266,14 @@ Authorization: Bearer <access_token>
 ### Knowledge Mastery
 ```
 GET /api/analysis/knowledge
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK` — Knowledge mastery breakdown by topic.
+Authorization: Bearer *** `...esponse:** `200 OK` — Knowledge mastery breakdown by topic.
 
 ---
 
 ### Learning Progress
 ```
 GET /api/analysis/progress
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK` — Study progress statistics and trends.
+Authorization: Bearer *** `...esponse:** `200 OK` — Study progress statistics and trends.
 
 ---
 
@@ -331,18 +282,11 @@ Authorization: Bearer <access_token>
 ### Get LLM Config
 ```
 GET /api/config/llm
-Authorization: Bearer <access_token>
-```
-
----
-
+Authorization: Bearer *** `...
 ### Save LLM Config
 ```
 POST /api/config/llm
-Authorization: Bearer <access_token>
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "provider": "openrouter",
@@ -359,10 +303,7 @@ Authorization: Bearer <access_token>
 ### List Notes
 ```
 GET /api/notes
-Authorization: Bearer ***
-```
-
-**Query Parameters:**
+Authorization: Bearer *** `...uery Parameters:**
 | Param | Type | Description |
 |-------|------|-------------|
 | `tag` | string | Filter by tag name |
@@ -376,10 +317,7 @@ Authorization: Bearer ***
 ### Create Note
 ```
 POST /api/notes
-Authorization: Bearer ***
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "title": "string",
@@ -397,26 +335,19 @@ Authorization: Bearer ***
 ### Get Note
 ```
 GET /api/notes/{note_id}
-Authorization: Bearer ***
-```
-
+Authorization: Bearer *** `...
 ### Update Note
 ```
 PUT /api/notes/{note_id}
-Authorization: Bearer ***
-```
-
+Authorization: Bearer *** `...
 ### Delete Note
 ```
 DELETE /api/notes/{note_id}
-Authorization: Bearer ***
-```
-
+Authorization: Bearer *** `...
 ### Search Notes
 ```
-POST /api/notes/search — not implemented — ❌ not implemented
-Authorization: Bearer ***
-```
+POST /api/notes/search
+Authorization: Bearer *** `...ntic search across user's notes using FAISS vector index.
 
 **Request Body:**
 ```json
@@ -426,29 +357,38 @@ Authorization: Bearer ***
 }
 ```
 
-### List Tags
+**Response:** `200 OK` — Array of note objects with relevance scores.
+```json
+[
+  {
+    "id": "uuid",
+    "title": "string",
+    "content": "string",
+    "note_type": "manual|ai",
+    "tags": ["tag1", "tag2"],
+    "score": 0.85,
+    "created_at": "2025-01-01T00:00:00Z"
+  }
+]
 ```
-GET /api/notes/tags
-Authorization: Bearer ***
-```
+
+**Note:** Notes are automatically indexed on create/update. The backend lazily loads `DocumentVectorStore(f"notes_{user.id}")` per query.
 
 ---
 
+### List Tags
+```
+GET /api/notes/tags/all
+Authorization: Bearer *** `...
 ## Courses
 
 ### List Course Spaces
 ```
 GET /api/courses
-Authorization: Bearer ***
-```
-
-### Create Course Space
+Authorization: Bearer *** `... Create Course Space
 ```
 POST /api/courses
-Authorization: Bearer ***
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "name": "string",
@@ -459,22 +399,40 @@ Authorization: Bearer ***
 ### Get Course Space
 ```
 GET /api/courses/{course_id}
-Authorization: Bearer ***
-```
-
-Returns course with associated documents and notes.
+Authorization: Bearer *** `...eturns course with associated documents and notes.
 
 ### Update Course Space
 ```
 PUT /api/courses/{course_id}
-Authorization: Bearer ***
-```
-
+Authorization: Bearer *** `...
 ### Delete Course Space
 ```
 DELETE /api/courses/{course_id}
-Authorization: Bearer ***
+Authorization: Bearer *** List Course Documents
 ```
+GET /api/courses/{course_id}/documents
+Authorization: Bearer *** `...e:** `200 OK` — Array of documents associated with the course.
+
+---
+
+### Add Document to Course
+```
+POST /api/courses/{course_id}/documents
+Authorization: Bearer *** Body:**
+```json
+{
+  "document_id": "uuid"
+}
+```
+
+**Response:** `201 Created` — Association record.
+
+---
+
+### Remove Document from Course
+```
+DELETE /api/courses/{course_id}/documents/{doc_id}
+Authorization: Bearer *** `... Sets `course_space_id = NULL` on the document.
 
 ---
 
@@ -483,10 +441,7 @@ Authorization: Bearer ***
 ### Transform Content
 ```
 POST /api/transform
-Authorization: Bearer ***
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "source_type": "document|note|text",
@@ -502,20 +457,13 @@ Authorization: Bearer ***
 ### List Transform Types
 ```
 GET /api/transform/transformations
-Authorization: Bearer ***
-```
-
----
-
+Authorization: Bearer *** `...
 ## TTS
 
 ### Synthesize Speech
 ```
 POST /api/tts/generate
-Authorization: Bearer ***
-```
-
-**Request Body:**
+Authorization: Bearer *** `...quest Body:**
 ```json
 {
   "text": "string",
@@ -528,26 +476,40 @@ Authorization: Bearer ***
 ### List Voices
 ```
 GET /api/tts/voices
-Authorization: Bearer ***
+Authorization: Bearer *** `...
+## Tasks
+
+### Create Task
+```
+POST /api/tasks
+Authorization: Bearer *** `...quest Body:**
+```json
+{
+  "task_type": "document_process|quiz_generate",
+  "payload": {}
+}
+```
+
+**Response:** `201 Created` — Task record.
+```json
+{
+  "id": "uuid",
+  "task_type": "document_process",
+  "status": "pending",
+  "created_at": "2025-01-01T00:00:00Z"
+}
 ```
 
 ---
 
-## Tasks
-
 ### List Tasks
 ```
 GET /api/tasks
-Authorization: Bearer ***
-```
-
+Authorization: Bearer *** `...
 ### Get Task Status
 ```
 GET /api/tasks/{task_id}
-Authorization: Bearer ***
-```
-
-**Response:**
+Authorization: Bearer *** `...esponse:**
 ```json
 {
   "id": "uuid",
@@ -563,15 +525,10 @@ Authorization: Bearer ***
 ### Cancel Task
 ```
 DELETE /api/tasks/{task_id}
-Authorization: Bearer ***
-```
-
----
-
+Authorization: Bearer *** `...
 ## Error Responses
 
 All error responses follow this format:
-
 ```json
 {
   "detail": "Error description"

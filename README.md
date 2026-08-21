@@ -271,18 +271,19 @@ study-copilot/
 │   │   │   └── chat/              # 聊天组件（Message/Input）
 │   │   │
 │   │   ├── stores/                 # Pinia 状态管理
-│   │   │   ├── note.js            # 笔记状态
-│   │   │   ├── course.js          # 课程空间状态
-│   │   │   ├── sidebar.js         # 侧边栏状态
-│   │   │   ├── auth.js            # 认证状态
-│   │   │   ├── document.js        # 文档状态
+│   │   │   ├── auth.ts            # 认证状态
 │   │   │   ├── chat.js            # 问答状态（含流式）
+│   │   │   ├── config.ts          # 配置状态
+│   │   │   ├── course.js          # 课程空间状态
+│   │   │   ├── document.ts        # 文档状态
+│   │   │   ├── note.js            # 笔记状态
 │   │   │   ├── quiz.js            # 做题状态
-│   │   │   ├── config.js          # 配置状态
-│   │   │   └── toast.js           # 提示状态
+│   │   │   ├── sidebar.ts         # 侧边栏状态
+│   │   │   ├── theme.ts           # 主题状态
+│   │   │   └── toast.ts           # 提示状态
 │   │   │
 │   │   ├── services/               # API 服务
-│   │   │   └── api.js             # Axios 封装（拦截器/错误处理）
+│   │   │   └── api.ts             # Axios 封装（拦截器/错误处理）
 │   │   │
 │   │   ├── router/                 # 路由配置
 │   │   ├── styles/                 # 全局样式
@@ -537,6 +538,7 @@ cd frontend && npm run dev
 | `/api/documents` | GET | 获取文档列表 | JWT |
 | `/api/documents/{id}` | GET | 获取文档详情 | JWT |
 | `/api/documents/{id}` | DELETE | 删除文档（级联清理文件+索引） | JWT |
+| `/api/documents/from-url` | POST | 从网页 URL 导入内容 | JWT |
 
 ### 问答接口（RAG）
 
@@ -546,6 +548,8 @@ cd frontend && npm run dev
 | `/api/chat/ask` (stream: true) | POST | 提问（流式 SSE 响应） | JWT |
 | `/api/chat/history` | GET | 获取对话历史列表 | JWT |
 | `/api/chat/history/{id}` | GET | 获取对话详情 | JWT |
+| `/api/chat/history/{id}` | PUT | 更新对话标题 | JWT |
+| `/api/chat/history/{id}` | DELETE | 删除对话 | JWT |
 
 ### 做题接口
 
@@ -570,36 +574,40 @@ cd frontend && npm run dev
 |------|------|------|------|
 | `/api/config/llm` | GET | 获取用户的 LLM 配置 | JWT |
 | `/api/config/llm` | POST | 保存 LLM 配置到服务端 | JWT |
+| `/api/config/llm` | PUT | 更新 LLM 配置 | JWT |
 | `/api/config/llm/with-secret` | GET | 获取含敏感字段的配置（前端同步配置） | JWT |
 
 ### 笔记接口
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
-| `/api/notes/` | GET | 获取笔记列表（支持标签/课程筛选） | JWT |
-| `/api/notes/` | POST | 创建笔记（手动/AI 生成） | JWT |
+| `/api/notes` | GET | 获取笔记列表（支持标签/课程筛选） | JWT |
+| `/api/notes` | POST | 创建笔记（手动/AI 生成） | JWT |
 | `/api/notes/{id}` | GET | 获取笔记详情 | JWT |
 | `/api/notes/{id}` | PUT | 更新笔记内容 | JWT |
 | `/api/notes/{id}` | DELETE | 删除笔记 | JWT |
+| `/api/notes/search` | POST | 笔记语义搜索 | JWT |
 | `/api/notes/tags/all` | GET | 获取所有标签 | JWT |
-| `/api/notes/tags/all` | GET | 获取所有标签 | JWT |
-
+| `/api/notes/tags/{id}` | DELETE | 删除标签 | JWT |
 
 ### 课程空间接口
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
-| `/api/courses/` | GET | 获取课程空间列表 | JWT |
-| `/api/courses/` | POST | 创建课程空间 | JWT |
+| `/api/courses` | GET | 获取课程空间列表 | JWT |
+| `/api/courses` | POST | 创建课程空间 | JWT |
 | `/api/courses/{id}` | GET | 获取课程空间详情（含文档和笔记） | JWT |
 | `/api/courses/{id}` | PUT | 更新课程空间 | JWT |
 | `/api/courses/{id}` | DELETE | 删除课程空间 | JWT |
+| `/api/courses/{id}/documents` | GET | 获取课程关联文档列表 | JWT |
+| `/api/courses/{id}/documents` | POST | 关联文档到课程 | JWT |
+| `/api/courses/{id}/documents/{doc_id}` | DELETE | 解除课程文档关联 | JWT |
 
 ### 内容转换接口
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
-| `/api/transform/` | POST | 执行内容转换（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释） | JWT |
+| `/api/transform` | POST | 执行内容转换（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释） | JWT |
 | `/api/transform/transformations` | GET | 获取支持的转换类型列表 | JWT |
 
 ### TTS 语音接口
@@ -613,7 +621,8 @@ cd frontend && npm run dev
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
-| `/api/tasks/` | GET | 获取任务列表 | JWT |
+| `/api/tasks` | POST | 创建异步任务 | JWT |
+| `/api/tasks` | GET | 获取任务列表 | JWT |
 | `/api/tasks/{id}` | GET | 获取任务状态和结果 | JWT |
 | `/api/tasks/{id}` | DELETE | 取消任务 | JWT |
 

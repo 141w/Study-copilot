@@ -42,8 +42,8 @@ This file provides architectural guidance for contributors working on Study Copi
 │          frontend/ @ port 3000               │
 ├──────────────────────────────────────────────┤
 │ - 13 views (Home, Login, Upload, Document, Chat, Quiz, Analysis, ModelConfig, CourseList, CourseDetail, Notes, Tasks, Register) │
-│ - 15 Pinia stores                             │
-│ - 8 shared components + 7 feature components │
+│ - 10 Pinia stores                             │
+│ - 12 common components + 9 feature components │
 │ - TailwindCSS + GSAP styling                  │
 │ - Axios HTTP client with JWT interceptors    │
 └──────────────────┬───────────────────────────┘
@@ -87,10 +87,9 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Document Parsing**: Docling (with OCR), PyMuPDF, python-docx, python-pptx
 - **LLM**: OpenAI SDK (OpenRouter / OpenAI / Anthropic / Gemini / custom)
 - **Auth**: JWT via python-jose + passlib (bcrypt)
-- **Validation**: Pydantic v2 + pydantic-settings
-- **Rate Limiting**: slowapi
-- **Migrations**: Alembic
-- **Testing**: pytest + pytest-asyncio + pytest-cov
+|- **Validation**: Pydantic v2 + pydantic-settings
+|- **Migrations**: Alembic
+|- **Testing**: pytest + pytest-asyncio + pytest-cov
 
 ### Frontend (`frontend/`)
 - **Framework**: Vue 3.4 (Composition API with `<script setup lang="ts">`)

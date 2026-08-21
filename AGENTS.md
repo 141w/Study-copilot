@@ -7,19 +7,45 @@ This file provides architectural guidance for contributors working on Study Copi
 **Study Copilot** is an AI-powered learning assistant built with FastAPI + Vue3. It enables users to upload documents (PDF/DOCX/PPTX), ask questions via RAG (Retrieval-Augmented Generation), generate quizzes automatically, and track learning progress.
 
 ### v2 Features
-- **Agentic RAG**: 查询路由、上下文感知改写、自适应检索、纠错检索、会话摘要、答案自我反思
-- **笔记系统**: 手动/AI 笔记，标签管理，语义搜索
-- **课程空间**: 按课程组织文档和笔记
+- **Agentic RAG**: 查询路由、上下文感知改写、自适应检索、纠错检索、会话摘要、答案自我反思、Hybrid检索（FAISS+BM25+RRF）
+- **笔记系统**: 手动/AI 笔记，标签管理，语义搜索（FAISS向量索引）
+- **课程空间**: 按课程组织文档和笔记，课程-文档关联管理
 - **内容转换**: 8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释）
 - **URL 导入**: 从网页链接提取内容
 - **TTS 语音**: Edge TTS 朗读答案和笔记
-- **异步任务**: 批量操作，后台任务队列
+- **异步任务**: 批量操作，后台任务队列（in-process asyncio）
 - **凭证加密**: Fernet 加密存储 API Key
 - **数据库迁移**: Alembic
 - **CI/CD**: GitHub Actions
-- **代码质量**: Ruff linter
+- **代码质量**: Ruff linter + TypeScript + vue-tsc
 
 **Key Values**: Local-first embedding, multi-provider LLM support, Chinese-language optimized, self-hosted.
+
+---
+
+## Current State (2026-08-17)
+
+- **Git**: `master` 分支，领先 origin 9 个 commit，工作区干净
+- **Changelog**: `CHANGELOG_2026-08-17.md`（8 commit，约 70 文件）
+- **Ports**: 前端 3000，后端 8000
+- **Frontend**: Vue3 + Vite + TypeScript + Pinia + TailwindCSS + GSAP
+- **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL 16+ + FAISS + sentence-transformers
+
+### Recent Changes (2026-08-17)
+
+1. **P0 紧急修复** (237c052): git 提交、text import、requirements 补全、quiz 密文修复、config model_name 对齐、alembic env、notes 前后端契约、course tab 404
+2. **P1 对齐** (fdbc370): 端口 5173→3000 (14 处)、API 路径纠错、CI main→master、测试方法名同步、前端 mock
+3. **P2 迁移** (55d8502): 6 模块模板迁移（14 orphan→render_template）、typescript+vue-tsc、.env.example + upload_dir、死代码清理
+4. **P3 卫生** (8c57f63): defineOptions、useMarkdown composable、温度注释、api__init__ 补全、TTS TODO
+5. **E 纠错** (02eae49): retrieval_grader 接入 ask/ask_stream、移除 _needs_rewrite 死代码
+6. **C+D 特性** (6989751): 笔记语义搜索（service+API）、课程-文档关联（routes+service+store）
+7. **A 异步** (32c8440): task_worker.py、main.py lifespan 接线、document_service 异步化、POST /api/tasks
+8. **B Hybrid** (part of 02eae49/55d8502): vector_store.py 新增 _tokenize()，支持 jieba 中文分词 + BM25+FAISS+RRF
+
+### Outstanding Items
+- BM25 jieba 分词仅用于 search 时，索引时 rank_bm25 内部有自有 tokenizer（需确认实际效果）
+- 异步任务队列目前是内存队列，server 重启会丢失未完成的任务（可添加重启时标记 running→failed）
+- CourseDetailView.vue 的文档 tab 模板恢复后需确认模板正确性
 
 ---
 
@@ -99,8 +125,8 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ## Component References
 
-- **[backend/AGENTS.md](backend/AGENTS.md)** — Backend architecture, API structure, core modules
-- **[frontend/AGENTS.md](frontend/AGENTS.md)** — Frontend architecture, components, stores
+- **[backend/CLAUDE.md](backend/CLAUDE.md)** — Backend architecture, API structure, core modules
+- **[frontend/CLAUDE.md](frontend/CLAUDE.md)** — Frontend architecture, components, stores
 
 ---
 
@@ -128,7 +154,7 @@ This file provides architectural guidance for contributors working on Study Copi
 1. Create view in `frontend/src/views/`
 2. Add route in `frontend/src/router/`
 3. Create Pinia store in `frontend/src/stores/` if needed
-4. Add API methods in `frontend/src/services/api.js`
+4. Add API methods in `frontend/src/services/api.ts`
 
 ### Run Tests
 ```bash
