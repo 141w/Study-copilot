@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.core.document_parser import DocumentParser, DOCXParser, PDFParser, PPTXParser
+from app.core.document_parser import DocumentParser, DOCXParser, PDFParser, PPTXParser, TextParser
 
 # ── BaseParser ───────────────────────────────────────────────────────────────
 
@@ -808,9 +808,19 @@ class TestDocumentParserFactory:
         parser = dp.get_parser("test.pptx")
         assert isinstance(parser, PPTXParser)
 
-    def test_factory_get_parser_unsupported(self):
+    def test_factory_get_parser_txt(self):
         dp = DocumentParser()
         parser = dp.get_parser("test.txt")
+        assert isinstance(parser, TextParser)
+
+    def test_factory_get_parser_md(self):
+        dp = DocumentParser()
+        parser = dp.get_parser("test.md")
+        assert isinstance(parser, TextParser)
+
+    def test_factory_get_parser_unsupported(self):
+        dp = DocumentParser()
+        parser = dp.get_parser("test.xlsx")
         assert parser is None
 
     def test_factory_is_supported(self):
@@ -818,26 +828,27 @@ class TestDocumentParserFactory:
         assert dp.is_supported("file.pdf") is True
         assert dp.is_supported("file.docx") is True
         assert dp.is_supported("file.pptx") is True
-        assert dp.is_supported("file.txt") is False
+        assert dp.is_supported("file.txt") is True
+        assert dp.is_supported("file.md") is True
         assert dp.is_supported("file.xlsx") is False
 
     @pytest.mark.asyncio
     async def test_factory_parse_unsupported_raises(self):
         dp = DocumentParser()
         with pytest.raises(ValueError, match="不支持的文件类型"):
-            await dp.parse("file.txt")
+            await dp.parse("file.xlsx")
 
     @pytest.mark.asyncio
     async def test_factory_extract_text_unsupported_raises(self):
         dp = DocumentParser()
         with pytest.raises(ValueError, match="不支持的文件类型"):
-            await dp.extract_text("file.txt")
+            await dp.extract_text("file.xlsx")
 
     @pytest.mark.asyncio
     async def test_factory_extract_pages_unsupported_raises(self):
         dp = DocumentParser()
         with pytest.raises(ValueError, match="不支持的文件类型"):
-            await dp.extract_pages("file.txt")
+            await dp.extract_pages("file.xlsx")
 
     @pytest.mark.asyncio
     async def test_factory_parse_delegates_to_parser(self):
@@ -868,6 +879,88 @@ class TestDocumentParserFactory:
 
         result = await dp.extract_pages("test.pdf")
         assert len(result) == 1
+
+
+# ── TextParser ───────────────────────────────────────────────────────────────
+
+
+class TestTextParser:
+    def test_supported_extensions(self):
+        parser = TextParser()
+        assert ".txt" in parser.supported_extensions
+        assert ".md" in parser.supported_extensions
+
+    @pytest.mark.asyncio
+    async def test_parse_plain_text(self, tmp_path):
+        f = tmp_path / "sample.txt"
+        f.write_text("第一段内容。\n第二段内容。\n第三段内容。", encoding="utf-8")
+
+        parser = TextParser()
+        result = await parser.parse(str(f))
+
+        assert result["metadata"]["title"] == "sample"
+        assert result["metadata"]["file_type"] == "txt"
+        assert len(result["pages"]) == 1
+        assert "第一段内容。" in result["pages"][0]["text"]
+        assert "第三段内容。" in result["pages"][0]["text"]
+
+    @pytest.mark.asyncio
+    async def test_parse_paginates_long_text(self, tmp_path):
+        f = tmp_path / "long.txt"
+        # 每段 500 字，共 10 段 = 5000 字，按 2000 字/页应分成多页
+        f.write_text("\n".join(["字" * 500] * 10), encoding="utf-8")
+
+        parser = TextParser()
+        result = await parser.parse(str(f))
+
+        assert len(result["pages"]) >= 3
+        assert result["metadata"]["page_count"] == len(result["pages"])
+        # 页码连续递增
+        for i, page in enumerate(result["pages"]):
+            assert page["page"] == i + 1
+
+    @pytest.mark.asyncio
+    async def test_parse_empty_file(self, tmp_path):
+        f = tmp_path / "empty.txt"
+        f.write_text("", encoding="utf-8")
+
+        parser = TextParser()
+        result = await parser.parse(str(f))
+
+        assert result["pages"] == []
+        assert result["metadata"]["page_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_parse_gbk_encoding(self, tmp_path):
+        f = tmp_path / "gbk.txt"
+        f.write_bytes("中文内容测试".encode("gbk"))
+
+        parser = TextParser()
+        result = await parser.parse(str(f))
+
+        assert "中文内容测试" in result["pages"][0]["text"]
+
+    @pytest.mark.asyncio
+    async def test_extract_text(self, tmp_path):
+        f = tmp_path / "sample.md"
+        f.write_text("# 标题\n\n正文内容", encoding="utf-8")
+
+        parser = TextParser()
+        text = await parser.extract_text(str(f))
+
+        assert "# 标题" in text
+        assert "正文内容" in text
+
+    @pytest.mark.asyncio
+    async def test_extract_pages(self, tmp_path):
+        f = tmp_path / "sample.txt"
+        f.write_text("内容A\n内容B", encoding="utf-8")
+
+        parser = TextParser()
+        pages = await parser.extract_pages(str(f))
+
+        assert len(pages) == 1
+        assert pages[0]["page"] == 1
 
 
 # ── PDFParser thresholds ─────────────────────────────────────────────────────

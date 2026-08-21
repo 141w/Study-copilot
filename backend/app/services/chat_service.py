@@ -69,6 +69,10 @@ async def ask_question_stream(
     session_id, _ = await _ensure_session(db, user.id, session_id, question)
     history = await _get_history(db, session_id)
 
+    # 第一时间下发 session_id，保证前端在所有路径（含无 sources 的快速路径）
+    # 都能拿到会话 ID，从而支持多轮追问
+    yield {"type": "session", "session_id": session_id}
+
     answer_parts: list[str] = []
 
     async for chunk in rag_engine.ask_stream(document_ids, question, history, llm_config):

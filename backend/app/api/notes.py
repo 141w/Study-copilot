@@ -45,12 +45,6 @@ class NoteSearchRequest(BaseModel):
     top_k: int = 5
 
 
-
-class NoteSearchRequest(BaseModel):
-    query: str
-    top_k: int = 5
-
-
 class NoteResponse(BaseModel):
     id: str
     title: str

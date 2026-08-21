@@ -2,8 +2,8 @@ import os
 import sys
 
 # 绕过 VPN 透明代理
-os.environ['NO_PROXY'] = '*'
-os.environ['no_proxy'] = '*'
+os.environ.setdefault('NO_PROXY', '*')
+os.environ.setdefault('no_proxy', '*')
 
 import uvicorn
 

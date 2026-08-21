@@ -16,7 +16,7 @@ from app.api.tasks import router as tasks_router
 from app.api.transform import router as transform_router
 from app.api.tts import router as tts_router
 from app.config import settings
-from app.db import ensure_current_schema, get_current_revision, run_migrations
+from app.db import ensure_current_schema, get_current_revision, run_migrations, stamp_head, stamp_head
 from app.exception_handlers import setup_exception_handlers
 
 logging.basicConfig(level=logging.INFO)
@@ -29,10 +29,19 @@ async def lifespan(app: FastAPI):
     logger.info("Starting database migrations...")
     current_revision = await get_current_revision()
     if current_revision is None:
-        logger.info("No alembic revision found; ensuring base schema before migrations.")
+        logger.info("Fresh database: creating schema and stamping head.")
         await ensure_current_schema()
-    await run_migrations()
+        await stamp_head()
+    else:
+        await run_migrations()
     logger.info("Database migrations complete.")
+
+    # 把上次进程遗留的 pending/running 任务标记为 failed（内存队列重启即丢失）
+    from app.db import AsyncSessionLocal
+    from app.services.task_service import recover_interrupted_tasks
+
+    async with AsyncSessionLocal() as db:
+        await recover_interrupted_tasks(db)
 
     # Start background task worker
     from app.core.task_worker import start_worker

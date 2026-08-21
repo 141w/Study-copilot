@@ -33,6 +33,19 @@ class CourseResponse(BaseModel):
     updated_at: str
 
 
+class AddDocRequest(BaseModel):
+    document_id: str
+
+
+class CourseDocResponse(BaseModel):
+    id: str
+    filename: str
+    status: str
+    chunk_count: int
+    file_size: int | None = None
+    created_at: str
+
+
 # ── Endpoints ───────────────────────────────────────────────────────────
 
 
@@ -118,4 +131,56 @@ async def delete_course(
     current_user: User = Depends(get_current_user),
 ):
     await course_service.delete_course_space(db, current_user, course_id)
-    return {"message": "删除成功"class AddDocRequest(BaseModel):    document_id: str@router.get("/{course_id}/documents")async def get_course_documents(    course_id: str,    db: AsyncSession = Depends(get_db),    current_user: User = Depends(get_current_user),):    """List documents in course."""    docs = await course_service.get_course_documents(        db, current_user, course_id    )    return docs@router.post("/{course_id}/documents")async def add_document_to_course(    course_id: str,    req: AddDocRequest,    db: AsyncSession = Depends(get_db),    current_user: User = Depends(get_current_user),):    """Add document to course."""    await course_service.add_document_to_course(        db, current_user, course_id, req.document_id    )    return {"message": "Document added"}@router.delete("/{course_id}/documents/{doc_id}")async def remove_document_from_course(    course_id: str,    doc_id: str,    db: AsyncSession = Depends(get_db),    current_user: User = Depends(get_current_user),):    """Remove document from course."""    await course_service.remove_document_from_course(        db, current_user, course_id, doc_id    )    return {"message": "Document removed"}}
+    return {"message": "删除成功"}
+
+
+# ── Course-Document association endpoints ───────────────────────────────
+
+
+@router.get("/{course_id}/documents", response_model=list[CourseDocResponse])
+async def get_course_documents(
+    course_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List documents in course."""
+    docs = await course_service.get_course_documents(db, current_user, course_id)
+    return [
+        CourseDocResponse(
+            id=d.id,
+            filename=d.filename,
+            status=d.status,
+            chunk_count=d.chunk_count,
+            file_size=d.file_size,
+            created_at=str(d.created_at),
+        )
+        for d in docs
+    ]
+
+
+@router.post("/{course_id}/documents")
+async def add_document_to_course(
+    course_id: str,
+    req: AddDocRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Add document to course."""
+    await course_service.add_document_to_course(
+        db, current_user, course_id, req.document_id
+    )
+    return {"message": "Document added"}
+
+
+@router.delete("/{course_id}/documents/{doc_id}")
+async def remove_document_from_course(
+    course_id: str,
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove document from course."""
+    await course_service.remove_document_from_course(
+        db, current_user, course_id, doc_id
+    )
+    return {"message": "Document removed"}

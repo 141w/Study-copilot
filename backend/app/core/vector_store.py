@@ -216,26 +216,32 @@ class BM25VectorStore(BaseVectorStore):
 
     def _init_bm25(self):
         """初始化BM25"""
+        if self._corpus:
+            self._build_bm25()
+
+    def _build_bm25(self):
+        """用与检索端一致的 _tokenize 分词构建索引。
+
+        修复（2026-08-19）：旧实现把原始字符串直接交给 BM25Okapi，
+        rank_bm25 按空格切词 → 中文语料被按单字索引，而检索端用 jieba 分词，
+        索引/检索分词不一致导致中文关键词检索基本失效。
+        现在索引与检索统一走 _tokenize（中文 jieba、英文 regex）。
+        """
         from rank_bm25 import BM25Okapi
 
-        if self._corpus:
-            self._bm25 = BM25Okapi(self._corpus)
+        tokenized = [self._tokenize(text) or ["_empty_"] for text in self._corpus]
+        self._bm25 = BM25Okapi(tokenized)
 
     async def add_chunks(self, chunks: list[dict], doc_id: str) -> bool:
         """添加文本块"""
         if not chunks:
             return False
 
-        from rank_bm25 import BM25Okapi
-
         texts = [c["text"] for c in chunks]
         self._corpus.extend(texts)
 
-        if self._bm25 is None:
-            self._bm25 = BM25Okapi(self._corpus)
-        else:
-            # 重新构建索引
-            self._bm25 = BM25Okapi(self._corpus)
+        # 重新构建索引（统一分词）
+        self._build_bm25()
 
         self.chunks.extend(chunks)
         self.document_ids.extend([doc_id] * len(chunks))
@@ -310,9 +316,9 @@ class BM25VectorStore(BaseVectorStore):
                 self._corpus = data["corpus"]
 
             if self._corpus:
-                from rank_bm25 import BM25Okapi
-
-                self._bm25 = BM25Okapi(self._corpus)
+                # 统一分词重建索引：旧版索引文件存的是原始字符串，
+                # 加载时重新分词即可自愈，无需重建索引文件
+                self._build_bm25()
 
             return True
         except Exception:

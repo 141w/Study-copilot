@@ -48,7 +48,6 @@ async def create_task_endpoint(
     task = await task_service.create_task(db, current_user.id, task_type, payload)
     await enqueue(task.id, current_user.id, task_type, payload)
     return TaskResponse(**task_service.format_task(task))
-────────────────────────────────────────────────────────────
 
 
 @router.get("", response_model=TaskListResponse)

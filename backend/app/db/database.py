@@ -39,6 +39,9 @@ class Document(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    course_space_id = Column(
+        String, ForeignKey("course_spaces.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     status = Column(String, default="pending")
@@ -212,16 +215,6 @@ async def init_db():
 
 
 async def ensure_current_schema() -> None:
-    """Lightweight schema bootstrap for fresh databases.
-
-    Pre Alembic from failing on an empty database when the initial migration
-    does not create the base tables. This still relies on the ORM models for
-    the actual schema and does not mutate existing data.
-    """
+    """Create any missing tables from ORM models (idempotent)."""
     async with engine.begin() as conn:
-        result = await conn.execute(
-            text("SELECT to_regclass('public.users') AS users_exists")
-        )
-        row = result.first()
-        if row is None or not row.users_exists:
-            await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all)

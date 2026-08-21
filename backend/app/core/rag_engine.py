@@ -617,6 +617,26 @@ class RAGEngine:
         for event in thinking_events:
             yield event
 
+        # Step 3: Corrective retrieval — grade quality, retry if poor
+        if retrieved:
+            quality = await retrieval_grader.grade(final_query, retrieved, user_config)
+            if not quality.is_good:
+                logger.info(
+                    "[RAG] Stream retrieval %s (%s), attempting corrective...",
+                    quality.quality, quality.reason,
+                )
+                yield {
+                    "type": "thinking",
+                    "step": "retrieval_retry",
+                    "detail": f"检索质量不佳（{quality.reason}），正在改写查询重试...",
+                }
+                corrected, _ = await self._corrective_retrieve(
+                    doc_ids, final_query, user_config, top_k=5
+                )
+                if corrected:
+                    retrieved = corrected
+                    logger.info("[RAG] Stream corrective improved: %d chunks", len(corrected))
+
         if not retrieved:
             yield {
                 "type": "answer",

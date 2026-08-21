@@ -133,7 +133,7 @@ class QueryRouter:
 
         try:
             prompt = render_template("router/classify_intent.jinja2", query=query)
-                        response = await llm.chat(
+            response = await llm.chat(
                 [{"role": "user", "content": prompt}],
                 temperature=0.0,
                 max_tokens=10,

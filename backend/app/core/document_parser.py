@@ -546,6 +546,77 @@ class PPTXParser(BaseParser):
         return result["pages"]
 
 
+class TextParser(BaseParser):
+    """纯文本/Markdown(.txt/.md)解析器
+
+    用于 URL 导入（正文抽取后落为 .txt）以及用户直接上传的纯文本。
+    将整段文本按字符量切分为若干"页"，供下游 chunker 使用。
+    """
+
+    # 每"页"最多容纳的字符数
+    CHARS_PER_PAGE = 2000
+
+    @property
+    def supported_extensions(self) -> list[str]:
+        return [".txt", ".md", ".markdown"]
+
+    def _read_text_sync(self, file_path: str) -> str:
+        """按多种编码尝试读取文本文件"""
+        last_err: Exception | None = None
+        for enc in ("utf-8", "utf-8-sig", "gbk", "latin-1"):
+            try:
+                with open(file_path, "r", encoding=enc) as f:
+                    return f.read()
+            except (UnicodeDecodeError, UnicodeError) as e:
+                last_err = e
+                continue
+        raise ValueError(f"无法解码文本文件: {last_err}")
+
+    async def parse(self, file_path: str) -> dict[str, Any]:
+        path = Path(file_path)
+        text = await asyncio.to_thread(self._read_text_sync, file_path)
+        text = text.strip()
+
+        ext = path.suffix.lower().lstrip(".")
+        metadata = {
+            "title": path.stem,
+            "author": "",
+            "subject": "",
+            "creator": "",
+            "page_count": 0,
+            "file_type": ext or "txt",
+        }
+
+        pages: list[dict[str, Any]] = []
+        if text:
+            # 按段落累积到 CHARS_PER_PAGE 后分页，尽量在段落边界切分
+            paragraphs = [p for p in text.split("\n") if p.strip()]
+            current: list[str] = []
+            current_len = 0
+            page_num = 1
+            for para in paragraphs:
+                if current_len + len(para) > self.CHARS_PER_PAGE and current:
+                    pages.append({"page": page_num, "text": "\n".join(current), "images": []})
+                    page_num += 1
+                    current = []
+                    current_len = 0
+                current.append(para)
+                current_len += len(para)
+            if current:
+                pages.append({"page": page_num, "text": "\n".join(current), "images": []})
+
+        metadata["page_count"] = len(pages)
+        return {"metadata": metadata, "pages": pages}
+
+    async def extract_text(self, file_path: str) -> str:
+        result = await self.parse(file_path)
+        return "\n\n".join([page["text"] for page in result["pages"]])
+
+    async def extract_pages(self, file_path: str) -> list[dict[str, Any]]:
+        result = await self.parse(file_path)
+        return result["pages"]
+
+
 class DocumentParser:
     """
     统一文档解析器工厂
@@ -560,6 +631,9 @@ class DocumentParser:
             ".doc": DOCXParser(),
             ".pptx": PPTXParser(),
             ".ppt": PPTXParser(),
+            ".txt": TextParser(),
+            ".md": TextParser(),
+            ".markdown": TextParser(),
         }
 
     @property

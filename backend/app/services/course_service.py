@@ -1,5 +1,5 @@
 """
-Course space service — CRUD operations for course spaces.
+Course space service — CRUD operations for course spaces and document associations.
 """
 
 import logging
@@ -8,7 +8,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import CourseSpace, User
+from app.db import CourseSpace, Document, User
 from app.exceptions import NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,86 @@ async def delete_course_space(
 ) -> None:
     """Delete a course space and its linked notes. Raises NotFoundError if missing."""
     course = await get_course_space(db, user, course_id)
+
+    # Unlink documents associated with this course
+    result = await db.execute(
+        select(Document).where(
+            Document.course_space_id == course_id,
+            Document.user_id == user.id,
+        )
+    )
+    for doc in result.scalars().all():
+        doc.course_space_id = None
+
     await db.delete(course)
     await db.commit()
     logger.info("Deleted course space %s", course_id)
-async def get_course_documents(db, user, course_id):    """Get documents in a course space."""    from sqlalchemy import select    from app.db import Document    result = await db.execute(        select(Document).where(            Document.course_space_id == course_id,            Document.user_id == user.id,        )    )    return list(result.scalars().all())async def add_document_to_course(db, user, course_id, document_id):    """Add a document to a course space."""    from sqlalchemy import select    from app.db import Document    from app.exceptions import NotFoundError    result = await db.execute(        select(Document).where(            Document.id == document_id,            Document.user_id == user.id,        )    )    doc = result.scalar_one_or_none()    if not doc: raise NotFoundError("Document not found")    doc.course_space_id = course_id    await db.commit()async def remove_document_from_course(db, user, course_id, document_id):    """Remove document from course space."""    from sqlalchemy import select    from app.db import Document    from app.exceptions import NotFoundError    result = await db.execute(        select(Document).where(            Document.id == document_id,            Document.course_space_id == course_id,            Document.user_id == user.id,        )    )    doc = result.scalar_one_or_none()    if not doc: raise NotFoundError("Document not found")    doc.course_space_id = None    await db.commit()
+
+
+# ── Course-Document associations ────────────────────────────────────────
+
+
+async def get_course_documents(
+    db: AsyncSession,
+    user: User,
+    course_id: str,
+) -> list[Document]:
+    """Get documents in a course space."""
+    # Verify course exists and belongs to user
+    await get_course_space(db, user, course_id)
+
+    result = await db.execute(
+        select(Document).where(
+            Document.course_space_id == course_id,
+            Document.user_id == user.id,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def add_document_to_course(
+    db: AsyncSession,
+    user: User,
+    course_id: str,
+    document_id: str,
+) -> None:
+    """Add a document to a course space."""
+    # Verify course exists and belongs to user
+    await get_course_space(db, user, course_id)
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.user_id == user.id,
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("文档不存在")
+
+    doc.course_space_id = course_id
+    await db.commit()
+    logger.info("Added document %s to course %s", document_id, course_id)
+
+
+async def remove_document_from_course(
+    db: AsyncSession,
+    user: User,
+    course_id: str,
+    document_id: str,
+) -> None:
+    """Remove document from course space."""
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.course_space_id == course_id,
+            Document.user_id == user.id,
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("文档不存在")
+
+    doc.course_space_id = None
+    await db.commit()
+    logger.info("Removed document %s from course %s", document_id, course_id)

@@ -39,8 +39,7 @@ class Settings(BaseSettings):
     debug: bool = True
     encryption_key: str = ""
 
-    class Config:
-        env_file = ".env"
+    model_config = {'env_file': '.env'}
 
 
 @lru_cache

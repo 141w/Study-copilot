@@ -230,7 +230,7 @@ pytest tests/ -v           # Run tests
 | POST | `/api/auth/login` | Login, returns access + refresh tokens |
 | POST | `/api/auth/refresh` | Refresh access token |
 | GET | `/api/auth/me` | Get current user info |
-| POST | `/api/documents` | Upload document (PDF/DOCX/PPTX) |
+| POST | `/api/documents/upload` | Upload document (PDF/DOCX/PPTX) |
 | POST | `/api/documents/from-url` | Import document from URL |
 | GET | `/api/documents` | List user's documents |
 | GET | `/api/documents/{id}` | Get document detail |
@@ -253,6 +253,7 @@ pytest tests/ -v           # Run tests
 | GET | `/api/notes/{id}` | Get note detail |
 | PUT | `/api/notes/{id}` | Update note (including tags) |
 | DELETE | `/api/notes/{id}` | Delete note |
+| POST | `/api/notes/search` | Semantic note search |
 | GET | `/api/notes/tags/all` | List all tags |
 | DELETE | `/api/notes/tags/{tag_id}` | Delete a tag |
 | POST | `/api/courses` | Create course space |
@@ -260,10 +261,14 @@ pytest tests/ -v           # Run tests
 | GET | `/api/courses/{id}` | Get course detail |
 | PUT | `/api/courses/{id}` | Update course space |
 | DELETE | `/api/courses/{id}` | Delete course space |
+| GET | `/api/courses/{id}/documents` | List documents associated with a course |
+| POST | `/api/courses/{id}/documents` | Associate documents with a course |
+| DELETE | `/api/courses/{id}/documents/{doc_id}` | Remove a document association |
 | POST | `/api/transform` | Transform content (8 types) |
 | GET | `/api/transform/transformations` | List available transformation types |
 | POST | `/api/tts/generate` | Synthesize speech from text |
 | GET | `/api/tts/voices` | List available TTS voices |
+| POST | `/api/tasks` | Create an async task |
 | GET | `/api/tasks` | List user's tasks (filterable by status) |
 | GET | `/api/tasks/{id}` | Get task status |
 | DELETE | `/api/tasks/{id}` | Cancel task |

@@ -14,12 +14,9 @@ from app.core.template_manager import render_template
 
 logger = logging.getLogger(__name__)
 
+
 class AnswerReflector:
     """答案质量反思器"""
-
-    REFLECT_PROMPT = (render_template("reflector/evaluate.jinja2", context=context, query=query, answer=answer)
-
-    REFINE_PROMPT = (render_template("reflector/refine.jinja2", query=query, context=context, answer=answer, feedback=feedback)
 
     async def evaluate(
         self, query: str, context: str, answer: str, llm: LLM
@@ -30,7 +27,8 @@ class AnswerReflector:
             {"pass": bool, "reason": str, "suggestions": str}
         """
         try:
-            prompt = render_template(self.REFLECT_PROMPT_TEMPLATE, 
+            prompt = render_template(
+                "reflector/evaluate.jinja2",
                 context=context[:4000], query=query, answer=answer
             )
             response = await llm.chat(
@@ -49,7 +47,8 @@ class AnswerReflector:
     ) -> str:
         """根据反馈重新生成答案。"""
         try:
-            prompt = render_template(self.REFINE_PROMPT_TEMPLATE, 
+            prompt = render_template(
+                "reflector/refine.jinja2",
                 query=query, context=context[:4000], answer=answer, feedback=feedback
             )
             refined = await llm.chat(
@@ -117,5 +116,6 @@ class AnswerReflector:
                 pass
 
         return {"pass": passed, "reason": reason or "parse_failed", "suggestions": suggestions}
+
 
 answer_reflector = AnswerReflector()

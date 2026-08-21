@@ -16,14 +16,24 @@ async def get_llm_config(
     db: AsyncSession,
     user: User,
 ) -> dict:
-    """Get user's LLM config. Returns defaults if none exists."""
+    """Get user's LLM config. Returns defaults if none exists.
+
+    安全约定：永不返回明文 api_key；仅返回 has_api_key 与掩码值供前端展示。
+    """
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
     config = result.scalar_one_or_none()
 
     if not config:
         return _default_config()
 
-    return _config_to_dict(config)
+    enc = get_encryption_service()
+    plaintext = enc.decrypt(config.api_key) if config.api_key else None
+    return {
+        **_config_to_dict(config),
+        "base_url": config.base_url,
+        "has_api_key": bool(config.api_key),
+        "api_key_masked": mask_api_key(plaintext),
+    }
 
 
 async def create_or_update_llm_config(
@@ -54,7 +64,12 @@ async def create_or_update_llm_config(
     config_id = existing.id if existing else str(uuid.uuid4())
 
     enc = get_encryption_service()
-    stored_key = enc.encrypt(api_key) if api_key else api_key
+    # 留空 = 保持原有 Key（修复：旧实现会把空值写入从而清掉已保存的 Key，
+    # 迫使前端必须把明文 Key 取回再回传，造成 /with-secret 明文出网）
+    if api_key:
+        stored_key = enc.encrypt(api_key)
+    else:
+        stored_key = existing.api_key if existing else None
 
     if existing:
         existing.provider = provider
@@ -125,7 +140,9 @@ async def update_llm_config(
 
     enc = get_encryption_service()
     config.provider = provider
-    config.api_key = enc.encrypt(api_key) if api_key else api_key
+    # 留空 = 保持原有 Key（同 create_or_update 的修复）
+    if api_key:
+        config.api_key = enc.encrypt(api_key)
     config.base_url = base_url
     config.model_name = model_name
     config.temperature = normalized_temperature
@@ -162,6 +179,18 @@ async def get_llm_config_with_secret(
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
+def mask_api_key(plaintext: str | None) -> str | None:
+    """返回 API Key 的掩码展示值（前 3 位 + 后 4 位），永不暴露完整明文。
+
+    例：sk-or-v1-abcdef...xyz -> sk-...xyz（短 Key 全掩码）
+    """
+    if not plaintext:
+        return None
+    if len(plaintext) <= 8:
+        return "***"
+    return f"{plaintext[:3]}***{plaintext[-4:]}"
+
+
 def _default_config() -> dict:
     return {
         "id": "",
@@ -171,6 +200,9 @@ def _default_config() -> dict:
         "max_tokens": 2048,
         "embedding_model": "shibing624/text2vec-base-chinese",
         "embedding_dimension": 768,
+        "base_url": None,
+        "has_api_key": False,
+        "api_key_masked": None,
         "created_at": "",
         "updated_at": "",
     }

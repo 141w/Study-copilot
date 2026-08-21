@@ -15,33 +15,35 @@ from app.db.database import engine
 
 logger = logging.getLogger(__name__)
 
-# Path to the alembic.ini file (relative to backend directory)
+# Path to the alembic.ini file (backend/alembic.ini)
+# 修复（2026-08-19）：旧路径少了一级 parent，解析到 backend/app/alembic.ini（不存在），
+# 导致 alembic Config 读不到 script_location，应用启动即崩
 ALEMBIC_CFG_PATH = Path(__file__).parent.parent.parent / "alembic.ini"
 
 
 def get_alembic_config() -> Config:
-    """Get Alembic configuration."""
-    alembic_cfg = Config(str(ALEMBIC_CFG_PATH))
-    return alembic_cfg
+    """Get Alembic configuration, overriding URL from app settings."""
+    from app.config import settings
+
+    cfg = Config(str(ALEMBIC_CFG_PATH))
+    cfg.set_main_option("sqlalchemy.url", settings.database_url)
+    return cfg
 
 
 async def run_migrations() -> None:
     """
     Run all pending Alembic migrations.
-    This is designed to be called on application startup.
+    Designed to be called on application startup.
     """
-    alembic_cfg = get_alembic_config()
-
-    # Run migrations in a thread pool since alembic commands are synchronous
+    cfg = get_alembic_config()
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _run_migrations_sync, alembic_cfg)
+    await loop.run_in_executor(None, _run_migrations_sync, cfg)
 
 
-def _run_migrations_sync(alembic_cfg: Config) -> None:
-    """Synchronous migration runner (executed in thread pool)."""
+def _run_migrations_sync(cfg: Config) -> None:
     try:
         logger.info("Running database migrations...")
-        command.upgrade(alembic_cfg, "head")
+        command.upgrade(cfg, "head")
         logger.info("Database migrations completed successfully.")
     except Exception as e:
         logger.error(f"Migration failed: {e}")
@@ -49,21 +51,22 @@ def _run_migrations_sync(alembic_cfg: Config) -> None:
 
 
 async def get_current_revision() -> str | None:
-    """Get the current database revision."""
-    async with engine.connect() as conn:
-        result = await conn.execute(text("SELECT version_num FROM alembic_version"))
-        row = result.first()
-        return row[0] if row else None
+    """Get the current database revision. Returns None on fresh DB (no alembic_version table)."""
+    try:
+        async with engine.connect() as conn:
+            result = await conn.execute(text("SELECT version_num FROM alembic_version"))
+            row = result.first()
+            return row[0] if row else None
+    except Exception:
+        return None
 
 
 async def get_pending_migrations() -> list[str]:
     """Get list of pending migration revisions."""
-    alembic_cfg = get_alembic_config()
-    script_dir = ScriptDirectory.from_config(alembic_cfg)
-
+    cfg = get_alembic_config()
+    script_dir = ScriptDirectory.from_config(cfg)
     current_rev = await get_current_revision()
 
-    # Get all revisions after current
     revisions = []
     for revision in script_dir.walk_revisions():
         if revision.revision == current_rev:
@@ -77,7 +80,7 @@ async def stamp_head() -> None:
     """Stamp the database with the head revision without running migrations.
     Useful when tables already exist and you want to mark them as current.
     """
-    alembic_cfg = get_alembic_config()
+    cfg = get_alembic_config()
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, command.stamp, alembic_cfg, "head")
+    await loop.run_in_executor(None, command.stamp, cfg, "head")
     logger.info("Database stamped with head revision.")

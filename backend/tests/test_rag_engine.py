@@ -62,25 +62,11 @@ class TestExtractSourceIndices:
 class TestRAGEngine:
     @pytest.fixture
     def engine(self):
-        return RAGEngine()
-
-    # _needs_rewrite
-    def test_needs_rewrite_with_pronoun(self, engine):
-        assert engine._needs_rewrite("它是什么意思") is True
-
-    def test_needs_rewrite_without_pronoun(self, engine):
-        assert engine._needs_rewrite("什么是机器学习") is False
-
-    def test_needs_rewrite_with_reference(self, engine):
-        assert engine._needs_rewrite("上面的内容解释一下") is True
-
-    def test_needs_rewrite_all_trigger_words(self, engine):
-        """Every trigger word should detect."""
-        for word in engine._REWRITE_TRIGGER_WORDS:
-            assert engine._needs_rewrite(f"请解释{word}的含义") is True
-
-    def test_needs_rewrite_empty_string(self, engine):
-        assert engine._needs_rewrite("") is False
+        engine = RAGEngine()
+        # Disable the real CrossEncoder reranker so tests never load the model
+        engine._reranker = None
+        engine._reranker_loaded = True
+        return engine
 
     # deduplicate_results
     def test_deduplicate_empty(self, engine):
@@ -216,13 +202,20 @@ class TestRAGEngine:
 class TestRAGEngineAsync:
     @pytest.fixture
     def engine(self):
-        return RAGEngine()
+        engine = RAGEngine()
+        # Disable the real CrossEncoder reranker so tests never load the model
+        engine._reranker = None
+        engine._reranker_loaded = True
+        return engine
 
     @pytest.mark.asyncio
     async def test_retrieve_calls_store_search(self, engine):
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(3)
         engine._vector_store_cache["doc1"] = mock_store
+        # Disable reranker to avoid loading the real CrossEncoder model
+        engine._reranker = None
+        engine._reranker_loaded = True
 
         results = await engine.retrieve(["doc1"], "test query", top_k=3)
         mock_store.search.assert_called_once()
@@ -406,7 +399,7 @@ class TestRAGEngineAsync:
 
         result = await engine.ask(["doc1"], "question")
         assert result["context_used"] is False
-        assert "upload" in result["answer"].lower()
+        assert "没有找到" in result["answer"]
 
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
@@ -529,9 +522,10 @@ class TestRAGEngineAsync:
         chunks = []
         async for event in engine.ask_stream(["doc1"], "question"):
             chunks.append(event)
-        assert len(chunks) == 1
-        assert chunks[0]["type"] == "answer"
-        assert "upload" in chunks[0]["content"].lower()
+        # Agentic RAG emits thinking events before the answer
+        answer_events = [c for c in chunks if c["type"] == "answer"]
+        assert len(answer_events) == 1
+        assert "没有找到" in answer_events[0]["content"]
 
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
@@ -552,9 +546,10 @@ class TestRAGEngineAsync:
         async for event in engine.ask_stream(["doc1"], "question"):
             events.append(event)
 
-        # Should have: sources event, then token events
-        assert events[0]["type"] == "sources"
-        assert "sources" in events[0]
+        # Agentic RAG emits thinking events first, then sources, then tokens
+        sources_events = [e for e in events if e["type"] == "sources"]
+        assert len(sources_events) == 1
+        assert "sources" in sources_events[0]
         token_events = [e for e in events if e["type"] == "token"]
         assert len(token_events) == 2
         assert "".join(e["content"] for e in token_events) == "答案"
@@ -625,7 +620,10 @@ class TestRAGEngineAsync:
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
     async def test_ask_with_history_triggers_rewrite(self, MockLLM, engine):
-        """Query with pronoun + history should trigger rewrite."""
+        """Query with pronoun + history should be routed through query_router.analyze,
+        which performs the context-aware rewrite."""
+        from app.core.query_router import QueryAnalysis, QueryType
+
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "rewritten query"
         MockLLM.return_value = mock_llm
@@ -635,10 +633,15 @@ class TestRAGEngineAsync:
         engine._vector_store_cache["doc1"] = mock_store
 
         history = [{"role": "user", "content": "what is X"}]
-        with patch.object(engine, "_rewrite_query", return_value="rewritten query") as mock_rewrite:
-            with patch.object(engine, "retrieve", return_value=_make_retrieved(1)) as mock_retrieve:
+        analysis = QueryAnalysis(QueryType.RAG_QA, "rewritten query")
+        with patch(
+            "app.core.rag_engine.query_router.analyze", return_value=analysis
+        ) as mock_analyze:
+            with patch.object(engine, "retrieve", return_value=_make_retrieved(1)):
                 await engine.ask(["doc1"], "它是什么", history=history)
-                mock_rewrite.assert_called_once()
+                mock_analyze.assert_called_once()
+                # history must be forwarded so the router can rewrite
+                assert mock_analyze.call_args[0][2] == history
 
     @pytest.mark.asyncio
     async def test_ask_no_rewrite_without_pronoun(self, engine):
@@ -669,9 +672,11 @@ class TestRAGEngineAsync:
     def test_engine_vector_store_cache_init(self, engine):
         assert engine._vector_store_cache == {}
 
-    def test_engine_reranker_init(self, engine):
-        assert engine._reranker is None
-        assert engine._reranker_loaded is False
+    def test_engine_reranker_init(self):
+        # Use a pristine engine (the fixture disables the reranker for other tests)
+        fresh = RAGEngine()
+        assert fresh._reranker is None
+        assert fresh._reranker_loaded is False
 
 
 # ── Extended RAGEngine tests ─────────────────────────────────────────────────
@@ -682,7 +687,11 @@ class TestRAGEngineExtended:
 
     @pytest.fixture
     def engine(self):
-        return RAGEngine()
+        engine = RAGEngine()
+        # Disable the real CrossEncoder reranker so tests never load the model
+        engine._reranker = None
+        engine._reranker_loaded = True
+        return engine
 
     # build_context edge cases
     def test_build_context_single_chunk(self, engine):
@@ -747,11 +756,6 @@ class TestRAGEngineExtended:
         ]
         deduped = engine.deduplicate_results(results)
         assert len(deduped) == 2
-
-    # _needs_rewrite edge cases
-    def test_needs_rewrite_substring_match(self, engine):
-        """Trigger word inside another word should still match."""
-        assert engine._needs_rewrite("解释一下它们") is True
 
     # retrieve edge cases
     @pytest.mark.asyncio
@@ -831,8 +835,9 @@ class TestRAGEngineExtended:
         async for event in engine.ask_stream(["doc1"], "q"):
             events.append(event)
 
-        sources_event = events[0]
-        assert sources_event["type"] == "sources"
+        sources_events = [e for e in events if e["type"] == "sources"]
+        assert len(sources_events) == 1
+        sources_event = sources_events[0]
         assert "sources" in sources_event
         assert "filtered_sources" in sources_event
         for s in sources_event["sources"]:
@@ -865,7 +870,8 @@ class TestRAGEngineExtended:
         async for event in engine.ask_stream(["doc1"], "q"):
             events.append(event)
 
-        sources = events[0]["sources"]
+        sources_events = [e for e in events if e["type"] == "sources"]
+        sources = sources_events[0]["sources"]
         assert isinstance(sources[0]["page"], str)
 
     @pytest.mark.asyncio
@@ -880,8 +886,9 @@ class TestRAGEngineExtended:
         engine._vector_store_cache["doc1"] = mock_store
 
         config = {"embedding_model": "new_model", "embedding_dimension": 512}
-        async for _ in engine.ask_stream(["doc1"], "q", user_config=config):
-            pass
+        with patch("app.core.rag_engine.LLM"):
+            async for _ in engine.ask_stream(["doc1"], "q", user_config=config):
+                pass
 
         mock_embedder.reload_model.assert_called_once_with("new_model", 512)
 

@@ -24,10 +24,27 @@ target_metadata = Base.metadata
 
 # Import all models to ensure they are registered with Base.metadata
 
-# Override sqlalchemy.url from environment variable if set
+# 解析数据库 URL（修复 2026-08-19）：
+# 1) 环境变量 DATABASE_URL 优先（docker-compose 已注入，指向 db 服务）
+# 2) 否则读 app settings（pydantic-settings 会加载 backend/.env）——
+#    旧实现只看环境变量，容器外手动跑 alembic 时 .env 不生效，
+#    容器内忘设环境变量时则静默 fallback 到 alembic.ini 的 localhost 默认值（连错库）
 from_env = os.getenv("DATABASE_URL")
 if from_env:
     config.set_main_option("sqlalchemy.url", from_env)
+else:
+    from app.config import settings
+
+    config.set_main_option("sqlalchemy.url", settings.database_url)
+
+# Fail-fast：容器内解析出 localhost 意味着会连到容器自身而非 db 服务
+_final_url = config.get_main_option("sqlalchemy.url") or ""
+if "localhost" in _final_url and os.path.exists("/.dockerenv"):
+    raise RuntimeError(
+        "alembic 在容器内解析到 localhost 数据库地址，这会连接到容器自身而不是 db 服务。"
+        "请设置 DATABASE_URL 环境变量，例如："
+        "postgresql+asyncpg://study_user:study123@db:5432/study_copilot"
+    )
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

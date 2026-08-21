@@ -26,25 +26,14 @@ class LLMConfigReq(BaseModel):
 class LLMConfigResp(BaseModel):
     id: str
     provider: str
+    base_url: str | None = None
     model_name: str
     temperature: float
     max_tokens: int
     embedding_model: str
     embedding_dimension: int
-    created_at: str
-    updated_at: str
-
-
-class LLMConfigWithSecret(BaseModel):
-    id: str
-    provider: str
-    api_key: str | None
-    base_url: str | None
-    model_name: str
-    temperature: float
-    max_tokens: int
-    embedding_model: str
-    embedding_dimension: int
+    has_api_key: bool = False
+    api_key_masked: str | None = None
     created_at: str
     updated_at: str
 
@@ -103,10 +92,7 @@ async def update_llm_config(
     return LLMConfigResp(**data)
 
 
-@router.get("/llm/with-secret", response_model=LLMConfigWithSecret)
-async def get_llm_config_with_secret(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    data = await config_service.get_llm_config_with_secret(db, current_user)
-    return LLMConfigWithSecret(**data)
+# 安全修复（2026-08-19）：移除 GET /llm/with-secret 端点。
+# 该端点会把解密后的 API Key 明文返回给前端（经浏览器/扩展/日志可截获）。
+# 后端内部仍通过 config_service.get_llm_config_with_secret() 获取明文（chat/quiz/transform），
+# 前端只需要 has_api_key / api_key_masked（见 GET /llm）。

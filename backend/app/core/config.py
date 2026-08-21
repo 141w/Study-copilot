@@ -24,7 +24,6 @@ async def get_user_llm_config(db: AsyncSession, user_id: str) -> dict:
     }
 
 
-class UserConfigMiddleware:
     """用户配置中间件 - 在请求中注入用户LLM配置"""
 
     def __init__(self, app):
@@ -36,3 +35,4 @@ class UserConfigMiddleware:
             return
 
         await self.app(scope, receive, send)
+

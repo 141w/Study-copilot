@@ -82,6 +82,13 @@ def get_user_identifier(request: Request) -> str:
     return client.host if client else "unknown"
 
 
+def create_rate_limit_key(endpoint: str, user_id: str | None = None) -> str:
+    """构建限流键：endpoint + 可选用户标识。"""
+    if user_id:
+        return f"{endpoint}:{user_id}"
+    return endpoint
+
+
 
 
 

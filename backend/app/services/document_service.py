@@ -1,5 +1,10 @@
 """
 Document service — upload, list, get, delete documents with parsing & vectorisation.
+
+Uploads are processed asynchronously: the file is saved and a Document row with
+status="processing" is created immediately, then the parse → chunk → vectorise
+pipeline runs in the background task worker. If the worker is not running
+(e.g. in tests), processing falls back to synchronous execution.
 """
 
 import logging
@@ -12,12 +17,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.task_worker import enqueue
 from app.core.chunker import (
     create_chunker,
     deduplicate_chunks,
 )
 from app.core.document_parser import document_parser
+from app.core.task_worker import enqueue
 from app.core.vector_store import DocumentVectorStore
 from app.db import Document, User
 from app.exceptions import (
@@ -27,6 +32,7 @@ from app.exceptions import (
     NotFoundError,
     ValidationError,
 )
+from app.services import task_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +54,11 @@ async def upload_document(
     filename: str,
     content: bytes,
 ) -> dict:
-    """Full upload pipeline: validate → save file → parse → chunk → vectorise → persist DB.
+    """Upload pipeline: validate → save file → create DB row → enqueue background processing.
 
     Returns dict with keys: id, filename, status, message, chunk_count.
+    status is "processing" when handled by the background worker, or "ready"
+    when processed synchronously (worker unavailable).
     """
     if not document_parser.is_supported(filename):
         supported = ", ".join(document_parser.supported_extensions)
@@ -76,6 +84,77 @@ async def upload_document(
     async with aiofiles.open(fp, "wb") as f:
         await f.write(content)
     logger.info("File saved, size: %d bytes", file_size)
+
+    # Create the document row in "processing" state
+    new_doc = Document(
+        id=doc_id,
+        user_id=user.id,
+        filename=filename,
+        file_path=fp,
+        status="processing",
+        chunk_count=0,
+        file_size=file_size,
+    )
+    db.add(new_doc)
+    await db.commit()
+
+    # Create a tracking task and enqueue background processing
+    task = await task_service.create_task(
+        db, user.id, "document_process", {"doc_id": doc_id, "filename": filename}
+    )
+    try:
+        await enqueue(task.id, user.id, "document_process", {"doc_id": doc_id})
+        logger.info("Document %s queued for background processing", doc_id)
+        return {
+            "id": doc_id,
+            "filename": filename,
+            "status": "processing",
+            "message": "文档已开始后台处理，请稍候查看",
+            "chunk_count": 0,
+        }
+    except RuntimeError:
+        # Worker not started (e.g. tests) — fall back to synchronous processing
+        logger.warning("Task worker unavailable, processing document %s synchronously", doc_id)
+        await task_service.update_task(db, task.id, user.id, status="running")
+        try:
+            chunk_count, method = await _do_process_document(db, user, doc_id)
+            await task_service.update_task(
+                db, task.id, user.id, status="completed",
+                result={"doc_id": doc_id, "chunk_count": chunk_count},
+            )
+        except Exception as e:
+            await task_service.update_task(
+                db, task.id, user.id, status="failed", error=str(e)
+            )
+            raise
+        return {
+            "id": doc_id,
+            "filename": filename,
+            "status": "ready",
+            "message": f"上传成功，使用 {method} 分块策略",
+            "chunk_count": chunk_count,
+        }
+
+
+async def _do_process_document(
+    db: AsyncSession,
+    user: User,
+    doc_id: str,
+) -> tuple[int, str]:
+    """Parse → chunk → vectorise a saved document and update its DB row.
+
+    Returns (chunk_count, chunking_method). Sets the document status to
+    "ready" on success or "error" on failure.
+    """
+    result = await db.execute(
+        select(Document).where(Document.id == doc_id, Document.user_id == user.id)
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("文档不存在")
+
+    fp = doc.file_path
+    method = "fixed"
 
     try:
         # Parse
@@ -124,32 +203,20 @@ async def upload_document(
         store = DocumentVectorStore(doc_id, retrieval_type=DocumentVectorStore.RETRIEVAL_TYPE_HYBRID)
         await store.add_chunks(chunks)
 
-        # Persist to DB
-        new_doc = Document(
-            id=doc_id,
-            user_id=user.id,
-            filename=filename,
-            file_path=fp,
-            status="ready",
-            chunk_count=len(chunks),
-            file_size=file_size,
-        )
-        db.add(new_doc)
+        # Mark ready
+        doc.status = "ready"
+        doc.chunk_count = len(chunks)
         await db.commit()
-        logger.info("Upload complete: %s", doc_id)
+        logger.info("Processing complete: %s (%d chunks)", doc_id, len(chunks))
+        return len(chunks), method
 
-        return {
-            "id": doc_id,
-            "filename": filename,
-            "status": "ready",
-            "message": f"上传成功，使用 {method} 分块策略",
-            "chunk_count": len(chunks),
-        }
-
-    except AppError:
-        raise
     except Exception as e:
-        logger.error("upload: %s", e, exc_info=True)
+        # Mark the document as failed
+        doc.status = "error"
+        await db.commit()
+        if isinstance(e, AppError):
+            raise
+        logger.error("document processing: %s", e, exc_info=True)
         raise ExternalServiceError(str(e))
 
 
@@ -196,7 +263,7 @@ async def delete_document(
     user: User,
     doc_id: str,
 ) -> None:
-    """Delete a document, its file, and vector store. Raises NotFoundError if missing."""
+    """Delete a document, its file, and vector store. Throws NotFoundError if missing."""
     result = await db.execute(
         select(Document).where(Document.id == doc_id, Document.user_id == user.id)
     )

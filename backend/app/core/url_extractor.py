@@ -4,6 +4,7 @@ URL content extraction using trafilatura.
 Extracts clean text content from web pages for document ingestion.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -34,7 +35,7 @@ async def extract_from_url(url: str) -> dict:
     logger.info("Extracting content from URL: %s", url)
 
     # trafilatura.fetch_url is synchronous, but fast enough for web scraping
-    downloaded = trafilatura.fetch_url(url)
+    downloaded = await asyncio.to_thread(trafilatura.fetch_url, url)
     if not downloaded:
         raise ValueError(f"无法访问该 URL: {url}")
 
