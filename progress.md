@@ -347,3 +347,7 @@ task_worker 改轮询认领；重启存活语义落地（pending 续跑、runnin
 ### 第十小节：覆盖率门禁（同日续）
 pytest.ini addopts + CI 双处落地，fail-under=65；基线 68.17%；全量 323 passed。
 剩余待办：LLM 效果回归（待用户提供 Key）。
+
+### 第十一小节：LLM 决策链有界超时（用户质疑驱动）
+SSE 中间件清白确认；真凶=connect 无界×多跳。三跳 wait_for(10s)+connect8+
+chat.py error/done 兜底；reranker 本地优先。黑洞环境 20s 收尾，323 passed。

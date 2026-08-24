@@ -665,3 +665,12 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
 - pytest.ini addopts 全局强制：--cov-fail-under=65（基线 68.17%，3pt 余量）；
   CI test.yml 同步显式阈值；负向验证确认门禁会拦
 - 后续策略：每补一块测试即上调阈值（棘轮式）
+
+### LLM 决策链路有界超时（用户质疑驱动的深挖，2026-08-24）
+- 用户"你确定吗"触发复检：SSE 安全头实测通过的同时暴露真问题——
+  ask/stream 在无 Key/黑洞网络下 session 后 40s+ 零事件（HTTP 与服务层一致）
+- 排除项：安全中间件（二分禁用后仍挂，且头正常下发）、FAISS 缓存（单例级
+  已存在）、Embedder（单例+哈希缓存）
+- 真凶：llm 客户端 connect 无显式上限 + 多决策跳无界。修复后黑洞环境
+  全流程 20s 有界收尾（session→thinking→answer→done）
+- 附带修复：reranker CrossEncoder 改本地优先加载（BUG-1 同模式第三处）
