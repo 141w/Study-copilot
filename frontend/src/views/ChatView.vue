@@ -216,109 +216,13 @@
       </div>
     </div>
 
-    <!-- History Sidebar -->
-    <div
-      v-if="showHistory"
-      class="w-80 border-l border-[var(--border-default)] bg-[var(--surface-card)] flex flex-col transition-all"
-    >
-      <!-- Sidebar Header -->
-      <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
-        <h2 class="font-medium text-[var(--text-primary)]">对话历史</h2>
-        <button @click="showHistory = false" class="text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Session List -->
-      <div class="flex-1 overflow-y-auto">
-        <div v-if="chatStore.sessions.length === 0" class="p-4 text-center text-[var(--text-muted)] text-sm">
-          暂无历史对话
-        </div>
-        <div
-          v-else
-          v-for="session in chatStore.sessions"
-          :key="session.session_id"
-          class="border-b border-[var(--border-default)] hover:bg-[var(--bg-hover)] group"
-          :class="{ 'bg-[var(--bg-hover)]': session.session_id === chatStore.currentSession }"
-        >
-          <!-- Session Item -->
-          <div
-            class="p-3 cursor-pointer"
-            @click="loadSession(session.session_id)"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <div class="flex-1 min-w-0">
-                <!-- Editing Title -->
-                <div v-if="editingSessionId === session.session_id" class="flex items-center gap-2">
-                  <input
-                    v-model="editingTitle"
-                    @keyup.enter="saveTitle(session.session_id)"
-                    @blur="saveTitle(session.session_id)"
-                    class="flex-1 px-2 py-1 text-sm border border-[var(--border-focus)] rounded focus:outline-none bg-[var(--bg-primary)] text-[var(--text-primary)]"
-                    @click.stop
-                  />
-                </div>
-                <div v-else class="flex items-center gap-2">
-                  <span class="text-sm text-[var(--text-secondary)] truncate block flex-1">
-                    {{ session.title || '新对话' }}
-                  </span>
-                  <!-- Edit Button -->
-                  <button
-                    @click.stop="startEditTitle(session)"
-                    class="text-[var(--text-muted)] hover:text-[var(--color-primary)] opacity-0 group-hover:opacity-100"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 15.232l2.536 2.536m0-2.536l-2.536 2.536m2.536-2.536l-2.536 2.536m2.536 2.536l2.536 2.536M4 20h4l2-2-4-4-2 2z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="text-xs text-[var(--text-muted)] mt-1">
-              {{ formatDate(session.created_at) }}
-            </div>
-          </div>
-
-          <!-- Delete Button (hover show) -->
-          <div class="px-3 pb-2 flex justify-end">
-            <button
-              @click.stop="confirmDelete(session)"
-              class="text-xs text-[var(--color-error)] hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              删除
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Delete Confirm Modal -->
-    <div
-      v-if="deleteModal.show"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click="deleteModal.show = false"
-    >
-      <div class="bg-[var(--surface-card)] rounded-lg p-6 max-w-sm w-full mx-4" @click.stop>
-        <h3 class="text-lg font-medium text-[var(--text-primary)] mb-4">确认删除</h3>
-        <p class="text-[var(--text-secondary)] mb-6">确定要删除「{{ deleteModal.title }}」吗？此操作无法撤销。</p>
-        <div class="flex gap-3 justify-end">
-          <button
-            @click="deleteModal.show = false"
-            class="px-4 py-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-          >
-            取消
-          </button>
-          <button
-            @click="deleteSession"
-            class="px-4 py-2 bg-[var(--color-error)] text-white rounded-lg hover:opacity-90"
-          >
-            删除
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- History Sidebar（会话列表/重命名/删除确认，自包含子组件） -->
+    <ChatHistoryPanel
+      :visible="showHistory"
+      @close="showHistory = false"
+      @loaded="onSessionLoaded"
+      @deleted="onSessionDeleted"
+    />
   </div>
 </template>
 
@@ -332,6 +236,8 @@ import { useRoute } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import { useDocumentStore } from '../stores/document'
 import ChatInput from '../components/chat/ChatInput.vue'
+import ChatHistoryPanel from '../components/chat/ChatHistoryPanel.vue'
+import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatExport'
 import TTSPlayer from '../components/TTSPlayer.vue'
 import { useMarkdown } from '../composables/useMarkdown'
 import gsap from 'gsap'
@@ -355,17 +261,6 @@ async function copyMessage(msg) {
     console.error('Copy failed:', e)
   }
 }
-
-// Edit state
-const editingSessionId = ref(null)
-const editingTitle = ref('')
-
-// Delete modal
-const deleteModal = ref({
-  show: false,
-  sessionId: '',
-  title: ''
-})
 
 const { renderMarkdown: renderMarkdownBase } = useMarkdown()
 
@@ -422,38 +317,8 @@ function handleStop() {
 
 function exportChat() {
   if (chatStore.messages.length === 0) return
-
-  const title = chatStore.currentSessionTitle || '对话'
-  let md = `# ${title}\n\n`
-
-  for (const msg of chatStore.messages) {
-    if (msg.role === 'user') {
-      md += `## 用户\n\n${msg.content}\n\n`
-    } else if (msg.role === 'assistant') {
-      md += `## AI\n\n${msg.content}\n\n`
-      if (msg.sources && msg.sources.length > 0) {
-        md += `## 参考来源\n\n`
-        msg.sources.forEach((source, idx) => {
-          const src = source.source || '未知来源'
-          const page = source.page ? ` P${source.page}` : ''
-          const text = source.text ? ` — ${source.text}` : ''
-          md += `${idx + 1}. ${src}${page}${text}\n`
-        })
-        md += '\n'
-      }
-    }
-  }
-
-  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  const date = new Date().toISOString().slice(0, 10)
-  a.href = url
-  a.download = `chat-${date}.md`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const md = buildChatMarkdown(chatStore.messages, chatStore.currentSessionTitle || '对话')
+  downloadChatMarkdown(md)
 }
 
 function newChat() {
@@ -463,12 +328,18 @@ function newChat() {
   showHistory.value = false
 }
 
-async function loadSession(sessionId) {
-  await chatStore.fetchHistory(sessionId)
-  chatStore.currentSessionTitle = chatStore.sessions.find(s => s.session_id === sessionId)?.title || ''
-  await nextTick()
-  scrollToBottom()
+function onSessionLoaded(sessionId) {
+  // 面板已完成 fetchHistory 与标题恢复；父级负责滚动与收起
+  void sessionId
+  nextTick(() => scrollToBottom())
   showHistory.value = false
+}
+
+function onSessionDeleted(sessionId) {
+  // 删除的是当前会话时重置视图
+  if (chatStore.currentSession === sessionId) {
+    newChat()
+  }
 }
 
 function scrollToBottom() {
@@ -479,61 +350,6 @@ function scrollToBottom() {
       el.scrollTop = el.scrollHeight
     }
   }
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diff = now - date
-  
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前'
-  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前'
-  if (diff < 604800000) return Math.floor(diff / 86400000) + '天前'
-  
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-}
-
-function startEditTitle(session) {
-  editingSessionId.value = session.session_id
-  editingTitle.value = session.title || ''
-}
-
-async function saveTitle(sessionId) {
-  if (editingSessionId.value !== sessionId) return
-  
-  const newTitle = editingTitle.value.trim()
-  if (newTitle) {
-    await chatStore.updateSessionTitle(sessionId, newTitle)
-  }
-  
-  editingSessionId.value = null
-  editingTitle.value = ''
-}
-
-function confirmDelete(session) {
-  deleteModal.value = {
-    show: true,
-    sessionId: session.session_id,
-    title: session.title || '新对话'
-  }
-}
-
-async function deleteSession() {
-  if (!deleteModal.value.sessionId) return
-  
-  try {
-    await chatStore.deleteSession(deleteModal.value.sessionId)
-    
-    if (chatStore.currentSession === deleteModal.value.sessionId) {
-      newChat()
-    }
-  } catch (error) {
-    console.error('Delete failed:', error)
-  }
-  
-  deleteModal.value.show = false
 }
 
 // GSAP animation context for cleanup
