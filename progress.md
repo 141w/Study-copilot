@@ -301,6 +301,12 @@ None — all phases completed successfully.
 chat store 未 return currentSessionTitle → ChatView 四处读写静默失效
 （详见 findings.md Phase 12）；由 strict 模式 TS6133 信号定位。
 
+### 第四小节：dist 重建 + 真机冒烟（同日续）
+- npm run build 通过（1.7s），dist 更新为含本轮全部修复的最新产物
+- 新增 scripts/e2e_config_notes_smoke.py 并实测 **ALL PASSED**：
+  config POST/GET/PUT 温度三端十进制一致、legacy 7→0.7 双形态兼容；
+  笔记语义搜索 top1 命中正确笔记（score≈0.68），删除即失效
+
 ### 遗留
-- push 到远端待用户拍板（本地领先 origin/master 29 commits）
-- frontend/dist 为 gitignored 且为旧编译产物——部署前必须 npm run build
+- push 到远端待用户拍板（本地领先 origin/master 30 commits）
+- 浏览器端手动检查点：ChatView 头部标题显示/新会话清空/切换会话恢复（API 层无法覆盖）

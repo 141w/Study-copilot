@@ -605,5 +605,10 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
 ### 验证
 - backend pytest **313 passed**（312+1）；vue-tsc --noEmit exit 0（strict 全开）；
   vitest **18 passed**
-- frontend/dist 为 gitignored（REVIEW §5.2 部署前 npm run build 的注意事项仍有效）
-- 未推送：本地领先 origin/master 29 commits，push 待用户拍板
+- frontend/dist 为 gitignore（已重建为最新产物，构建 1.7s 通过；§5.2 风险解除）
+- 未推送：本地领先 origin/master 30 commits，push 待用户拍板
+
+### 真机 E2E 追加（同轮稍后）
+- 新增 scripts/e2e_config_notes_smoke.py：起 PG+后端后实测——
+  config 三端温度一致（POST=GET=PUT 十进制 + legacy 7→0.7 兼容）✅；
+  笔记语义搜索 top1 正确命中（score≈0.68）、删除即失效 ✅ → **ALL PASSED**
