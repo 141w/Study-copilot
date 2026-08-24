@@ -59,7 +59,7 @@ jobs:
       - name: Run backend tests with coverage
         working-directory: backend
         run: |
-          python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing
+          python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=65
 
       - name: Upload backend coverage to Codecov
         if: always()
