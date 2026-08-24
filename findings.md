@@ -552,3 +552,12 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
 
 ### ⚠️ 注意
 .env 切回 768 维模型后，旧 bge-m3(1024维) 索引检索会维度失配，需重新上传对应文档。
+
+### Phase 11 追加（同日第二轮打磨）
+- fix(backend): 笔记语义索引缺失修复——create/update/delete_note 后全量重建
+  notes_{uid} 索引（此前恒空，搜索永远返回空列表）；+4 单测，pytest 311
+- chore(backend): core/__init__.py 清空再导出——无人包级导入，避免冷启动
+  急切实例化 FAISS/Embedder 单例
+- 记录勘误：url_extractor 阻塞(#19)早已 to_thread 修复；nginx SSE 已是
+  600s+buffering off（非 60s）；F6(chat SSE 401 刷新)已实现于 chat.js；
+  README 路由表归一化后全覆盖（D3 缺口早轮已补）
