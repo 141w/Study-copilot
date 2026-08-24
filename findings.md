@@ -644,3 +644,13 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
 - 已知取舍：消息气泡区与 GSAP 入场选择器(.flex.gap-4)、scrollToSource 的
   lastMsg 语义强耦合，本轮不抽离；后续如拆需同步迁移动画上下文
 - 新增 chatExport 单测 3 例；全套 vitest 23 passed / tsc strict 通过
+
+### PG 持久化任务队列（同日第五小节）
+- 内存 asyncio.Queue → pending 行落库 + 轮询认领（SKIP LOCKED 多 worker 安全）；
+  enqueue 保留 RuntimeError 以维持 upload 同步回退契约；recover 收窄至 running
+- 调试踩坑记录：① SQLite 加 FOR UPDATE SKIP LOCKED 会静默返回空集（非忽略），
+  必须按方言条件启用；② conftest db_session 为共享连接/会话循环，测试内后台
+  worker 需独立引擎（tmp_path 文件库）+ 显式 monkeypatch AsyncSessionLocal——
+  曾因重写用例时丢失 setattr 导致认领静默连到本机 PG（空表→None），
+  靠在认领函数内打印 bind 方言定位
+- 全量 pytest 318 passed；TASK_POLL_INTERVAL_SEC 默认 1s 可调

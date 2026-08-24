@@ -335,3 +335,7 @@ chat store 未 return currentSessionTitle → ChatView 四处读写静默失效
 ### 第七小节：ChatView 拆分（同日续）
 ChatHistoryPanel + useChatExport 落地；639→455 行；vitest 23/tsc/build 全绿。
 剩余优化待办：PG 持久队列、安全响应头、软删除、覆盖率门禁、LLM 效果回归。
+
+### 第八小节：PG 持久队列（同日续）
+task_worker 改轮询认领；重启存活语义落地（pending 续跑、running 才收尸）；
++3 回归用例；全量 318 passed。剩余待办：安全响应头、软删除、覆盖率门禁、LLM 效果回归。
