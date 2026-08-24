@@ -173,17 +173,18 @@ async def cancel_task(
 
 
 async def recover_interrupted_tasks(db: AsyncSession) -> int:
-    """把上一次进程遗留的 pending/running 任务标记为 failed。
+    """把上一次进程遗留的 running 孤儿任务标记为 failed。
 
-    任务队列是进程内存队列，重启后这些任务永远不会再被执行；
-    若不标记，前端任务页会永远显示假的"进行中"状态。
+    队列已持久化（pending 行落库、worker 轮询认领）：重启后未执行的
+    pending 任务由新进程继续处理，不再丢失；仅崩溃时正在执行中的
+    running 任务成为孤儿需标记失败，以免前端显示假"进行中"。
     在应用启动（lifespan）时调用。
 
     Returns:
         被标记的任务数量。
     """
     result = await db.execute(
-        select(AsyncTask).where(AsyncTask.status.in_(["pending", "running"]))
+        select(AsyncTask).where(AsyncTask.status == "running")
     )
     stale = list(result.scalars().all())
     if not stale:
@@ -192,7 +193,7 @@ async def recover_interrupted_tasks(db: AsyncSession) -> int:
     now = datetime.now(UTC).replace(tzinfo=None)
     for task in stale:
         task.status = "failed"
-        task.error = "服务重启，任务中断（内存队列已丢失），请重新发起"
+        task.error = "服务重启时任务正在执行，已被中断，请重新发起"
         task.completed_at = now
     await db.commit()
 

@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 # 下载被代理挂起）让任务永远停留在 running、前端显示假进度。
 TASK_TIMEOUT_SEC = int(os.environ.get("TASK_TIMEOUT_SEC", "600"))
 
-_task_queue = None
+# 持久化队列：任务以 pending 行落库，worker 轮询认领。
+# 重启后未认领的 pending 行会被新进程继续执行，不再丢失。
+POLL_INTERVAL_SEC = float(os.environ.get("TASK_POLL_INTERVAL_SEC", "1.0"))
+
 _worker_task = None
 
 
@@ -30,12 +33,11 @@ class TaskJob:
 
 
 async def start_worker():
-    global _task_queue, _worker_task
+    global _worker_task
     if _worker_task is not None:
         return
-    _task_queue = asyncio.Queue()
     _worker_task = asyncio.create_task(_worker_loop())
-    logger.info("Background worker started")
+    logger.info("Background worker started (poll interval %.1fs)", POLL_INTERVAL_SEC)
 
 
 async def stop_worker():
@@ -52,22 +54,85 @@ async def stop_worker():
 
 
 async def enqueue(task_id, user_id, task_type, payload):
-    if _task_queue is None:
+    """兼容入口：pending 任务行已提交入库，轮询型 worker 会自动认领。
+
+    保留 RuntimeError 语义——worker 未启动时调用方（如 upload）据此走同步回退。
+    """
+    if _worker_task is None:
         raise RuntimeError("Worker not started")
-    await _task_queue.put(TaskJob(task_id, user_id, task_type, payload))
-    logger.info("Enqueued task %s: %s", task_id, task_type)
+    logger.debug("Task %s persisted as pending (poll-based queue)", task_id)
+
+
+async def _claim_next_job():
+    """认领最早已提交的 pending 任务（FOR UPDATE SKIP LOCKED，多 worker 安全）。"""
+    import json
+
+    from sqlalchemy import select
+
+    from app.db import AsyncTask
+
+    async with AsyncSessionLocal() as db:
+        query = (
+            select(AsyncTask)
+            .where(AsyncTask.status == "pending")
+            .order_by(AsyncTask.created_at.asc())
+            .limit(1)
+        )
+        # 行锁仅 PG 有意义；SQLite 加该子句会静默返回空集，故按方言条件启用
+        if db.bind.dialect.name == "postgresql":
+            query = query.with_for_update(skip_locked=True)
+        result = await db.execute(query)
+        task = result.scalar_one_or_none()
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "CLAIM local=%r bind=%r found=%s",
+            AsyncSessionLocal, getattr(db, "bind", None), task is not None
+        )
+        if task is None:
+            return None
+
+    from sqlalchemy import select
+
+    from app.db import AsyncTask
+
+    async with AsyncSessionLocal() as db:
+        query = (
+            select(AsyncTask)
+            .where(AsyncTask.status == "pending")
+            .order_by(AsyncTask.created_at.asc())
+            .limit(1)
+        )
+        # 行锁仅 PG 有意义；SQLite 加该子句会静默返回空集，故按方言条件启用
+        if db.bind.dialect.name == "postgresql":
+            query = query.with_for_update(skip_locked=True)
+        result = await db.execute(query)
+        task = result.scalar_one_or_none()
+        if task is None:
+            return None
+        task.status = "running"
+        await db.commit()
+
+        payload = {}
+        if task.result:
+            try:
+                payload = json.loads(task.result)
+            except json.JSONDecodeError:
+                payload = {}
+        return TaskJob(task.id, task.user_id, task.task_type, payload)
 
 
 async def _worker_loop():
     while True:
         try:
-            job = await _task_queue.get()
+            job = await _claim_next_job()
+            if job is None:
+                await asyncio.sleep(POLL_INTERVAL_SEC)
+                continue
             try:
                 await _execute_job(job)
             except Exception as e:
                 logger.error("Task %s error: %s", job.task_id, e)
-            finally:
-                _task_queue.task_done()
         except asyncio.CancelledError:
             break
         except Exception as e:
