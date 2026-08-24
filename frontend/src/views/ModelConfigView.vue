@@ -158,41 +158,6 @@
                   class="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
                 />
               </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                  适配度评分
-                </label>
-                <div class="flex items-center gap-3">
-                  <div class="flex-1">
-                    <div class="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>OpenRouter 适配度</span>
-                      <span>{{ fitScores.openrouter }}%</span>
-                    </div>
-                    <div class="w-full bg-gray-100 rounded-full h-2">
-                      <div 
-                        class="bg-[#010120] h-2 rounded-full transition-all duration-300"
-                        :style="{ width: fitScores.openrouter + '%' }"
-                      ></div>
-                    </div>
-                  </div>
-                  <div class="w-8 text-center text-xs font-medium text-gray-400">
-                    ★
-                  </div>
-                  <div class="flex-1">
-                    <div class="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>自定义配置适配度</span>
-                      <span>{{ fitScores.custom }}%</span>
-                    </div>
-                    <div class="w-full bg-gray-100 rounded-full h-2">
-                      <div 
-                        class="bg-[#010120] h-2 rounded-full transition-all duration-300"
-                        :style="{ width: fitScores.custom + '%' }"
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div class="mt-6 flex gap-3">
@@ -211,31 +176,6 @@
             </div>
           </div>
         </div>
-
-        <!-- 配置历史 -->
-        <div class="mt-8">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">配置历史</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div 
-              v-for="item in configHistory" 
-              :key="item.id"
-              class="card p-4"
-            >
-              <div class="flex justify-between items-start mb-2">
-                <span class="text-sm font-medium text-gray-900">
-                  {{ item.provider }}
-                </span>
-                <span class="text-xs text-gray-500">
-                  {{ formatTime(item.timestamp) }}
-                </span>
-              </div>
-              <p class="text-sm text-gray-600">
-                模型: {{ item.modelName }}<br/>
-                温度: {{ item.temperature }} | Token: {{ item.maxTokens }}
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
   </div>
@@ -243,15 +183,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import { useConfigStore } from '../stores/config'
-import { useDocumentStore } from '../stores/document'
 
-const router = useRouter()
 const chatStore = useChatStore()
 const configStore = useConfigStore()
-const documentStore = useDocumentStore()
 
 const config = ref({
   apiKey: localStorage.getItem('llmApiKey') || '',
@@ -264,8 +200,6 @@ const config = ref({
   embeddingModel: 'shibing624/text2vec-base-chinese',
   embeddingDimension: 768
 })
-
-const configHistory = ref([])
 
 // 已保存 Key 的掩码展示值（如 sk-***xyz）；输入框留空保存 = 保留原 Key
 const savedKeyMasked = ref('')
@@ -287,8 +221,6 @@ function onProviderChange() {
   const defaults = providerDefaults[config.value.provider]
   config.value.baseUrl = defaults.baseUrl
   config.value.modelName = defaults.model
-  // Regenerate fit scores when provider changes
-  regenerateFitScores()
 }
 
 const embeddingDimensionMap = {
@@ -298,20 +230,6 @@ const embeddingDimensionMap = {
 
 function onEmbeddingModelChange() {
   config.value.embeddingDimension = embeddingDimensionMap[config.value.embeddingModel] || 768
-}
-
-// Stable fit scores — generated once and only regenerated on provider/adapter changes
-const fitScores = ref({ openrouter: 80, custom: 85 })
-
-function regenerateFitScores() {
-  let score = 80
-  if (config.value.provider === 'openrouter') score += 10
-  if (config.value.adapter !== 'none') score += 5
-  if (config.value.temperature >= 0.5 && config.value.temperature <= 0.8) score += 10
-  fitScores.value = {
-    openrouter: score,
-    custom: Math.min(100, score + Math.floor(Math.random() * 10))
-  }
 }
 
 async function saveConfig() {
@@ -354,14 +272,7 @@ function resetConfig() {
   chatStore.config.adapter = 'none'
 }
 
-function formatTime(timestamp) {
-  return new Date(timestamp).toLocaleString('zh-CN')
-}
-
 onMounted(async () => {
-  // Generate stable fit scores once on mount
-  regenerateFitScores()
-
   // 安全修复（2026-08-19）：改用不含明文的 /config/llm。
   // 已保存的 Key 只显示掩码；留空保存 = 保留原 Key（后端已支持）。
   const dbConfig = await configStore.fetchLLMConfig()

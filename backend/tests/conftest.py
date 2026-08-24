@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 from app.db import Base, get_db
 from app.main import app
@@ -8,13 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 # 使用 SQLite 作为测试数据库（无需 PostgreSQL）
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture(scope="session")
