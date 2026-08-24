@@ -321,3 +321,13 @@ chat store 未 return currentSessionTitle → ChatView 四处读写静默失效
 
 脚本：scripts/e2e_features_smoke.py（ALL PASSED）；后端进程已回收。
 剩余唯一人工项：配一个 LLM Key 跑 LLM 段（可选）。
+
+### 第六小节：快赢优化三件（同日第四轮）
+| # | 项 | 结果 |
+|---|---|---|
+| 1 | hljs core+按需注册 / manualChunks | ChatView gzip 366KB→22.5KB；vitest 20 ✓ tsc ✓ |
+| 2 | DEBUG 默认 False / 加密 Key 启动校验 | pytest 313 ✓；本地 .env 显式 True 行为不变 |
+| 3 | scripts/backup.sh + gitignore backups/ | 实测 80K dump + 128M 归档，DRY_RUN/保留期可用 |
+
+全角度优化盘点其余项（分页/PG 队列/安全头/软删除/覆盖率门禁/LLM 效果回归等）
+记录于会话结论，未在本轮实施。

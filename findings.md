@@ -623,3 +623,17 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
   - LLM 段（chat ask / 转换×N / 真实出题判分）：**设计为 Key 门控**——
     .env 无 Key（用户真实 Key 加密存库不可取用），本段合法 SKIP；
     之后任意时刻 export SMOKE_LLM_API_KEY=sk-xxx 重跑即自动全测
+
+### 快赢优化三件（全角度盘点后落地，2026-08-24 第四轮）
+1. **hljs 按需引入 + vendor 分包**（perf/frontend）
+   - highlight.js/lib/core + 注册 12 别名语言（js/ts/python/java/json/bash/shell/sql/xml/html/css/markdown/yaml）
+   - vite manualChunks：vendor-vue/markdown/http/gsap 四包，业务改动不再击穿 vendor 缓存
+   - 效果：ChatView chunk **1054KB(gzip 366KB) → 71.8KB(gzip 22.5KB)**；
+     vendor-markdown 112.9KB(gzip 54KB) 可长期缓存。vue-tsc/vitest 全绿
+2. **DEBUG 安全默认 + ENCRYPTION_KEY 启动 fail-fast**（chore/backend）
+   - settings.debug 默认翻转为 False（生产漏配不再回显 SQL）；本地 .env 已显式 True 不受影响
+   - lifespan 最前调用 get_encryption_service()：Key 缺失从"首次加密才崩"提前到启动即崩
+3. **scripts/backup.sh 备份脚本**（ops）+ .gitignore backups/
+   - pg_dump -Fc + tar(backend/uploads + backend/vectorstore)，BACKUP_KEEP_DAYS 过期清理，DRY_RUN 支持
+   - 实测：80K dump + 128M 归档；踩坑记录——目录实际在 backend/ 子目录、
+     摘要循环空格路径需数组引号、hljs 无 vue 语言模块（该围栏回退转义文本）
