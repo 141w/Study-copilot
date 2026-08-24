@@ -1,5 +1,32 @@
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+// 按需引入：全量 highlight.js 会使 ChatView chunk 膨胀到 ~1MB
+import hljs from 'highlight.js/lib/core'
+import javascript from 'highlight.js/lib/languages/javascript'
+import typescript from 'highlight.js/lib/languages/typescript'
+import python from 'highlight.js/lib/languages/python'
+import java from 'highlight.js/lib/languages/java'
+import json from 'highlight.js/lib/languages/json'
+import bash from 'highlight.js/lib/languages/bash'
+import sql from 'highlight.js/lib/languages/sql'
+import xml from 'highlight.js/lib/languages/xml'
+import css from 'highlight.js/lib/languages/css'
+import markdownLang from 'highlight.js/lib/languages/markdown'
+import yaml from 'highlight.js/lib/languages/yaml'
+
+hljs.registerLanguage('javascript', javascript)
+hljs.registerLanguage('typescript', typescript)
+hljs.registerLanguage('python', python)
+hljs.registerLanguage('java', java)
+hljs.registerLanguage('json', json)
+hljs.registerLanguage('bash', bash)
+hljs.registerLanguage('shell', bash)
+hljs.registerLanguage('sql', sql)
+hljs.registerLanguage('xml', xml)
+hljs.registerLanguage('html', xml)
+hljs.registerLanguage('css', css)
+hljs.registerLanguage('markdown', markdownLang)
+hljs.registerLanguage('yaml', yaml)
+// 未注册语言的代码块由下方 highlight() 回退为转义纯文本
 
 // Create markdown-it instance with highlight.js
 const md: MarkdownIt = new MarkdownIt({
