@@ -517,3 +517,38 @@ D6. docs/4-DEVELOPMENT 称 run.py "Start with auto-reload"，实际 reload=False
 | P3-9 | open-notebook-main/（6.5MB 外部参考项目）untracked 在仓库 | Phase 1 待验证 #5 | 移出仓库或加 .gitignore |
 | P3-10 | 文档残余漂移（D1-D6 大部分已对齐，个别细节待查） | Phase 4 | 随 P1/P2 修复顺带更新 |
 
+
+---
+
+## Phase 11: P2/P3 全量收尾 + E2E 实测（2026-08-24 会话）
+
+### 修复清单
+| # | 内容 | 文件 |
+|---|------|------|
+| P2-1 | CI 分支确认早已修复（master） | .github/workflows/test.yml |
+| P2-5 | 删除 4 个孤儿模板（非 findings 所记 14 个） | router/analyze, rag/history_summary, rag/direct_answer_system, rag/doc_summary_system |
+| P2-3 | 新增异步任务 E2E 冒烟脚本并实测 **PASS** | scripts/e2e_tasks_smoke.py（新） |
+| P3-1/4/8/9 | 确认早已修复（slowapi/api__init__/defineOptions/.gitignore） | — |
+| P3-2 | 删除弃用 event_loop fixture；加 asyncio_default_fixture_loop_scope=session | conftest.py, pyproject.toml |
+| P3-3 | 温度约定改为后端单端 ownership：前端直传 0.7，后端内部 ×10/+回归测试 | stores/config.ts, tests/test_config_service.py（新） |
+| P3-5 | /analysis/wrong POST→GET（后端+前端+全部文档） | analysis.py, AnalysisView.vue, docs×2, README, backend CLAUDE.md |
+| P3-6A | 删除 ModelConfigView 假评分+空历史 UI 及死导入 | ModelConfigView.vue（−89 行） |
+| P3-7 | uploadDocument 返回类型对齐实际响应 | document.ts, models.ts(created_at 可选) |
+| P3-10 | 文档漂移修正（reload/login form-data/upload 响应/model_name） | docs×2 |
+
+### ⭐ E2E 抓到的生产级 bug（单测无法发现）
+`.env` 配 BAAI/bge-m3 但从未下载成功；且**即使模型已缓存**，huggingface_hub
+默认联网版本校验在本机代理环境下无限挂起 → 上传任务永远卡 running。
+修复：embedder 改缓存优先加载（local_files_only 先行，未命中再联网）；
+.env 回退到已缓存的 text2vec-base-chinese/768。
+
+### 追加清理与健壮性
+- 死代码删除：core/config.py（get_user_llm_config 密钥陷阱）、utils/file_handler.py、tests/test_file_handler.py、alembic versions/__pycache__
+- 任务看门狗：TASK_TIMEOUT_SEC(默认600s) 超时→failed+明确错误（task_worker.py）
+- F6 确认早已修复：chat.js 已含 SSE 401 刷新重试（findings 记录过期）
+
+### 验证
+pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
+
+### ⚠️ 注意
+.env 切回 768 维模型后，旧 bge-m3(1024维) 索引检索会维度失配，需重新上传对应文档。

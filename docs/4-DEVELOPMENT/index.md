@@ -17,7 +17,7 @@ conda create -n study-c python=3.11
 conda activate study-c
 pip install -r requirements.txt "pydantic[email]"
 cp .env.example .env  # Configure your environment
-python run.py          # Start with auto-reload
+python run.py          # Start without auto-reload
 ```
 
 The backend runs at `http://localhost:8000` with hot-reload enabled.
