@@ -21,8 +21,9 @@ Key 注入方式（仅经环境变量，绝不打印明文）：
 退出码：0=通过（含合法 SKIP），1=失败。
 """
 
-import io
+import asyncio
 import os
+import pathlib
 import sys
 import threading
 import time
@@ -144,13 +145,35 @@ def main() -> int:
         skip(f"TTS 依赖微软边缘网络（{type(e).__name__}: {e}）")
 
     # ── C/D/E. LLM 段 ────────────────────────────────────────────
-    api_key = os.environ.get("SMOKE_LLM_API_KEY", "").strip()
+    # Key 来源优先级：SMOKE_LLM_* 环境变量 → backend/.env 的 OPENAI_*（自动回退，
+    # 占位/样例值会被过滤）。Key 仅在进程内使用，绝不打印。
+    def _resolve_llm_creds():
+        key = os.environ.get("SMOKE_LLM_API_KEY", "").strip()
+        base = os.environ.get("SMOKE_LLM_BASE_URL", "").strip()
+        model = os.environ.get("SMOKE_LLM_MODEL", "").strip()
+        if not key:
+            env_file = pathlib.Path(__file__).resolve().parent.parent / "backend" / ".env"
+            if env_file.exists():
+                vals = {}
+                for line in env_file.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, _, v = line.partition("=")
+                        vals[k.strip()] = v.strip()
+                cand = vals.get("OPENAI_API_KEY", "")
+                if cand and "replace" not in cand.lower() and cand != "sk-dummy":
+                    key = cand
+                    base = base or vals.get("OPENAI_BASE_URL", "")
+                    model = model or vals.get("OPENAI_MODEL", "")
+        return key, base, model
+
+    api_key, env_base, env_model = _resolve_llm_creds()
     step("C/D/E. LLM 全链路（chat ask / 转换×N / 出题判分）")
     if not api_key:
-        skip("未设置 SMOKE_LLM_API_KEY——配置后重跑本脚本即自动执行该段")
+        skip("无可用 Key：设置 SMOKE_LLM_API_KEY 或在 backend/.env 填入 OPENAI_API_KEY 后重跑")
     else:
-        base_url = os.environ.get("SMOKE_LLM_BASE_URL", "https://api.openai.com/v1")
-        model = os.environ.get("SMOKE_LLM_MODEL", "gpt-4o-mini")
+        base_url = env_base or "https://api.openai.com/v1"
+        model = env_model or "gpt-4o-mini"
         cfg = client.post("/api/config/llm", json={
             "provider": "custom", "api_key": api_key, "base_url": base_url,
             "model_name": model, "temperature": 0.7, "max_tokens": 2048,

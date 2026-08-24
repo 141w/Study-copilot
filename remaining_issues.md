@@ -1,15 +1,16 @@
-# 仍存在的问题（2026-08-19 修复后）
+# 仍存在的问题（2026-08-24 第四轮刷新后）
 
 > 基于 findings.md 各阶段记录，排除已修复问题后的剩余清单。
-> 2026-08-18 修复内容见 findings.md Phase 8 和 progress.md。
-> 2026-08-19 修复：nginx 超时、文档对齐、vue-tsc 环境、ChatView MarkdownIt 复用。
+> 2026-08-24 刷新：原 #10（analysis/wrong POST→GET）已由 f2d6a0b 完成；
+> 原 #11（conftest event_loop 弃用）已由 4e56ca4 迁移至 loop_scope 配置完成；
+> 本轮新增落地见 REVIEW_2026-08-24.md 附录与 findings Phase 12。
 
 ---
 
 ## 🔴 中等风险
 
 | # | 问题 | 位置 | 具体原因 |
-|---|------|------|---------|
+|---|------|------|------|
 | （无） | — | — | 原 #2 Docker alembic 连错库已于 2026-08-19 C2 修复 |
 
 ## 🟡 低风险 / 代码卫生
