@@ -46,10 +46,26 @@ class Embedder:
                     logger.info(f"Using HuggingFace mirror endpoint: {hf_endpoint}")
 
                 logger.info(f"Loading embedding model: {self.model_name}")
-                model_kwargs = {}
-                if os.environ.get("HF_HUB_OFFLINE") == "1":
-                    model_kwargs["local_files_only"] = True
-                self._model = SentenceTransformer(self.model_name, **model_kwargs)
+                offline_env = os.environ.get("HF_HUB_OFFLINE") == "1"
+                if not offline_env:
+                    try:
+                        # 缓存优先：本地已有模型时跳过 huggingface_hub 的联网版本校验。
+                        # 校验请求在受限代理/VPN 环境下会无限挂起（2026-08-24 E2E 实测），
+                        # 即使模型完整缓存也会卡住，因此先走纯离线加载。
+                        self._model = SentenceTransformer(
+                            self.model_name, local_files_only=True
+                        )
+                        logger.info(
+                            f"Embedding model loaded from local cache: {self.model_name}"
+                        )
+                    except Exception as cache_err:
+                        logger.info(
+                            f"Model '{self.model_name}' not fully cached "
+                            f"({type(cache_err).__name__}); falling back to online load"
+                        )
+                        self._model = None  # 落入下方在线加载
+                if self._model is None:
+                    self._model = SentenceTransformer(self.model_name)
                 logger.info("Embedding model loaded successfully")
             except Exception as e:
                 logger.error(f"Failed to load embedding model: {e}")
