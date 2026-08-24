@@ -637,3 +637,10 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
    - pg_dump -Fc + tar(backend/uploads + backend/vectorstore)，BACKUP_KEEP_DAYS 过期清理，DRY_RUN 支持
    - 实测：80K dump + 128M 归档；踩坑记录——目录实际在 backend/ 子目录、
      摘要循环空格路径需数组引号、hljs 无 vue 语言模块（该围栏回退转义文本）
+
+### ChatView 拆分（同轮第五小节）
+- 抽离 ChatHistoryPanel.vue（200 行，含删除确认弹窗 Teleport 化）与
+  useChatExport.ts 纯函数；主视图 639→455 行
+- 已知取舍：消息气泡区与 GSAP 入场选择器(.flex.gap-4)、scrollToSource 的
+  lastMsg 语义强耦合，本轮不抽离；后续如拆需同步迁移动画上下文
+- 新增 chatExport 单测 3 例；全套 vitest 23 passed / tsc strict 通过

@@ -331,3 +331,7 @@ chat store 未 return currentSessionTitle → ChatView 四处读写静默失效
 
 全角度优化盘点其余项（分页/PG 队列/安全头/软删除/覆盖率门禁/LLM 效果回归等）
 记录于会话结论，未在本轮实施。
+
+### 第七小节：ChatView 拆分（同日续）
+ChatHistoryPanel + useChatExport 落地；639→455 行；vitest 23/tsc/build 全绿。
+剩余优化待办：PG 持久队列、安全响应头、软删除、覆盖率门禁、LLM 效果回归。
