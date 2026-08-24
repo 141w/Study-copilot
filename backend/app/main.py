@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.analysis import router as analysis_router
@@ -63,6 +63,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 
 setup_exception_handlers(app)
+
+@app.middleware("http")
+async def set_security_headers(request: Request, call_next):
+    """基础安全响应头（对 API/静态/SSE 均生效，不影响流式传输）。"""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
 
 app.add_middleware(
     CORSMiddleware,
