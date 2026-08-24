@@ -1,14 +1,44 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../services/api'
+import type { Quiz } from '../types/models'
+
+/** 提交答案后的判分结果（/quiz/submit 响应） */
+export interface QuizSubmitResult {
+  quiz_id: string
+  user_answer: string
+  correct_answer: string
+  is_correct: boolean
+  explanation?: string | null
+}
+
+/** 做题历史条目（/quiz/result-history 响应） */
+export interface QuizHistoryItem {
+  quiz_id: string
+  question: string
+  user_answer: string
+  correct_answer: string
+  is_correct: boolean
+  submitted_at: string
+}
+
+/** 运行时测验题（在 models.Quiz 基础上叠加作答状态） */
+export type RuntimeQuiz = Quiz & {
+  user_answer?: string
+  result?: QuizSubmitResult
+}
 
 export const useQuizStore = defineStore('quiz', () => {
-  const quizzes = ref([])
-  const currentQuiz = ref(null)
+  const quizzes = ref<RuntimeQuiz[]>([])
+  const currentQuiz = ref<RuntimeQuiz | null>(null)
   const loading = ref(false)
-  const quizResults = ref([])
-  
-  async function generateQuizzes(documentIds, choiceCount = 3, shortAnswerCount = 2) {
+  const quizResults = ref<QuizHistoryItem[]>([])
+
+  async function generateQuizzes(
+    documentIds: string[],
+    choiceCount: number = 3,
+    shortAnswerCount: number = 2
+  ): Promise<any> {
     loading.value = true
     try {
       const response = await api.post('/quiz/generate', {
@@ -16,7 +46,7 @@ export const useQuizStore = defineStore('quiz', () => {
         choice_count: choiceCount,
         short_answer_count: shortAnswerCount
       })
-      
+
       quizzes.value = response.data.quizzes
       return response.data
     } catch (error) {
@@ -26,10 +56,10 @@ export const useQuizStore = defineStore('quiz', () => {
       loading.value = false
     }
   }
-  
-  async function submitAnswer(quizId, userAnswer) {
+
+  async function submitAnswer(quizId: string, userAnswer: string): Promise<QuizSubmitResult> {
     try {
-      const response = await api.post('/quiz/submit', {
+      const response = await api.post<QuizSubmitResult>('/quiz/submit', {
         quiz_id: quizId,
         user_answer: userAnswer
       })
@@ -48,25 +78,25 @@ export const useQuizStore = defineStore('quiz', () => {
       throw error
     }
   }
-  
-  async function fetchQuizHistory() {
+
+  async function fetchQuizHistory(): Promise<void> {
     try {
-      const response = await api.get('/quiz/result-history')
+      const response = await api.get<QuizHistoryItem[]>('/quiz/result-history')
       quizResults.value = response.data
     } catch (error) {
       console.error('Error fetching quiz history:', error)
     }
   }
-  
-  function setCurrentQuiz(quiz) {
+
+  function setCurrentQuiz(quiz: RuntimeQuiz | null): void {
     currentQuiz.value = quiz
   }
-  
-  function clearQuizzes() {
+
+  function clearQuizzes(): void {
     quizzes.value = []
     currentQuiz.value = null
   }
-  
+
   return {
     quizzes,
     currentQuiz,

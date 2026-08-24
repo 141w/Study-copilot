@@ -1,16 +1,23 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../services/api'
+import type { Course } from '../types/models'
+
+/** 创建/更新课程时前端提交的字段 */
+export interface CoursePayload {
+  name: string
+  description?: string
+}
 
 export const useCourseStore = defineStore('course', () => {
-  const courses = ref([])
-  const currentCourse = ref(null)
+  const courses = ref<Course[]>([])
+  const currentCourse = ref<Course | null>(null)
   const loading = ref(false)
 
-  async function fetchCourses() {
+  async function fetchCourses(): Promise<void> {
     loading.value = true
     try {
-      const response = await api.get('/courses')
+      const response = await api.get<Course[]>('/courses')
       courses.value = response.data
     } catch (error) {
       console.error('Error fetching courses:', error)
@@ -20,10 +27,10 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  async function fetchCourse(courseId) {
+  async function fetchCourse(courseId: string): Promise<Course> {
     loading.value = true
     try {
-      const response = await api.get(`/courses/${courseId}`)
+      const response = await api.get<Course>(`/courses/${courseId}`)
       currentCourse.value = response.data
       return response.data
     } catch (error) {
@@ -34,10 +41,10 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  async function createCourse(data) {
+  async function createCourse(data: CoursePayload): Promise<Course> {
     loading.value = true
     try {
-      const response = await api.post('/courses', data)
+      const response = await api.post<Course>('/courses', data)
       courses.value.unshift(response.data)
       return response.data
     } catch (error) {
@@ -48,10 +55,10 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  async function updateCourse(courseId, data) {
+  async function updateCourse(courseId: string, data: Partial<CoursePayload>): Promise<Course> {
     loading.value = true
     try {
-      const response = await api.put(`/courses/${courseId}`, data)
+      const response = await api.put<Course>(`/courses/${courseId}`, data)
       const idx = courses.value.findIndex(c => c.id === courseId)
       if (idx !== -1) {
         courses.value[idx] = response.data
@@ -68,7 +75,7 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  async function deleteCourse(courseId) {
+  async function deleteCourse(courseId: string): Promise<void> {
     try {
       await api.delete(`/courses/${courseId}`)
       courses.value = courses.value.filter(c => c.id !== courseId)
@@ -78,9 +85,9 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  async function fetchCourseDocuments(courseId) {
+  async function fetchCourseDocuments(courseId: string): Promise<Course[]> {
     try {
-      const response = await api.get(`/courses/${courseId}/documents`)
+      const response = await api.get<Course[]>(`/courses/${courseId}/documents`)
       return response.data
     } catch (error) {
       console.error('Error fetching course documents:', error)
@@ -88,7 +95,7 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  async function addDocumentToCourse(courseId, documentId) {
+  async function addDocumentToCourse(courseId: string, documentId: string): Promise<any> {
     try {
       const response = await api.post(`/courses/${courseId}/documents`, { document_id: documentId })
       return response.data
@@ -98,7 +105,7 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  async function removeDocumentFromCourse(courseId, documentId) {
+  async function removeDocumentFromCourse(courseId: string, documentId: string): Promise<void> {
     try {
       await api.delete(`/courses/${courseId}/documents/${documentId}`)
     } catch (error) {
@@ -107,7 +114,7 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  function selectCourse(course) {
+  function selectCourse(course: Course | null): void {
     currentCourse.value = course
   }
 

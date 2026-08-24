@@ -1,30 +1,75 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import api from '../services/api'
+import type { Source } from '../types/models'
+
+/** 反思/思考步骤（后端 thinking 事件负载） */
+export interface ThinkingStep {
+  step: number | string
+  detail: string
+}
+
+/**
+ * 流式消息的运行时形态。
+ * 与 models.ChatMessage 的差异：thinking 在流式期间是步骤数组
+ * （models 里为 string），另携带来源索引等扩展字段。
+ */
+export interface ChatStreamMessage {
+  id: number | string
+  role: 'user' | 'assistant'
+  content: string
+  sources?: Source[]
+  used_source_indices?: number[]
+  filtered_sources?: Source[]
+  expandedSources?: boolean
+  created_at?: string
+  isStreaming?: boolean
+  thinking?: string | ThinkingStep[]
+}
+
+/** 会话列表条目（后端以 session_id 为键，区别于 models.ChatSession.id） */
+export interface ChatSessionSummary {
+  session_id: string
+  title: string
+  created_at?: string
+  message_count?: number
+}
+
+/** SSE data 负载（宽松键位，按 type 分发） */
+interface SseEvent {
+  type: string
+  session_id?: string
+  sources?: Source[]
+  filtered_sources?: Source[]
+  content?: string
+  step?: number | string
+  detail?: string
+  [key: string]: unknown
+}
 
 export const useChatStore = defineStore('chat', () => {
-  const messages = ref([])
-  const sessions = ref([])
-  const currentSession = ref(null)
+  const messages = ref<ChatStreamMessage[]>([])
+  const sessions = ref<ChatSessionSummary[]>([])
+  const currentSession = ref<string | null>(null)
   const currentSessionTitle = ref('')
   const loading = ref(false)
-  const streamingContent = ref('') // 新增：流式内容暂存
-  const streamingSources = ref([]) // 新增：流式来源信息
-  const isStreaming = ref(false) // 新增：是否正在流式输出
-  const abortController = ref(null) // 用于取消流式请求
+  const streamingContent = ref('') // 流式内容暂存
+  const streamingSources = ref<Source[]>([]) // 流式来源信息
+  const isStreaming = ref(false) // 是否正在流式输出
+  const abortController = ref<AbortController | null>(null) // 用于取消流式请求
   const config = reactive({
     apiKey: localStorage.getItem('llmApiKey') || '',
     baseUrl: localStorage.getItem('llmBaseUrl') || 'https://api.openai.com/v1',
     provider: localStorage.getItem('llmProvider') || 'openrouter',
     modelName: localStorage.getItem('llmModel') || 'gpt-4o-mini',
-    temperature: parseFloat(localStorage.getItem('llmTemperature')) || 0.7,
-    maxTokens: parseInt(localStorage.getItem('llmMaxTokens')) || 2048,
+    temperature: parseFloat(localStorage.getItem('llmTemperature') || '') || 0.7,
+    maxTokens: parseInt(localStorage.getItem('llmMaxTokens') || '', 10) || 2048,
     adapter: localStorage.getItem('llmAdapter') || 'none'
   })
-  
-  async function fetchSessions() {
+
+  async function fetchSessions(): Promise<void> {
     try {
-      const response = await api.get('/chat/history')
+      const response = await api.get<ChatSessionSummary[]>('/chat/history')
       sessions.value = response.data
     } catch (error) {
       console.error('Error fetching sessions:', error)
@@ -32,10 +77,12 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function fetchHistory(sessionId) {
+  async function fetchHistory(sessionId: string): Promise<void> {
     loading.value = true
     try {
-      const response = await api.get(`/chat/history/${sessionId}`)
+      const response = await api.get<{ messages: ChatStreamMessage[] }>(
+        `/chat/history/${sessionId}`
+      )
       messages.value = response.data.messages
       currentSession.value = sessionId
     } catch (error) {
@@ -45,18 +92,25 @@ export const useChatStore = defineStore('chat', () => {
       loading.value = false
     }
   }
-  
-  function saveConfig() {
-    localStorage.setItem('llmConfig', JSON.stringify({
-      provider: config.provider,
-      modelName: config.modelName,
-      temperature: config.temperature,
-      maxTokens: config.maxTokens,
-      adapter: config.adapter
-    }))
+
+  function saveConfig(): void {
+    localStorage.setItem(
+      'llmConfig',
+      JSON.stringify({
+        provider: config.provider,
+        modelName: config.modelName,
+        temperature: config.temperature,
+        maxTokens: config.maxTokens,
+        adapter: config.adapter
+      })
+    )
   }
 
-  async function askQuestion(question, documentIds, sessionId = null) {
+  async function askQuestion(
+    question: string,
+    documentIds: string[],
+    sessionId: string | null = null
+  ): Promise<any> {
     loading.value = true
 
     messages.value.push({
@@ -73,12 +127,12 @@ export const useChatStore = defineStore('chat', () => {
         session_id: sessionId || currentSession.value,
         stream: false // 使用非流式接口
       })
-      
+
       currentSession.value = response.data.session_id
-      
+
       messages.value.push({
         id: Date.now() + 1,
-        role: 'assistant',
+        role: 'assistant' as const,
         content: response.data.answer,
         sources: response.data.sources,
         used_source_indices: response.data.used_source_indices || [],
@@ -86,7 +140,7 @@ export const useChatStore = defineStore('chat', () => {
         expandedSources: false,
         created_at: new Date().toISOString()
       })
-      
+
       return response.data
     } catch (error) {
       console.error('Error asking question:', error)
@@ -96,7 +150,11 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function askQuestionStream(question, documentIds, sessionId = null) {
+  async function askQuestionStream(
+    question: string,
+    documentIds: string[],
+    sessionId: string | null = null
+  ): Promise<{ success: boolean; cancelled?: boolean }> {
     loading.value = true
     isStreaming.value = true
     streamingContent.value = ''
@@ -128,11 +186,12 @@ export const useChatStore = defineStore('chat', () => {
       isStreaming: true // 标记为流式加载中
     })
 
-    async function doFetch(token) {
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+    async function doFetch(token: string | null): Promise<Response> {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
       return await fetch('/api/chat/ask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
+        headers,
         body: JSON.stringify({
           question,
           document_ids: documentIds,
@@ -154,7 +213,7 @@ export const useChatStore = defineStore('chat', () => {
           try {
             const refreshResp = await fetch('/api/auth/refresh', {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${refreshToken}` }
+              headers: { Authorization: `Bearer ${refreshToken}` }
             })
             if (refreshResp.ok) {
               const data = await refreshResp.json()
@@ -172,7 +231,7 @@ export const useChatStore = defineStore('chat', () => {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const reader = response.body.getReader()
+      const reader = response.body!.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
 
@@ -182,11 +241,11 @@ export const useChatStore = defineStore('chat', () => {
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
-        buffer = lines.pop() // 保留未完成的行
+        buffer = lines.pop()! // 保留未完成的行
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            let data
+            let data: SseEvent
             try {
               data = JSON.parse(line.slice(6))
             } catch (e) {
@@ -202,7 +261,7 @@ export const useChatStore = defineStore('chat', () => {
                 currentSession.value = data.session_id
               }
             } else if (data.type === 'sources') {
-              streamingSources.value = data.sources
+              streamingSources.value = data.sources || []
               // sources 事件也携带 session_id（兼容旧路径）
               if (data.session_id) {
                 currentSession.value = data.session_id
@@ -214,7 +273,7 @@ export const useChatStore = defineStore('chat', () => {
                 messages.value[msgIdx].filtered_sources = data.filtered_sources
               }
             } else if (data.type === 'token') {
-              streamingContent.value += data.content
+              streamingContent.value += data.content ?? ''
               // 实时更新临时消息内容
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
@@ -222,30 +281,25 @@ export const useChatStore = defineStore('chat', () => {
               }
             } else if (data.type === 'answer') {
               // 非流式答案（DIRECT_ANSWER / OUT_OF_SCOPE / SUMMARY 路径）
-              streamingContent.value = data.content
+              streamingContent.value = data.content || ''
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
-                messages.value[msgIdx].content = data.content
+                messages.value[msgIdx].content = data.content || ''
               }
             } else if (data.type === 'thinking') {
-              // 思考过程事件（Agentic RAG）
-              // 可选：存储到消息的 thinking 数组中
+              // 思考过程事件（Agentic RAG）—— 追加到步骤数组
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
-                if (!messages.value[msgIdx].thinking) {
-                  messages.value[msgIdx].thinking = []
-                }
-                messages.value[msgIdx].thinking.push({
-                  step: data.step,
-                  detail: data.detail
-                })
+                const m = messages.value[msgIdx]
+                if (!Array.isArray(m.thinking)) m.thinking = []
+                m.thinking.push({ step: data.step!, detail: data.detail! })
               }
             } else if (data.type === 'answer_refined') {
               // 答案反思后修正（替换已流式输出的内容）
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
-                messages.value[msgIdx].content = data.content
-                streamingContent.value = data.content
+                messages.value[msgIdx].content = data.content || ''
+                streamingContent.value = data.content || ''
               }
             } else if (data.type === 'done') {
               // 流式结束，更新最终状态
@@ -271,8 +325,8 @@ export const useChatStore = defineStore('chat', () => {
         currentSession.value = sessionId
       }
       return { success: true }
-    } catch (error) {
-      if (error.name === 'AbortError') {
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
         // 用户主动取消，不是错误 — 保留已流式传输的内容
         const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
         if (msgIdx !== -1) {
@@ -295,13 +349,13 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function cancelStream() {
+  function cancelStream(): void {
     if (abortController.value) {
       abortController.value.abort()
     }
   }
 
-  async function deleteSession(sessionId) {
+  async function deleteSession(sessionId: string): Promise<void> {
     try {
       await api.delete(`/chat/history/${sessionId}`)
       sessions.value = sessions.value.filter(s => s.session_id !== sessionId)
@@ -311,7 +365,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function updateSessionTitle(sessionId, title) {
+  async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
     try {
       await api.put(`/chat/history/${sessionId}`, { title })
       const session = sessions.value.find(s => s.session_id === sessionId)
@@ -319,15 +373,15 @@ export const useChatStore = defineStore('chat', () => {
         session.title = title
       }
     } catch (error) {
-      console.error('Error updating title:', error)
+      console.error('Error updating session title:', error)
       throw error
     }
   }
-  
-  function clearMessages() {
+
+  function clearMessages(): void {
     messages.value = []
   }
-  
+
   return {
     messages,
     sessions,
