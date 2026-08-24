@@ -8,6 +8,8 @@ Adaptive Retriever — 根据查询复杂度自适应选择检索策略
 - COMPARE:   对比类问题，提取实体 + 分别检索 + 合并
 """
 
+import asyncio
+
 import logging
 from enum import Enum
 
@@ -30,10 +32,14 @@ class AdaptiveRetriever:
         """用 LLM 判断查询复杂度，返回最优检索策略。"""
         try:
             prompt = render_template("retriever/strategy_select.jinja2", query=query)
-            response = await llm.chat(
-                [{"role": "user", "content": prompt}],
-                temperature=0.0,
-                max_tokens=20,
+            # 轻量决策：15s 未响应即降级 STANDARD，避免拖死整条流
+            response = await asyncio.wait_for(
+                llm.chat(
+                    [{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=20,
+                ),
+                timeout=10.0,
             )
             response = response.strip().lower()
 

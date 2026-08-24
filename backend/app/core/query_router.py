@@ -8,6 +8,7 @@ Query Router — 查询意图分类 + 上下文感知改写（合并为一步）
 设计参考：open-notebook 的简洁方案（LLM 自行理解上下文）
 """
 
+import asyncio
 import json
 import logging
 from enum import Enum
@@ -114,10 +115,14 @@ class QueryRouter:
             prompt = self.ANALYZE_PROMPT.format(
                 history_text=history_text, query=query_stripped
             )
-            response = await llm.chat(
-                [{"role": "user", "content": prompt}],
-                temperature=0.0,
-                max_tokens=200,
+            # 路由属轻量决策：15s 内未响应即降级为规则路径，避免拖死整条流
+            response = await asyncio.wait_for(
+                llm.chat(
+                    [{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=200,
+                ),
+                timeout=10.0,
             )
             return self._parse_response(response, query_stripped)
 
@@ -133,10 +138,13 @@ class QueryRouter:
 
         try:
             prompt = render_template("router/classify_intent.jinja2", query=query)
-            response = await llm.chat(
-                [{"role": "user", "content": prompt}],
-                temperature=0.0,
-                max_tokens=10,
+            response = await asyncio.wait_for(
+                llm.chat(
+                    [{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=10,
+                ),
+                timeout=10.0,
             )
             response = (response or "").strip().lower()
 

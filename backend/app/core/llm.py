@@ -18,10 +18,12 @@ class LLM:
             proxy=None,
             transport=httpx.AsyncHTTPTransport(proxy=None),
         )
+        # connect 显式设短：VPN/TUN 黑洞环境下直连会长时间无响应，
+        # 必须尽快失败进入重试/降级；read 保持宽裕以容纳长生成
         self.client = AsyncOpenAI(
             api_key=api_key or settings.openai_api_key,
             base_url=base_url or settings.openai_base_url,
-            timeout=120.0,
+            timeout=httpx.Timeout(connect=8.0, read=120.0, write=30.0, pool=10.0),
             http_client=http_client,
         )
         self.model = model or settings.openai_model

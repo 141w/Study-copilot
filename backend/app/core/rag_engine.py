@@ -315,10 +315,15 @@ class RAGEngine:
             try:
                 from sentence_transformers import CrossEncoder
 
-                self._reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-                logger.info("CrossEncoder reranker loaded successfully")
+                # 缓存优先（同 embedder BUG-1 修复模式）：避免 HF 联网校验在
+                # VPN 黑洞环境下阻塞首问数十秒；本地无缓存则放弃 rerank 降级
+                self._reranker = CrossEncoder(
+                    "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                    local_files_only=True,
+                )
+                logger.info("CrossEncoder reranker loaded (local cache)")
             except Exception as e:
-                logger.warning(f"Failed to load CrossEncoder reranker: {e}")
+                logger.warning(f"CrossEncoder 本地缓存不可用，禁用 rerank 降级: {e}")
                 self._reranker = None
             finally:
                 self._reranker_loaded = True

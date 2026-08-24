@@ -6,6 +6,8 @@ Retrieval Grader — 评估检索结果质量
 2. LLM 级：当规则不确定时，用 LLM 判断 top-3 结果是否与问题相关
 """
 
+import asyncio
+
 import logging
 
 from app.core.llm import LLM
@@ -97,10 +99,14 @@ class RetrievalGrader:
             fragments_text = "\n".join(fragments)
 
             prompt = self.GRADE_PROMPT.format(query=query, fragments=fragments_text)
-            response = await llm.chat(
-                [{"role": "user", "content": prompt}],
-                temperature=0.0,
-                max_tokens=10,
+            # 轻量决策：15s 未响应即降级，避免拖死整条流
+            response = await asyncio.wait_for(
+                llm.chat(
+                    [{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=10,
+                ),
+                timeout=10.0,
             )
             response = response.strip().lower()
             is_relevant = response.startswith("yes") or "是" in response[:5]

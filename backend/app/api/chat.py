@@ -79,15 +79,21 @@ async def ask(
     if req.stream:
 
         async def generate_stream():
-            async for event in chat_service.ask_question_stream(
-                db,
-                current_user,
-                req.question,
-                req.document_ids,
-                req.session_id,
-                req.config,
-            ):
-                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            try:
+                async for event in chat_service.ask_question_stream(
+                    db,
+                    current_user,
+                    req.question,
+                    req.document_ids,
+                    req.session_id,
+                    req.config,
+                ):
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                # 上游异常（如模型不可达）转为可见事件并正常收尾，
+                # 避免客户端在已发出的 200 流上无限等待
+                yield f"data: {json.dumps({'type': 'error', 'message': f'服务暂时无法连接模型：{e}'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         return StreamingResponse(
             generate_stream(),
