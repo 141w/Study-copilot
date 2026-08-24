@@ -26,6 +26,9 @@ ignore = [
     "N818",   # Exception naming conventions - allow non-Error suffix
     "N806",   # Variable in function should be lowercase (MockLLM etc in tests)
     "N803",   # Argument name should be lowercase (MockLLM etc in tests)
+    "UP042",  # str+Enum 双继承为有意设计（枚举值直接序列化进 LLM prompt）
+    "SIM105", # try/except-pass -> contextlib.suppress - 可读性偏好
+    "SIM108", # if/else -> ternary - 可读性偏好
 ]
 
 [tool.ruff.lint.per-file-ignores]

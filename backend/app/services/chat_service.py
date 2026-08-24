@@ -11,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.rag_engine import rag_engine
-from app.services.config_service import get_llm_config_with_secret
 from app.db import ChatSession, Message, User
 from app.exceptions import NotFoundError, ValidationError
+from app.services.config_service import get_llm_config_with_secret
 
 logger = logging.getLogger(__name__)
 

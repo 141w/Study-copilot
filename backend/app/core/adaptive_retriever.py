@@ -12,8 +12,8 @@ import logging
 from enum import Enum
 
 from app.core.llm import LLM
-from app.core.template_manager import render_template
 from app.core.query_decomposer import query_decomposer
+from app.core.template_manager import render_template
 
 logger = logging.getLogger(__name__)
 

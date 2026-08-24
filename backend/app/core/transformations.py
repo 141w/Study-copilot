@@ -6,6 +6,7 @@ using the configured LLM.
 """
 
 from dataclasses import dataclass
+
 from app.core.template_manager import render_template
 
 

@@ -1,8 +1,7 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db import User
 from app.services import config_service
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

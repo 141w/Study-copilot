@@ -10,11 +10,11 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.config_service import get_llm_config_with_secret
 from app.core.quiz_generator import QuizGenerator
 from app.core.vector_store import DocumentVectorStore
 from app.db import Document, Quiz, QuizResult, User
 from app.exceptions import ExternalServiceError, NotFoundError, ValidationError
+from app.services.config_service import get_llm_config_with_secret
 
 logger = logging.getLogger(__name__)
 

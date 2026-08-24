@@ -4,10 +4,9 @@ DocumentVectorStore 被 monkeypatch 为内存 fake，避免真实 embedding。
 """
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db import User
 from app.services import note_service
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class FakeStore:
@@ -81,7 +80,7 @@ async def test_update_note_reindexes_new_content(db_session, fake_store):
 
     last = fake_store.instances[-1]
     assert any("全新的内容文本" in c["text"] for c in last.chunks)
-    assert not any("旧内容" == c["text"] for c in last.chunks)
+    assert not any(c["text"] == "旧内容" for c in last.chunks)
 
 
 @pytest.mark.asyncio

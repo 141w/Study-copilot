@@ -2,8 +2,7 @@
 Async Tasks API endpoints.
 """
 
-from fastapi import APIRouter, Depends
-from fastapi import Body
+from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 

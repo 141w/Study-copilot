@@ -10,13 +10,14 @@ logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.core.adaptive_retriever import adaptive_retriever
-from app.core.template_manager import render_template
 from app.core.answer_reflector import answer_reflector
 from app.core.embedder import embedder
 from app.core.llm import LLM
 from app.core.query_router import QueryType, query_router
 from app.core.retrieval_grader import retrieval_grader
+from app.core.template_manager import render_template
 from app.core.vector_store import DocumentVectorStore
+
 
 def extract_source_indices(text: str) -> list[int]:
     pattern = r"\[来源(\d+)\]"
@@ -190,7 +191,6 @@ class RAGEngine:
             }
 
         ctx = self.build_context(all_results, max_context_tokens=12000)
-        sources_text = self.build_sources_text(all_results)
 
         if user_config:
             llm = LLM(

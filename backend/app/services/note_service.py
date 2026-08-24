@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db import Note, Tag, User
 from app.core.vector_store import DocumentVectorStore
+from app.db import Note, Tag, User
 from app.exceptions import NotFoundError
 
 logger = logging.getLogger(__name__)

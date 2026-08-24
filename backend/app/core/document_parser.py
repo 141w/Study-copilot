@@ -565,7 +565,7 @@ class TextParser(BaseParser):
         last_err: Exception | None = None
         for enc in ("utf-8", "utf-8-sig", "gbk", "latin-1"):
             try:
-                with open(file_path, "r", encoding=enc) as f:
+                with open(file_path, encoding=enc) as f:
                     return f.read()
             except (UnicodeDecodeError, UnicodeError) as e:
                 last_err = e

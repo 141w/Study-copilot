@@ -157,7 +157,7 @@ async def _execute_job(job):
             await update_task(
                 db, job.task_id, job.user_id, status="completed", progress=1.0, result=result
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # 看门狗：任务卡死（典型如模型下载被代理挂起）时转为可见失败，
             # 而非永远停留在 running 让前端显示假进度。
             await db.rollback()  # 被取消的协程可能留下失效事务

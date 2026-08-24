@@ -16,7 +16,7 @@ from app.api.tasks import router as tasks_router
 from app.api.transform import router as transform_router
 from app.api.tts import router as tts_router
 from app.config import settings
-from app.db import ensure_current_schema, get_current_revision, run_migrations, stamp_head, stamp_head
+from app.db import ensure_current_schema, get_current_revision, run_migrations, stamp_head
 from app.exception_handlers import setup_exception_handlers
 
 logging.basicConfig(level=logging.INFO)

@@ -12,12 +12,11 @@ import asyncio
 import uuid
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 from app.core import task_worker
 from app.db.database import Base
 from app.services import task_service
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
 def _make_sessionmaker(engine):

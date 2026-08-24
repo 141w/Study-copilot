@@ -4,6 +4,7 @@ Template Manager for Jinja2 Prompt Templates
 Centralizes all LLM prompts into Jinja2 template files for better maintainability.
 """
 import os
+
 from jinja2 import Environment, FileSystemLoader
 
 # Template directory path

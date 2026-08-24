@@ -529,7 +529,7 @@ class DocumentVectorStore:
                 del temp_index
             except Exception:
                 detected_dim = self.dimension
-            
+
             self._store = FAISSVectorStore(dimension=detected_dim)
             return await self._store.load(faiss_path)
 
@@ -543,7 +543,7 @@ class DocumentVectorStore:
                 del temp_index
             except Exception:
                 detected_dim = self.dimension
-            
+
             self._store = HybridVectorStore(dimension=detected_dim)
             return await self._store.load(path)
 

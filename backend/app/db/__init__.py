@@ -13,9 +13,9 @@ from app.db.database import (
     User,
     UserLLMConfig,
     engine,
+    ensure_current_schema,
     get_db,
     init_db,
     note_tags,
 )
 from app.db.migrations import get_current_revision, run_migrations, stamp_head
-from app.db.database import ensure_current_schema
