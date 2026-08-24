@@ -6,11 +6,16 @@ thread pool via the service layer.
 
 import asyncio
 import logging
+import os
 
 from app.db.database import AsyncSessionLocal
 from app.services.task_service import update_task
 
 logger = logging.getLogger(__name__)
+
+# 看门狗：单任务最长执行时间。超时转为 failed，避免环境故障（如模型
+# 下载被代理挂起）让任务永远停留在 running、前端显示假进度。
+TASK_TIMEOUT_SEC = int(os.environ.get("TASK_TIMEOUT_SEC", "600"))
 
 _task_queue = None
 _worker_task = None
@@ -75,15 +80,36 @@ async def _execute_job(job):
         await update_task(db, job.task_id, job.user_id, status="running")
         try:
             if job.task_type == "document_process":
-                result = await _run_document_process(job, db)
+                result = await asyncio.wait_for(
+                    _run_document_process(job, db), timeout=TASK_TIMEOUT_SEC
+                )
             elif job.task_type == "quiz_generate":
-                result = await _run_quiz_generate(job, db)
+                result = await asyncio.wait_for(
+                    _run_quiz_generate(job, db), timeout=TASK_TIMEOUT_SEC
+                )
             else:
                 raise ValueError(f"Unknown type: {job.task_type}")
             await update_task(
                 db, job.task_id, job.user_id, status="completed", progress=1.0, result=result
             )
+        except asyncio.TimeoutError:
+            # 看门狗：任务卡死（典型如模型下载被代理挂起）时转为可见失败，
+            # 而非永远停留在 running 让前端显示假进度。
+            await db.rollback()  # 被取消的协程可能留下失效事务
+            logger.error("Task %s timed out after %ss", job.task_id, TASK_TIMEOUT_SEC)
+            await update_task(
+                db,
+                job.task_id,
+                job.user_id,
+                status="failed",
+                progress=0.0,
+                error=(
+                    f"任务超时（超过 {TASK_TIMEOUT_SEC}s 未完成），已中止。"
+                    "常见原因：Embedding 模型下载受网络/代理限制。"
+                ),
+            )
         except Exception as e:
+            await db.rollback()
             await update_task(
                 db, job.task_id, job.user_id, status="failed", progress=0.0, error=str(e)
             )
