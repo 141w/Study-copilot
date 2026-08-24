@@ -21,7 +21,7 @@ export const useDocumentStore = defineStore('document', () => {
     }
   }
 
-  async function uploadDocument(file: File): Promise<Document> {
+  async function uploadDocument(file: File): Promise<Pick<Document, 'id' | 'filename' | 'status' | 'chunk_count'> & { message?: string }> {
     loading.value = true
     try {
       const formData = new FormData()

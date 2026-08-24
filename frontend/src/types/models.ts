@@ -18,7 +18,7 @@ export interface Document {
   id: string
   filename: string
   status: 'processing' | 'ready' | 'error'
-  created_at: string
+  created_at?: string
   chunk_count?: number
 }
 
