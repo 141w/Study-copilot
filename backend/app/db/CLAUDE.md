@@ -58,4 +58,4 @@ Migration files live in `backend/alembic/versions/`.
 - **Async everywhere**: Uses `asyncpg` driver with `create_async_engine()`
 - **Single file for models**: All models in `database.py` for simplicity (could split later)
 - **UUID primary keys**: All models use `uuid.uuid4` as default PK
-- **Soft deletes not implemented**: Hard deletes via cascade (documented tech debt)
+- **Soft deletes (2026-08-24)**: documents.deleted_at / notes.deleted_at 标记回收站；DELETE 端点软删可恢复，物理清除走 purge_deleted_* 服务函数（运维脚本用）

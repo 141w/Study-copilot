@@ -116,6 +116,15 @@ Authorization: Bearer *** `...esponse:** `200 OK` — Document detail with metad
 
 ---
 
+### Restore Document
+```
+POST /api/documents/{document_id}/restore
+Authorization: Bearer ***
+```
+**Response:** `200 OK` — 从回收站恢复软删除的文档。
+
+---
+
 ### Delete Document
 ```
 DELETE /api/documents/{document_id}
@@ -340,6 +349,15 @@ Authorization: Bearer *** `...
 ```
 PUT /api/notes/{note_id}
 Authorization: Bearer *** `...
+### Restore Note
+```
+POST /api/notes/{note_id}/restore
+Authorization: Bearer ***
+```
+**Response:** `200 OK` — 恢复后的笔记对象。
+
+---
+
 ### Delete Note
 ```
 DELETE /api/notes/{note_id}

@@ -231,7 +231,8 @@ pytest tests/ -v           # Run tests
 | POST | `/api/documents/from-url` | Import document from URL |
 | GET | `/api/documents` | List user's documents |
 | GET | `/api/documents/{id}` | Get document detail |
-| DELETE | `/api/documents/{id}` | Delete document |
+| DELETE | `/api/documents/{id}` | Delete document (soft, restorable) |
+| POST | `/api/documents/{id}/restore` | Restore soft-deleted document |
 | POST | `/api/chat/ask` | Non-streaming RAG Q&A |
 | POST | `/api/chat/ask` (stream:true) | Streaming RAG Q&A (SSE) |
 | GET | `/api/chat/history` | List chat sessions |
@@ -249,7 +250,8 @@ pytest tests/ -v           # Run tests
 | POST | `/api/notes` | Create note |
 | GET | `/api/notes/{id}` | Get note detail |
 | PUT | `/api/notes/{id}` | Update note (including tags) |
-| DELETE | `/api/notes/{id}` | Delete note |
+| DELETE | `/api/notes/{id}` | Delete note (soft, restorable) |
+| POST | `/api/notes/{id}/restore` | Restore soft-deleted note |
 | POST | `/api/notes/search` | Semantic note search |
 | GET | `/api/notes/tags/all` | List all tags |
 | DELETE | `/api/notes/tags/{tag_id}` | Delete a tag |

@@ -230,7 +230,11 @@ async def list_documents(
 
     limit/offset 为可选分页参数：缺省返回全部（兼容既有前端）。
     """
-    query = select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc())
+    query = (
+        select(Document)
+        .where(Document.user_id == user.id, Document.deleted_at.is_(None))
+        .order_by(Document.created_at.desc())
+    )
     if offset:
         query = query.offset(offset)
     if limit is not None:
@@ -246,7 +250,11 @@ async def get_document(
 ) -> dict:
     """Get a single document with its chunks. Raises NotFoundError if missing."""
     result = await db.execute(
-        select(Document).where(Document.id == doc_id, Document.user_id == user.id)
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == user.id,
+            Document.deleted_at.is_(None),
+        )
     )
     doc = result.scalar_one_or_none()
     if not doc:
@@ -271,19 +279,70 @@ async def delete_document(
     user: User,
     doc_id: str,
 ) -> None:
-    """Delete a document, its file, and vector store. Throws NotFoundError if missing."""
+    """软删除文档（进回收站，可 restore）：保留文件与索引，仅打标记。"""
+    from datetime import UTC, datetime
+
     result = await db.execute(
-        select(Document).where(Document.id == doc_id, Document.user_id == user.id)
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == user.id,
+            Document.deleted_at.is_(None),
+        )
     )
     doc = result.scalar_one_or_none()
     if not doc:
         raise NotFoundError("文档不存在")
 
-    if os.path.exists(doc.file_path):
-        os.remove(doc.file_path)
-
-    store = DocumentVectorStore(doc_id)
-    store.delete()
-
-    await db.delete(doc)
+    doc.deleted_at = datetime.now(UTC).replace(tzinfo=None)
     await db.commit()
+
+
+async def restore_document(db: AsyncSession, user: User, doc_id: str) -> Document:
+    """从回收站恢复软删除的文档（文件与索引未动，恢复即用）。"""
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == user.id,
+            Document.deleted_at.is_not(None),
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("回收站中没有该文档")
+    doc.deleted_at = None
+    await db.commit()
+    return doc
+
+
+async def purge_deleted_documents(
+    db: AsyncSession,
+    user: User,
+    older_than_days: int = 30,
+) -> int:
+    """物理清除回收站中超期的文档（文件+索引+行）。返回清除数量。
+
+    仅供运维脚本/显式调用，不接入 HTTP。
+    """
+    from datetime import UTC, datetime, timedelta
+
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=older_than_days)
+    result = await db.execute(
+        select(Document).where(
+            Document.user_id == user.id,
+            Document.deleted_at.is_not(None),
+            Document.deleted_at < cutoff,
+        )
+    )
+    stale = list(result.scalars().all())
+
+    for doc in stale:
+        if doc.file_path and os.path.exists(doc.file_path):
+            os.remove(doc.file_path)
+        store = DocumentVectorStore(doc.id)
+        store.delete()
+        await db.delete(doc)
+
+    if stale:
+        await db.commit()
+        logger.info("Purged %d soft-deleted documents (user=%s)", len(stale), user.id)
+    return len(stale)

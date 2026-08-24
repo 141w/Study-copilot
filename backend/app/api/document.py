@@ -96,6 +96,17 @@ async def delete_doc(
     return {"message": "删除成功"}
 
 
+@router.post("/{doc_id}/restore")
+async def restore_doc(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """从回收站恢复软删除的文档。"""
+    await document_service.restore_document(db, current_user, doc_id)
+    return {"message": "恢复成功"}
+
+
 @router.post("/from-url", response_model=DocProcessResponse)
 async def import_from_url(
     request: Request,

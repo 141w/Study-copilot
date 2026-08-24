@@ -184,6 +184,18 @@ async def delete_note(
     return {"message": "删除成功"}
 
 
+@router.post("/{note_id}/restore", response_model=NoteResponse)
+async def restore_note(
+    note_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """从回收站恢复软删除的笔记。"""
+    note = await note_service.restore_note(db, current_user, note_id)
+    note = await note_service.get_note(db, current_user, note.id)
+    return _note_to_response(note)
+
+
 
 
 @router.post("/search", response_model=list[dict])

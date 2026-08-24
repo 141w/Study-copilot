@@ -534,7 +534,8 @@ cd frontend && npm run dev
 | `/api/documents/upload` | POST | 上传 PDF / DOCX / PPTX | JWT |
 | `/api/documents` | GET | 获取文档列表 | JWT |
 | `/api/documents/{id}` | GET | 获取文档详情 | JWT |
-| `/api/documents/{id}` | DELETE | 删除文档（级联清理文件+索引） | JWT |
+| `/api/documents/{id}` | DELETE | 删除文档（软删除，进回收站可恢复） | JWT |
+| `/api/documents/{id}/restore` | POST | 从回收站恢复文档 | JWT |
 | `/api/documents/from-url` | POST | 从网页 URL 导入内容 | JWT |
 
 ### 问答接口（RAG）
@@ -581,8 +582,9 @@ cd frontend && npm run dev
 | `/api/notes` | POST | 创建笔记（手动/AI 生成） | JWT |
 | `/api/notes/{id}` | GET | 获取笔记详情 | JWT |
 | `/api/notes/{id}` | PUT | 更新笔记内容 | JWT |
-| `/api/notes/{id}` | DELETE | 删除笔记 | JWT |
+| `/api/notes/{id}` | DELETE | 删除笔记（软删除，可恢复） | JWT |
 | `/api/notes/search` | POST | 笔记语义搜索 | JWT |
+| `/api/notes/{id}/restore` | POST | 从回收站恢复笔记 | JWT |
 | `/api/notes/tags/all` | GET | 获取所有标签 | JWT |
 | `/api/notes/tags/{id}` | DELETE | 删除标签 | JWT |
 

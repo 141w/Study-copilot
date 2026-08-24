@@ -49,6 +49,8 @@ class Document(Base):
     file_size = Column(Integer)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
     vectorstore_path = Column(String, nullable=True)
+    # 软删除标记：NULL=正常；非空=回收站（文件与索引保留，可恢复）
+    deleted_at = Column(DateTime, nullable=True, index=True)
 
 
 class ChatSession(Base):
@@ -179,6 +181,8 @@ class Note(Base):
         default=lambda: datetime.now(UTC).replace(tzinfo=None),
         onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
     )
+    # 软删除标记：NULL=正常；非空=回收站（可恢复）
+    deleted_at = Column(DateTime, nullable=True, index=True)
 
     # relationships
     course_space = relationship("CourseSpace", back_populates="notes")

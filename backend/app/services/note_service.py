@@ -65,7 +65,9 @@ async def reindex_user_notes(db: AsyncSession, user: User) -> int:
     相比增量 upsert 更简单且天然覆盖删除场景。
     返回入索引的 chunk 数。
     """
-    result = await db.execute(select(Note).where(Note.user_id == user.id))
+    result = await db.execute(
+        select(Note).where(Note.user_id == user.id, Note.deleted_at.is_(None))
+    )
     notes = list(result.scalars().all())
 
     # 先清旧文件再新建实例，避免维度/陈旧数据残留
@@ -183,7 +185,9 @@ async def list_notes(
 
     limit/offset 为可选分页参数：缺省返回全部（兼容既有前端）。
     """
-    query = select(Note).options(selectinload(Note.tags)).where(Note.user_id == user.id)
+    query = select(Note).options(selectinload(Note.tags)).where(
+        Note.user_id == user.id, Note.deleted_at.is_(None)
+    )
     if course_space_id:
         query = query.where(Note.course_space_id == course_space_id)
     if tag_name:
@@ -207,7 +211,11 @@ async def get_note(
     result = await db.execute(
         select(Note)
         .options(selectinload(Note.tags))
-        .where(Note.id == note_id, Note.user_id == user.id)
+        .where(
+            Note.id == note_id,
+            Note.user_id == user.id,
+            Note.deleted_at.is_(None),
+        )
     )
     note = result.scalar_one_or_none()
     if not note:
@@ -258,15 +266,42 @@ async def delete_note(
     user: User,
     note_id: str,
 ) -> None:
-    """Delete a note. Raises NotFoundError if missing."""
-    result = await db.execute(select(Note).where(Note.id == note_id, Note.user_id == user.id))
+    """软删除笔记（进回收站，可 restore）。Raises NotFoundError if missing."""
+    from datetime import UTC, datetime
+
+    result = await db.execute(
+        select(Note).where(
+            Note.id == note_id,
+            Note.user_id == user.id,
+            Note.deleted_at.is_(None),
+        )
+    )
     note = result.scalar_one_or_none()
     if not note:
         raise NotFoundError("笔记不存在")
-    await db.delete(note)
+    note.deleted_at = datetime.now(UTC).replace(tzinfo=None)
     await db.commit()
-    logger.info("Deleted note %s", note_id)
+    logger.info("Soft-deleted note %s", note_id)
     await _safe_reindex(db, user)
+
+
+async def restore_note(db: AsyncSession, user: User, note_id: str) -> Note:
+    """从回收站恢复软删除的笔记。"""
+    result = await db.execute(
+        select(Note).where(
+            Note.id == note_id,
+            Note.user_id == user.id,
+            Note.deleted_at.is_not(None),
+        )
+    )
+    note = result.scalar_one_or_none()
+    if not note:
+        raise NotFoundError("回收站中没有该笔记")
+    note.deleted_at = None
+    await db.commit()
+    logger.info("Restored note %s", note_id)
+    await _safe_reindex(db, user)
+    return note
 
 
 
@@ -296,7 +331,9 @@ async def search_notes(
 
     q = await db.execute(
         select(Note).options(selectinload(Note.tags)).where(
-            Note.id.in_(note_ids), Note.user_id == user.id
+            Note.id.in_(note_ids),
+            Note.user_id == user.id,
+            Note.deleted_at.is_(None),  # 索引陈旧时的双保险
         )
     )
     notes_map = {n.id: n for n in q.scalars().all()}
