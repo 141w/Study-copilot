@@ -223,11 +223,19 @@ async def _do_process_document(
 async def list_documents(
     db: AsyncSession,
     user: User,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[Document]:
-    """Return all documents owned by user, newest first."""
-    result = await db.execute(
-        select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc())
-    )
+    """Return documents owned by user, newest first.
+
+    limit/offset 为可选分页参数：缺省返回全部（兼容既有前端）。
+    """
+    query = select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc())
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 

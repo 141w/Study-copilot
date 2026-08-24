@@ -129,10 +129,14 @@ async def create_note(
 async def list_notes(
     course_space_id: str | None = Query(None),
     tag: str | None = Query(None),
+    limit: int | None = Query(None, ge=1, le=200, description="分页大小；缺省返回全部"),
+    offset: int = Query(0, ge=0, description="分页偏移"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    notes = await note_service.list_notes(db, current_user, course_space_id, tag)
+    notes = await note_service.list_notes(
+        db, current_user, course_space_id, tag, limit=limit, offset=offset
+    )
     return [_note_to_brief(n) for n in notes]
 
 

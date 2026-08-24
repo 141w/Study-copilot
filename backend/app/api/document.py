@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,10 +58,12 @@ async def upload(
 
 @router.get("", response_model=list[DocResponse])
 async def list_docs(
+    limit: int | None = Query(None, ge=1, le=200, description="分页大小；缺省返回全部"),
+    offset: int = Query(0, ge=0, description="分页偏移"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    docs = await document_service.list_documents(db, current_user)
+    docs = await document_service.list_documents(db, current_user, limit=limit, offset=offset)
     return [
         DocResponse(
             id=d.id,

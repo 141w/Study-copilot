@@ -176,8 +176,13 @@ async def list_notes(
     user: User,
     course_space_id: str | None = None,
     tag_name: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[Note]:
-    """Return notes for user, optionally filtered by course space or tag."""
+    """Return notes for user, optionally filtered by course space or tag.
+
+    limit/offset 为可选分页参数：缺省返回全部（兼容既有前端）。
+    """
     query = select(Note).options(selectinload(Note.tags)).where(Note.user_id == user.id)
     if course_space_id:
         query = query.where(Note.course_space_id == course_space_id)
@@ -185,6 +190,10 @@ async def list_notes(
         query = query.join(Note.tags).where(Tag.name == tag_name)
 
     query = query.order_by(Note.is_pinned.desc(), Note.updated_at.desc())
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
     result = await db.execute(query)
     return list(result.scalars().unique().all())
 

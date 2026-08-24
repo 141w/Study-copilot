@@ -98,7 +98,13 @@ Authorization: Bearer *** Body:**
 
 ### List Documents
 ```
-GET /api/documents
+GET /api/documents?limit=50&offset=0
+```
+**Query Parameters:**
+| Param | Type | Description |
+|-------|------|-------------|
+| `limit` | int | 分页大小（1-200）；缺省返回全部 |
+| `offset` | int | 分页偏移，默认 0 |
 Authorization: Bearer *** `...esponse:** `200 OK` — Array of document objects.
 
 ---
@@ -298,8 +304,11 @@ Authorization: Bearer *** `...uery Parameters:**
 | Param | Type | Description |
 |-------|------|-------------|
 | `tag` | string | Filter by tag name |
-| `course_id` | uuid | Filter by course space |
-| `search` | string | Semantic search query |
+| `course_space_id` | uuid | Filter by course space |
+| `limit` | int | 分页大小（1-200）；缺省返回全部 |
+| `offset` | int | 分页偏移，默认 0 |
+
+> 语义搜索使用独立端点 `POST /api/notes/search`。
 
 **Response:** `200 OK` — Array of note objects.
 
