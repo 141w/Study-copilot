@@ -561,3 +561,6 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
 - 记录勘误：url_extractor 阻塞(#19)早已 to_thread 修复；nginx SSE 已是
   600s+buffering off（非 60s）；F6(chat SSE 401 刷新)已实现于 chat.js；
   README 路由表归一化后全覆盖（D3 缺口早轮已补）
+- test(backend): quiz_generate 任务链路集成测试——HTTP 建任务→队列→worker
+  →QuizGenerator 打桩→题目落库→终态断言；worker 会话工厂对齐测试引擎
+  （AsyncSession.bind 而非 get_bind()，后者返回同步门面不可用于 async 工厂）
