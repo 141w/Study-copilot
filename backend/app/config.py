@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     debug: bool = False  # 安全默认：生产漏配 .env 时不得回显 SQL/内部信息
     encryption_key: str = ""
 
+    # CORS：逗号分隔的允许来源；部署到域名后必须在 .env 覆盖
+    cors_origins: str = (
+        "http://localhost:3000,http://localhost:5173,"
+        "http://127.0.0.1:3000,http://127.0.0.1:5173"
+    )
+
     model_config = {'env_file': '.env'}
 
 
