@@ -46,12 +46,12 @@ frontend/
 │   │   ├── UrlImportDialog.vue  # URL import dialog
 │   ├── stores/               # Pinia stores (TypeScript)
 │   │   ├── auth.ts           # Login state, tokens, user info
-│   │   ├── chat.js           # Messages, streaming, conversations
+│   │   ├── chat.ts           # Messages, streaming, conversations
 │   │   ├── config.ts         # LLM configuration
-│   │   ├── course.js         # Course spaces, document associations
+│   │   ├── course.ts         # Course spaces, document associations
 │   │   ├── document.ts       # Document list, upload state
-│   │   ├── note.js           # Notes list, tags, search, filters
-│   │   ├── quiz.js           # Quiz state, answers, results
+│   │   ├── note.ts           # Notes list, tags, search, filters
+│   │   ├── quiz.ts           # Quiz state, answers, results
 │   │   ├── sidebar.ts        # Sidebar navigation state
 │   │   ├── theme.ts          # Light/dark theme state
 │   │   ├── toast.ts          # Toast notification queue

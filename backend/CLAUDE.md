@@ -22,7 +22,6 @@ backend/
 │   │   └── config.py           # GET/POST user LLM config
 │   ├── core/                   # Business logic (no HTTP concerns)
 │   │   ├── __init__.py
-│   │   ├── config.py           # Default config constants
 │   │   ├── llm.py              # OpenAI SDK wrapper with retry/backoff
 │   │   ├── embedder.py         # sentence-transformers wrapper with async + caching
 │   │   ├── vector_store.py     # FAISS/BM25/Hybrid vector indices (per-document)
@@ -39,14 +38,14 @@ backend/
 │   │   ├── encryption.py       # Fernet credential encryption for API keys
 │   │   ├── tts.py              # Edge TTS wrapper
 │   │   ├── url_extractor.py    # Web content extraction
-│   │   └── rate_limit.py       # slowapi rate limiting
+│   │   └── rate_limit.py       # 自研滑动窗口 IPRateLimiter
 │   ├── services/               # Business orchestration layer
 │   │   ├── __init__.py
 │   │   ├── auth_service.py     # register, login, refresh_token
 │   │   ├── document_service.py # upload_document, delete_document, list_documents
 │   │   ├── chat_service.py     # ask_question, stream_answer, get_history
 │   │   ├── quiz_service.py     # generate_quiz, submit_quiz, get_wrong_questions
-│   │   ├── analysis_service.py # record_wrong, get_knowledge_gaps, get_progress
+│   │   ├── analysis_service.py # analyze_wrong_questions, get_knowledge_stats, get_progress
 │   │   ├── config_service.py   # get_config, update_config
 │   │   ├── note_service.py     # Note CRUD + tagging + semantic search
 │   │   ├── course_service.py   # Course space management + document associations
@@ -59,7 +58,6 @@ backend/
 │   ├── utils/
 │   │   ├── __init__.py
 │   │   ├── auth.py             # Password hashing, JWT creation/validation, get_current_user
-│   │   ├── file_handler.py     # File save/delete helpers
 │   ├── config.py               # Pydantic Settings (env vars)
 │   ├── main.py                 # FastAPI app, middleware, router includes
 │   ├── exceptions.py           # Custom exception classes
@@ -71,7 +69,6 @@ backend/
 │   │   ├── test_chunker.py
 │   │   ├── test_document_parser.py
 │   │   ├── test_exceptions.py
-│   │   ├── test_file_handler.py
 │   │   ├── test_quiz_generator.py
 │   │   ├── test_quiz.py
 │   │   ├── test_rag_engine.py
@@ -275,6 +272,5 @@ pytest tests/ -v           # Run tests
 | GET | `/api/config/llm` | Get user's LLM config |
 | POST | `/api/config/llm` | Update user's LLM config |
 | PUT | `/api/config/llm` | Update user's LLM config |
-| GET | `/api/config/llm/with-secret` | Get LLM config with decrypted API key (internal) |
 | GET | `/` | App info |
 | GET | `/health` | Health check |

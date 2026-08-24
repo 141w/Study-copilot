@@ -34,7 +34,7 @@ Core (app/core/*.py)
 | `document_service.py` | Document upload/parse | upload_document, delete_document, list_documents |
 | `chat_service.py` | RAG Q&A | ask_question, stream_answer, get_history |
 | `quiz_service.py` | Quiz generation | generate_quiz, submit_quiz, get_wrong_questions |
-| `analysis_service.py` | Learning analytics | record_wrong, get_knowledge_gaps, get_progress |
+| `analysis_service.py` | Learning analytics | analyze_wrong_questions, get_knowledge_stats, get_progress |
 | `config_service.py` | LLM configuration | get_config, update_config |
 | `note_service.py` | Notes management | create_note, update_note, delete_note, search_notes, add_tags |
 | `course_service.py` | Course spaces | create_course, update_course, list_courses, get_course_detail |

@@ -19,10 +19,8 @@ Core modules contain **pure business logic** with no HTTP or framework dependenc
 | `tts.py` | Edge TTS text-to-speech | `synthesize_speech()` — async audio generation via edge-tts |
 | `url_extractor.py` | Web content extraction | `extract_from_url()` — fetches and parses web page content |
 | `transformations.py` | Content transformation engine | 8 transform types: summary, key_points, outline, flashcards, mindmap, qa, translate, explain |
-| `config.py` | User LLM config CRUD | Per-user model/base_url/api_key preferences |
-| `rate_limit.py` | Request rate limiting | slowapi integration |
+| `rate_limit.py` | Request rate limiting | 自研滑动窗口 `IPRateLimiter` |
 | `exceptions.py` | Custom exception hierarchy | `AppError`, `DocumentNotFoundError`, `LLMError`, etc. |
-| `pdf_parser.py` | PDF-specific parsing | PyMuPDF fallback for large PDFs (>30 pages) |
 
 ## Design Principles
 

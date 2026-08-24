@@ -31,7 +31,7 @@
 | **RAG 策略** | 5 步 Agentic RAG（路由→自适应检索→纠错→摘要→反思） | LangGraph 工作流（chat/ask/source_chat） |
 | **异步任务** | AsyncTask ORM 模型 + 前端轮询 | surreal-commands 后台作业队列（fire-and-forget） |
 | **播客生成** | ❌ 不支持 | ✅ podcast-creator 库，多说话人，EpisodeProfile/SpeakerProfile |
-| **速率限制** | slowapi | ❌ 无内置速率限制 |
+| **速率限制** | 自研滑动窗口 IPRateLimiter（内存实现） | ❌ 无内置速率限制 |
 | **迁移工具** | Alembic | AsyncMigrationManager（自研，自动运行） |
 | **日志** | logging 标准库 | loguru |
 | **测试** | pytest + pytest-asyncio + pytest-cov（12 个测试文件） | pytest + pytest-asyncio（15 个测试文件） |

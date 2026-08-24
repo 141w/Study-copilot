@@ -136,7 +136,6 @@
 | **aiofiles** | 异步文件处理 | - |
 | **python-docx** | DOCX 解析 | ≥ 1.1 |
 | **python-pptx** | PPTX 解析 | ≥ 0.6 |
-| **slowapi** | 接口限流 | - |
 | **Alembic** | 数据库迁移管理 | ≥ 1.12 |
 | **pytest** | 后端测试框架 | ≥ 7.0 |
 
@@ -200,7 +199,6 @@ study-copilot/
 │   │   │
 │   │   ├── core/                   # 核心业务逻辑
 │   │   │   ├── document_parser.py # 统一文档解析（PDF/DOCX/PPTX）
-│   │   │   ├── pdf_parser.py      # PDF 解析封装
 │   │   │   ├── chunker.py         # 文本分块（固定/语义两种策略）
 │   │   │   ├── vector_store.py    # FAISS 向量存储
 │   │   │   ├── rag_engine.py      # Agentic RAG 引擎（路由+自适应检索+反思）
@@ -230,7 +228,6 @@ study-copilot/
 │   │   │
 │   │   ├── utils/                  # 工具函数
 │   │   │   ├── auth.py            # 密码哈希/Token 验证
-│   │   │   └── file_handler.py    # 文件处理
 │   │   │
 │   │   ├── config.py               # 应用配置（Pydantic Settings）
 │   │   └── main.py                 # FastAPI 应用入口
@@ -575,7 +572,6 @@ cd frontend && npm run dev
 | `/api/config/llm` | GET | 获取用户的 LLM 配置 | JWT |
 | `/api/config/llm` | POST | 保存 LLM 配置到服务端 | JWT |
 | `/api/config/llm` | PUT | 更新 LLM 配置 | JWT |
-| `/api/config/llm/with-secret` | GET | 获取含敏感字段的配置（前端同步配置） | JWT |
 
 ### 笔记接口
 
