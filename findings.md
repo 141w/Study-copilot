@@ -654,3 +654,9 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
   曾因重写用例时丢失 setattr 导致认领静默连到本机 PG（空表→None），
   靠在认领函数内打印 bind 方言定位
 - 全量 pytest 318 passed；TASK_POLL_INTERVAL_SEC 默认 1s 可调
+
+### 安全响应头（同日第六小节）
+- 双层：FastAPI 中间件（API/错误路径/SSE）+ nginx server 级与静态 location
+  重复声明（add_header 继承陷阱）；CSP 含 media blob:/img data: 以兼容 TTS 与预览
+- 踩坑：@app.middleware 第二参数是 call_next 而非 Response，签名写反导致
+  AttributeError 波及 5 个用例，已修正并全量回归

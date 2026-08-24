@@ -339,3 +339,7 @@ ChatHistoryPanel + useChatExport 落地；639→455 行；vitest 23/tsc/build �
 ### 第八小节：PG 持久队列（同日续）
 task_worker 改轮询认领；重启存活语义落地（pending 续跑、running 才收尸）；
 +3 回归用例；全量 318 passed。剩余待办：安全响应头、软删除、覆盖率门禁、LLM 效果回归。
+
+### 第九小节：安全响应头（同日续）
+后端中间件三头 + nginx 四头（含 CSP）落地；pytest 320 passed。
+剩余待办：软删除、覆盖率门禁、LLM 效果回归。
