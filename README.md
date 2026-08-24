@@ -83,7 +83,7 @@
 │                              │                                    │
 │                         Pinia 状态管理                            │
 └──────────────────────────────┼───────────────────────────────────┘
-                               │ HTTP + WebSocket (SSE)
+                               │ HTTP + SSE
 ┌──────────────────────────────┼───────────────────────────────────┐
 │                         后端 (FastAPI)                            │
 │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
@@ -199,8 +199,8 @@ study-copilot/
 │   │   │
 │   │   ├── core/                   # 核心业务逻辑
 │   │   │   ├── document_parser.py # 统一文档解析（PDF/DOCX/PPTX）
-│   │   │   ├── chunker.py         # 文本分块（固定/语义两种策略）
-│   │   │   ├── vector_store.py    # FAISS 向量存储
+│   │   │   ├── chunker.py         # 文本分块（固定/语义/层级三种策略）
+│   │   │   ├── vector_store.py    # 混合向量检索（FAISS+BM25+RRF）
 │   │   │   ├── rag_engine.py      # Agentic RAG 引擎（路由+自适应检索+反思）
 │   │   │   ├── query_router.py    # 查询路由（意图分类+上下文改写）
 │   │   │   ├── retrieval_grader.py # 检索质量评估
@@ -214,9 +214,9 @@ study-copilot/
 │   │   │   ├── tts.py             # Edge TTS 语音合成
 │   │   │   ├── url_extractor.py   # 网页内容提取
 │   │   │   ├── transformations.py # 内容转换引擎
-│   │   │   ├── config.py          # 用户 LLM 配置管理
-│   │   │   ├── rate_limit.py      # 接口限流
-│   │   │   └── exceptions.py      # 全局异常处理
+│   │   │   ├── task_worker.py     # 异步任务 worker（内存队列 + 看门狗超时）
+│   │   │   ├── template_manager.py # Jinja2 Prompt 模板管理
+│   │   │   └── rate_limit.py      # 接口限流
 │   │   │
 │   │   ├── db/                     # 数据库层
 │   │   │   ├── database.py        # SQLAlchemy 异步配置 + 数据模型
@@ -234,9 +234,29 @@ study-copilot/
 │   │
 │   ├── uploads/                    # 用户上传文件存储（gitignored）
 │   ├── vectorstore/                # FAISS 向量索引存储（gitignored）
-│   ├── study_copilot.db            # SQLite 数据库文件（gitignored）
 │   ├── .env                        # 环境变量配置（gitignored）
 │   ├── requirements.txt            # Python 依赖
+│   ├── alembic/                    # 数据库迁移（Alembic）
+│   │   ├── alembic.ini             # Alembic 配置
+│   │   ├── env.py                  # Alembic 环境配置
+│   │   └── versions/               # 迁移脚本
+│   ├── tests/                      # 后端测试（pytest）
+│   │   ├── conftest.py             # 测试配置与 fixtures
+│   │   ├── test_api.py             # API 集成测试
+│   │   ├── test_auth.py            # 认证测试
+│   │   ├── test_chunker.py         # 分块器测试
+│   │   ├── test_config_service.py  # 配置服务测试（温度归一化）
+│   │   ├── test_document_parser.py # 文档解析测试
+│   │   ├── test_exceptions.py      # 异常处理测试
+│   │   ├── test_note_indexing.py   # 笔记语义索引测试
+│   │   ├── test_quiz.py            # 出题/判分测试
+│   │   ├── test_quiz_generator.py  # 题目生成器测试
+│   │   ├── test_quiz_task_e2e.py   # 出题异步链路集成测试
+│   │   ├── test_rag_engine.py      # RAG 引擎测试
+│   │   ├── test_rate_limit.py      # 接口限流测试
+│   │   ├── test_tasks.py           # 异步任务测试
+│   │   ├── test_tts.py             # TTS 测试
+│   │   └── test_vector_store.py    # 向量存储测试
 │   └── run.py                      # 启动脚本
 │
 ├── frontend/                        # 前端应用
@@ -265,16 +285,16 @@ study-copilot/
 │   │   │   ├── TransformDialog.vue # 内容转换对话框
 │   │   │   ├── UrlImportDialog.vue # URL 导入对话框
 │   │   │   ├── common/            # 通用组件（Header/Sidebar/Toast）
-│   │   │   └── chat/              # 聊天组件（Message/Input）
+│   │   │   └── chat/              # 聊天组件（ChatInput）
 │   │   │
 │   │   ├── stores/                 # Pinia 状态管理
 │   │   │   ├── auth.ts            # 认证状态
-│   │   │   ├── chat.js            # 问答状态（含流式）
+│   │   │   ├── chat.ts            # 问答状态（含流式）
 │   │   │   ├── config.ts          # 配置状态
-│   │   │   ├── course.js          # 课程空间状态
+│   │   │   ├── course.ts          # 课程空间状态
 │   │   │   ├── document.ts        # 文档状态
-│   │   │   ├── note.js            # 笔记状态
-│   │   │   ├── quiz.js            # 做题状态
+│   │   │   ├── note.ts            # 笔记状态
+│   │   │   ├── quiz.ts            # 做题状态
 │   │   │   ├── sidebar.ts         # 侧边栏状态
 │   │   │   ├── theme.ts           # 主题状态
 │   │   │   └── toast.ts           # 提示状态
@@ -293,25 +313,6 @@ study-copilot/
 │   ├── postcss.config.js
 │   └── package.json
 │
-├── alembic/                          # 数据库迁移
-│   ├── alembic.ini                 # Alembic 配置
-│   ├── versions/                   # 迁移脚本
-│   └── env.py                      # Alembic 环境配置
-│
-├── tests/                            # 后端测试
-│   ├── conftest.py                 # 测试配置与 fixtures
-│   ├── test_auth.py                # 认证测试
-│   ├── test_document.py            # 文档测试
-│   ├── test_chat.py                # 问答测试
-│   ├── test_quiz.py                # 测验测试
-│   ├── test_notes.py               # 笔记测试
-│   ├── test_courses.py             # 课程空间测试
-│   ├── test_transform.py           # 内容转换测试
-│   ├── test_tts.py                 # TTS 测试
-│   ├── test_tasks.py               # 异步任务测试
-│   ├── test_encryption.py          # 加密测试
-│   └── test_url_extractor.py       # URL 提取测试
-│
 ├── docs/                             # 项目文档
 │   ├── 0-START-HERE/              # 快速入门
 │   ├── 1-INSTALLATION/            # 安装指南
@@ -320,7 +321,8 @@ study-copilot/
 │   └── 4-DEVELOPMENT/             # 开发文档
 │
 ├── scripts/
-│   └── run_all_tests.sh            # 一键运行全部测试
+│   ├── run_all_tests.sh            # 一键运行全部测试
+│   └── e2e_tasks_smoke.py          # 异步任务真机 E2E 冒烟脚本
 │
 ├── pyproject.toml                    # Python 项目配置（Ruff、pytest）
 ├── .github/
@@ -395,38 +397,30 @@ cp .env.example .env
 
 ```env
 # ==================== LLM 配置 ====================
+# 方案一：OpenRouter
 OPENAI_API_KEY=sk-or-...xxxx
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 OPENAI_MODEL=openai/gpt-4o-mini
 
-# ==================== 数据库 ====================
-DATABASE_URL=postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot
-
-# ==================== Embedding ====================
-# 支持 text2vec-base-chinese (768维) 或 BAAI/bge-m3 (1024维)
-# 切换模型后需重新上传文档以生成对应维度的向量索引
-EMBEDDING_MODEL=shibing624/text2vec-base-chinese
-EMBEDDING_DIMENSION=768
-```
-OPENAI_MODEL=openai/gpt-4o-mini
-
-# 方案二: OpenAI 官方
+# 方案二：OpenAI 官方
 # OPENAI_API_KEY=sk-xxxxxxxxxxxx
 # OPENAI_BASE_URL=https://api.openai.com/v1
 # OPENAI_MODEL=gpt-4o-mini
 
 # ==================== Embedding 配置 ====================
-EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_DIMENSION=384
+# 支持 text2vec-base-chinese (768维) 或 BAAI/bge-m3 (1024维)
+# 切换模型后需重新上传文档以生成对应维度的向量索引
+EMBEDDING_MODEL=shibing624/text2vec-base-chinese
+EMBEDDING_DIMENSION=768
 
 # ==================== JWT 配置 ====================
-JWT_SECRET_KEY=your-super-secret-key-change-in-production
+JWT_SECRET_KEY=please-replace-with-a-strong-random-secret-key-at-least-32-chars
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
 
 # ==================== 数据库 ====================
-DATABASE_URL=sqlite+aiosqlite:///./study_copilot.db
+DATABASE_URL=postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot
 
 # ==================== 文件上传 ====================
 UPLOAD_DIR=./uploads
@@ -434,11 +428,17 @@ MAX_FILE_SIZE=52428800
 
 # ==================== 向量库 ====================
 VECTORSTORE_DIR=./vectorstore
+TOP_K=5
 
 # ==================== 应用配置 ====================
 APP_NAME=Study Copilot
 APP_VERSION=1.0.0
-DEBUG=True
+DEBUG=true
+
+# ==================== 凭证加密 ====================
+# API Key 落盘加密密钥（Fernet），生成命令：
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+ENCRYPTION_KEY=
 ```
 
 ### 5. 一键启动（推荐）
@@ -647,12 +647,13 @@ cd frontend && npm run dev
 
 ### 2. 文本分块（Chunker）
 
-两种分块策略，适应不同场景：
+三种分块策略，适应不同场景：
 
 | 策略 | 类名 | 特点 | 适用场景 |
 |-----|------|------|---------|
 | **固定分块** | `FixedChunker` | 按句子边界 + 固定大小（默认 512 token） | 通用场景 |
 | **语义分块** | `SemanticChunker` | 语义相似度检测，保持语义完整 | 需要高精度检索 |
+| **层级分块** | `HierarchicalChunker` | 父子双层结构（粗 + 细粒度） | 长文档结构化检索 |
 
 **代码位置：** `backend/app/core/chunker.py`
 
@@ -759,8 +760,8 @@ Step 4: 答案生成 + 自我反思
 
 前后端均支持流式问答，用户可以在生成完整回答前实时看到内容，显著提升体验。
 
-- **后端**：使用 `StreamingResponse` + `EventSourceResponse`
-- **前端**：使用 `fetchEventSource` 或 `ReadableStream` 接收流式数据
+- **后端**：FastAPI `StreamingResponse` 输出 SSE（text/event-stream）
+- **前端**：原生 fetch + ReadableStream 解析流式数据
 - **接口**：`POST /api/chat/ask` (stream: true)
 
 ### 上下文感知改写（Context-Aware Rewrite）
@@ -818,11 +819,12 @@ LLM 调用失败时自动重试：
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `OPENAI_API_KEY` | 是 | - | LLM API Key |
-| `OPENAI_BASE_URL` | 是 | `https://openrouter.ai/api/v1` | API 端点 |
-| `OPENAI_MODEL` | 是 | `openai/gpt-4o-mini` | 模型名称 |
-| `EMBEDDING_MODEL` | 否 | `all-MiniLM-L6-v2` | Embedding 模型 |
+| `OPENAI_BASE_URL` | 是 | `https://api.openai.com/v1` | API 端点（OpenRouter 等可覆盖） |
+| `OPENAI_MODEL` | 是 | `gpt-3.5-turbo` | 模型名称 |
+| `EMBEDDING_MODEL` | 否 | `shibing624/text2vec-base-chinese` | Embedding 模型 |
+| `EMBEDDING_DIMENSION` | 否 | `768` | 向量维度（须与模型输出一致，切换模型后需重新上传文档） |
 | `JWT_SECRET_KEY` | 是 | - | JWT 签名密钥 |
-| `DATABASE_URL` | 否 | `sqlite+aiosqlite:///./study_copilot.db` | 数据库连接 |
+| `DATABASE_URL` | 否 | `postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot` | 数据库连接 |
 | `UPLOAD_DIR` | 否 | `./uploads` | 上传文件目录 |
 | `MAX_FILE_SIZE` | 否 | `52428800` | 最大文件大小（50MB） |
 | `VECTORSTORE_DIR` | 否 | `./vectorstore` | 向量索引目录 |
@@ -890,7 +892,7 @@ alembic history
 
 项目使用 GitHub Actions 实现自动化 CI/CD：
 
-- **触发条件**：push 到 `main`/`develop` 分支，或创建 Pull Request
+- **触发条件**：push 到 `master` 分支，或创建指向 master 的 Pull Request
 - **流水线步骤**：
   1. 安装后端依赖并运行 `pytest`
   2. 安装前端依赖并运行 `vitest`
@@ -1007,7 +1009,7 @@ ruff format .
 ### Q6: 流式输出不显示
 
 **可能原因：**
-- 前端 EventSource 连接问题
+- 前端 SSE 连接问题（原生 fetch 流式解析）
 - 后端 CORS 配置问题
 - 网络代理拦截了 SSE
 
