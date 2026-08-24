@@ -29,7 +29,7 @@ class KnowledgeStats(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────────────
 
 
-@router.post("/wrong")
+@router.get("/wrong")
 async def analyze_wrong(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

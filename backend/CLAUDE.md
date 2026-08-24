@@ -245,7 +245,7 @@ pytest tests/ -v           # Run tests
 | POST | `/api/quiz/submit` | Submit quiz answers |
 | GET | `/api/quiz/result-history` | Get quiz result history |
 | GET | `/api/quiz/wrong-questions` | Get wrong questions for review |
-| POST | `/api/analysis/wrong` | Analyze wrong answers |
+| GET | `/api/analysis/wrong` | Analyze wrong answers |
 | GET | `/api/analysis/knowledge` | Get knowledge stats |
 | GET | `/api/analysis/progress` | Get learning progress |
 | GET | `/api/notes` | List notes (with filters) |

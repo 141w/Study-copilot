@@ -254,7 +254,7 @@ async function loadStats() {
 async function analyzeWeakness() {
   loading.value = true
   try {
-    const response = await api.post('/analysis/wrong')
+    const response = await api.get('/analysis/wrong')
     weakAreas.value = response.data.weak_areas || []
   } catch (error) {
     console.error('Failed to analyze:', error)

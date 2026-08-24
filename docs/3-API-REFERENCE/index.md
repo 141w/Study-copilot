@@ -33,12 +33,9 @@ POST /api/auth/register
 POST /api/auth/login
 ```Authenticate and receive JWT tokens.
 
-**Request Body:**
-```json
-{
-  "username": "string",
-  "password": "string"
-}
+**Request Body:** `application/x-www-form-urlencoded`
+```
+username=string&password=string
 ```
 
 **Response:** `200 OK`
@@ -84,14 +81,14 @@ Authorization: Bearer *** Body:**
 |-------|------|-------------|
 | `file` | File | PDF, DOCX, or PPTX (max 50MB) |
 
-**Response:** `201 Created`
+**Response:** `200 OK`
 ```json
 {
   "id": "uuid",
   "filename": "lecture-notes.pdf",
   "status": "processing",
-  "task_id": "uuid",
-  "created_at": "2025-01-01T00:00:00Z"
+  "message": "文档已开始后台处理，请稍候查看",
+  "chunk_count": 0
 }
 ```
 
@@ -251,14 +248,8 @@ Authorization: Bearer *** `...esponse:** `200 OK` — Array of incorrectly answe
 
 ### Wrong Answer Analysis
 ```
-POST /api/analysis/wrong
-Authorization: Bearer *** `...quest Body:**
-```json
-{
-  "document_id": "uuid"
-}
-```
-
+GET /api/analysis/wrong
+Authorization: Bearer *** `...
 **Response:** `200 OK` — AI-generated analysis of weak areas.
 
 ---
@@ -291,7 +282,7 @@ Authorization: Bearer *** `...quest Body:**
 {
   "provider": "openrouter",
   "api_key": "sk-or-...",
-  "model": "openai/gpt-4o-mini",
+  "model_name": "openai/gpt-4o-mini",
   "base_url": "https://openrouter.ai/api/v1"
 }
 ```

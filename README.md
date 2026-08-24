@@ -564,7 +564,7 @@ cd frontend && npm run dev
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
-| `/api/analysis/wrong` | POST | 错题智能分析 | JWT |
+| `/api/analysis/wrong` | GET | 错题智能分析 | JWT |
 | `/api/analysis/knowledge` | GET | 知识掌握度分析 | JWT |
 | `/api/analysis/progress` | GET | 学习进度统计 | JWT |
 
