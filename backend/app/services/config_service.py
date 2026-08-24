@@ -49,13 +49,13 @@ async def create_or_update_llm_config(
     embedding_dimension: int,
 ) -> dict:
     """Create or upsert LLM config for user."""
-    # TEMPERATURE CONVENTION (keep in sync with frontend)
-    # DB stores temperature * 10 as integer
-    # Write: value <= 1  -> multiply by 10; value > 1  -> store as-is
-    # Read:  divide by 10
-    # Frontend config.ts also multiplies by 10 before PUT.
+    # TEMPERATURE CONVENTION (backend-owned since 7e4d4f6)
+    # DB stores temperature * 10 as integer.
+    # Write: value <= 1 -> *10; value > 1 -> store as-is（兼容旧双形态输入）。
+    # Read/Response: always divide by 10 —— GET/POST/PUT 响应一律返回十进制值。
+    # Frontend sends decimals directly; no client-side conversion anymore.
     #
-        # Normalize temperature: DB stores multiplied int (7 for 0.7).
+    # Normalize temperature: DB stores multiplied int (7 for 0.7).
     # Accept both decimal (<=1) and already-multiplied (>1) inputs.
     normalized_temperature = float(round(temperature * 10) if temperature <= 1 else round(temperature))
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
@@ -101,7 +101,7 @@ async def create_or_update_llm_config(
         "id": config_id,
         "provider": provider,
         "model_name": model_name,
-        "temperature": normalized_temperature,
+        "temperature": normalized_temperature / 10,
         "max_tokens": max_tokens,
         "embedding_model": embedding_model,
         "embedding_dimension": embedding_dimension,
@@ -123,13 +123,13 @@ async def update_llm_config(
     embedding_dimension: int,
 ) -> dict:
     """Update existing LLM config. Raises NotFoundError if none exists."""
-    # TEMPERATURE CONVENTION (keep in sync with frontend)
-    # DB stores temperature * 10 as integer
-    # Write: value <= 1  -> multiply by 10; value > 1  -> store as-is
-    # Read:  divide by 10
-    # Frontend config.ts also multiplies by 10 before PUT.
+    # TEMPERATURE CONVENTION (backend-owned since 7e4d4f6)
+    # DB stores temperature * 10 as integer.
+    # Write: value <= 1 -> *10; value > 1 -> store as-is（兼容旧双形态输入）。
+    # Read/Response: always divide by 10 —— GET/POST/PUT 响应一律返回十进制值。
+    # Frontend sends decimals directly; no client-side conversion anymore.
     #
-        # Normalize temperature: DB stores multiplied int (7 for 0.7).
+    # Normalize temperature: DB stores multiplied int (7 for 0.7).
     # Accept both decimal (<=1) and already-multiplied (>1) inputs.
     normalized_temperature = float(round(temperature * 10) if temperature <= 1 else round(temperature))
 
