@@ -56,14 +56,12 @@ import gsap from 'gsap'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { useConfigStore } from '../stores/config'
-import { useChatStore } from '../stores/chat'
 import BaseInput from '../components/common/BaseInput.vue'
 import type { AxiosError } from 'axios'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const configStore = useConfigStore()
-const chatStore = useChatStore()
 
 const loginCard = ref<HTMLElement | null>(null)
 const logoIcon = ref<HTMLElement | null>(null)

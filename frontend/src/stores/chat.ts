@@ -386,6 +386,7 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     sessions,
     currentSession,
+    currentSessionTitle,
     loading,
     config,
     saveConfig,
