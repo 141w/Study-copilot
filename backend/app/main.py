@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast：ENCRYPTION_KEY 缺失此前要拖到首次加密调用才抛错，
+    # 这里提前到启动期校验，配置遗漏在部署时即刻可见。
+    from app.core.encryption import get_encryption_service
+
+    get_encryption_service()
+    logger.info("Encryption service ready.")
+
     # Run Alembic migrations on startup
     logger.info("Starting database migrations...")
     current_revision = await get_current_revision()

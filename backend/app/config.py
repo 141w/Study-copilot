@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # 应用配置
     app_name: str = "Study Copilot"
     app_version: str = "1.0.0"
-    debug: bool = True
+    debug: bool = False  # 安全默认：生产漏配 .env 时不得回显 SQL/内部信息
     encryption_key: str = ""
 
     model_config = {'env_file': '.env'}
