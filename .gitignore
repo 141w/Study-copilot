@@ -99,3 +99,6 @@ backend/uploads/tts/*.mp3
 .idea/
 frontend/node_modules/
 frontend/dist/
+
+# Backups（scripts/backup.sh 产物，含全量数据勿入库）
+backups/
