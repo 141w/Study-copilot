@@ -343,3 +343,7 @@ task_worker 改轮询认领；重启存活语义落地（pending 续跑、runnin
 ### 第九小节：安全响应头（同日续）
 后端中间件三头 + nginx 四头（含 CSP）落地；pytest 320 passed。
 剩余待办：软删除、覆盖率门禁、LLM 效果回归。
+
+### 第十小节：覆盖率门禁（同日续）
+pytest.ini addopts + CI 双处落地，fail-under=65；基线 68.17%；全量 323 passed。
+剩余待办：LLM 效果回归（待用户提供 Key）。

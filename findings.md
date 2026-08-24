@@ -660,3 +660,8 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
   重复声明（add_header 继承陷阱）；CSP 含 media blob:/img data: 以兼容 TTS 与预览
 - 踩坑：@app.middleware 第二参数是 call_next 而非 Response，签名写反导致
   AttributeError 波及 5 个用例，已修正并全量回归
+
+### 覆盖率门禁（同日第七小节）
+- pytest.ini addopts 全局强制：--cov-fail-under=65（基线 68.17%，3pt 余量）；
+  CI test.yml 同步显式阈值；负向验证确认门禁会拦
+- 后续策略：每补一块测试即上调阈值（棘轮式）
