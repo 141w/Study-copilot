@@ -285,7 +285,7 @@ study-copilot/
 │   │   ├── router/                 # 路由配置
 │   │   ├── styles/                 # 全局样式
 │   │   ├── App.vue                # 根组件
-│   │   └── main.js                # 入口文件
+│   │   └── main.ts                # 入口文件
 │   │
 │   ├── index.html
 │   ├── vite.config.js
@@ -923,7 +923,7 @@ ruff format .
 2. **核心逻辑**：在 `backend/app/core/` 下实现业务逻辑
 3. **数据模型**：在 `backend/app/db/database.py` 中添加 SQLAlchemy 模型
 4. **前端页面**：在 `frontend/src/views/` 下创建 Vue 组件
-5. **前端路由**：在 `frontend/src/router/index.js` 中注册路由
+5. **前端路由**：在 `frontend/src/router/index.ts` 中注册路由
 6. **状态管理**：在 `frontend/src/stores/` 中添加 Pinia store
 
 ### 数据库模型
@@ -1035,7 +1035,7 @@ ruff format .
 - `frontend/src/components/common/LoadingSpinner.vue` — 加载动画
 - `frontend/src/components/common/IconButton.vue` — 图标按钮
 - `frontend/src/composables/useApi.ts` — 统一 API 请求处理
-- `frontend/src/composables/useMarkdown.js` — Markdown 渲染
+- `frontend/src/composables/useMarkdown.ts` — Markdown 渲染
 - `frontend/src/types/api.ts` — API 响应类型
 - `frontend/src/types/models.ts` — 核心数据模型
 - `frontend/tsconfig.json` — TypeScript 配置

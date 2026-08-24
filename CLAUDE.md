@@ -119,7 +119,7 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ### Composables (`frontend/src/composables/`)
 - `useApi.ts` — 统一 API 请求处理（错误处理、toast 通知）
-- `useMarkdown.js` — Markdown 渲染（markdown-it 封装）
+- `useMarkdown.ts` — Markdown 渲染（markdown-it 封装）
 
 ---
 

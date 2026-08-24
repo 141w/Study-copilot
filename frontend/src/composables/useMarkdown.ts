@@ -2,44 +2,50 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 
 // Create markdown-it instance with highlight.js
-const md = new MarkdownIt({
+const md: MarkdownIt = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
-  highlight: function (str, lang) {
+  highlight: function (str: string, lang: string): string {
     if (lang && hljs.getLanguage(lang)) {
       try {
         return '<pre class="hljs"><code>' +
                hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
                '</code></pre>'
-      } catch (__) {}
+      } catch {}
     }
     // Unknown/failed language: escaped plain-text code block
     return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>'
   }
 })
 
+/** useMarkdown 返回的渲染工具集 */
+export interface MarkdownUtils {
+  /** Render markdown string to HTML */
+  renderMarkdown: (content: string) => string
+  /** Strip markdown formatting and return plain text */
+  stripMarkdown: (content: string) => string
+  /** Get first N characters of plain text from markdown */
+  getExcerpt: (content: string, length?: number) => string
+  markdownIt: MarkdownIt
+}
+
 /**
  * Composable for Markdown rendering
- * @returns {Object} Markdown rendering utilities
  */
-export function useMarkdown() {
+export function useMarkdown(): MarkdownUtils {
   /**
    * Render markdown string to HTML
-   * @param {string} content - Markdown content
-   * @returns {string} Rendered HTML
    */
-  function renderMarkdown(content) {
+  function renderMarkdown(content: string): string {
     if (!content) return ''
     return md.render(content)
   }
 
   /**
    * Strip markdown formatting and return plain text
-   * @param {string} content - Markdown content
-   * @returns {string} Plain text
    */
-  function stripMarkdown(content) {
+  function stripMarkdown(content: string): string {
     if (!content) return ''
     // Simple stripping - remove common markdown syntax
     return content
@@ -57,11 +63,8 @@ export function useMarkdown() {
 
   /**
    * Get first N characters of plain text from markdown
-   * @param {string} content - Markdown content
-   * @param {number} length - Max length
-   * @returns {string} Truncated plain text
    */
-  function getExcerpt(content, length = 150) {
+  function getExcerpt(content: string, length: number = 150): string {
     const plainText = stripMarkdown(content)
     if (plainText.length <= length) return plainText
     return plainText.substring(0, length) + '...'

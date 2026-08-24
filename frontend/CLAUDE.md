@@ -59,17 +59,17 @@ frontend/
 │   │   └── api.ts            # Axios instance with JWT interceptors
 │   ├── composables/          # ✨ Reusable composition functions
 │   │   ├── useApi.ts         # Unified API request handling
-│   │   └── useMarkdown.js    # Markdown rendering utilities
+│   │   └── useMarkdown.ts    # Markdown rendering utilities
 │   ├── types/                # ✨ TypeScript type definitions
 │   │   ├── api.ts            # API response types
 │   │   └── models.ts         # Core data models (User, Document, Note, etc.)
 │   ├── router/
-│   │   └── index.js          # Vue Router config with auth guards
+│   │   └── index.ts          # Vue Router config with auth guards
 │   ├── styles/
 │   │   └── variables.css     # ✨ Design system (CSS variables)
 │   ├── env.d.ts              # ✨ TypeScript environment declarations
 │   ├── App.vue               # Root component (layout shell)
-│   └── main.js               # App bootstrap
+│   └── main.ts               # App bootstrap
 ├── tests/                    # Vitest test suite
 │   ├── components/
 │   │   ├── UploadView.test.js
@@ -133,7 +133,7 @@ export const useChatStore = defineStore('chat', () => {
 ### Composables
 Reusable composition functions in `src/composables/`:
 - `useApi.ts` — Unified API request handling with error management
-- `useMarkdown.js` — Markdown rendering utilities (markdown-it wrapper)
+- `useMarkdown.ts` — Markdown rendering utilities (markdown-it wrapper)
 
 ### Type Definitions
 Core types defined in `src/types/`:

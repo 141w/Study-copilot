@@ -1,7 +1,15 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-const routes = [
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** 该路由是否需要登录态 */
+    requiresAuth?: boolean
+  }
+}
+
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'home',
@@ -88,9 +96,9 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
-  
+
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')
   } else {
