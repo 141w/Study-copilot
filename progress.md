@@ -274,3 +274,33 @@ None — all phases completed successfully.
 | 5 | ChatView 内联 MarkdownIt 未复用 composable | 低 | 需手动重构（ChatView.vue + useMarkdown.js） |
 
 ---
+
+---
+
+## 会话记录：2026-08-24 第三轮（REVIEW_2026-08-24 后续收尾）
+
+### 任务来源
+用户提供 REVIEW_2026-08-24.md，要求基于文档完成任务；明确**不需要推送**。
+范围 = 报告 §6「明确未做」除 push 外全部 + §4.1 温度 wart 建议。
+
+### 完成项
+| # | 内容 | 提交 |
+|---|------|------|
+| 1 | main/router/useMarkdown TS 化 + markdown-it ambient 类型声明 | 8d65757 |
+| 2 | config POST 响应温度 /10 归一化统一（§4.1 收口）+ 回归测试 | cb3fd0f |
+| 3 | tsconfig strict/noUnusedLocals/noUnusedParameters 开启 + chat store 隐性 bug 修复 | 8f136cb |
+| 4 | README 叙述性内容逐句核对修正（结构树/env 块/默认值表/分块策略/SSE/CI） | 9aceb42 |
+| 5 | 规划文件与评审文档附录收尾 | （本提交） |
+
+### 验证结果
+- 后端 pytest：**313 passed**（312 基线 + 1 新增双形态兼容用例）
+- vue-tsc --noEmit：exit 0（strict 全开后仅 4 处 TS6133，均已修复）
+- vitest：**18 passed**
+
+### 关键发现
+chat store 未 return currentSessionTitle → ChatView 四处读写静默失效
+（详见 findings.md Phase 12）；由 strict 模式 TS6133 信号定位。
+
+### 遗留
+- push 到远端待用户拍板（本地领先 origin/master 29 commits）
+- frontend/dist 为 gitignored 且为旧编译产物——部署前必须 npm run build

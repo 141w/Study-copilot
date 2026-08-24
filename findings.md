@@ -564,3 +564,46 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
 - test(backend): quiz_generate 任务链路集成测试——HTTP 建任务→队列→worker
   →QuizGenerator 打桩→题目落库→终态断言；worker 会话工厂对齐测试引擎
   （AsyncSession.bind 而非 get_bind()，后者返回同步门面不可用于 async 工厂）
+
+
+---
+
+## Phase 12: REVIEW_2026-08-24 后续收尾（2026-08-24 第三轮会话）
+
+> 任务来源：用户提供 REVIEW_2026-08-24.md，要求完成文档所列后续任务；用户明确**不需要推送**。
+
+### 修复清单
+| # | 内容 | 关键文件 | 提交 |
+|---|------|---------|------|
+| 12.A | 前端最后三个 JS 文件 TS 化，src 内 .js 清零 | main.ts / router/index.ts / useMarkdown.ts / types/markdown-it.d.ts(新) + index.html 入口 + 三份 CLAUDE/README 文件名同步 | 8d65757 |
+| 12.B | config 写入响应温度与 GET/PUT 对齐为十进制（报告 §4.1 wart 收口） | config_service.py POST 返回 /10；过时注释块重写；+1 旧双形态兼容用例 | cb3fd0f |
+| 12.C | tsconfig strict + noUnusedLocals/noUnusedParameters 开启 | 仅 4 处 TS6133 全部修复；顺带修复 strict 揪出的 chat store 隐性 bug | 8f136cb |
+| 12.D | README 叙述性内容逐句核对修正 | 结构树幽灵项清理、tests 清单重列、env 断裂块重建、默认值表纠正等（详见下） | 9aceb42 |
+
+### 重要发现：chat store 隐性 bug（strict 模式揪出）
+- useChatStore 从未 return currentSessionTitle，但 ChatView.vue 在四处读写它：
+  模板 L10（头部标题）、exportChat L426（导出文件名）、newChat L462（清空）、
+  loadSession L468（切换恢复）
+- 运行时表现：标题恒不显示、导出文件名恒为"对话"、新会话/切换会话的标题
+  读写全部静默落空——TS6133 "declared but never read" 正是它未进 return 的信号
+- 修复：加入 store return 对象即恢复全部行为，无其他联动改动
+
+### README 核对要点（逐句 vs 源码事实）
+- 幽灵树项删除：core/config.py 与 core/exceptions.py（均已不存在）、根级
+  alembic//tests/（实际位于 backend/ 下）、study_copilot.db（PG-only 项目无此文件）
+- tests 树原列 test_document/test_chat/test_notes/test_courses/test_transform/
+  test_encryption/test_url_extractor 全部不存在 → 按 backend/tests 真实 15 个文件重列
+- env 示例块围栏断裂（原第 410 行提前闭合致后半段裸文本渲染）→ 整块重建，
+  并清除与 PostgreSQL 安装指引矛盾的 sqlite+aiosqlite/all-MiniLM 陈旧值
+- Settings 默认值表 4 处纠正：OPENAI_BASE_URL=api.openai.com/v1、
+  OPENAI_MODEL=gpt-3.5-turbo、EMBEDDING_MODEL=text2vec-base-chinese、
+  DATABASE_URL=postgresql+asyncpg://...；补 EMBEDDING_DIMENSION 行
+- 分块策略"两种"→三种（HierarchicalChunker 补行）；SSE 描述对齐实现
+  （StreamingResponse + 原生 fetch ReadableStream，无 EventSourceResponse/
+  fetchEventSource）；CI 触发分支 main/develop → master；架构图 WebSocket(SSE)→SSE
+
+### 验证
+- backend pytest **313 passed**（312+1）；vue-tsc --noEmit exit 0（strict 全开）；
+  vitest **18 passed**
+- frontend/dist 为 gitignored（REVIEW §5.2 部署前 npm run build 的注意事项仍有效）
+- 未推送：本地领先 origin/master 29 commits，push 待用户拍板

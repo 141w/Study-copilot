@@ -123,6 +123,8 @@
 | C5 | BM25 索引/检索分词统一：_build_bm25() 统一 _tokenize，旧索引加载自愈 | ✅ verify_bm25.py |
 | C6 | 删除 ChatMessage.vue 孤儿组件 + 测试 + 文档同步 | ✅ |
 
+> 注：Phase 11 详情见文件末尾追加段。 |
+
 #### D 后端 E2E 冒烟 (complete)
 - study-c 环境真实启动 backend:8000 + httpx 冒烟脚本（/tmp/e2e_smoke.py）
 - **9/9 PASSED**：P0-1 .txt 上传解析、P0-2 SSE 首事件 session + 多轮同 session_id、P0-3 topic 文件名、P0-4 简答/选择判分
@@ -135,3 +137,30 @@
 
 #### F Git 提交 (pending — 用户决策)
 - 建议拆分：①P0 五修+测试 ②P1 批次+测试 ③文档/计划文件
+
+---
+
+### 12. REVIEW_2026-08-24 后续收尾（2026-08-24 第三轮会话）(complete)
+依据 REVIEW_2026-08-24.md §6「明确未做」+ §4.1 建议，**不推送远端**（用户指示）：
+
+#### 12.A 前端剩余 JS 文件 TS 化 (complete)
+- main.js / router/index.js / useMarkdown.js → .ts（收益递减项，本轮完成）
+
+#### 12.B config 写入响应温度归一化统一 (complete)
+- §4.1 wart：POST 响应体 temperature 返回存储原值（PUT/GET 本已正确）
+- POST 返回改为 /10 + 双形态兼容回归测试（cb3fd0f）
+
+#### 12.C tsconfig strict 开启 (complete)
+- strict/noUnusedLocals/noUnusedParameters 全开，仅 4 处 TS6133 已修；
+  揪出 chat store 未暴露 currentSessionTitle 的隐性 bug（8f136cb）
+
+#### 12.D README 叙述性内容核对 (complete)
+- 结构树幽灵项/tests 清单/env 断裂块/默认值表/分块策略数/SSE/CI 分支修正（9aceb42）
+
+#### 12.E 全量验证 + 提交（无 push）(complete)
+- pytest 313 passed / vue-tsc(strict) exit 0 / vitest 18 passed
+- 4 个逻辑 commit 落库；push 按用户指示保留待拍板
+
+---
+### 11. Phase 11 P2/P3 收尾（2026-08-24 会话）(complete)
+- 见 findings.md Phase 11 与 REVIEW_2026-08-24.md；12 commits 已落库，push 待用户拍板
