@@ -612,3 +612,14 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
 - 新增 scripts/e2e_config_notes_smoke.py：起 PG+后端后实测——
   config 三端温度一致（POST=GET=PUT 十进制 + legacy 7→0.7 兼容）✅；
   笔记语义搜索 top1 正确命中（score≈0.68）、删除即失效 ✅ → **ALL PASSED**
+
+### 功能面真机验证追加（用户要求"尽可能免人工"）
+- 新增 frontend/tests/stores/chat.title.test.js（2 用例）：把 ChatView 标题
+  bug 固化为 store 级回归测试，浏览器人工检查点解除 ✅
+- 新增 scripts/e2e_features_smoke.py 并实测 **ALL PASSED**：
+  - URL 导入：脚本内起本地受控 HTTP 服务托管文章页，trafilatura 提取
+    →文档 ready ✅（消除外网不确定性）
+  - TTS：voices 分组正常；合成音频流 15984B 合法 MP3 魔数 ✅
+  - LLM 段（chat ask / 转换×N / 真实出题判分）：**设计为 Key 门控**——
+    .env 无 Key（用户真实 Key 加密存库不可取用），本段合法 SKIP；
+    之后任意时刻 export SMOKE_LLM_API_KEY=sk-xxx 重跑即自动全测

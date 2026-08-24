@@ -310,3 +310,14 @@ chat store 未 return currentSessionTitle → ChatView 四处读写静默失效
 ### 遗留
 - push 到远端待用户拍板（本地领先 origin/master 30 commits）
 - 浏览器端手动检查点：ChatView 头部标题显示/新会话清空/切换会话恢复（API 层无法覆盖）
+
+### 第五小节：功能面自动化验证（同日续）
+| 项 | 方式 | 结果 |
+|---|------|------|
+| ChatView 标题 bug | vitest 回归测试 chat.title.test.js | 2/2 passed ✅ |
+| URL 导入 | 本地受控网页 + trafilatura | doc ready ✅ |
+| TTS 音频流 | Edge TTS 实合成 | 15984B 合法 MP3 ✅ |
+| LLM 全链路 | SMOKE_LLM_API_KEY 门控 | 无 Key 合法 SKIP ⏸ |
+
+脚本：scripts/e2e_features_smoke.py（ALL PASSED）；后端进程已回收。
+剩余唯一人工项：配一个 LLM Key 跑 LLM 段（可选）。
