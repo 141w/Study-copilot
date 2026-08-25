@@ -351,3 +351,7 @@ pytest.ini addopts + CI 双处落地，fail-under=65；基线 68.17%；全量 32
 ### 第十一小节：LLM 决策链有界超时（用户质疑驱动）
 SSE 中间件清白确认；真凶=connect 无界×多跳。三跳 wait_for(10s)+connect8+
 chat.py error/done 兜底；reranker 本地优先。黑洞环境 20s 收尾，323 passed。
+
+### 第十二小节：LLM 效果回归实测 PASS（同日终章）
+用户提供 SiliconFlow Key → e2e_features_smoke 全链路 ALL PASSED。
+至此前九轮优化清单全部闭环。本地领先 origin/master 51 commits。

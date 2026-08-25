@@ -674,3 +674,11 @@ pytest 307 ✅ / vitest 18 ✅ / vue-tsc 0 err ✅ / e2e_tasks_smoke PASS ✅
 - 真凶：llm 客户端 connect 无显式上限 + 多决策跳无界。修复后黑洞环境
   全流程 20s 有界收尾（session→thinking→answer→done）
 - 附带修复：reranker CrossEncoder 改本地优先加载（BUG-1 同模式第三处）
+
+### LLM 效果回归实测通过（用户提供 SiliconFlow Key，2026-08-24）
+- 模型：deepseek-ai/DeepSeek-V4-Flash；直答/转换×8/出题/判分全链路 ✓
+- 关键发现：QuizResp 有意不下发 answer（防作弊），冒烟已改为元验证；
+- 简答裁判能给出具体判定理由（识别改写句未覆盖召回-生成流程）——
+  语义裁判真实有效而非摆设
+- 遗留观察：tiny txt 的 RAG 直答回退到"未找到"文案（检索相关性或
+  grader 判定偏保守），属效果调优范畴非功能故障
