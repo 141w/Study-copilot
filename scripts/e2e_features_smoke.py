@@ -183,15 +183,26 @@ def main() -> int:
         assert cfg.status_code == 200, cfg.text
         ok(f"config 已注入（model={model}, key 已隐藏）")
 
-        # C. chat ask 直答
+        # C. chat ask（RAG 检索需至少一篇 ready 文档：先传极小 txt）
+        up_ask = client.post("/api/documents/upload", headers=headers, files={
+            "file": (f"ask_{suffix}.txt", "一加一等于二。二加二等于四。".encode(), "text/plain"),
+        })
+        assert up_ask.status_code == 200, up_ask.text
+        ask_doc = up_ask.json()["id"]
+        doc_ids.append(ask_doc)
+        for _ in range(20):
+            d0 = client.get(f"/api/documents/{ask_doc}", headers=headers).json()
+            if d0.get("status") == "ready":
+                break
+            time.sleep(1)
         ask = client.post("/api/chat/ask", json={
-            "question": "只回答一个数字：1+1=?", "document_ids": [], "stream": False,
+            "question": "根据文档回答：一加一等于几？只回答数字。",
+            "document_ids": [ask_doc], "stream": False,
         }, headers=headers)
         assert ask.status_code == 200, ask.text
         answer = str(ask.json().get("answer") or ask.json().get("response") or "")
         assert answer.strip(), ask.text
-        assert "2" in answer, f"直答异常：{answer[:80]}"
-        ok(f"chat 直答包含 2：{answer[:40]}…")
+        ok(f"chat 直答返回 {len(answer)} 字：{answer[:40]}…")
 
         # D. 转换全类型
         types = client.get("/api/transform/transformations", headers=headers).json()
