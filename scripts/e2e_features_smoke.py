@@ -248,19 +248,24 @@ def main() -> int:
         assert len(quizzes) >= 2, f"出题数量不足：{len(quizzes)}"
         choice = next((q for q in quizzes if q["question_type"] == "choice"), None)
         short = next((q for q in quizzes if q["question_type"] == "short_answer"), None)
-        assert choice and choice.get("answer"), f"选择题缺失：{choice}"
-        self_ans = client.post("/api/quiz/submit",
-                               json={"quiz_id": choice["id"], "user_answer": choice["answer"]},
+        # 服务端不下发答案（防作弊）；用 submit 回传的 correct_answer 做元验证：
+        # 探测 → 判对 → 判错，三步覆盖判分正向与负向路径
+        letters = sorted({o.strip()[0] for o in (choice.get("options") or []) if o and o.strip()})
+
+        def _submit(letter):
+            return client.post("/api/quiz/submit",
+                               json={"quiz_id": choice["id"], "user_answer": letter},
                                headers=headers).json()
-        assert self_ans["is_correct"] is True, f"自答判错：{self_ans}"
-        ok(f"选择自答({choice['answer']})判对")
-        opts = choice.get("options") or []
-        wrong = next((o[0] for o in opts if o and o[0] != choice["answer"][:1]), "Z")
-        wrong_ans = client.post("/api/quiz/submit",
-                                json={"quiz_id": choice["id"], "user_answer": wrong},
-                                headers=headers).json()
-        assert wrong_ans["is_correct"] is False, f"错误选项被判对：{wrong_ans}"
-        ok(f"错误选项({wrong})判错")
+
+        probe = _submit(letters[0])
+        correct_letter = probe["correct_answer"].strip()[:1]
+        hit = _submit(correct_letter)
+        assert hit["is_correct"] is True, f"正确答案({correct_letter})被判错：{hit}"
+        ok(f"正确答案({correct_letter})判对")
+        wrong_letter = next(l for l in letters if l != correct_letter)
+        miss = _submit(wrong_letter)
+        assert miss["is_correct"] is False, f"错误选项({wrong_letter})被判对：{miss}"
+        ok(f"错误选项({wrong_letter})判错；服务端答案={probe['correct_answer']}")
         if short:
             # 语义等价改写（非原文照抄），考察 LLM 裁判而非字符串匹配
             paraphrase = ("向量数据库用来存放高维向量并做相似度检索，"
