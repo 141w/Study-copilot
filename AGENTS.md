@@ -49,7 +49,6 @@ This file provides architectural guidance for contributors working on Study Copi
 ### Outstanding Items
 - test_document_service.py 依赖 faiss/docling 导入链，本地轻量环境跑不了，由 CI 全量验证
 - uv.lock 需在依赖变更后手动运行 `cd backend && uv lock` 再生
-- TTS 输出目录仍与 uploads 混用，可拆分独立子目录 + 定期清理
 
 ### Resolved Since 2026-08-17（详见 remaining_issues.md）
 - BM25 索引/检索分词统一 _tokenize()（C5），旧索引加载自愈
