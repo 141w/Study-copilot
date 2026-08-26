@@ -8,6 +8,9 @@ htmlcov/
 *.egg-info
 dist/
 build/
+.venv/
+backend/.venv/
+uv.lock
 
 # Data
 backend/.embedding_cache/

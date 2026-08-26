@@ -7,10 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for accurate dependency resolution
-COPY pyproject.toml .
+# Install uv for accurate dependency resolution.
+# Non-editable install: an -e install would leave a stale .pth pointing at
+# /build in the runtime stage, where that path no longer exists.
+COPY pyproject.toml ./
+COPY app/ ./app/
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system --prefix=/install -e .
+    uv pip install --system --prefix=/install .
 
 # ---- Runtime Stage ----
 FROM python:3.11-slim
