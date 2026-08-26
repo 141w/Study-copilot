@@ -1,0 +1,47 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.coverage
+htmlcov/
+*.egg-info
+dist/
+build/
+
+# Data
+backend/.embedding_cache/
+backend/uploads/
+backend/vectorstore/
+backend/tests/
+
+# Version control
+.git
+.gitignore
+
+# CI/CD
+.github/
+
+# Documentation (keep README)
+*.md
+!README.md
+
+# Frontend
+frontend/
+node_modules/
+
+# Reference projects
+open-notebook-main/
+
+# Backups
+backups/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
