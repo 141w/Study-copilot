@@ -19,7 +19,9 @@ from app.config import settings
 from app.db import ensure_current_schema, get_current_revision, run_migrations, stamp_head
 from app.exception_handlers import setup_exception_handlers
 
-logging.basicConfig(level=logging.INFO)
+from app.core.logger import setup_logging
+
+setup_logging(debug=settings.debug)
 logger = logging.getLogger(__name__)
 
 
@@ -64,6 +66,13 @@ app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=li
 
 setup_exception_handlers(app)
 
+# Trace-id propagation (pure ASGI, SSE-safe): echoes X-Trace-ID +
+# X-Process-Time-Ms, feeds the id to structured logs via ContextVar.
+from app.middleware.trace import TraceIdMiddleware
+
+app.add_middleware(TraceIdMiddleware)
+
+
 @app.middleware("http")
 async def set_security_headers(request: Request, call_next):
     """基础安全响应头（对 API/静态/SSE 均生效，不影响流式传输）。"""
@@ -107,4 +116,22 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    """Liveness + dependency readiness (DB ping)."""
+    checks = {}
+    try:
+        from sqlalchemy import text
+
+        from app.db import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as e:  # noqa: BLE001 - health must never raise
+        logger.warning("Health check DB failure: %s", e)
+        checks["database"] = f"error: {e}"
+
+    return {
+        "status": "healthy" if checks.get("database") == "ok" else "degraded",
+        "version": settings.app_version,
+        "checks": checks,
+    }
