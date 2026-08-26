@@ -23,9 +23,9 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ---
 
-## Current State (2026-08-17)
+## Current State (2026-08-25)
 
-- **Git**: `master` 分支，领先 origin 9 个 commit，工作区干净
+- **Git**: `master` 分支（含优化计划 v2 全部落地提交），待推送远端
 - **Changelog**: `CHANGELOG_2026-08-17.md`（8 commit，约 70 文件）
 - **Ports**: 前端 3000，后端 8000
 - **Frontend**: Vue3 + Vite + TypeScript + Pinia + TailwindCSS + GSAP
