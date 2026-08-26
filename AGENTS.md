@@ -13,7 +13,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - **内容转换**: 8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释）
 - **URL 导入**: 从网页链接提取内容
 - **TTS 语音**: Edge TTS 朗读答案和笔记
-- **异步任务**: 批量操作，后台任务队列（in-process asyncio）
+- **异步任务**: 批量操作，持久化任务队列（pending 行落库、worker 轮询认领、看门狗超时、重启自动恢复孤儿任务）
 - **凭证加密**: Fernet 加密存储 API Key
 - **数据库迁移**: Alembic
 - **CI/CD**: GitHub Actions
@@ -30,6 +30,10 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Ports**: 前端 3000，后端 8000
 - **Frontend**: Vue3 + Vite + TypeScript + Pinia + TailwindCSS + GSAP
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL 16+ + FAISS + sentence-transformers
+- **打包**: backend/pyproject.toml（hatchling）+ uv.lock（192 包锁定）；requirements.txt 为兼容层
+- **CI**: uv 安装依赖 + ruff lint + 覆盖率门禁 65% + 前端 vue-tsc/build/vitest 全链路
+- **可观测性**: 结构化 JSON 日志（生产）/ 文本（开发）+ X-Trace-ID 纯 ASGI 追踪中间件 + /health DB 探测
+- **Docker**: 多阶段构建、非 root 运行、healthcheck；.dockerignore 收敛构建上下文
 
 ### Recent Changes (2026-08-17)
 
@@ -43,9 +47,14 @@ This file provides architectural guidance for contributors working on Study Copi
 8. **B Hybrid** (part of 02eae49/55d8502): vector_store.py 新增 _tokenize()，支持 jieba 中文分词 + BM25+FAISS+RRF
 
 ### Outstanding Items
-- BM25 jieba 分词仅用于 search 时，索引时 rank_bm25 内部有自有 tokenizer（需确认实际效果）
-- 异步任务队列目前是内存队列，server 重启会丢失未完成的任务（可添加重启时标记 running→failed）
-- CourseDetailView.vue 的文档 tab 模板恢复后需确认模板正确性
+- test_document_service.py 依赖 faiss/docling 导入链，本地轻量环境跑不了，由 CI 全量验证
+- uv.lock 需在依赖变更后手动运行 `cd backend && uv lock` 再生
+- TTS 输出目录仍与 uploads 混用，可拆分独立子目录 + 定期清理
+
+### Resolved Since 2026-08-17（详见 remaining_issues.md）
+- BM25 索引/检索分词统一 _tokenize()（C5），旧索引加载自愈
+- 任务队列持久化：pending 落库 + worker 轮询 + recover_interrupted_tasks 接入 lifespan（C4）
+- CourseDetailView 文档 tab、analysis/wrong 方法语义、pytest-asyncio loop_scope 迁移均已完成
 
 ---
 
