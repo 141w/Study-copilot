@@ -26,10 +26,13 @@ WORKDIR /app
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy application code
+# Copy application code.
+# Host trees may carry restrictive modes (e.g. 600); normalize so the
+# non-root runtime user can read every source file.
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
+RUN chmod -R a+rX /app
 
 # Create data directories with proper ownership
 RUN mkdir -p uploads vectorstore && \
