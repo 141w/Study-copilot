@@ -25,7 +25,7 @@ class Embedder:
     def __init__(self, model_name=None, cache_dir: str = "./.embedding_cache"):
         self.model_name = model_name or settings.embedding_model
         self.dimension = settings.embedding_dimension
-        self._model = None
+        self._model: SentenceTransformer | None = None
         self._cache_dir = Path(cache_dir)
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache: dict = {}

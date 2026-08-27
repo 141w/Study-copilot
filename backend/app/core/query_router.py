@@ -64,7 +64,7 @@ class QueryRouter:
         "分析结果："
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     async def analyze(

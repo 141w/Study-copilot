@@ -26,7 +26,7 @@ class QuizGenerator:
 
 文档：{context[:500]}"""
         try:
-            resp = await self.llm.generate(prompt)
+            resp = await self.llm.generate(prompt) or ""
             match = re.search(r"\[[\s\S]+\]", resp)
             if match:
                 data = json.loads(match.group())
@@ -51,7 +51,7 @@ class QuizGenerator:
 
 文档：{context[:500]}"""
         try:
-            resp = await self.llm.generate(prompt)
+            resp = await self.llm.generate(prompt) or ""
             match = re.search(r"\[[\s\S]+\]", resp)
             if match:
                 data = json.loads(match.group())

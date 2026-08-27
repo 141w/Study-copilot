@@ -9,7 +9,6 @@ Adaptive Retriever — 根据查询复杂度自适应选择检索策略
 """
 
 import asyncio
-
 import logging
 from enum import Enum
 

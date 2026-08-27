@@ -18,13 +18,20 @@
 
 | # | 问题 | 位置 | 具体原因 |
 |---|------|------|---------|
+| 12 | **迁移链空库不可跑通（存量）** | backend/alembic/versions/f26617cd474b_initial_schema.py | 初始迁移 upgrade() 为 `pass` 占位，表全靠启动时 ensure_current_schema() 建出；对空库 `alembic upgrade head` 会在中途 ALTER 时报 no such table。生产实例均为先建库再 stamp_head，不受影响；仅影响"从零用纯迁移链装库"的场景。修复需补写真实的 initial schema 或接受 create_all 路径为唯一初始化方式 |
 | （无） | — | — | 原 #10/#11 已于 2026-08-24 前修复（f2d6a0b / 4e56ca4） |
+
+> 备注：2026-08-27 已实证 ORM 类型化重写零 schema 变化——对 HEAD 版与当前版
+> database.py 分别渲染全部 23 条 DDL 并逐条对比，完全一致。
 
 ## ✅ 本次已修复（不再存在的问题）
 
 | 问题 | 状态 |
 |------|------|
 | mypy 门禁形同虚设（strict 配置 + 插件名错误，从未真正运行） | ✅ 2026-08-27 渐进落地：插件名 pydantic.mypy 修正；ORM 全量迁移 Mapped[]/mapped_column（消 78% 错误）；16 处真类型问题修复；CI 接入 `mypy app` 硬门禁 |
+| 测试套全量跑 8 失败 + 37 错误（此前从未被任何环境跑通过） | ✅ 2026-08-27 根因四项全修：①pytest.ini 静默遮蔽 pyproject 致 loop_scope=session 未生效（已删，统一配置源）；②session 引擎 + 函数级循环跨循环污染（测试统一 session 循环）；③测试间共享库无隔离（conftest 加 autouse 清表 fixture）；④盲写测试缺陷（trace 用同步 callable 当 ASGI send、metrics 直连真实 PG、purge 传参错位、mock 缺 AsyncMock）。终态 379 passed / 0 failed，覆盖率 69.8% |
+| LLM 空回复（content=None）静默传入 re.search | ✅ 2026-08-27 llm.chat 收敛为非空 str 契约，quiz_generator/quiz_service 四处调用补防护；同暴露于严格名单扩容（llm/query_router 已入名单） |
+| numpy 2.x PEP 695 桩与 python_version=3.11 冲突 | ✅ 2026-08-27 override follow_imports=skip + follow_imports_for_stubs；项目升级 3.12+ 后可删除该段恢复完整类型 |
 | analysis/wrong 是 POST 但无请求体（#10） | ✅ f2d6a0b：改为 GET /api/analysis/wrong，前端调用点同步 |
 | conftest event_loop fixture 弃用风险（#11） | ✅ 4e56ca4：asyncio_default_fixture_loop_scope = "session" 配置化迁移 |
 | P0-1 URL 导入永远失败（.txt 无解析器） | ✅ 2026-08-19 TextParser（多编码探测+段落分页），注册 .txt/.md/.markdown |

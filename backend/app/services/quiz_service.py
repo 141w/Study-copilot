@@ -211,7 +211,7 @@ async def _judge_short_answer(
             correct_answer=correct_ans,
             user_answer=user_ans,
         )
-        resp = await llm.generate(prompt, temperature=0.0, max_tokens=200)
+        resp = await llm.generate(prompt, temperature=0.0, max_tokens=200) or ""
 
         match = re.search(r"\{[\s\S]*\}", resp)
         if match:

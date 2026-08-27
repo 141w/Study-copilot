@@ -19,6 +19,21 @@ async def test_engine():
     await engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+async def _clean_tables(test_engine):
+    """每个测试结束后清空全部业务表。
+
+    session 级引擎意味着所有测试共享同一个 SQLite 库；不清理时，
+    前序测试遗留的固定主键（用户/任务 id）会让后续测试撞
+    UNIQUE/FK 约束，且只在全量跑时暴露（单文件跑是干净库，
+    这正是 2026-08-27 之前"单独绿、全量炸"的根因）。
+    """
+    yield
+    async with test_engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
+
+
 @pytest.fixture
 async def db_session(test_engine):
     async_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)

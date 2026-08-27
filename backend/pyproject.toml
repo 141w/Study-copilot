@@ -92,9 +92,21 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.pytest.ini_options]
+# 唯一 pytest 配置源（2026-08-27：删除 pytest.ini——它静默遮蔽本节，
+# 导致 asyncio_default_fixture_loop_scope=session 从未生效，
+# session 级 fixture 挂函数级事件循环，全量跑必现跨循环 RuntimeError/IntegrityError）
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+# 测试也共用 session 级事件循环：app.db 的模块级全局 engine 连接池绑定单循环，
+# 函数级循环会在池化连接上触发 "attached to a different loop" RuntimeError，
+# 并级联出 IntegrityError 污染（2026-08-27 全量回归定位）
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# 覆盖率门禁：本地与 CI 一致强制（当前基线 ~69%，阈值随质量提升棘轮上调）
+addopts = "--cov=app --cov-report=term-missing:skip-covered --cov-fail-under=65"
 
 [tool.mypy]
 # 渐进式类型检查（2026-08-27 起步）：
@@ -106,6 +118,8 @@ testpaths = ["tests"]
 # 名单内模块必须完全注解化。CI 以 `mypy app` 为门禁。
 python_version = "3.11"
 plugins = ["pydantic.mypy"]
+# 使下方 numpy 覆盖项的 follow_imports="skip" 对 .pyi 桩文件同样生效
+follow_imports_for_stubs = true
 
 # ---- 全局基线（对全部 app/ 代码生效）----
 no_implicit_optional = true          # x=None 必须写成 Optional[x]
@@ -128,10 +142,17 @@ module = [
     "pptx",
     "jose.*",
     "cryptography.*",
-    "numpy",
     "openai",
     "aiofiles",
 ]
+ignore_missing_imports = true
+
+# numpy 2.x 自带 PEP 695（type 语句）的类型桩，要求解释器目标 ≥3.12；
+# 本项目锁定 3.11（Docker 同为 3.11-slim），故跳过其桩按 Any 处理。
+# 项目若升级到 3.12+，可删除此段以恢复 numpy 完整类型。
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"
 ignore_missing_imports = true
 
 # ---- 严格名单：新模块落地后逐个追加到这里 ----
@@ -139,6 +160,8 @@ ignore_missing_imports = true
 module = [
     "app.api.metrics",
     "app.db.database",
+    "app.core.llm",
+    "app.core.query_router",
 ]
 disallow_untyped_defs = true         # 函数必须完整注解
 disallow_incomplete_defs = true      # 半注解也不行

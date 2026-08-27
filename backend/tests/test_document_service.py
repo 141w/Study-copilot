@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import Document, User
@@ -61,7 +61,8 @@ async def test_get_document_returns_data(db_session: AsyncSession, user: User):
         mock_store = MagicMock()
         mock_store._store.chunks = []
         MockVS.return_value = mock_store
-        mock_store.load = MagicMock()
+        # get_document 对 store.load() 有 await，必须用 AsyncMock
+        mock_store.load = AsyncMock()
         result = await document_service.get_document(db_session, user, d.id)
     assert result["filename"] == "file.pdf"
 
@@ -110,5 +111,5 @@ async def test_purge_removes_old_deleted(db_session: AsyncSession, user: User):
     await db_session.commit()
     with patch('os.path.exists', return_value=True), patch('os.remove'):
         with patch('app.services.document_service.DocumentVectorStore'):
-            count = await document_service.purge_deleted_documents(db_session, user.id, older_than_days=30)
+            count = await document_service.purge_deleted_documents(db_session, user, older_than_days=30)
     assert count == 1

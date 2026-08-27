@@ -47,8 +47,12 @@ This file provides architectural guidance for contributors working on Study Copi
 8. **B Hybrid** (part of 02eae49/55d8502): vector_store.py 新增 _tokenize()，支持 jieba 中文分词 + BM25+FAISS+RRF
 
 ### Outstanding Items
-- test_document_service.py 依赖 faiss/docling 导入链，本地轻量环境跑不了，由 CI 全量验证
 - uv.lock 需在依赖变更后手动运行 `cd backend && uv lock` 再生
+- 本地测试环境（2026-08-27 起）：backend/.venv 已补齐全量依赖（含 faiss/docling/sentence-transformers），
+  `HF_HUB_OFFLINE=1 .venv/bin/python -m pytest tests/` 可本地全量跑；注意 .venv 由 conda Python 3.13 创建，
+  类型检查目标版本由 pyproject `python_version = "3.11"` 钉住（与 Docker 一致）
+- pytest 配置唯一源为 pyproject `[tool.pytest.ini_options]`（pytest.ini 已删除——它会静默遮蔽 pyproject，
+  曾导致 loop_scope=session 失效、全量测试跨循环崩溃）；uv 缓存若被沙箱拒写可加 `UV_CACHE_DIR=/tmp/uv-cache`
 
 ### Resolved Since 2026-08-17（详见 remaining_issues.md）
 - BM25 索引/检索分词统一 _tokenize()（C5），旧索引加载自愈

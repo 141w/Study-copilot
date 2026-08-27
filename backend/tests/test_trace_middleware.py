@@ -23,6 +23,16 @@ async def dummy_app(scope, receive, send):
     await send({"type": "http.response.body", "body": b"ok"})
 
 
+def make_async_recorder(messages):
+    """ASGI send 必须可 await（TraceIdMiddleware 内部 `await send(msg)`），
+    因此不能用 list.append / lambda 这类同步 callable。"""
+
+    async def _send(message):
+        messages.append(message)
+
+    return _send
+
+
 def get_response_headers(messages):
     start = next(m for m in messages if m["type"] == "http.response.start")
     return {k.decode().lower(): v.decode() for k, v in start["headers"]}
@@ -32,7 +42,7 @@ def get_response_headers(messages):
 async def test_generates_trace_id_when_missing():
     app = TraceIdMiddleware(dummy_app)
     messages = []
-    await app(make_scope(), None, messages.append)
+    await app(make_scope(), None, make_async_recorder(messages))
 
     headers = get_response_headers(messages)
     assert len(headers["x-trace-id"]) == 32  # uuid4 hex
@@ -43,7 +53,7 @@ async def test_generates_trace_id_when_missing():
 async def test_honors_incoming_trace_id():
     app = TraceIdMiddleware(dummy_app)
     messages = []
-    await app(make_scope({"X-Trace-ID": "my-trace-123"}), None, messages.append)
+    await app(make_scope({"X-Trace-ID": "my-trace-123"}), None, make_async_recorder(messages))
 
     headers = get_response_headers(messages)
     assert headers["x-trace-id"] == "my-trace-123"
@@ -72,6 +82,6 @@ async def test_trace_id_visible_to_logging_contextvar():
         await send({"type": "http.response.start", "status": 200, "headers": []})
 
     app = TraceIdMiddleware(probing_app)
-    await app(make_scope({"X-Trace-ID": "log-corr-9"}), None, lambda m: None)
+    await app(make_scope({"X-Trace-ID": "log-corr-9"}), None, make_async_recorder([]))
 
     assert captured["trace_id"] == "log-corr-9"

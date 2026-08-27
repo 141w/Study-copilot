@@ -6,11 +6,11 @@ import asyncio
 import logging
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
+from alembic import command
 from app.db.database import engine
 
 logger = logging.getLogger(__name__)
