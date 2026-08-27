@@ -1,8 +1,9 @@
-# 仍存在的问题（2026-08-24 第四轮刷新后）
+# 仍存在的问题（2026-08-27 第五轮刷新后）
 
 > 基于 findings.md 各阶段记录，排除已修复问题后的剩余清单。
-> 2026-08-24 刷新：原 #10（analysis/wrong POST→GET）已由 f2d6a0b 完成；
-> 原 #11（conftest event_loop 弃用）已由 4e56ca4 迁移至 loop_scope 配置完成；
+> 2026-08-27 刷新：mypy 渐进式类型门禁落地——ORM 全量迁移 SQLAlchemy 2.0 类型化声明，
+> `mypy app` 基线从 143 错清零并接入 CI（详见 commit 记录与 pyproject [tool.mypy] 棘轮配置）。
+> 2026-08-24 刷新：原 #10/#11 已修复，正式移入下方已修复表。
 > 本轮新增落地见 REVIEW_2026-08-24.md 附录与 findings Phase 12。
 
 ---
@@ -17,13 +18,15 @@
 
 | # | 问题 | 位置 | 具体原因 |
 |---|------|------|---------|
-| 10 | **analysis/wrong 是 POST 但无请求体** | backend/app/api/analysis.py | 接口定义接受空 body，设计上可能不规范（P3-5） |
-| 11 | **conftest event_loop fixture 弃用风险** | backend/tests/conftest.py | pytest-asyncio >= 0.23 弃用 session-scoped event_loop fixture；未来版本可能移除（P3-2） |
+| （无） | — | — | 原 #10/#11 已于 2026-08-24 前修复（f2d6a0b / 4e56ca4） |
 
 ## ✅ 本次已修复（不再存在的问题）
 
 | 问题 | 状态 |
 |------|------|
+| mypy 门禁形同虚设（strict 配置 + 插件名错误，从未真正运行） | ✅ 2026-08-27 渐进落地：插件名 pydantic.mypy 修正；ORM 全量迁移 Mapped[]/mapped_column（消 78% 错误）；16 处真类型问题修复；CI 接入 `mypy app` 硬门禁 |
+| analysis/wrong 是 POST 但无请求体（#10） | ✅ f2d6a0b：改为 GET /api/analysis/wrong，前端调用点同步 |
+| conftest event_loop fixture 弃用风险（#11） | ✅ 4e56ca4：asyncio_default_fixture_loop_scope = "session" 配置化迁移 |
 | P0-1 URL 导入永远失败（.txt 无解析器） | ✅ 2026-08-19 TextParser（多编码探测+段落分页），注册 .txt/.md/.markdown |
 | P0-2 流式对话丢多轮上下文 | ✅ 2026-08-19 后端首事件下发 session_id + 前端 chat.js 捕获 |
 | P0-3 薄弱知识点显示文档 UUID | ✅ 2026-08-19 analysis_service 映射 Document.filename |

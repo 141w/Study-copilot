@@ -13,7 +13,7 @@ backend/
 │   │   ├── document.py         # POST /upload, GET /, DELETE /{id}
 │   │   ├── chat.py             # POST /ask (stream:true), GET /history
 │   │   ├── quiz.py             # POST /generate, /submit, GET /wrong-questions
-│   │   ├── analysis.py         # POST /wrong, GET /knowledge, /progress
+│   │   ├── analysis.py         # GET /wrong, GET /knowledge, /progress
 │   │   ├── notes.py            # CRUD notes + tags + semantic search
 │   │   ├── courses.py          # CRUD course spaces, document associations
 │   │   ├── transform.py        # Content transformation endpoints (8 types)
