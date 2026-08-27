@@ -16,7 +16,24 @@ from app.core.llm import LLM
 from app.core.query_router import QueryType, query_router
 from app.core.retrieval_grader import retrieval_grader
 from app.core.template_manager import render_template
-from app.core.vector_store import DocumentVectorStore
+from app.core.vector_store import DocumentVectorStore, result_relevance
+from app.exceptions import classify_llm_error
+
+
+def _display_relevance(r: dict) -> float:
+    """统一的 [0,1] 相关度读取：新字段优先，旧 distance 公式兜底。"""
+    rel = result_relevance(r)
+    if rel is not None:
+        return float(rel)
+    return 1.0 / (1.0 + r.get("distance", 1))
+
+
+def _relevance_sort_key(r: dict):
+    """降序相关度排序键；无新字段的旧结果回退为升序距离。"""
+    rel = result_relevance(r)
+    if rel is not None:
+        return (0, -rel)
+    return (1, r.get("distance", float("inf")))
 
 
 def extract_source_indices(text: str) -> list[int]:
@@ -227,7 +244,7 @@ class RAGEngine:
                 "page": page,
                 "source": chunk.get("source", ""),
                 "text": chunk.get("text", ""),
-                "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
+                "relevance_score": _display_relevance(r),
             })
 
         return {
@@ -241,7 +258,8 @@ class RAGEngine:
     def deduplicate_results(self, results: list[dict]) -> list[dict]:
         """Deduplicate chunks with >90% text overlap (first 100 chars match).
 
-        When two chunks overlap, keep the one with lower distance (higher relevance).
+        When two chunks overlap, keep the more relevant one
+        （统一 [0,1] 相关度比较，兼容旧 distance 语义）。
         """
         if not results:
             return results
@@ -256,12 +274,11 @@ class RAGEngine:
                 deduped.append(r)
                 continue
 
-            dist = r.get("distance", float("inf"))
+            score = _display_relevance(r)
             if prefix in seen_prefixes:
                 existing = seen_prefixes[prefix]
-                existing_dist = existing.get("distance", float("inf"))
-                if dist < existing_dist:
-                    # Replace with the more relevant (lower distance) result
+                if score > _display_relevance(existing):
+                    # Replace with the more relevant (higher relevance) result
                     deduped.remove(existing)
                     deduped.append(r)
                     seen_prefixes[prefix] = r
@@ -280,10 +297,22 @@ class RAGEngine:
             store = await self._get_vector_store(doc_id)
             results = await store.search(query, fetch_k)
             all_results.extend(results)
-        all_results.sort(key=lambda x: x.get("distance", float("inf")))
+        all_results.sort(key=_relevance_sort_key)
 
-        # Fix 3: Filter out low-relevance results (distance > 0.85)
-        all_results = [r for r in all_results if r.get("distance", float("inf")) <= 0.85]
+        # Fix 3（2026-08-27 修订）：三种 store 的 distance 语义不一致——
+        # Hybrid 的 1-RRF 恒≈0.97+，旧绝对阈值 <=0.85 会把全部结果误杀，
+        # 导致任何文档问答都返回"没找到"。现按字段类型分族判定：
+        #   FAISS（含 similarity）沿用原阈值 sim>=0.15；
+        #   BM25/Hybrid 使用批内归一相关度，仅滤除零信号噪声。
+        def _relevant(r) -> bool:
+            if "similarity" in r:
+                return r["similarity"] >= 0.15
+            rel = result_relevance(r)
+            if rel is not None:
+                return rel > 1e-6
+            return r.get("distance", float("inf")) <= 0.85
+
+        all_results = [r for r in all_results if _relevant(r)]
 
         # Deduplicate chunks with similar text content before reranking
         all_results = self.deduplicate_results(all_results)
@@ -396,12 +425,18 @@ class RAGEngine:
                 base_url=llm_config.get("base_url"),
                 model=llm_config.get("model_name"),
             )
-            temperature = llm_config.get("temperature", 0.7)
-            max_tokens = llm_config.get("max_tokens")
-            answer = await llm.chat(messages, temperature=temperature, max_tokens=max_tokens)
         else:
             llm = LLM()
-            answer = await llm.chat(messages)
+        try:
+            if llm_config:
+                temperature = llm_config.get("temperature", 0.7)
+                max_tokens = llm_config.get("max_tokens")
+                answer = await llm.chat(messages, temperature=temperature, max_tokens=max_tokens)
+            else:
+                answer = await llm.chat(messages)
+        except Exception as e:
+            # 未分类的供应商异常 → 友好的类型化错误（否则表现为裸 500）
+            raise classify_llm_error(e) from e
         return answer
 
     async def generate_answer_stream(
@@ -421,14 +456,18 @@ class RAGEngine:
             )
             temperature = llm_config.get("temperature", 0.7)
             max_tokens = llm_config.get("max_tokens")
+        else:
+            llm = LLM()
+            temperature = 0.7
+            max_tokens = None
+        try:
             async for token in llm.chat_stream(
                 messages, temperature=temperature, max_tokens=max_tokens
             ):
                 yield token
-        else:
-            llm = LLM()
-            async for token in llm.chat_stream(messages):
-                yield token
+        except Exception as e:
+            # 流式场景同样映射为类型化错误，避免裸 500 中断 SSE
+            raise classify_llm_error(e) from e
 
     async def ask(self, doc_ids, query, history=None, user_config: dict | None = None):
         # 检查是否需要切换 Embedding 模型
@@ -534,7 +573,7 @@ class RAGEngine:
                     "page": page,
                     "source": chunk.get("source", ""),
                     "text": chunk_text,
-                    "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
+                    "relevance_score": _display_relevance(r),
                 }
             )
 
@@ -600,7 +639,7 @@ class RAGEngine:
                     "page": str(chunk.get("page", "")),
                     "source": chunk.get("source", ""),
                     "text": chunk.get("text", ""),
-                    "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
+                    "relevance_score": _display_relevance(r),
                 })
             yield {"type": "sources", "sources": sources_list, "filtered_sources": sources_list}
             async for token in self.generate_answer_stream(
@@ -668,7 +707,7 @@ class RAGEngine:
                     "page": page,
                     "source": chunk.get("source", ""),
                     "text": chunk_text,
-                    "relevance_score": 1.0 / (1.0 + r.get("distance", 1)),
+                    "relevance_score": _display_relevance(r),
                 }
             )
 

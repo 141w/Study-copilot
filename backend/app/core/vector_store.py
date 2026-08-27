@@ -19,6 +19,26 @@ from typing import Any
 import numpy as np
 
 
+def result_relevance(result: dict) -> float | None:
+    """统一读取检索结果的 [0,1] 相关度。
+
+    三种 store 的 ``distance`` 语义互不相同（FAISS=1-余弦、BM25=1-无界原始分、
+    Hybrid=1-RRF 融合分恒≈0.97+），直接比较或套绝对阈值会误杀结果
+    （2026-08-27 真机冒烟定位）。各 store 已在返回值中附带批内归一化的
+    ``relevance``；本函数作为唯一可信读取口：
+      - 有 ``relevance`` 直接用；
+      - 否则回退 FAISS 的 ``similarity``；
+      - 都没有则 None（调用方自行决定 legacy 行为）。
+    """
+    rel = result.get("relevance")
+    if rel is not None:
+        return max(0.0, min(1.0, float(rel)))
+    sim = result.get("similarity")
+    if sim is not None:
+        return max(0.0, min(1.0, float(sim)))
+    return None
+
+
 class BaseVectorStore(ABC):
     """
     向量存储抽象基类
@@ -142,6 +162,7 @@ class FAISSVectorStore(BaseVectorStore):
                         "chunk": self.chunks[idx],
                         "distance": float(1 - similarity),  # 转换为距离用于兼容
                         "similarity": float(similarity),
+                        "relevance": float(max(0.0, min(1.0, similarity))),
                         "index": int(idx),
                     }
                 )
@@ -276,14 +297,20 @@ class BM25VectorStore(BaseVectorStore):
         # 获取top_k索引
         top_indices = np.argsort(scores)[::-1][:top_k]
 
+        # 批内归一化相关度：BM25 原始分无上界（且可能为 0/负），不能直接当
+        # [0,1] 相关度使用；以本批最高分为基准做相对归一。
+        best = float(max(scores)) if len(scores) else 0.0
+
         results = []
         for idx in top_indices:
             if 0 <= idx < len(self.chunks):
+                rel = (float(scores[idx]) / best) if best > 0 else 0.0
                 results.append(
                     {
                         "chunk": self.chunks[idx],
                         "distance": float(1 - scores[idx]),  # 兼容旧接口
                         "bm25_score": float(scores[idx]),
+                        "relevance": float(max(0.0, min(1.0, rel))),
                         "index": int(idx),
                     }
                 )
@@ -405,14 +432,21 @@ class HybridVectorStore(BaseVectorStore):
         # 按融合分数排序
         sorted_indices = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
 
+        # 批内归一化：RRF 融合分数上限极小（k=60、双列表时 ≈0.033），
+        # 直接 1-fused 当距离会恒≈1，被下游绝对阈值误杀（2026-08-27 定位）。
+        # 以本批最高融合分为基准归一到 [0,1]，第一名=1.0。
+        best_fused = sorted_indices[0][1] if sorted_indices else 0.0
+
         results = []
         for idx, fused_score in sorted_indices:
             if 0 <= idx < len(self.chunks):
+                rel = (float(fused_score) / best_fused) if best_fused > 0 else 0.0
                 results.append(
                     {
                         "chunk": self.chunks[idx],
                         "distance": 1 - fused_score,  # 兼容
                         "fused_score": fused_score,
+                        "relevance": rel,
                         "index": idx,
                         "retrieval_type": "hybrid",
                     }

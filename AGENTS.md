@@ -48,6 +48,8 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ### Outstanding Items
 - uv.lock 需在依赖变更后手动运行 `cd backend && uv lock` 再生
+- `.env` 的 `OPENAI_MODEL` 必须使用供应商（当前 siliconflow）实际存在的模型 ID，
+  否则问答返回 validation_error"Model does not exist"——检索与外呼链路本身正常
 - 本地测试环境（2026-08-27 起）：backend/.venv 已补齐全量依赖（含 faiss/docling/sentence-transformers），
   `HF_HUB_OFFLINE=1 .venv/bin/python -m pytest tests/` 可本地全量跑；注意 .venv 由 conda Python 3.13 创建，
   类型检查目标版本由 pyproject `python_version = "3.11"` 钉住（与 Docker 一致）

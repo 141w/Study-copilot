@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from app.core.llm import LLM
+from app.core.vector_store import result_relevance
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,12 @@ class RetrievalGrader:
             return RetrievalQuality("bad", "no_results", 0.0)
 
         # ── 规则级评估 ──
-        best_distance = retrieved[0].get("distance", 1.0)
-        best_score = 1.0 / (1.0 + best_distance)
+        # 优先使用统一 [0,1] 相关度；旧结果回退 distance 换算
+        best_rel = result_relevance(retrieved[0])
+        if best_rel is not None:
+            best_score = best_rel
+        else:
+            best_score = 1.0 / (1.0 + retrieved[0].get("distance", 1.0))
 
         if best_score >= self.HIGH_RELEVANCE_THRESHOLD:
             logger.info("[Grader] High relevance (score=%.3f) → good", best_score)

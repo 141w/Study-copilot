@@ -15,8 +15,17 @@ from enum import Enum
 from app.core.llm import LLM
 from app.core.query_decomposer import query_decomposer
 from app.core.template_manager import render_template
+from app.core.vector_store import result_relevance
 
 logger = logging.getLogger(__name__)
+
+
+def _relevance_sort_key(x: dict):
+    """合并多路结果时的统一排序键：相关度降序，旧格式回退距离升序。"""
+    rel = result_relevance(x)
+    if rel is not None:
+        return (0, -rel)
+    return (1, x.get("distance", float("inf")))
 
 class RetrievalStrategy(str, Enum):
     SINGLE = "single"
@@ -139,7 +148,7 @@ class AdaptiveRetriever:
 
         merged = rag_engine.deduplicate_results(all_results)
         # 按距离排序，取 top 5
-        merged.sort(key=lambda x: x.get("distance", float("inf")))
+        merged.sort(key=_relevance_sort_key)  # 相关度降序（兼容旧距离）
         merged = merged[:5]
 
         thinking_events.append({
@@ -198,7 +207,7 @@ class AdaptiveRetriever:
             all_results.extend(results)
 
         merged = rag_engine.deduplicate_results(all_results)
-        merged.sort(key=lambda x: x.get("distance", float("inf")))
+        merged.sort(key=_relevance_sort_key)  # 相关度降序（兼容旧距离）
         merged = merged[:5]
 
         thinking_events.append({
