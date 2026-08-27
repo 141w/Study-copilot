@@ -164,7 +164,17 @@ async def get_llm_config_with_secret(
     config = result.scalar_one_or_none()
 
     if not config:
-        return {**_default_config(), "api_key": None, "base_url": None}
+        return {
+            **_default_config(),
+            "api_key": None,
+            "base_url": None,
+            # 关键（2026-08-27 真机 E2E 定位）：未保存过配置的用户不得注入
+            # 硬编码 model_name——否则 chat/quiz 走"有配置"分支，
+            # 用 "gpt-4o-mini" 这类第三方平台不存在的模型名覆盖 .env 里
+            # 管理员校准过的 settings.openai_model，导致所有问答 20012。
+            # 置 None 让 LLM 构造器回落到环境配置。
+            "model_name": None,
+        }
 
     enc = get_encryption_service()
     return {

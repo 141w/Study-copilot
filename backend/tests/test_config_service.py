@@ -81,3 +81,27 @@ async def test_temperature_legacy_multiplied_form_still_accepted(db_session: Asy
 
     fetched = await config_service.get_llm_config(db_session, user)
     assert fetched["temperature"] == pytest.approx(0.7)
+
+
+@pytest.mark.asyncio
+async def test_get_llm_config_with_secret_returns_none_model_for_new_user(
+    db_session: AsyncSession,
+):
+    """未保存过配置的用户，model_name 必须为 None（回落 .env 的 OPENAI_MODEL）。
+
+    回归背景（2026-08-27 真机 E2E）：旧实现返回硬编码 "gpt-4o-mini"，
+    使 rag_engine 走"有配置"分支、以第三方平台不存在的模型名发起调用，
+    所有无配置用户的问答全部失败（供应商 code 20012）。
+    """
+    user = User(
+        id="user-nocfg-test",
+        username="nocfg",
+        email="nocfg@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    result = await config_service.get_llm_config_with_secret(db_session, user)
+    assert result["model_name"] is None
+    assert result["api_key"] is None

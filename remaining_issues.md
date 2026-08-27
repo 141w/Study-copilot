@@ -30,7 +30,8 @@
 |------|------|
 | **RAG 问答对任何文档都返回"没有找到相关内容"**（真机冒烟发现的最高优先级缺陷） | ✅ 2026-08-27 根因修复：三种向量库的 `distance` 字段语义互不相同——Hybrid 的 distance=1-RRF 融合分恒≈0.97+，而 rag_engine 的绝对阈值 `distance<=0.85` 把全部 Hybrid 结果误杀（上传默认产出 Hybrid 索引）。修复：三 store 统一输出批内归一的 `relevance`[0,1] + `result_relevance()` 统一读取口；engine/grader/adaptive 全部切换为相关度语义，FAISS 族保留原阈值行为。新增 test_hybrid_retrieval_contract.py 锁定契约 |
 | LLM 调用异常未映射 → 用户看到裸 500 | ✅ 2026-08-27 generate_answer / generate_answer_stream 接入既有 classify_llm_error（此前该函数零调用），供应商错误现在返回类型化友好提示 |
-| .env 默认模型名在硅基流动不存在（`deepseek-ai/DeepSeek-V4-Flash` → code 20012 Model does not exist） | 📝 环境配置项非代码缺陷：将 OPENAI_MODEL 改为该平台实际存在的模型 ID 即可全功能出答案；已由真机冒烟确认外呼链路本身畅通 |
+| **无配置用户问答全部失败（供应商 code 20012 Model does not exist）** | ✅ 2026-08-27 二次真机 E2E 定位（非 .env 问题——该模型直连与 SDK 均正常，初判系误诊）：`_default_config()` 硬编码 model_name="gpt-4o-mini"，未保存配置的用户也被返回它，使 rag_engine 误走"有自定义配置"分支、以平台不存在的模型名覆盖 settings.openai_model。修复：无 DB 配置时 model_name 置 None 让 LLM 回落环境配置；新增回归测试。终态：真机问答返回带 `[来源N]` 引用与完整 sources 的真实生成内容，15/15 冒烟全过 |
+| 请求期核心模块 INFO 日志不达 stdout（[RAG]/[Grader] 行缺失，启动期日志正常） | 📝 低优先级可观测性怪癖：不影响功能；疑似 uvicorn log_config 与 import 时序交互。定位修复时以 PYTHONUNBUFFERED=1 + grep app.core 为起点 |
 | mypy 门禁形同虚设（strict 配置 + 插件名错误，从未真正运行） | ✅ 2026-08-27 渐进落地：插件名 pydantic.mypy 修正；ORM 全量迁移 Mapped[]/mapped_column（消 78% 错误）；16 处真类型问题修复；CI 接入 `mypy app` 硬门禁 |
 | 测试套全量跑 8 失败 + 37 错误（此前从未被任何环境跑通过） | ✅ 2026-08-27 根因四项全修：①pytest.ini 静默遮蔽 pyproject 致 loop_scope=session 未生效（已删，统一配置源）；②session 引擎 + 函数级循环跨循环污染（测试统一 session 循环）；③测试间共享库无隔离（conftest 加 autouse 清表 fixture）；④盲写测试缺陷（trace 用同步 callable 当 ASGI send、metrics 直连真实 PG、purge 传参错位、mock 缺 AsyncMock）。终态 379 passed / 0 failed，覆盖率 69.8% |
 | LLM 空回复（content=None）静默传入 re.search | ✅ 2026-08-27 llm.chat 收敛为非空 str 契约，quiz_generator/quiz_service 四处调用补防护；同暴露于严格名单扩容（llm/query_router 已入名单） |
