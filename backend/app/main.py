@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.analysis import router as analysis_router
 from app.api.auth import router as auth_router
+from app.api.metrics import router as metrics_router
 from app.api.chat import router as chat_router
 from app.api.config import router as config_router
 from app.api.courses import router as courses_router
@@ -113,6 +114,7 @@ app.include_router(notes_router, prefix="/api")
 app.include_router(transform_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
+app.include_router(metrics_router, prefix="/api")
 
 
 @app.get("/")
