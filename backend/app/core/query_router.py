@@ -96,7 +96,12 @@ class QueryRouter:
             logger.info("[Router] Summary keywords → SUMMARY")
             return QueryAnalysis(QueryType.SUMMARY, query_stripped)
 
-        # ── 规则 4：没有历史 → 不需要改写，直接走 LLM 分类 ──
+        # ── 规则 4：无可用 LLM → 与 _classify_intent 相同的兜底语义 ──
+        if llm is None:
+            logger.info("[Router] No LLM configured → RAG_QA with original query")
+            return QueryAnalysis(QueryType.RAG_QA, query_stripped)
+
+        # ── 规则 5：没有历史 → 不需要改写，直接走 LLM 分类 ──
         if not history or len(history) == 0:
             intent = await self._classify_intent(query_stripped, llm)
             return QueryAnalysis(intent, query_stripped)

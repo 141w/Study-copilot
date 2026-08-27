@@ -1,3 +1,12 @@
+"""SQLAlchemy 2.0 typed ORM models + async engine/session factory.
+
+2026-08-27: 全部模型从旧式 ``Column`` 声明迁移到 ``Mapped[]/mapped_column``
+类型化风格。纯类型层重构，DDL（列类型/可空性/索引/外键行为）逐字段保持不变；
+静态检查从此能直接使用真实字段类型（此前 service/api 层大量
+Column[str] vs str 误报由此根除）。
+"""
+
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from sqlalchemy import (
@@ -10,111 +19,121 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    text,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.config import settings
 
 engine = create_async_engine(settings.database_url, echo=settings.debug)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Declarative base (SQLAlchemy 2.0 风格，含类型注解映射)。"""
+
+
+def _utcnow_naive() -> datetime:
+    """统一的时间默认值：UTC 当前时刻（去 tzinfo，与既有 NOT NULL 列语义一致）。"""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True)
-    username = Column(String, unique=True, nullable=False, index=True)
-    email = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
-    is_active = Column(Boolean, default=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    username: Mapped[str] = mapped_column(String, unique=True, index=True)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    course_space_id = Column(
-        String, ForeignKey("course_spaces.id", ondelete="SET NULL"), nullable=True, index=True
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    course_space_id: Mapped[str | None] = mapped_column(
+        ForeignKey("course_spaces.id", ondelete="SET NULL"), index=True
     )
-    filename = Column(String, nullable=False)
-    file_path = Column(String, nullable=False)
-    status = Column(String, default="pending")
-    chunk_count = Column(Integer, default=0)
-    file_size = Column(Integer)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
-    vectorstore_path = Column(String, nullable=True)
+    filename: Mapped[str] = mapped_column(String)
+    file_path: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="pending")
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    file_size: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    vectorstore_path: Mapped[str | None] = mapped_column(String)
     # 软删除标记：NULL=正常；非空=回收站（文件与索引保留，可恢复）
-    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
 
 
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
-    id = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    title = Column(String, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
 
 
 class Message(Base):
     __tablename__ = "messages"
 
-    id = Column(String, primary_key=True)
-    session_id = Column(String, ForeignKey("chat_sessions.id"), nullable=False)
-    role = Column(String, nullable=False)
-    content = Column(Text, nullable=False)
-    sources = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("chat_sessions.id"))
+    role: Mapped[str] = mapped_column(String)
+    content: Mapped[str] = mapped_column(Text)
+    sources: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
 
 
 class Quiz(Base):
     __tablename__ = "quizzes"
 
-    id = Column(String, primary_key=True)
-    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
-    question_type = Column(String, nullable=False)
-    question = Column(Text, nullable=False)
-    options = Column(Text, nullable=True)
-    answer = Column(Text, nullable=False)
-    explanation = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"))
+    question_type: Mapped[str] = mapped_column(String)
+    question: Mapped[str] = mapped_column(Text)
+    options: Mapped[str | None] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    explanation: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
 
 
 class QuizResult(Base):
     __tablename__ = "quiz_results"
 
-    id = Column(String, primary_key=True)
-    quiz_id = Column(String, ForeignKey("quizzes.id"), nullable=False)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    user_answer = Column(Text, nullable=False)
-    is_correct = Column(Boolean, nullable=False)
-    submitted_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    quiz_id: Mapped[str] = mapped_column(ForeignKey("quizzes.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    user_answer: Mapped[str] = mapped_column(Text)
+    is_correct: Mapped[bool] = mapped_column(Boolean)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
 
 
 class UserLLMConfig(Base):
     __tablename__ = "user_llm_configs"
 
-    id = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, unique=True, index=True)
-    provider = Column(String, default="openrouter")
-    api_key = Column(String, nullable=True)
-    base_url = Column(String, nullable=True)
-    model_name = Column(String, default="gpt-4o-mini")
-    temperature = Column(Float, default=0.7)
-    max_tokens = Column(Integer, default=2048)
-    embedding_model = Column(String, default="shibing624/text2vec-base-chinese")
-    embedding_dimension = Column(Integer, default=768)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
-    updated_at = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id"), unique=True, index=True
+    )
+    provider: Mapped[str] = mapped_column(String, default="openrouter")
+    api_key: Mapped[str | None] = mapped_column(String)
+    base_url: Mapped[str | None] = mapped_column(String)
+    model_name: Mapped[str] = mapped_column(String, default="gpt-4o-mini")
+    temperature: Mapped[float] = mapped_column(Float, default=0.7)
+    max_tokens: Mapped[int] = mapped_column(Integer, default=2048)
+    embedding_model: Mapped[str] = mapped_column(
+        String, default="shibing624/text2vec-base-chinese"
+    )
+    embedding_dimension: Mapped[int] = mapped_column(Integer, default=768)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.now(UTC).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+        default=_utcnow_naive,
+        onupdate=_utcnow_naive,
     )
 
 
@@ -123,6 +142,7 @@ class UserLLMConfig(Base):
 note_tags = Table(
     "note_tags",
     Base.metadata,
+    # 关联表为非映射对象，沿用传统 Column 声明
     Column("note_id", String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True),
     Column("tag_id", String, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
 )
@@ -133,20 +153,22 @@ class CourseSpace(Base):
 
     __tablename__ = "course_spaces"
 
-    id = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
-    name = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-    color = Column(String, nullable=True, default="#6366f1")
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
-    updated_at = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(Text)
+    color: Mapped[str | None] = mapped_column(String, default="#6366f1")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.now(UTC).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+        default=_utcnow_naive,
+        onupdate=_utcnow_naive,
     )
 
     # relationships
-    notes = relationship("Note", back_populates="course_space", cascade="all, delete-orphan")
+    notes: Mapped[list["Note"]] = relationship(
+        back_populates="course_space", cascade="all, delete-orphan"
+    )
 
 
 class Tag(Base):
@@ -154,13 +176,15 @@ class Tag(Base):
 
     __tablename__ = "tags"
 
-    id = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
-    name = Column(String, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
 
     # relationships
-    notes = relationship("Note", secondary=note_tags, back_populates="tags")
+    notes: Mapped[list["Note"]] = relationship(
+        secondary=note_tags, back_populates="tags"
+    )
 
 
 class Note(Base):
@@ -168,25 +192,27 @@ class Note(Base):
 
     __tablename__ = "notes"
 
-    id = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
-    course_space_id = Column(String, ForeignKey("course_spaces.id"), nullable=True, index=True)
-    title = Column(String, nullable=False)
-    content = Column(Text, nullable=False, default="")
-    note_type = Column(String, default="markdown")  # markdown / plain
-    is_pinned = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
-    updated_at = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    course_space_id: Mapped[str | None] = mapped_column(
+        ForeignKey("course_spaces.id"), index=True
+    )
+    title: Mapped[str] = mapped_column(String)
+    content: Mapped[str] = mapped_column(Text, default="")
+    note_type: Mapped[str] = mapped_column(String, default="markdown")  # markdown / plain
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.now(UTC).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+        default=_utcnow_naive,
+        onupdate=_utcnow_naive,
     )
     # 软删除标记：NULL=正常；非空=回收站（可恢复）
-    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
 
     # relationships
-    course_space = relationship("CourseSpace", back_populates="notes")
-    tags = relationship("Tag", secondary=note_tags, back_populates="notes")
+    course_space: Mapped["CourseSpace | None"] = relationship(back_populates="notes")
+    tags: Mapped[list["Tag"]] = relationship(secondary=note_tags, back_populates="notes")
 
 
 class AsyncTask(Base):
@@ -194,18 +220,18 @@ class AsyncTask(Base):
 
     __tablename__ = "async_tasks"
 
-    id = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
-    task_type = Column(String, nullable=False)  # e.g., "document_process", "quiz_generate"
-    status = Column(String, default="pending")  # pending / running / completed / failed / cancelled
-    progress = Column(Float, default=0.0)  # 0.0 ~ 1.0
-    result = Column(Text, nullable=True)  # JSON-encoded result data
-    error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
-    completed_at = Column(DateTime, nullable=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    task_type: Mapped[str] = mapped_column(String)  # e.g., "document_process", "quiz_generate"
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending / running / completed / failed / cancelled
+    progress: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 ~ 1.0
+    result: Mapped[str | None] = mapped_column(Text)  # JSON-encoded result data
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
-async def get_db():
+async def get_db() -> AsyncIterator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -213,7 +239,7 @@ async def get_db():
             await session.close()
 
 
-async def init_db():
+async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

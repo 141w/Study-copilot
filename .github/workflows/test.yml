@@ -62,6 +62,11 @@ jobs:
         run: |
           uv run ruff check app/ --output-format=github || true
 
+      - name: Type check with mypy
+        working-directory: backend
+        run: |
+          uv run mypy app
+
       - name: Run backend tests with coverage
         working-directory: backend
         run: |

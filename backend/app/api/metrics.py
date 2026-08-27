@@ -7,9 +7,11 @@ is acceptable (pure gains, no API break).
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import AsyncTask, get_db
 
@@ -19,7 +21,7 @@ _STARTED_AT = datetime.now(UTC)
 
 
 @router.get("/metrics")
-async def get_metrics(db = Depends(get_db)):
+async def get_metrics(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     """Operational snapshot: app info + task breakdown by status."""
     now = datetime.now(UTC)
     uptime_sec = round((now - _STARTED_AT).total_seconds(), 1)

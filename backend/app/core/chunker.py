@@ -85,7 +85,7 @@ class MarkdownSplitter:
             return [("", None, "")]
 
         # 保护代码块：先替换为占位符
-        code_blocks = {}
+        code_blocks: dict[str, str] = {}
 
         def _save_codeblock(m):
             key = f"__CODEBLOCK_{len(code_blocks)}__"
@@ -209,7 +209,7 @@ class FixedChunker(BaseChunker):
 
     def split_sentences(self, text: str) -> list[str]:
         """按句子分割文本（含4级fallback）"""
-        sentences = []
+        sentences: list[str] = []
 
         # 方法1: 匹配中英文句子结束符
         parts = self.SENTENCE_RE.split(text)
@@ -279,7 +279,7 @@ class FixedChunker(BaseChunker):
         if not sentences:
             return []
         total = 0
-        take = []
+        take: list[str] = []
         for sent in reversed(sentences):
             take.insert(0, sent)
             total += len(sent)
@@ -527,8 +527,8 @@ class SemanticChunker(BaseChunker):
 
     def _split_large_chunk(self, sentences: list[str]) -> list[str]:
         """将大块分割成小块"""
-        chunks = []
-        current = []
+        chunks: list[str] = []
+        current: list[str] = []
         size = 0
 
         for sent in sentences:
@@ -536,7 +536,7 @@ class SemanticChunker(BaseChunker):
             if size + sz > self.max_chunk_size and current:
                 chunks.append(" ".join(current))
                 # 语义块内部也做句级 overlap
-                ov = []
+                ov: list[str] = []
                 ov_size = 0
                 for s in reversed(current):
                     ov.insert(0, s)
@@ -574,7 +574,7 @@ class SemanticChunker(BaseChunker):
             page_counts[p] = page_counts.get(p, 0) + 1
         if not page_counts:
             return page_markers[min(sent_start, len(page_markers) - 1)]
-        return max(page_counts, key=page_counts.get)
+        return max(page_counts, key=lambda k: page_counts[k])
 
     async def chunk_document(
         self,
@@ -677,7 +677,8 @@ class HierarchicalChunker(BaseChunker):
             "parent_id": "doc_0",
         }
         """
-        # 选择父块生成器
+        # 选择父块生成器（两种实现接口一致，仅分块策略不同）
+        parent_chunker: SemanticChunker | FixedChunker
         if self.use_semantic_parent:
             parent_chunker = SemanticChunker(
                 min_chunk_size=self.min_chunk_size,

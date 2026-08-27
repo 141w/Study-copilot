@@ -82,7 +82,8 @@ class FAISSVectorStore(BaseVectorStore):
 
     def __init__(self, dimension: int = 384):
         super().__init__(dimension)
-        self._index = None
+        # faiss 无类型桩（Any）：实际为 faiss.IndexFlatIP 实例，_init_index() 必然赋值
+        self._index: Any = None
         self._init_index()
 
     def _init_index(self):
@@ -492,7 +493,8 @@ class DocumentVectorStore:
         self.retrieval_type = retrieval_type
         self.dimension = settings.embedding_dimension
 
-        # 根据类型创建向量库
+        # 根据类型创建向量库（三种实现共享 BaseVectorStore 接口，load() 时可能整体替换）
+        self._store: BaseVectorStore
         if retrieval_type == self.RETRIEVAL_TYPE_BM25:
             self._store = BM25VectorStore()
         elif retrieval_type == self.RETRIEVAL_TYPE_FAISS:

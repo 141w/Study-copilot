@@ -44,6 +44,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0.0",
     "httpx>=0.26.0",
+    "mypy>=1.8.0",
 ]
 
 [build-system]
@@ -96,6 +97,49 @@ asyncio_default_fixture_loop_scope = "session"
 testpaths = ["tests"]
 
 [tool.mypy]
+# 渐进式类型检查（2026-08-27 起步）：
+# 存量代码 ~357 个函数几乎无类型注解，一次性 strict 会产生数百错误、形同虚设。
+# 策略（棘轮式，只紧不松）：全局先立"有意义的宽松基线"——
+#   - 所有被 import 的模块照常全量分析（含无注解函数体）
+#   - 禁止隐式 Optional；已用 cast/ignore 处必须真实有效
+# 新写/重构的模块逐个加入下方 overrides 的严格名单；
+# 名单内模块必须完全注解化。CI 以 `mypy app` 为门禁。
 python_version = "3.11"
-strict = true
-plugins = ["pydantic"]
+plugins = ["pydantic.mypy"]
+
+# ---- 全局基线（对全部 app/ 代码生效）----
+no_implicit_optional = true          # x=None 必须写成 Optional[x]
+warn_unused_ignores = true           # type: ignore 用不上了要报（防腐烂）
+warn_redundant_casts = true          # 冗余 cast 要报
+check_untyped_defs = true            # 无注解函数体也做类型核查
+
+# ---- 第三方库缺类型桩：放行为 Any ----
+[[tool.mypy.overrides]]
+module = [
+    "faiss",
+    "jieba",
+    "rank_bm25",
+    "sentence_transformers",
+    "docling.*",
+    "edge_tts",
+    "trafilatura",
+    "fitz",
+    "docx",
+    "pptx",
+    "jose.*",
+    "cryptography.*",
+    "numpy",
+    "openai",
+    "aiofiles",
+]
+ignore_missing_imports = true
+
+# ---- 严格名单：新模块落地后逐个追加到这里 ----
+[[tool.mypy.overrides]]
+module = [
+    "app.api.metrics",
+    "app.db.database",
+]
+disallow_untyped_defs = true         # 函数必须完整注解
+disallow_incomplete_defs = true      # 半注解也不行
+warn_return_any = true               # 返回 Any 要显式

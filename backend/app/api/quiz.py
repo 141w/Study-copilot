@@ -87,8 +87,8 @@ async def generate_quizzes(
         db,
         current_user,
         req.document_ids,
-        req.choice_count,
-        req.short_answer_count,
+        req.choice_count if req.choice_count is not None else 3,
+        req.short_answer_count if req.short_answer_count is not None else 2,
         req.config,
     )
     return QuizGenResp(quizzes=[QuizResp(**q) for q in quizzes])

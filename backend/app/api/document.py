@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +52,8 @@ async def upload(
         raise RateLimitError("请求过于频繁，请稍后再试")
 
     content = await file.read()
+    if not file.filename:
+        raise HTTPException(status_code=422, detail="上传文件缺少文件名")
     result = await document_service.upload_document(db, current_user, file.filename, content)
     return DocProcessResponse(**result)
 

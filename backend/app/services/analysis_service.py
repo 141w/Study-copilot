@@ -3,6 +3,7 @@ Analysis service — weakness analysis, knowledge stats, progress tracking.
 """
 
 from collections import defaultdict
+from operator import itemgetter
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +38,9 @@ async def analyze_wrong_questions(
         d_result = await db.execute(select(Document).where(Document.id.in_(doc_ids)))
         doc_names = {d.id: d.filename for d in d_result.scalars().all()}
 
-    topic_stats = defaultdict(lambda: {"wrong": 0, "total": 0})
+    topic_stats: defaultdict[str, dict[str, int]] = defaultdict(
+        lambda: {"wrong": 0, "total": 0}
+    )
 
     for w in wrong_results:
         quiz = quizzes.get(w.quiz_id)
@@ -67,7 +70,7 @@ async def analyze_wrong_questions(
                 }
             )
 
-    weak_areas.sort(key=lambda x: x["accuracy_rate"])
+    weak_areas.sort(key=itemgetter("accuracy_rate"))
     return {"message": f"共{len(wrong_results)}道错题", "weak_areas": weak_areas[:5]}
 
 
@@ -99,7 +102,9 @@ async def get_progress(
     all_results = list(result.scalars().all())
 
     total = len(all_results)
-    daily = defaultdict(lambda: {"total": 0, "correct": 0})
+    daily: defaultdict[str, dict[str, int]] = defaultdict(
+        lambda: {"total": 0, "correct": 0}
+    )
     for r in all_results:
         date = str(r.submitted_at.date())
         daily[date]["total"] += 1

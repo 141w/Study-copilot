@@ -80,4 +80,4 @@ def setup_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(SQLAlchemyError, database_exception_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(Exception, general_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(Exception, general_exception_handler)
