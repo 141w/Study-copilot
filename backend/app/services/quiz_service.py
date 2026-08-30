@@ -11,8 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.quiz_generator import QuizGenerator
-from app.core.vector_store import DocumentVectorStore
-from app.db import Document, Quiz, QuizResult, User
+from app.db import Document, DocumentChunk, Quiz, QuizResult, User
 from app.exceptions import ExternalServiceError, NotFoundError, ValidationError
 from app.services.config_service import get_llm_config_with_secret
 
@@ -83,11 +82,17 @@ async def _do_generate_quiz(
         doc = result.scalar_one_or_none()
         logger.debug(f"doc found: {doc}, status: {doc.status if doc else 'None'}")
         if doc and doc.status == "ready":
-            store = DocumentVectorStore(did)
-            await store.load()
-            logger.debug(f"chunks count: {len(store._store.chunks)}")
-            if store._store.chunks:
-                chunks_list.extend([c["text"] for c in store._store.chunks[:10]])
+            # Query chunks from database (replaces file-based DocumentVectorStore)
+            chunk_result = await db.execute(
+                select(DocumentChunk)
+                .where(DocumentChunk.document_id == did)
+                .order_by(DocumentChunk.chunk_index)
+                .limit(10)
+            )
+            chunks = chunk_result.scalars().all()
+            logger.debug(f"chunks count: {len(chunks)}")
+            if chunks:
+                chunks_list.extend([c.content for c in chunks])
 
     if not chunks_list:
         raise ValidationError("文档内容不足")

@@ -1,8 +1,8 @@
 <template>
   <div class="max-w-4xl mx-auto px-6 py-8">
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">后台任务</h1>
+    <h1 class="text-2xl font-bold text-[var(--text-primary)] mb-6">后台任务</h1>
     <TaskPanel />
-    <p v-if="!hasTasks" class="text-gray-500 text-sm mt-4">暂无后台任务</p>
+    <p v-if="!hasTasks" class="text-[var(--text-muted)] text-sm mt-4">暂无后台任务</p>
   </div>
 </template>
 

@@ -53,37 +53,6 @@ async def test_temperature_roundtrip_is_backend_owned(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_temperature_legacy_multiplied_form_still_accepted(db_session: AsyncSession):
-    """旧双形态兼容：>1 的输入视为已乘 10 的存储值，读回时仍 /10。"""
-    user = User(
-        id="user-temp-legacy",
-        username="temp-legacy",
-        email="t2@t.com",
-        password_hash="x" * 60,
-    )
-    db_session.add(user)
-    await db_session.commit()
-
-    created = await config_service.create_or_update_llm_config(
-        db_session,
-        user,
-        provider="openai",
-        api_key="sk-test",
-        base_url=None,
-        model_name="gpt-4o-mini",
-        temperature=7,  # 旧客户端形态：实际温度 0.7
-        max_tokens=2048,
-        embedding_model="shibing624/text2vec-base-chinese",
-        embedding_dimension=768,
-    )
-    # 响应统一为十进制语义
-    assert created["temperature"] == pytest.approx(0.7)
-
-    fetched = await config_service.get_llm_config(db_session, user)
-    assert fetched["temperature"] == pytest.approx(0.7)
-
-
-@pytest.mark.asyncio
 async def test_get_llm_config_with_secret_returns_none_model_for_new_user(
     db_session: AsyncSession,
 ):

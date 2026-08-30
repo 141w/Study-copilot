@@ -12,8 +12,7 @@ Study Copilot uses:
 
 ```bash
 cd backend
-conda activate study-c
-pip install pytest pytest-asyncio httpx
+pip install -e ".[dev]"
 ```
 
 ### Running Tests
@@ -39,9 +38,35 @@ pytest tests/ --cov=app --cov-report=html
 
 | File | Tests |
 |------|-------|
+| `tests/test_api.py` | Health check, root endpoint |
+| `tests/test_auth.py` | Password hash, JWT encode/decode |
+| `tests/test_analysis_service.py` | Wrong answer analysis, knowledge stats, progress |
+| `tests/test_chunker.py` | Fixed/Semantic/Hierarchical chunking |
+| `tests/test_config_service.py` | LLM config CRUD, temperature roundtrip |
+| `tests/test_course_service.py` | Course CRUD, document associations |
 | `tests/test_document_parser.py` | PDF/DOCX/PPTX parsing, edge cases |
+| `tests/test_document_service.py` | Document upload, delete, soft-delete |
+| `tests/test_exceptions.py` | Custom exception hierarchy |
+| `tests/test_hybrid_retrieval_contract.py` | FAISS+BM25 RRF contract |
+| `tests/test_logging_config.py` | Logging setup |
+| `tests/test_metrics.py` | /api/metrics endpoint |
+| `tests/test_note_indexing.py` | Note-vector-store indexing |
+| `tests/test_quiz.py` | Quiz API endpoints |
 | `tests/test_quiz_generator.py` | Quiz generation, question formatting |
+| `tests/test_quiz_service.py` | Quiz business logic |
+| `tests/test_quiz_task_e2e.py` | Quiz async task flow |
 | `tests/test_rag_engine.py` | RAG pipeline, retrieval, reranking |
+| `tests/test_rate_limit.py` | IP rate limiter |
+| `tests/test_security_headers.py` | Security middleware |
+| `tests/test_soft_delete.py` | Document/note soft-delete |
+| `tests/test_task_persistence.py` | Async task persistence |
+| `tests/test_task_service.py` | Task CRUD service |
+| `tests/test_tasks.py` | Task API endpoints |
+| `tests/test_trace_middleware.py` | Trace middleware |
+| `tests/test_transform_service.py` | Content transformations |
+| `tests/test_tts.py` | Text-to-speech |
+| `tests/test_type_safety_regressions.py` | Type safety baseline |
+| `tests/test_vector_store.py` | FAISS/BM25/Hybrid vector stores |
 
 ### Writing Backend Tests
 
@@ -91,26 +116,32 @@ npm install
 
 ```bash
 # Run all tests
-npm test
+npx vitest run
 
 # Watch mode
-npm run test:watch
+npx vitest
 
 # Run with coverage
 npx vitest run --coverage
 
 # Run specific test file
-npx vitest run tests/stores/auth.test.js
+npx vitest run tests/stores/note.test.js
 ```
 
 ### Test Files
 
 | File | Tests |
 |------|-------|
-| `tests/components/UploadView.test.js` | Upload component rendering, file selection |
-| `tests/components/ChatMessage.test.js` | Message display, citation rendering |
-| `tests/stores/auth.test.js` | Auth store: login, logout, token refresh |
+| `tests/components/BaseDialog.test.js` | Dialog rendering, slots, events |
+| `tests/components/UploadView.test.js` | Upload component rendering |
+| `tests/composables/chatExport.test.js` | Chat markdown export |
+| `tests/services/api.test.js` | Axios interceptor retry logic |
+| `tests/stores/auth.test.js` | Auth store: login, logout, token |
 | `tests/stores/chat.test.js` | Chat store: messages, streaming |
+| `tests/stores/chat.title.test.js` | Chat session title updates |
+| `tests/stores/config.test.js` | LLM config store |
+| `tests/stores/document.test.js` | Document store: CRUD, SWR cache |
+| `tests/stores/note.test.js` | Note store: filters, SWR cache |
 | `tests/stores/quiz.test.js` | Quiz store: generation, submission |
 
 ### Writing Frontend Tests
@@ -212,7 +243,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r backend/requirements.txt pytest pytest-asyncio
+      - run: pip install -e ".[dev]"
       - run: cd backend && pytest tests/ -v
 
   frontend:

@@ -2,7 +2,7 @@
   <div v-if="tasks.length > 0" class="task-panel">
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-medium text-gray-700 flex items-center gap-2">
+      <h3 class="text-sm font-medium text-[var(--text-secondary)] flex items-center gap-2">
         <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -40,20 +40,20 @@
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
               </svg>
             </span>
-            <span v-else class="text-gray-400">
+            <span v-else class="text-[var(--text-muted)]">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
               </svg>
             </span>
 
-            <span class="font-medium text-gray-800">{{ taskTypeName(task.task_type) }}</span>
+            <span class="font-medium text-[var(--text-primary)]">{{ taskTypeName(task.task_type) }}</span>
           </div>
 
           <!-- Cancel button for pending/running tasks -->
           <button
             v-if="task.status === 'pending' || task.status === 'running'"
             @click="cancelTask(task.id)"
-            class="text-xs text-gray-400 hover:text-red-500 transition-colors"
+            class="text-xs text-[var(--text-muted)] hover:text-red-500 transition-colors"
             title="取消任务"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,7 +63,7 @@
         </div>
 
         <!-- Progress bar -->
-        <div v-if="task.status === 'running' || task.status === 'pending'" class="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+        <div v-if="task.status === 'running' || task.status === 'pending'" class="w-full bg-[var(--bg-active)] rounded-full h-1.5 mb-1">
           <div
             class="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
             :style="{ width: (task.progress * 100) + '%' }"
@@ -75,7 +75,7 @@
           <span class="text-xs" :class="statusTextClass(task)">
             {{ statusText(task) }}
           </span>
-          <span class="text-xs text-gray-400">{{ formatTime(task.created_at) }}</span>
+          <span class="text-xs text-[var(--text-muted)]">{{ formatTime(task.created_at) }}</span>
         </div>
 
         <!-- Error message -->
@@ -117,8 +117,8 @@ function taskBorderClass(task) {
     case 'running': return 'border-indigo-200 bg-indigo-50/30'
     case 'completed': return 'border-green-200 bg-green-50/30'
     case 'failed': return 'border-red-200 bg-red-50/30'
-    case 'cancelled': return 'border-gray-200 bg-gray-50/30'
-    default: return 'border-gray-200'
+    case 'cancelled': return 'border-[var(--border-default)] bg-[var(--bg-secondary)]/30'
+    default: return 'border-[var(--border-default)]'
   }
 }
 
@@ -127,8 +127,8 @@ function statusTextClass(task) {
     case 'running': return 'text-indigo-600'
     case 'completed': return 'text-green-600'
     case 'failed': return 'text-red-600'
-    case 'cancelled': return 'text-gray-500'
-    default: return 'text-gray-500'
+    case 'cancelled': return 'text-[var(--text-muted)]'
+    default: return 'text-[var(--text-muted)]'
   }
 }
 

@@ -5,7 +5,7 @@ Analysis service — weakness analysis, knowledge stats, progress tracking.
 from collections import defaultdict
 from operator import itemgetter
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import Document, Quiz, QuizResult, User
@@ -18,42 +18,55 @@ async def analyze_wrong_questions(
     """Analyze wrong answers and return weak areas with suggestions.
 
     薄弱点按题目所属文档聚合，topic 展示文档名（而非文档 UUID）。
+
+    优化：用两条 SQL 聚合替代 4 次全表扫描（H-1）。
     """
-    result = await db.execute(
-        select(QuizResult).where(QuizResult.user_id == user.id, QuizResult.is_correct == False)
+    # ── 聚合 1：各文档错题数 ──
+    wrong_stmt = (
+        select(
+            Quiz.document_id,
+            func.count(QuizResult.id).label("wrong"),
+        )
+        .join(Quiz, QuizResult.quiz_id == Quiz.id)
+        .where(
+            QuizResult.user_id == user.id,
+            QuizResult.is_correct == False,
+        )
+        .group_by(Quiz.document_id)
     )
-    wrong_results = list(result.scalars().all())
+    wrong_rows = (await db.execute(wrong_stmt)).all()
 
-    if not wrong_results:
-        return {"message": "暂无错题", "weak_areas": []}
+    # ── 聚合 2：各文档总题数 ──
+    total_stmt = (
+        select(
+            Quiz.document_id,
+            func.count(QuizResult.id).label("total"),
+        )
+        .join(Quiz, QuizResult.quiz_id == Quiz.id)
+        .where(QuizResult.user_id == user.id)
+        .group_by(Quiz.document_id)
+    )
+    total_rows = (await db.execute(total_stmt)).all()
 
-    quiz_ids = [r.quiz_id for r in wrong_results]
-    q_result = await db.execute(select(Quiz).where(Quiz.id.in_(quiz_ids)))
-    quizzes = {q.id: q for q in q_result.scalars().all()}
+    if not total_rows:
+        return {"message": "暂无答题记录", "weak_areas": []}
 
-    # 文档名映射：把 document_id 换成用户可读的文件名
-    doc_ids = {q.document_id for q in quizzes.values() if q.document_id}
+    # 查文档名（只查有答题的文档）
+    doc_ids = {r.document_id for r in total_rows if r.document_id}
     doc_names: dict[str, str] = {}
     if doc_ids:
         d_result = await db.execute(select(Document).where(Document.id.in_(doc_ids)))
         doc_names = {d.id: d.filename for d in d_result.scalars().all()}
 
-    topic_stats: defaultdict[str, dict[str, int]] = defaultdict(
-        lambda: {"wrong": 0, "total": 0}
-    )
-
-    for w in wrong_results:
-        quiz = quizzes.get(w.quiz_id)
-        if quiz:
-            topic_stats[quiz.document_id]["wrong"] += 1
-
-    all_r = await db.execute(select(QuizResult).where(QuizResult.user_id == user.id))
-    all_results = all_r.scalars().all()
-
-    for r in all_results:
-        quiz = quizzes.get(r.quiz_id)
-        if quiz:
-            topic_stats[quiz.document_id]["total"] += 1
+    # 合并
+    wrong_map = {r.document_id: r.wrong for r in wrong_rows}
+    topic_stats: dict[str, dict[str, int]] = {}
+    for r in total_rows:
+        did = r.document_id or ""
+        topic_stats[did] = {
+            "wrong": wrong_map.get(did, 0),
+            "total": r.total,
+        }
 
     weak_areas = []
     for doc_id, stats in topic_stats.items():
@@ -71,19 +84,26 @@ async def analyze_wrong_questions(
             )
 
     weak_areas.sort(key=itemgetter("accuracy_rate"))
-    return {"message": f"共{len(wrong_results)}道错题", "weak_areas": weak_areas[:5]}
+    total_wrong = sum(r.wrong for r in wrong_rows)
+    return {"message": f"共{total_wrong}道错题", "weak_areas": weak_areas[:5]}
 
 
 async def get_knowledge_stats(
     db: AsyncSession,
     user: User,
 ) -> dict:
-    """Return overall quiz accuracy stats."""
-    result = await db.execute(select(QuizResult).where(QuizResult.user_id == user.id))
-    all_results = list(result.scalars().all())
-
-    total = len(all_results)
-    correct = sum(1 for r in all_results if r.is_correct)
+    """Return overall quiz accuracy stats. 优化：单条 SQL 聚合（H-1）。"""
+    stmt = (
+        select(
+            func.count(QuizResult.id).label("total"),
+            func.sum(case((QuizResult.is_correct == True, 1), else_=0)).label("correct"),
+        )
+        .where(QuizResult.user_id == user.id)
+    )
+    result = await db.execute(stmt)
+    row = result.one()
+    total = int(row.total or 0)
+    correct = int(row.correct or 0)
     acc = correct / total if total > 0 else 0
 
     return {
@@ -97,28 +117,31 @@ async def get_progress(
     db: AsyncSession,
     user: User,
 ) -> dict:
-    """Return daily progress data (last 7 days) and total exercises."""
-    result = await db.execute(select(QuizResult).where(QuizResult.user_id == user.id))
-    all_results = list(result.scalars().all())
+    """Return daily progress data (last 7 days) and total exercises.
 
-    total = len(all_results)
-    daily: defaultdict[str, dict[str, int]] = defaultdict(
-        lambda: {"total": 0, "correct": 0}
+    优化：SQL 层按日期聚合，不拉全表（H-1）。
+    """
+    stmt = (
+        select(
+            func.date(QuizResult.submitted_at).label("date"),
+            func.count(QuizResult.id).label("total"),
+            func.sum(case((QuizResult.is_correct == True, 1), else_=0)).label("correct"),
+        )
+        .where(QuizResult.user_id == user.id)
+        .group_by(func.date(QuizResult.submitted_at))
+        .order_by(func.date(QuizResult.submitted_at))
     )
-    for r in all_results:
-        date = str(r.submitted_at.date())
-        daily[date]["total"] += 1
-        if r.is_correct:
-            daily[date]["correct"] += 1
+    rows = (await db.execute(stmt)).all()
 
     progress_data = [
         {
-            "date": d,
-            "total": s["total"],
-            "correct": s["correct"],
-            "accuracy": round(s["correct"] / s["total"] * 100, 1) if s["total"] > 0 else 0,
+            "date": str(r.date),
+            "total": r.total,
+            "correct": int(r.correct or 0),
+            "accuracy": round(int(r.correct or 0) / r.total * 100, 1) if r.total > 0 else 0,
         }
-        for d, s in sorted(daily.items())
+        for r in rows
     ]
 
-    return {"total_exercises": total, "progress_data": progress_data[-7:]}
+    total_exercises = sum(r.total for r in rows)
+    return {"total_exercises": total_exercises, "progress_data": progress_data[-7:]}

@@ -5,10 +5,10 @@
       <div class="absolute inset-0 pastel-gradient opacity-50"></div>
       <div class="relative max-w-6xl mx-auto px-6 py-24">
         <div class="text-center">
-          <h1 class="text-5xl font-semibold text-gray-900 mb-6" style="letter-spacing: -0.02em">
+          <h1 class="text-5xl font-semibold text-[var(--text-primary)] mb-6" style="letter-spacing: -0.02em">
             模型配置中心
           </h1>
-          <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+          <p class="text-xl text-[var(--text-secondary)] mb-8 max-w-2xl mx-auto">
             配置LLM模型参数，优化AI问答体验
           </p>
           <div class="flex gap-4 justify-center">
@@ -25,17 +25,17 @@
       <div class="max-w-4xl mx-auto px-6">
         <div class="card">
           <div class="p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-6">模型配置</h2>
+            <h2 class="text-xl font-semibold text-[var(--text-primary)] mb-6">模型配置</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   LLM 模型提供商
                 </label>
                 <select 
                   v-model="config.provider"
                   @change="onProviderChange"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                 >
                   <option value="openrouter">OpenRouter</option>
                   <option value="openai">OpenAI</option>
@@ -46,19 +46,19 @@
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   模型名称
                 </label>
                 <input 
                   v-model="config.modelName"
                   type="text"
                   :placeholder="modelPlaceholder"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                 />
               </div>
 
               <div :class="{ 'md:col-span-2': config.provider === 'custom' }">
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Base URL
                 </label>
                 <input 
@@ -66,28 +66,28 @@
                   type="text"
                   :placeholder="baseUrlPlaceholder"
                   :disabled="!isCustomProvider"
-                  :class="{ 'bg-gray-50': !isCustomProvider }"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  :class="{ 'bg-[var(--bg-secondary)]': !isCustomProvider }"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                 />
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   API Key
                 </label>
                 <input 
                   v-model="config.apiKey"
                   type="password"
                   :placeholder="apiKeyPlaceholder"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                 />
-                <p v-if="savedKeyMasked" class="mt-1.5 text-xs text-gray-500">
+                <p v-if="savedKeyMasked" class="mt-1.5 text-xs text-[var(--text-muted)]">
                   已保存：{{ savedKeyMasked }}（留空保存 = 保留原 Key，输入新值 = 覆盖）
                 </p>
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   温度 (0.0 - 1.0)
                 </label>
                 <input 
@@ -98,7 +98,7 @@
                   step="0.1"
                   class="w-full"
                 />
-                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                <div class="flex justify-between text-xs text-[var(--text-muted)] mt-1">
                   <span>0.0 (确定性)</span>
                   <span>{{ config.temperature }}</span>
                   <span>1.0 (随机性)</span>
@@ -106,7 +106,7 @@
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   最大响应长度
                 </label>
                 <input 
@@ -114,18 +114,18 @@
                   type="number"
                   min="100"
                   max="4096"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                   placeholder="2048"
                 />
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   适配器 (适配器模式)
                 </label>
                 <select
                   v-model="config.adapter"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                 >
                   <option value="none">无适配器</option>
                   <option value="lora">LoRA 适配器</option>
@@ -134,13 +134,13 @@
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Embedding 模型
                 </label>
                 <select
                   v-model="config.embeddingModel"
                   @change="onEmbeddingModelChange"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
                 >
                   <option value="shibing624/text2vec-base-chinese">text2vec-base-chinese (中文, 768维)</option>
                   <option value="BAAI/bge-m3">bge-m3 (多语言, 1024维)</option>
@@ -148,14 +148,14 @@
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Embedding 维度
                 </label>
                 <input
                   :value="config.embeddingDimension"
                   type="text"
                   disabled
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg bg-[var(--bg-secondary)] text-[var(--text-muted)] cursor-not-allowed"
                 />
               </div>
             </div>

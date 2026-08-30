@@ -18,7 +18,20 @@ logger = logging.getLogger(__name__)
 # Path to the alembic.ini file (backend/alembic.ini)
 # 修复（2026-08-19）：旧路径少了一级 parent，解析到 backend/app/alembic.ini（不存在），
 # 导致 alembic Config 读不到 script_location，应用启动即崩
-ALEMBIC_CFG_PATH = Path(__file__).parent.parent.parent / "alembic.ini"
+# 修复（2026-08-30）：Docker 部署时代码安装在 site-packages，同时支持多路径搜索
+_CANDIDATES = [
+    Path(__file__).parent.parent.parent / "alembic.ini",  # 源码树: /app/alembic.ini
+    Path("/app/alembic.ini"),                              # Docker 容器固定路径
+    Path(__file__).parent.parent.parent.parent / "alembic.ini",  # site-packages 上级
+]
+
+for _candidate in _CANDIDATES:
+    if _candidate.exists() and _candidate.is_file():
+        ALEMBIC_CFG_PATH = _candidate
+        break
+else:
+    # Fallback: use first candidate (best-effort)
+    ALEMBIC_CFG_PATH = _CANDIDATES[0]
 
 
 def get_alembic_config() -> Config:

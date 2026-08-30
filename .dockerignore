@@ -10,7 +10,11 @@ dist/
 build/
 .venv/
 backend/.venv/
+backend/.mypy_cache/
+backend/.pytest_cache/
+backend/.coverage
 uv.lock
+backend/uv.lock
 
 # Data
 backend/.embedding_cache/
@@ -48,3 +52,7 @@ backups/
 # OS
 .DS_Store
 Thumbs.db
+
+# Databases
+backend/*.db
+backend/*.sqlite

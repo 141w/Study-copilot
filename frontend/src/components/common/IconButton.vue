@@ -38,8 +38,8 @@ const sizeClass = computed(() => {
 
 const variantClass = computed(() => {
   const variants = {
-    ghost: 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg',
-    primary: 'text-[#010120] hover:bg-gray-100 rounded-lg',
+    ghost: 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] rounded-lg',
+    primary: 'text-[#010120] hover:bg-[var(--bg-tertiary)] rounded-lg',
     danger: 'text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg'
   }
   return variants[props.variant] || variants.ghost

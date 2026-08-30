@@ -1,14 +1,14 @@
 <template>
   <div class="max-w-6xl mx-auto px-6 py-8">
-    <h1 class="text-2xl font-semibold text-gray-900 mb-8">文档阅读</h1>
+    <h1 class="text-2xl font-semibold text-[var(--text-primary)] mb-8">文档阅读</h1>
 
     <!-- Document List -->
     <div class="mb-8">
-      <h2 class="text-lg font-medium text-gray-700 mb-4">选择要阅读的文档</h2>
-      <div v-if="loading" class="text-center py-8 text-gray-500">
+      <h2 class="text-lg font-medium text-[var(--text-secondary)] mb-4">选择要阅读的文档</h2>
+      <div v-if="loading" class="text-center py-8 text-[var(--text-muted)]">
         加载中...
       </div>
-      <div v-else-if="documents.length === 0" class="text-center py-8 text-gray-400">
+      <div v-else-if="documents.length === 0" class="text-center py-8 text-[var(--text-muted)]">
         暂无已上传的文档
       </div>
       <div v-else class="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -17,7 +17,7 @@
           :key="doc.id"
           @click="selectDocument(doc)"
           class="p-4 border rounded-lg cursor-pointer transition-all bg-white shadow-sm hover:shadow-md"
-          :class="selectedDoc?.id === doc.id ? 'border-l-4 border-l-[#010120] ring-1 ring-[#010120]' : 'border-gray-200 hover:border-gray-300'"
+          :class="selectedDoc?.id === doc.id ? 'border-l-4 border-l-[#010120] ring-1 ring-[#010120]' : 'border-[var(--border-default)] hover:border-[var(--border-hover)]'"
         >
           <div class="flex items-center gap-2 mb-2">
             <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
@@ -30,8 +30,8 @@
               {{ doc.status === 'ready' ? '已就绪' : '处理中' }}
             </span>
           </div>
-          <p class="text-sm font-medium text-gray-900 truncate">{{ doc.filename }}</p>
-          <p class="text-xs text-gray-500 mt-1">{{ formatSize(doc.file_size) }}</p>
+          <p class="text-sm font-medium text-[var(--text-primary)] truncate">{{ doc.filename }}</p>
+          <p class="text-xs text-[var(--text-muted)] mt-1">{{ formatSize(doc.file_size) }}</p>
         </div>
       </div>
     </div>
@@ -39,15 +39,15 @@
     <!-- Document Content -->
     <div v-if="selectedDoc" class="card !p-0">
       <!-- Header -->
-      <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-lg">
+      <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-white rounded-t-lg">
         <div>
-          <h2 class="font-medium text-gray-900">{{ selectedDoc.filename }}</h2>
-          <p class="text-sm text-gray-500 mt-1">共 {{ filteredChunks.length }} 个段落</p>
+          <h2 class="font-medium text-[var(--text-primary)]">{{ selectedDoc.filename }}</h2>
+          <p class="text-sm text-[var(--text-muted)] mt-1">共 {{ filteredChunks.length }} 个段落</p>
         </div>
         <div class="flex items-center gap-3">
           <button
             @click="openTransform"
-            class="p-2 text-gray-400 hover:text-purple-600 transition-colors"
+            class="p-2 text-[var(--text-muted)] hover:text-purple-600 transition-colors"
             title="内容转换"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,7 +56,7 @@
           </button>
           <button
             @click="copyAllText"
-            class="p-2 text-gray-400 hover:text-[#010120] transition-colors"
+            class="p-2 text-[var(--text-muted)] hover:text-[#010120] transition-colors"
             title="复制全文"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -67,30 +67,30 @@
       </div>
       
       <!-- Search -->
-      <div class="p-4 border-b border-gray-100 bg-gray-50">
+      <div class="p-4 border-b border-[var(--border-default)] bg-[var(--bg-secondary)]">
         <input
           v-model="searchQuery"
           type="text"
           placeholder="搜索文档内容..."
-          class="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] text-base"
+          class="w-full px-4 py-2.5 border border-[var(--border-default)] rounded-lg bg-white focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] text-base"
         />
       </div>
       
       <!-- Content -->
-      <div ref="contentRef" class="p-6 max-h-[70vh] overflow-y-auto bg-gray-50">
-        <div v-if="filteredChunks.length === 0" class="text-center py-12 text-gray-400">
+      <div ref="contentRef" class="p-6 max-h-[70vh] overflow-y-auto bg-[var(--bg-secondary)]">
+        <div v-if="filteredChunks.length === 0" class="text-center py-12 text-[var(--text-muted)]">
           文档内容加载中...
         </div>
         <div v-else class="space-y-4">
           <div
             v-for="(chunk, idx) in paginatedChunks"
             :key="chunk.idx"
-            class="group bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200"
+            class="group bg-white rounded-lg shadow-sm border border-[var(--border-default)] hover:shadow-md hover:border-[var(--border-default)] transition-all duration-200"
           >
             <!-- Chunk Header -->
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-50 bg-gray-50/50 rounded-t-lg">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)] bg-[var(--bg-secondary)]/50 rounded-t-lg">
               <div class="flex items-center gap-3">
-                <span class="text-xs font-medium tracking-wider text-gray-400 uppercase">
+                <span class="text-xs font-medium tracking-wider text-[var(--text-muted)] uppercase">
                   {{ chunk.page ? `PAGE ${chunk.page}` : `CHUNK ${filteredChunks.findIndex(c => c.idx === chunk.idx) + 1}` }}
                 </span>
               </div>
@@ -98,7 +98,7 @@
               <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   @click="explainChunk(chunk)"
-                  class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  class="p-1.5 text-[var(--text-muted)] hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                   title="解释此段"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,7 +107,7 @@
                 </button>
                 <button
                   @click="generateQuiz(chunk)"
-                  class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                  class="p-1.5 text-[var(--text-muted)] hover:text-green-600 hover:bg-green-50 rounded transition-colors"
                   title="基于此段出题"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,7 +116,7 @@
                 </button>
                 <button
                   @click="copyText(chunk.text)"
-                  class="p-1.5 text-gray-400 hover:text-[#010120] hover:bg-gray-100 rounded transition-colors"
+                  class="p-1.5 text-[var(--text-muted)] hover:text-[#010120] hover:bg-[var(--bg-tertiary)] rounded transition-colors"
                   title="复制文本"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,28 +128,28 @@
             
             <!-- Chunk Content -->
             <div class="p-4">
-              <p class="text-base text-gray-700 leading-relaxed whitespace-pre-wrap">{{ cleanText(chunk.text) }}</p>
+              <p class="text-base text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{{ cleanText(chunk.text) }}</p>
             </div>
           </div>
         </div>
       </div>
       
       <!-- Pagination -->
-      <div v-if="filteredChunks.length > pageSize" class="p-4 border-t border-gray-100 flex items-center justify-between bg-white rounded-b-lg">
+      <div v-if="filteredChunks.length > pageSize" class="p-4 border-t border-[var(--border-default)] flex items-center justify-between bg-white rounded-b-lg">
         <button
           @click="prevPage"
           :disabled="currentPage === 1"
-          class="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-gray-700"
+          class="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)]"
         >
           上一页
         </button>
-        <span class="text-sm text-gray-500">
+        <span class="text-sm text-[var(--text-muted)]">
           {{ currentPage }} / {{ totalPages }}
         </span>
         <button
           @click="nextPage"
           :disabled="currentPage >= totalPages"
-          class="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-gray-700"
+          class="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)]"
         >
           下一页
         </button>
@@ -170,7 +170,7 @@
     <!-- Toast Notification -->
     <div
       v-if="toast.show"
-      class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm"
+      class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg shadow-lg text-sm"
     >
       {{ toast.message }}
     </div>
@@ -367,6 +367,6 @@ onUnmounted(() => {
 
 <style scoped>
 .card {
-  @apply bg-white rounded-lg shadow-sm border border-gray-100;
+  @apply bg-white rounded-lg shadow-sm border border-[var(--border-default)];
 }
 </style>

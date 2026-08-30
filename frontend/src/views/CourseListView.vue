@@ -113,8 +113,8 @@
       <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="absolute inset-0 bg-black/40" @click="showDeleteConfirm = false"></div>
         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-2">删除课程</h2>
-          <p class="text-sm text-gray-600 mb-6">
+          <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-2">删除课程</h2>
+          <p class="text-sm text-[var(--text-secondary)] mb-6">
             确定要删除「{{ deletingCourse?.name }}」吗？课程内的文档不会被删除。
           </p>
           <div class="flex items-center justify-end gap-3">

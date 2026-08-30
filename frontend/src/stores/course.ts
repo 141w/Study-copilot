@@ -13,12 +13,19 @@ export const useCourseStore = defineStore('course', () => {
   const courses = ref<Course[]>([])
   const currentCourse = ref<Course | null>(null)
   const loading = ref(false)
+  const lastFetched = ref(0)
 
-  async function fetchCourses(): Promise<void> {
+  function isCacheFresh(): boolean {
+    return Date.now() - lastFetched.value < 30_000 && courses.value.length > 0
+  }
+
+  async function fetchCourses(forceRefresh = false): Promise<void> {
+    if (!forceRefresh && isCacheFresh()) return
     loading.value = true
     try {
       const response = await api.get<Course[]>('/courses')
       courses.value = response.data
+      lastFetched.value = Date.now()
     } catch (error) {
       console.error('Error fetching courses:', error)
       throw error
@@ -122,6 +129,8 @@ export const useCourseStore = defineStore('course', () => {
     courses,
     currentCourse,
     loading,
+    lastFetched,
+    isCacheFresh,
     fetchCourses,
     fetchCourse,
     createCourse,

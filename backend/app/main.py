@@ -34,14 +34,18 @@ async def lifespan(app: FastAPI):
     get_encryption_service()
     logger.info("Encryption service ready.")
 
-    # 生产模式拒绝弱/缺失 JWT 密钥：与 ENCRYPTION_KEY 同级的启动期 fail-fast。
-    # CI 与本地开发走 debug=True 或显式密钥，不受影响。
+    # 生产模式拒绝弱/缺失关键配置：与 ENCRYPTION_KEY、JWT 同级的启动期 fail-fast。
     if not settings.debug:
         weak_secrets = {"", "change-this-in-production", "secret", "changeme"}
         if settings.jwt_secret_key.strip().lower() in weak_secrets:
             raise RuntimeError(
                 "JWT_SECRET_KEY 未配置或为已知默认值：生产环境(debug=false)拒绝启动。"
                 "请在 .env 中设置强随机密钥（如 openssl rand -hex 32 生成）。"
+            )
+        if not settings.openai_api_key.strip():
+            raise RuntimeError(
+                "OPENAI_API_KEY 未配置：生产环境拒绝启动。"
+                "请在 .env 中设置有效的 LLM API Key。"
             )
 
     # Run Alembic migrations on startup

@@ -7,7 +7,7 @@ This file provides architectural guidance for contributors working on Study Copi
 **Study Copilot** is an AI-powered learning assistant built with FastAPI + Vue3. It enables users to upload documents (PDF/DOCX/PPTX), ask questions via RAG (Retrieval-Augmented Generation), generate quizzes automatically, and track learning progress.
 
 ### v3 Features (Current)
-- **TypeScript**: 前端全面 TypeScript 支持，类型安全
+- **TypeScript**: 渐进式 TypeScript 迁移，stores 全面 TS，views/composables 渐进覆盖
 - **组件复用**: BaseDialog、BaseButton、LoadingSpinner 等通用组件
 - **Prompt 模板化**: Jinja2 模板管理 30+ 个 LLM prompt
 - **设计系统**: 完整的 CSS 变量系统（间距、字体、颜色、组件样式）
@@ -52,7 +52,7 @@ This file provides architectural guidance for contributors working on Study Copi
 │          Backend (FastAPI)                   │
 │          backend/ @ port 8000                │
 ├──────────────────────────────────────────────┤
-│ - 11 REST API routers                        │
+│ - 12 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis)
 │ - Agentic RAG (Router + Adaptive + Corrective + Reflection) │
 │ - Hybrid vector search (FAISS + BM25 + RRF)  │
 │ - Multi-provider LLM abstraction (OpenAI SDK)│
@@ -87,9 +87,9 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Document Parsing**: Docling (with OCR), PyMuPDF, python-docx, python-pptx
 - **LLM**: OpenAI SDK (OpenRouter / OpenAI / Anthropic / Gemini / custom)
 - **Auth**: JWT via python-jose + passlib (bcrypt)
-|- **Validation**: Pydantic v2 + pydantic-settings
-|- **Migrations**: Alembic
-|- **Testing**: pytest + pytest-asyncio + pytest-cov
+- **Validation**: Pydantic v2 + pydantic-settings
+- **Migrations**: Alembic
+- **Testing**: pytest + pytest-asyncio + pytest-cov
 
 ### Frontend (`frontend/`)
 - **Framework**: Vue 3.4 (Composition API with `<script setup lang="ts">`)

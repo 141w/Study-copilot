@@ -1,22 +1,22 @@
 <template>
   <div class="max-w-4xl mx-auto px-6 py-8">
-    <h1 class="text-2xl font-semibold text-gray-900 mb-8">上传文档</h1>
+    <h1 class="text-2xl font-semibold text-[var(--text-primary)] mb-8">上传文档</h1>
     
 <!-- Upload Area -->
     <div
       ref="uploadArea"
-      class="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center mb-8"
-      :class="{ 'border-[#010120] bg-gray-50': isDragging }"
+      class="border-2 border-dashed border-[var(--border-default)] rounded-xl p-12 text-center mb-8"
+      :class="{ 'border-[#010120] bg-[var(--bg-secondary)]': isDragging }"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="handleDrop"
     >
-      <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="w-16 h-16 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
         </svg>
       </div>
-      <p class="text-gray-600 mb-2">拖拽文档到此处，或点击上传</p>
+      <p class="text-[var(--text-secondary)] mb-2">拖拽文档到此处，或点击上传</p>
       <input
         type="file"
         accept=".pdf,.docx,.pptx"
@@ -31,7 +31,7 @@
       >
         {{ uploading ? '上传中...' : '选择文件' }}
       </button>
-      <p class="text-sm text-gray-400 mt-4">支持 PDF、DOCX、PPTX 格式，最大 50MB</p>
+      <p class="text-sm text-[var(--text-muted)] mt-4">支持 PDF、DOCX、PPTX 格式，最大 50MB</p>
       <div class="flex justify-center gap-4 mt-3">
         <span class="text-xs px-2 py-1 bg-red-50 text-red-600 rounded">PDF</span>
         <span class="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded">Word</span>
@@ -43,7 +43,7 @@
     <div class="flex justify-center mb-8">
       <button
         @click="showUrlDialog = true"
-        class="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:text-[#010120] hover:border-[#010120] transition-all"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm border border-[var(--border-default)] rounded-lg text-[var(--text-secondary)] hover:text-[#010120] hover:border-[#010120] transition-all"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -60,18 +60,18 @@
 
     <!-- Document List -->
     <div ref="docList" class="card">
-      <div class="p-4 border-b border-gray-100">
-        <h2 class="font-semibold text-gray-900">我的文档</h2>
+      <div class="p-4 border-b border-[var(--border-default)]">
+        <h2 class="font-semibold text-[var(--text-primary)]">我的文档</h2>
       </div>
       
       <div v-if="documentStore.loading" class="p-8 text-center">
-        <svg class="w-8 h-8 animate-spin mx-auto text-gray-400" fill="none" viewBox="0 0 24 24">
+        <svg class="w-8 h-8 animate-spin mx-auto text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
       </div>
       
-      <div v-else-if="documentStore.documents.length === 0" class="p-8 text-center text-gray-500">
+      <div v-else-if="documentStore.documents.length === 0" class="p-8 text-center text-[var(--text-muted)]">
         暂无文档，请先上传
       </div>
       
@@ -88,8 +88,8 @@
           </div>
           
           <div class="flex-1">
-            <h3 class="font-medium text-gray-900">{{ doc.filename }}</h3>
-            <p class="text-sm text-gray-500">
+            <h3 class="font-medium text-[var(--text-primary)]">{{ doc.filename }}</h3>
+            <p class="text-sm text-[var(--text-muted)]">
               {{ doc.chunk_count }} chunks · 
               <span :class="statusColor(doc.status)">{{ statusText(doc.status) }}</span>
             </p>
@@ -97,7 +97,7 @@
           
           <button 
             @click="deleteDoc(doc.id)"
-            class="text-gray-400 hover:text-red-500 transition-colors"
+            class="text-[var(--text-muted)] hover:text-red-500 transition-colors"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -190,7 +190,7 @@ function statusColor(status) {
     case 'ready': return 'text-green-500'
     case 'processing': return 'text-yellow-500'
     case 'error': return 'text-red-500'
-    default: return 'text-gray-500'
+    default: return 'text-[var(--text-muted)]'
   }
 }
 

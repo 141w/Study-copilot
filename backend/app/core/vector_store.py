@@ -10,6 +10,7 @@
 作者：AI全栈工程师
 """
 
+import asyncio
 import json
 import os
 import pickle
@@ -398,8 +399,10 @@ class HybridVectorStore(BaseVectorStore):
 
     async def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """混合检索"""
-        faiss_results = await self._faiss.search(query, top_k * 2)
-        bm25_results = await self._bm25.search(query, top_k * 2)
+        faiss_results, bm25_results = await asyncio.gather(
+            self._faiss.search(query, top_k * 2),
+            self._bm25.search(query, top_k * 2),
+        )
 
         # RRF融合
         fused = self._rrf_fusion(faiss_results, bm25_results, top_k)

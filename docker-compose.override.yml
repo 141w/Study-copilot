@@ -1,0 +1,13 @@
+services:
+  backend:
+    volumes:
+      - ./app:/app/app:ro
+      - ./alembic:/alembic:ro
+    environment:
+      - DEBUG=true
+
+  frontend:
+    volumes:
+      - ./src:/app/src:ro
+      - ./public:/app/public:ro
+      - ./index.html:/app/index.html:ro

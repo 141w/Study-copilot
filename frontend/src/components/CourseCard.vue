@@ -13,7 +13,7 @@
       <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           @click.stop="$emit('edit', course)"
-          class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
           title="编辑课程"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -22,7 +22,7 @@
         </button>
         <button
           @click.stop="$emit('delete', course)"
-          class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
           title="删除课程"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -32,10 +32,10 @@
       </div>
     </div>
 
-    <h3 class="font-semibold text-gray-900 mb-1 truncate">{{ course.name }}</h3>
-    <p v-if="course.description" class="text-sm text-gray-500 line-clamp-2 mb-3">{{ course.description }}</p>
+    <h3 class="font-semibold text-[var(--text-primary)] mb-1 truncate">{{ course.name }}</h3>
+    <p v-if="course.description" class="text-sm text-[var(--text-muted)] line-clamp-2 mb-3">{{ course.description }}</p>
 
-    <div class="flex items-center gap-3 mt-auto text-xs text-gray-400">
+    <div class="flex items-center gap-3 mt-auto text-xs text-[var(--text-muted)]">
       <span class="flex items-center gap-1">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

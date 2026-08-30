@@ -30,7 +30,6 @@ describe('Chat Store', () => {
     expect(store.currentSession).toBeNull()
     expect(store.loading).toBe(false)
     expect(store.isStreaming).toBe(false)
-    expect(store.streamingContent).toBe('')
   })
 
   it('fetchSessions loads sessions from API', async () => {

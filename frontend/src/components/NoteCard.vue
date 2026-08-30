@@ -5,11 +5,11 @@
     @click="$emit('click', note)"
   >
     <div class="flex items-start justify-between mb-2">
-      <h3 class="font-semibold text-gray-900 truncate flex-1 pr-2">{{ note.title || '未命名笔记' }}</h3>
+      <h3 class="font-semibold text-[var(--text-primary)] truncate flex-1 pr-2">{{ note.title || '未命名笔记' }}</h3>
       <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
         <button
           @click.stop="$emit('edit', note)"
-          class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
           title="编辑笔记"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -18,7 +18,7 @@
         </button>
         <button
           @click.stop="$emit('delete', note)"
-          class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
           title="删除笔记"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -28,19 +28,19 @@
       </div>
     </div>
 
-    <p class="text-sm text-gray-500 line-clamp-3 mb-3 leading-relaxed">{{ noteSummary }}</p>
+    <p class="text-sm text-[var(--text-muted)] line-clamp-3 mb-3 leading-relaxed">{{ noteSummary }}</p>
 
     <div class="flex items-center gap-2 flex-wrap">
       <span v-for="tag in (note.tags || []).slice(0, 3)" :key="tag"
-        class="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full"
+        class="text-xs px-2 py-0.5 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded-full"
       >{{ tag }}</span>
-      <span v-if="(note.tags || []).length > 3" class="text-xs text-gray-400">
+      <span v-if="(note.tags || []).length > 3" class="text-xs text-[var(--text-muted)]">
         +{{ note.tags.length - 3 }}
       </span>
     </div>
 
-    <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-      <span class="text-xs text-gray-400">{{ formatDate(note.updated_at || note.created_at) }}</span>
+    <div class="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-default)]">
+      <span class="text-xs text-[var(--text-muted)]">{{ formatDate(note.updated_at || note.created_at) }}</span>
       <span v-if="courseName" class="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
         {{ courseName }}
       </span>

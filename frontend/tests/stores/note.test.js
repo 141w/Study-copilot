@@ -164,4 +164,61 @@ describe('Note Store', () => {
     store.selectNote(mockNotes[0])
     expect(store.currentNote).toEqual(mockNotes[0])
   })
+
+  describe('SWR cache', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('returns cached data when fetched within 30s (no API call)', async () => {
+      api.get.mockResolvedValue({ data: mockNotes })
+
+      await store.fetchNotes()
+      expect(api.get).toHaveBeenCalledTimes(1)
+
+      await store.fetchNotes()
+      expect(api.get).toHaveBeenCalledTimes(1) // Still 1, not 2
+    })
+
+    it('refreshes from API when cache is stale (>30s)', async () => {
+      api.get.mockResolvedValue({ data: mockNotes })
+
+      await store.fetchNotes()
+      expect(api.get).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(35000)
+
+      await store.fetchNotes()
+      expect(api.get).toHaveBeenCalledTimes(2)
+    })
+
+    it('createNote invalidates cache', async () => {
+      api.get.mockResolvedValue({ data: mockNotes })
+      api.post.mockResolvedValue({ data: { id: '4', title: 'New', content: '', tags: [], note_type: 'markdown' } })
+
+      await store.fetchNotes()
+      expect(api.get).toHaveBeenCalledTimes(1)
+
+      await store.createNote({ title: 'New', content: 'New content' })
+
+      // Cache invalidated, next fetch should call API
+      await store.fetchNotes()
+      expect(api.get).toHaveBeenCalledTimes(2)
+    })
+
+    it('deleteNote invalidates cache', async () => {
+      store.notes = [...mockNotes]
+      api.delete.mockResolvedValue({})
+
+      await store.deleteNote('1')
+
+      // lastFetched reset → next fetch calls API
+      await store.fetchNotes()
+      expect(api.get).toHaveBeenCalledTimes(1)
+    })
+  })
 })

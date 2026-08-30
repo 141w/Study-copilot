@@ -4,8 +4,11 @@
 类型化风格。纯类型层重构，DDL（列类型/可空性/索引/外键行为）逐字段保持不变；
 静态检查从此能直接使用真实字段类型（此前 service/api 层大量
 Column[str] vs str 误报由此根除）。
+
+2026-08-29: 连接池参数环境变量化，默认值与 SQLAlchemy 内置默认一致（向后兼容）。
 """
 
+import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
@@ -16,16 +19,26 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Table,
     Text,
+    TypeDecorator,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.config import settings
 
-engine = create_async_engine(settings.database_url, echo=settings.debug)
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.debug,
+    pool_size=int(os.environ.get("DB_POOL_SIZE", "5")),
+    max_overflow=int(os.environ.get("DB_MAX_OVERFLOW", "10")),
+    pool_timeout=int(os.environ.get("DB_POOL_TIMEOUT", "30")),
+    pool_recycle=int(os.environ.get("DB_POOL_RECYCLE", "3600")),
+)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -36,6 +49,59 @@ class Base(DeclarativeBase):
 def _utcnow_naive() -> datetime:
     """统一的时间默认值：UTC 当前时刻（去 tzinfo，与既有 NOT NULL 列语义一致）。"""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+class _Vector(TypeDecorator):
+    """pgvector 兼容类型：PostgreSQL 渲染为 vector(N)，SQLite 回退为 JSON 存储。
+
+    生产环境使用 ``vector_cosine_ops`` 索引；SQLite 上回退为 JSON 存储（测试兼容）。
+    """
+
+    impl = String
+    cache_ok = True
+
+    def __init__(self, dimension: int = 768):
+        super().__init__()
+        self.dimension = dimension
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            # Return a lazy __visit_name__ that SQLAlchemy renders as VECTOR(N)
+            from sqlalchemy.dialects.postgresql.base import PGCompiler
+
+            _PG_VECTOR_N = self.dimension
+
+            class PgVector:
+                __visit_name__ = "vector"
+
+                def _compiler_dispatch(self, compiler: PGCompiler, **kw) -> str:
+                    return f"vector({_PG_VECTOR_N})"
+
+            return dialect.type_descriptor(PgVector())
+        # SQLite: store as JSON string
+        return dialect.type_descriptor(String())
+
+    def process_bind_param(self, value, dialect):
+        """Convert Python list to the DB representation."""
+        if value is None:
+            return None
+        if dialect.name == "postgresql":
+            return value  # asyncpg handles list → vector natively
+        # SQLite: serialize to JSON string
+        import json
+        return json.dumps(value)
+
+    def process_result_value(self, value, dialect):
+        """Convert DB value back to Python list."""
+        if value is None:
+            return None
+        if dialect.name == "postgresql":
+            return value  # asyncpg returns list natively
+        # SQLite: deserialize from JSON
+        import json
+        if isinstance(value, str):
+            return json.loads(value)
+        return value
 
 
 class User(Base):
@@ -229,6 +295,26 @@ class AsyncTask(Base):
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class DocumentChunk(Base):
+    """Text chunk with embedding for pgvector-based RAG retrieval.
+
+    Replaces file-based FAISS + BM25 indices.  Each row stores one chunk's
+    text, its dense embedding in the ``embedding`` vector column, and a JSON
+    ``metadata`` bag for auxiliary info (source, page, chunking_method, etc.).
+    """
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(_Vector(), nullable=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, default=0)
+    chunk_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:

@@ -3,15 +3,14 @@ version: '3.8'
 services:
   # PostgreSQL 数据库
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: study-copilot-db
     environment:
       POSTGRES_DB: study_copilot
       POSTGRES_USER: study_user
-      # 密钥外置：启动前必须 export POSTGRES_PASSWORD，否则 compose 直接报错
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,38 +20,29 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # 后端 API
-  backend:
+  # 合并镜像：nginx（前端静态文件 + API 反向代理）+ uvicorn（后端）
+  app:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: study-copilot-backend
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: study-copilot-app
     environment:
       - DATABASE_URL=postgresql+asyncpg://study_user:${POSTGRES_PASSWORD}@db:5432/study_copilot
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (见 .env.example)}
+    env_file:
+      - ./backend/.env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:80:80"
     volumes:
       - ./backend/uploads:/app/uploads
-      - ./backend/vectorstore:/app/vectorstore
+      - ./backend/.embedding_cache:/app/.embedding_cache
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
-
-  # 前端
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: study-copilot-frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
     restart: unless-stopped
 
 volumes:

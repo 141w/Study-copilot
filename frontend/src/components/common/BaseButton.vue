@@ -45,8 +45,8 @@ defineEmits(['click'])
 const variantClass = computed(() => {
   const variants = {
     primary: 'bg-[#010120] text-white rounded-lg hover:opacity-90',
-    secondary: 'text-gray-600 hover:text-gray-900 transition-colors',
-    ghost: 'text-gray-400 hover:text-gray-600 transition-colors',
+    secondary: 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors',
+    ghost: 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors',
     danger: 'bg-red-600 text-white rounded-lg hover:bg-red-700'
   }
   return variants[props.variant] || variants.primary

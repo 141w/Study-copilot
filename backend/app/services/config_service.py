@@ -49,15 +49,6 @@ async def create_or_update_llm_config(
     embedding_dimension: int,
 ) -> dict:
     """Create or upsert LLM config for user."""
-    # TEMPERATURE CONVENTION (backend-owned since 7e4d4f6)
-    # DB stores temperature * 10 as integer.
-    # Write: value <= 1 -> *10; value > 1 -> store as-is（兼容旧双形态输入）。
-    # Read/Response: always divide by 10 —— GET/POST/PUT 响应一律返回十进制值。
-    # Frontend sends decimals directly; no client-side conversion anymore.
-    #
-    # Normalize temperature: DB stores multiplied int (7 for 0.7).
-    # Accept both decimal (<=1) and already-multiplied (>1) inputs.
-    normalized_temperature = float(round(temperature * 10) if temperature <= 1 else round(temperature))
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
     existing = result.scalar_one_or_none()
 
@@ -76,7 +67,7 @@ async def create_or_update_llm_config(
         existing.api_key = stored_key
         existing.base_url = base_url
         existing.model_name = model_name
-        existing.temperature = normalized_temperature
+        existing.temperature = temperature
         existing.max_tokens = max_tokens
         existing.embedding_model = embedding_model
         existing.embedding_dimension = embedding_dimension
@@ -88,7 +79,7 @@ async def create_or_update_llm_config(
             api_key=stored_key,
             base_url=base_url,
             model_name=model_name,
-            temperature=normalized_temperature,
+            temperature=temperature,
             max_tokens=max_tokens,
             embedding_model=embedding_model,
             embedding_dimension=embedding_dimension,
@@ -101,7 +92,7 @@ async def create_or_update_llm_config(
         "id": config_id,
         "provider": provider,
         "model_name": model_name,
-        "temperature": normalized_temperature / 10,
+        "temperature": temperature,
         "max_tokens": max_tokens,
         "embedding_model": embedding_model,
         "embedding_dimension": embedding_dimension,
@@ -123,16 +114,6 @@ async def update_llm_config(
     embedding_dimension: int,
 ) -> dict:
     """Update existing LLM config. Raises NotFoundError if none exists."""
-    # TEMPERATURE CONVENTION (backend-owned since 7e4d4f6)
-    # DB stores temperature * 10 as integer.
-    # Write: value <= 1 -> *10; value > 1 -> store as-is（兼容旧双形态输入）。
-    # Read/Response: always divide by 10 —— GET/POST/PUT 响应一律返回十进制值。
-    # Frontend sends decimals directly; no client-side conversion anymore.
-    #
-    # Normalize temperature: DB stores multiplied int (7 for 0.7).
-    # Accept both decimal (<=1) and already-multiplied (>1) inputs.
-    normalized_temperature = float(round(temperature * 10) if temperature <= 1 else round(temperature))
-
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
     config = result.scalar_one_or_none()
     if not config:
@@ -140,12 +121,11 @@ async def update_llm_config(
 
     enc = get_encryption_service()
     config.provider = provider
-    # 留空 = 保持原有 Key（同 create_or_update 的修复）
     if api_key:
         config.api_key = enc.encrypt(api_key)
     config.base_url = base_url
     config.model_name = model_name
-    config.temperature = normalized_temperature
+    config.temperature = temperature
     config.max_tokens = max_tokens
     config.embedding_model = embedding_model
     config.embedding_dimension = embedding_dimension
@@ -181,8 +161,7 @@ async def get_llm_config_with_secret(
         **_config_to_dict(config),
         "api_key": enc.decrypt(config.api_key),
         "base_url": config.base_url,
-        # 数据库存的是 temperature*10（前端乘的），这里要除回来
-        "temperature": config.temperature / 10,
+        "temperature": config.temperature,
     }
 
 
@@ -223,7 +202,7 @@ def _config_to_dict(config: UserLLMConfig) -> dict:
         "id": config.id,
         "provider": config.provider,
         "model_name": config.model_name,
-        "temperature": config.temperature / 10,
+        "temperature": config.temperature,
         "max_tokens": config.max_tokens,
         "embedding_model": config.embedding_model,
         "embedding_dimension": config.embedding_dimension,

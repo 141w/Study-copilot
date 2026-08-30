@@ -54,17 +54,18 @@ async def test_list_documents_excludes_other_users_docs(db_session: AsyncSession
 
 @pytest.mark.asyncio
 async def test_get_document_returns_data(db_session: AsyncSession, user: User):
+    from app.db import DocumentChunk
     d = _doc(user.id, "file.pdf")
     db_session.add(d)
     await db_session.commit()
-    with patch('app.services.document_service.DocumentVectorStore') as MockVS:
-        mock_store = MagicMock()
-        mock_store._store.chunks = []
-        MockVS.return_value = mock_store
-        # get_document 对 store.load() 有 await，必须用 AsyncMock
-        mock_store.load = AsyncMock()
-        result = await document_service.get_document(db_session, user, d.id)
+    # Insert a chunk directly for the document (replaces old DocumentVectorStore mock)
+    c = DocumentChunk(id=str(uuid.uuid4()), document_id=d.id, content="hello world", chunk_index=0, chunk_metadata={})
+    db_session.add(c)
+    await db_session.commit()
+    result = await document_service.get_document(db_session, user, d.id)
     assert result["filename"] == "file.pdf"
+    assert len(result["chunks"]) == 1
+    assert result["chunks"][0]["text"] == "hello world"
 
 @pytest.mark.asyncio
 async def test_get_document_raises_for_missing(db_session: AsyncSession, user: User):
@@ -110,6 +111,5 @@ async def test_purge_removes_old_deleted(db_session: AsyncSession, user: User):
     db_session.add(old_doc)
     await db_session.commit()
     with patch('os.path.exists', return_value=True), patch('os.remove'):
-        with patch('app.services.document_service.DocumentVectorStore'):
-            count = await document_service.purge_deleted_documents(db_session, user, older_than_days=30)
+        count = await document_service.purge_deleted_documents(db_session, user, older_than_days=30)
     assert count == 1

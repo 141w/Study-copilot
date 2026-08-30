@@ -3,6 +3,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import asyncio
+import random
 from collections.abc import AsyncGenerator
 from typing import Any, cast
 
@@ -42,21 +43,31 @@ class LLM:
         system_prompt: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        max_retries: int = 2,
     ) -> str | None:
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        # cast：dict 形式消息是 OpenAI API 官方支持的 payload，SDK 的 TypedDict
-        # 参数类型对 dict[str, str] 过窄，运行时完全兼容
-        resp = await self.client.chat.completions.create(
-            model=self.model,
-            messages=cast(Any, messages),
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        return resp.choices[0].message.content
+        last_err: Exception | None = None
+        for attempt in range(max_retries):
+            try:
+                resp = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=cast(Any, messages),
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return resp.choices[0].message.content
+            except Exception as e:
+                last_err = e
+                if attempt < max_retries - 1:
+                    logger.warning(f"Generate attempt {attempt + 1} failed: {e}. Retrying...")
+                    await asyncio.sleep(2**attempt + random.uniform(0, 1))
+                else:
+                    raise
+        raise last_err  # type: ignore[misc]
 
     async def chat(
         self,
@@ -81,7 +92,7 @@ class LLM:
                 if attempt == max_retries - 1:
                     raise  # 最后一次重试失败，抛出异常
                 logger.warning(f"Chat attempt {attempt + 1} failed: {e}. Retrying...")
-                await asyncio.sleep(2**attempt)  # 指数退避
+                await asyncio.sleep(2**attempt + random.uniform(0, 1))  # 指数退避 + jitter
         return ""  # 不应该到达这里
 
     async def chat_stream(
@@ -89,19 +100,32 @@ class LLM:
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        max_retries: int = 1,
     ) -> AsyncGenerator[str, None]:
-        """流式聊天接口，逐token返回生成内容"""
-        stream = await self.client.chat.completions.create(
-            model=self.model,
-            messages=cast(Any, messages),
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-        )
-        async for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta and delta.content:
-                yield delta.content
+        """流式聊天接口，逐 token 返回生成内容。支持重试（stream 创建阶段）。"""
+        last_err: Exception | None = None
+        for attempt in range(max_retries + 1):
+            try:
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=cast(Any, messages),
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+                async for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if delta and delta.content:
+                        yield delta.content
+                return  # 成功完成，退出重试循环
+            except Exception as e:
+                last_err = e
+                if attempt < max_retries:
+                    logger.warning(f"ChatStream attempt {attempt + 1} failed: {e}. Retrying...")
+                    await asyncio.sleep(2**attempt + random.uniform(0, 1))
+                else:
+                    raise
+        raise last_err  # type: ignore[misc]
 
 
 llm = LLM()

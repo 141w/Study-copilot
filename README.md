@@ -24,9 +24,11 @@
 - [高级特性](#高级特性)
 - [配置说明](#配置说明)
 - [开发指南](#开发指南)
+- [Docker 部署](#docker-部署)
 - [常见问题](#常见问题)
 - [更新日志](#更新日志)
 - [许可证](#许可证)
+- [致谢](#致谢)
 
 ---
 
@@ -172,6 +174,41 @@
 study-copilot/
 ├── backend/                         # 后端服务
 │   ├── app/
+│   │   ├── api/                    # API 路由层（12 routers）
+│   │   │   ├── auth.py            # 用户认证（注册/登录/JWT 刷新）
+│   │   │   ├── document.py        # 文档上传/解析/删除/级联清理
+│   │   │   ├── chat.py            # RAG 问答接口（含流式 SSE）
+│   │   │   ├── quiz.py            # 出题/答题/判分/错题本
+│   │   │   ├── analysis.py        # 学习分析/知识掌握/进度统计
+│   │   │   ├── notes.py           # 笔记 CRUD + 标签管理
+│   │   │   ├── courses.py         # 课程空间 CRUD
+│   │   │   ├── transform.py       # 内容转换接口（8 种类型）
+│   │   │   ├── tts.py             # 文本转语音接口
+│   │   │   ├── tasks.py           # 异步任务管理接口
+│   │   │   ├── config.py          # LLM 配置存储
+│   │   │   └── metrics.py         # 运营指标端点
+│   │   │
+│   │   ├── core/                   # 核心业务逻辑
+│   │   │   ├── document_parser.py # 统一文档解析（PDF/DOCX/PPTX/TXT）
+│   │   │   ├── chunker.py         # 文本分块（固定/语义/层级）
+│   │   │   ├── vector_store.py    # 混合向量检索（FAISS+BM25+RRF）
+│   │   │   ├── rag_engine.py      # Agentic RAG 引擎（路由+自适应+反思）
+│   │   │   ├── query_router.py    # 查询路由（意图分类+上下文改写）
+│   │   │   ├── retrieval_grader.py # 检索质量评估
+│   │   │   ├── adaptive_retriever.py # 自适应检索（4 种策略）
+│   │   │   ├── query_decomposer.py # 查询分解+实体提取
+│   │   │   ├── answer_reflector.py # 答案自我反思
+│   │   │   ├── quiz_generator.py  # AI 出题生成
+│   │   │   ├── llm.py             # LLM 调用封装（含重试+退避）
+│   │   │   ├── embedder.py        # 文本向量化
+│   │   │   ├── encryption.py      # Fernet 凭证加密
+│   │   │   ├── tts.py             # Edge TTS 语音合成
+│   │   │   ├── url_extractor.py   # 网页内容提取
+│   │   │   ├── transformations.py # 内容转换引擎（8 种类型）
+│   │   │   ├── task_worker.py     # 异步任务 worker
+│   │   │   ├── template_manager.py # Jinja2 Prompt 模板管理
+│   │   │   └── rate_limit.py      # 接口限流
+│   │   │
 │   │   ├── services/               # 业务服务层
 │   │   │   ├── auth_service.py     # 认证服务
 │   │   │   ├── document_service.py # 文档服务
@@ -181,161 +218,166 @@ study-copilot/
 │   │   │   ├── course_service.py   # 课程空间服务
 │   │   │   ├── transform_service.py # 内容转换服务
 │   │   │   ├── task_service.py     # 异步任务服务
-│   │   │   ├── config_service.py   # 配置服务
-│   │   │   └── analysis_service.py # 分析服务
-│   │   │
-│   │   ├── api/                    # API 路由层
-│   │   │   ├── auth.py            # 用户认证（注册/登录/JWT 刷新）
-│   │   │   ├── document.py        # 文档上传/解析/删除/级联清理
-│   │   │   ├── chat.py            # RAG 问答接口（含流式 SSE）
-│   │   │   ├── quiz.py            # 出题/答题/判分/错题本
-│   │   │   ├── analysis.py        # 学习分析/知识掌握/进度统计
-│   │   │   ├── notes.py           # 笔记 CRUD + 标签管理
-│   │   │   ├── courses.py         # 课程空间 CRUD
-│   │   │   ├── transform.py       # 内容转换接口
-│   │   │   ├── tts.py             # 文本转语音接口
-│   │   │   ├── tasks.py           # 异步任务管理接口
-│   │   │   └── config.py          # LLM 配置存储
-│   │   │
-│   │   ├── core/                   # 核心业务逻辑
-│   │   │   ├── document_parser.py # 统一文档解析（PDF/DOCX/PPTX）
-│   │   │   ├── chunker.py         # 文本分块（固定/语义/层级三种策略）
-│   │   │   ├── vector_store.py    # 混合向量检索（FAISS+BM25+RRF）
-│   │   │   ├── rag_engine.py      # Agentic RAG 引擎（路由+自适应检索+反思）
-│   │   │   ├── query_router.py    # 查询路由（意图分类+上下文改写）
-│   │   │   ├── retrieval_grader.py # 检索质量评估
-│   │   │   ├── adaptive_retriever.py # 自适应检索（4种策略）
-│   │   │   ├── query_decomposer.py # 查询分解+实体提取
-│   │   │   ├── answer_reflector.py # 答案自我反思
-│   │   │   ├── quiz_generator.py  # AI 出题生成
-│   │   │   ├── llm.py             # LLM 调用封装（含重试机制）
-│   │   │   ├── embedder.py        # 文本向量化
-│   │   │   ├── encryption.py      # Fernet 凭证加密
-│   │   │   ├── tts.py             # Edge TTS 语音合成
-│   │   │   ├── url_extractor.py   # 网页内容提取
-│   │   │   ├── transformations.py # 内容转换引擎
-│   │   │   ├── task_worker.py     # 异步任务 worker（内存队列 + 看门狗超时）
-│   │   │   ├── template_manager.py # Jinja2 Prompt 模板管理
-│   │   │   └── rate_limit.py      # 接口限流
+│   │   │   └── config_service.py   # 配置服务
 │   │   │
 │   │   ├── db/                     # 数据库层
-│   │   │   ├── database.py        # SQLAlchemy 异步配置 + 数据模型
+│   │   │   ├── database.py        # SQLAlchemy 异步配置 + ORM 模型
 │   │   │   ├── migrations.py      # 数据库迁移辅助
 │   │   │   └── __init__.py
 │   │   │
-│   │   ├── exceptions.py           # 自定义异常类
-│   │   ├── exception_handlers.py   # 全局异常处理器
+│   │   ├── middleware/             # 中间件
+│   │   │   └── trace.py           # X-Trace-ID 链路追踪
 │   │   │
 │   │   ├── utils/                  # 工具函数
-│   │   │   ├── auth.py            # 密码哈希/Token 验证
+│   │   │   └── auth.py            # 密码哈希/Token 验证
+│   │   │
+│   │   ├── templates/              # Jinja2 Prompt 模板
+│   │   │   ├── router/
+│   │   │   ├── rag/
+│   │   │   ├── retriever/
+│   │   │   ├── reflector/
+│   │   │   ├── decomposer/
+│   │   │   ├── quiz/
+│   │   │   └── transformations/
 │   │   │
 │   │   ├── config.py               # 应用配置（Pydantic Settings）
+│   │   ├── exceptions.py           # 自定义异常类
+│   │   ├── exception_handlers.py   # 全局异常处理器
 │   │   └── main.py                 # FastAPI 应用入口
 │   │
-│   ├── uploads/                    # 用户上传文件存储（gitignored）
-│   ├── vectorstore/                # FAISS 向量索引存储（gitignored）
-│   ├── .env                        # 环境变量配置（gitignored）
-│   ├── requirements.txt            # Python 依赖
-│   ├── alembic/                    # 数据库迁移（Alembic）
+│   ├── alembic/
 │   │   ├── alembic.ini             # Alembic 配置
 │   │   ├── env.py                  # Alembic 环境配置
-│   │   └── versions/               # 迁移脚本
-│   ├── tests/                      # 后端测试（pytest）
-│   │   ├── conftest.py             # 测试配置与 fixtures
-│   │   ├── test_api.py             # API 集成测试
-│   │   ├── test_auth.py            # 认证测试
-│   │   ├── test_chunker.py         # 分块器测试
-│   │   ├── test_config_service.py  # 配置服务测试（温度归一化）
-│   │   ├── test_document_parser.py # 文档解析测试
-│   │   ├── test_exceptions.py      # 异常处理测试
-│   │   ├── test_note_indexing.py   # 笔记语义索引测试
-│   │   ├── test_quiz.py            # 出题/判分测试
-│   │   ├── test_quiz_generator.py  # 题目生成器测试
-│   │   ├── test_quiz_task_e2e.py   # 出题异步链路集成测试
-│   │   ├── test_rag_engine.py      # RAG 引擎测试
-│   │   ├── test_rate_limit.py      # 接口限流测试
-│   │   ├── test_tasks.py           # 异步任务测试
-│   │   ├── test_tts.py             # TTS 测试
-│   │   └── test_vector_store.py    # 向量存储测试
-│   └── run.py                      # 启动脚本
+│   │   └── versions/               # 6 个迁移脚本
+│   │
+│   ├── tests/                      # 后端测试（pytest, 420+ 用例）
+│   │   ├── conftest.py
+│   │   ├── test_api.py
+│   │   ├── test_analysis_service.py
+│   │   ├── test_auth.py
+│   │   ├── test_chunker.py
+│   │   ├── test_config_service.py
+│   │   ├── test_course_service.py
+│   │   ├── test_document_parser.py
+│   │   ├── test_document_service.py
+│   │   ├── test_exceptions.py
+│   │   ├── test_hybrid_retrieval_contract.py
+│   │   ├── test_list_pagination.py
+│   │   ├── test_logging_config.py
+│   │   ├── test_metrics.py
+│   │   ├── test_note_indexing.py
+│   │   ├── test_quiz.py
+│   │   ├── test_quiz_generator.py
+│   │   ├── test_quiz_service.py
+│   │   ├── test_quiz_task_e2e.py
+│   │   ├── test_rag_engine.py
+│   │   ├── test_rate_limit.py
+│   │   ├── test_rag_engine.py
+│   │   ├── test_soft_delete.py
+│   │   ├── test_security_headers.py
+│   │   ├── test_task_persistence.py
+│   │   ├── test_task_service.py
+│   │   ├── test_tasks.py
+│   │   ├── test_trace_middleware.py
+│   │   ├── test_transform_service.py
+│   │   ├── test_tts.py
+│   │   ├── test_type_safety_regressions.py
+│   │   └── test_vector_store.py
+│   │
+│   ├── uploads/                    # 用户上传文件（gitignored）
+│   ├── vectorstore/                # FAISS 索引文件（gitignored）
+│   ├── .env                        # 环境变量（gitignored）
+│   ├── .env.example                # 环境变量模板
+│   ├── requirements.txt            # Python 依赖（兼容层）
+│   ├── pyproject.toml               # 项目配置（hatchling + ruff + pytest）
+│   ├── run.py                      # 启动脚本
+│   └── Dockerfile                  # Docker 镜像
 │
 ├── frontend/                        # 前端应用
 │   ├── src/
-│   │   ├── views/                  # 页面组件
-│   │   │   ├── NotesView.vue      # 笔记管理
-│   │   │   ├── CourseListView.vue  # 课程空间列表
-│   │   │   ├── CourseDetailView.vue # 课程空间详情
-│   │   │   ├── TasksView.vue      # 异步任务管理
+│   │   ├── views/                  # 13 个页面组件
 │   │   │   ├── HomeView.vue       # 首页
-│   │   │   ├── LoginView.vue      # 登录页
+│   │   │   ├── LoginView.vue      # 登录页（TypeScript）
 │   │   │   ├── RegisterView.vue   # 注册页
 │   │   │   ├── UploadView.vue     # 文档上传
 │   │   │   ├── DocumentView.vue   # 文档管理
-│   │   │   ├── ChatView.vue       # 智能问答（含引用联动）
+│   │   │   ├── ChatView.vue       # 智能问答（SSE 流式）
 │   │   │   ├── QuizView.vue       # 在线做题
 │   │   │   ├── AnalysisView.vue   # 学习分析
-│   │   │   └── ModelConfigView.vue # 模型配置
+│   │   │   ├── ModelConfigView.vue # 模型配置
+│   │   │   ├── CourseListView.vue  # 课程空间列表
+│   │   │   ├── CourseDetailView.vue # 课程空间详情
+│   │   │   ├── NotesView.vue      # 笔记管理
+│   │   │   └── TasksView.vue      # 异步任务管理
 │   │   │
-│   │   ├── components/             # 公共组件
-│   │   │   ├── NoteEditor.vue     # 笔记编辑器（Markdown + AI）
-│   │   │   ├── NoteCard.vue       # 笔记卡片
-│   │   │   ├── CourseCard.vue     # 课程空间卡片
-│   │   │   ├── TTSPlayer.vue     # 语音播放器
-│   │   │   ├── TaskPanel.vue     # 任务状态面板
+│   │   ├── components/             # 功能组件
+│   │   │   ├── NoteEditor.vue     # Markdown 笔记编辑器 + AI 辅助
+│   │   │   ├── NoteCard.vue       # 笔记卡片（TypeScript）
+│   │   │   ├── CourseCard.vue     # 课程空间卡片（TypeScript）
+│   │   │   ├── TTSPlayer.vue      # 语音播放器
+│   │   │   ├── TaskPanel.vue      # 任务状态面板
 │   │   │   ├── TransformDialog.vue # 内容转换对话框
 │   │   │   ├── UrlImportDialog.vue # URL 导入对话框
-│   │   │   ├── common/            # 通用组件（Header/Sidebar/Toast）
-│   │   │   └── chat/              # 聊天组件（ChatInput）
+│   │   │   ├── common/            # 通用组件
+│   │   │   │   ├── AppHeader.vue  # 全局头部导航
+│   │   │   │   ├── AppSidebar.vue # 侧边栏导航
+│   │   │   │   ├── BaseButton.vue # 通用按钮
+│   │   │   │   ├── BaseDialog.vue # 通用对话框
+│   │   │   │   ├── BaseInput.vue  # 输入框
+│   │   │   │   ├── BaseSelect.vue # 下拉选择
+│   │   │   │   ├── BaseTextarea.vue # 文本域
+│   │   │   │   ├── BaseTable.vue  # 表格
+│   │   │   │   ├── BaseList.vue   # 列表
+│   │   │   │   ├── LoadingSpinner.vue # 加载动画
+│   │   │   │   ├── IconButton.vue # 图标按钮
+│   │   │   │   └── Toast.vue      # 通知提示
+│   │   │   └── chat/              # 聊天组件
+│   │   │       ├── ChatInput.vue  # 消息输入
+│   │   │       └── ChatHistoryPanel.vue # 聊天历史面板
 │   │   │
-│   │   ├── stores/                 # Pinia 状态管理
+│   │   ├── stores/                 # 10 个 Pinia store（全部 TypeScript）
 │   │   │   ├── auth.ts            # 认证状态
 │   │   │   ├── chat.ts            # 问答状态（含流式）
-│   │   │   ├── config.ts          # 配置状态
+│   │   │   ├── config.ts          # LLM 配置状态
 │   │   │   ├── course.ts          # 课程空间状态
-│   │   │   ├── document.ts        # 文档状态
-│   │   │   ├── note.ts            # 笔记状态
+│   │   │   ├── document.ts        # 文档状态（SWR 缓存）
+│   │   │   ├── note.ts            # 笔记状态（SWR 缓存）
 │   │   │   ├── quiz.ts            # 做题状态
 │   │   │   ├── sidebar.ts         # 侧边栏状态
 │   │   │   ├── theme.ts           # 主题状态
 │   │   │   └── toast.ts           # 提示状态
 │   │   │
+│   │   ├── composables/            # 可复用组合函数
+│   │   │   ├── useApi.ts          # 统一 API 请求处理
+│   │   │   ├── useMarkdown.ts     # Markdown 渲染
+│   │   │   └── useChatExport.ts   # 对话导出
+│   │   │
+│   │   ├── types/                  # TypeScript 类型定义
+│   │   │   ├── api.ts             # API 响应类型
+│   │   │   ├── models.ts          # 核心数据模型
+│   │   │   └── markdown-it.d.ts   # markdown-it 类型声明
+│   │   │
 │   │   ├── services/               # API 服务
-│   │   │   └── api.ts             # Axios 封装（拦截器/错误处理）
+│   │   │   └── api.ts             # Axios 封装（JWT 拦截器/重试）
 │   │   │
 │   │   ├── router/                 # 路由配置
+│   │   │   └── index.ts           # 懒加载路由 + 认证守卫
+│   │   │
 │   │   ├── styles/                 # 全局样式
-│   │   ├── App.vue                # 根组件
+│   │   │   ├── variables.css      # CSS 变量设计系统
+│   │   │   └── global.css         # 全局样式
+│   │   │
+│   │   ├── App.vue                # 根组件（布局壳）
 │   │   └── main.ts                # 入口文件
 │   │
 │   ├── index.html
 │   ├── vite.config.js
+│   ├── vitest.config.js
 │   ├── tailwind.config.js
 │   ├── postcss.config.js
-│   └── package.json
-│
-├── docs/                             # 项目文档
-│   ├── 0-START-HERE/              # 快速入门
-│   ├── 1-INSTALLATION/            # 安装指南
-│   ├── 2-ARCHITECTURE/            # 架构文档
-│   ├── 3-API-REFERENCE/           # API 参考
-│   └── 4-DEVELOPMENT/             # 开发文档
-│
-├── scripts/
-│   ├── run_all_tests.sh            # 一键运行全部测试
-│   └── e2e_tasks_smoke.py          # 异步任务真机 E2E 冒烟脚本
-│
-├── pyproject.toml                    # Python 项目配置（Ruff、pytest）
-├── .github/
-│   └── workflows/
-│       └── test.yml               # CI/CD 测试流水线
-│
-├── .gitignore                       # Git 忽略规则
-├── package.json                     # 根目录脚本
-├── LICENSE                          # MIT 许可证
-├── README.md                        # 项目文档
-├── CLAUDE.md                        # AI 辅助开发指南
-└── CONTRIBUTING.md                  # 贡献指南
-```
+│   ├── tsconfig.json
+│   ├── package.json
+│   └── .dockerignore
 
 ---
 
@@ -377,12 +419,12 @@ psql study_copilot -c "GRANT ALL ON SCHEMA public TO study_user;"
 ```bash
 cd backend
 
-# 创建 conda 环境（推荐）
-conda create -n study-c python=3.11
-conda activate study-c
+# 创建虚拟环境
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # 安装依赖
-pip install -r requirements.txt "pydantic[email]"
+pip install -e ".[dev]"
 ```
 
 ### 4. 配置环境变量
@@ -853,18 +895,18 @@ LLM 调用失败时自动重试：
 
 ```bash
 cd backend
-pytest tests/ -v                     # 运行全部测试
+pytest tests/ -v                     # 运行全部测试（420+ 用例）
 pytest tests/test_auth.py -v         # 运行单个测试文件
-pytest tests/ -v --tb=short          # 简化错误输出
+pytest tests/ --cov=app --cov-report=html  # 生成覆盖率报告
 ```
 
 #### 前端测试（Vitest）
 
 ```bash
 cd frontend
-npx vitest run                       # 运行全部测试
-npx vitest run --watch               # 监听模式
-npx vitest run --coverage            # 生成覆盖率报告
+npx vitest run                       # 运行全部测试（87 用例）
+npx vitest                            # 监听模式
+npx vitest run --coverage             # 生成覆盖率报告
 ```
 
 #### 一键测试
@@ -1109,9 +1151,149 @@ ruff format .
 
 ---
 
+## Docker 部署
+
+### 前置要求
+
+- Docker 20.10+
+- Docker Compose 2.0+
+- 至少 8GB 可用内存（嵌入模型需要）
+
+### 快速开始
+
+#### 1. 配置环境变量
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env`，填入以下**必填**变量：
+
+| 变量 | 说明 |
+|------|------|
+| `POSTGRES_PASSWORD` | PostgreSQL 密码 |
+| `ENCRYPTION_KEY` | 凭证加密密钥（Fernet key） |
+| `JWT_SECRET_KEY` | JWT 签名密钥 |
+
+生成密钥：
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+#### 2. 启动服务
+
+```bash
+make build
+make up
+```
+
+或直接使用 docker compose：
+```bash
+docker compose build
+docker compose up -d
+```
+
+#### 3. 访问应用
+
+| 服务 | 地址 |
+|------|------|
+| 前端 | http://localhost:3000 |
+| 后端 API | http://localhost:8000 |
+| API 文档 | http://localhost:8000/docs |
+| 健康检查 | http://localhost:8000/health |
+
+### 开发模式
+
+支持热重载——修改代码后自动反映到容器中：
+
+```bash
+docker compose up -d
+make shell         # 进 backend 容器调试
+```
+
+前端在容器内监听 3000 端口（开发模式），nginx 在 80。
+
+### Makefile 命令
+
+| 命令 | 说明 |
+|------|------|
+| `make build` | 构建所有镜像 |
+| `make up` | 启动服务（后台） |
+| `make down` | 停止服务（保留数据） |
+| `make restart` | 重启服务 |
+| `make logs` | 查看全部日志 |
+| `make logs-backend` | 查看后端日志 |
+| `make logs-db` | 查看数据库日志 |
+| `make shell` | 进入 backend 容器 |
+| `make migrate` | 手动执行数据库迁移 |
+| `make clean` | 停止并删除所有数据（⚠️ 危险！） |
+| `make prune` | 清理未使用的 Docker 资源 |
+
+### HF 模型预取
+
+首次启动时需要下载嵌入模型（~480MB）。如果在内网环境：
+
+```bash
+docker compose build --build-arg HF_PREFETCH=1 --build-arg HF_ENDPOINT_MIRROR=https://hf-mirror.com
+```
+
+这会将模型打包进镜像，容器启动无需联网下载。
+
+### 手动数据库迁移
+
+通常不需要——entrypoint 会自动执行。如需手动操作：
+
+```bash
+make shell
+alembic upgrade head
+```
+
+### 环境变量参考（Docker）
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `POSTGRES_PASSWORD` | DB 密码 | — |
+| `ENCRYPTION_KEY` | Fernet 加密密钥 | — |
+| `JWT_SECRET_KEY` | JWT 密钥 | change-this |
+| `OPENAI_API_KEY` | LLM API Key | — |
+| `OPENAI_BASE_URL` | API 地址 | https://api.openai.com/v1 |
+| `OPENAI_MODEL` | 使用的模型 | gpt-3.5-turbo |
+| `EMBEDDING_MODEL` | 嵌入模型 | text2vec-base-chinese |
+| `HF_ENDPOINT` | HuggingFace 地址 | https://huggingface.co |
+| `HF_PREFETCH` | 构建时预取模型 | 0 |
+| `DEBUG` | 调试模式 | false |
+
+### 故障排查
+
+**后端启动失败：数据库迁移报错**
+确认 PostgreSQL 已正常启动：
+```bash
+docker compose ps db
+```
+
+**后端启动失败：ENCRYPTION_KEY 缺失**
+必须设置 `ENCRYPTION_KEY`，否则无法解密已存的 API Key：
+```bash
+export ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+docker compose up -d
+```
+
+**模型下载超时**
+在国内网络环境构建时：
+```bash
+docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple --build-arg HF_ENDPOINT_MIRROR=https://hf-mirror.com
+```
+
+**前端 API 请求 404**
+确认前端 nginx 已正确代理到后端。生产模式下前端容器监听 80 端口，请求 `/api/*` 自动转发到 `backend:8000`。
+
+---
+
 ## 许可证
 
 MIT License - 欢迎开源贡献！
+
 
 ---
 

@@ -1,52 +1,69 @@
-# ---- Build Stage ----
-FROM python:3.11-slim AS builder
+# ---- Frontend Builder ----
+FROM docker.m.daocloud.io/library/node:20-alpine AS frontend-builder
 
-# Install build dependencies only in build stage
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# ---- Backend Builder ----
+FROM docker.m.daocloud.io/library/python:3.11-slim AS backend-builder
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for accurate dependency resolution.
-# Non-editable install: an -e install would leave a stale .pth pointing at
-# /build in the runtime stage, where that path no longer exists.
+ENV PIP_DEFAULT_TIMEOUT=120
+
 COPY pyproject.toml ./
 COPY app/ ./app/
-RUN pip install --no-cache-dir uv && \
-    uv pip install --system --prefix=/install .
 
-# ---- Runtime Stage ----
-FROM python:3.11-slim
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir uv
+RUN uv pip install --system --prefix=/install . --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match
 
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser
+RUN mkdir -p /opt/hf
 
-WORKDIR /app
+# ---- Runtime ----
+FROM docker.m.daocloud.io/library/python:3.11-slim
 
-# Copy installed packages from builder
-COPY --from=builder /install /usr/local
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nginx \
+    libpq-dev \
+    curl \
+    util-linux \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 
-# Copy application code.
-# Host trees may carry restrictive modes (e.g. 600); normalize so the
-# non-root runtime user can read every source file.
-COPY app/ ./app/
-COPY alembic/ ./alembic/
-COPY alembic.ini ./
-RUN chmod -R a+rX /app
+# Backend deps from build stage
+COPY --from=backend-builder /install /usr/local
+COPY --from=backend-builder /opt/hf /opt/hf
+ENV HF_HOME=/opt/hf
 
-# Create data directories with proper ownership
-RUN mkdir -p uploads vectorstore && \
-    chown -R appuser:appuser uploads vectorstore
+# Frontend from build stage
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html/
 
-# Switch to non-root user
-USER appuser
+# Nginx config (proxy to localhost:8000)
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port
-EXPOSE 8000
+# Backend code
+COPY backend/app/ ./app/
+COPY backend/alembic/ ./alembic/
+COPY backend/alembic.ini ./
+COPY backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh && \
+    chown -R www-data:www-data /usr/share/nginx/html && \
+    useradd -r -u 1000 -g www-data appuser && \
+    chown -R appuser:www-data /app && \
+    mkdir -p /app/uploads /app/vectorstore /app/.embedding_cache
 
-# Health check
+EXPOSE 80
+
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD curl -f http://localhost:80/health || exit 1
 
-# Run the application
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/app/entrypoint.sh"]

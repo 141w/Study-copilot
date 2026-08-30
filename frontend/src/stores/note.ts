@@ -32,9 +32,10 @@ export const useNoteStore = defineStore('note', () => {
   const notes = ref<NoteDetail[]>([])
   const currentNote = ref<NoteDetail | null>(null)
   const loading = ref(false)
+  const lastFetched = ref(0)
   const filterCourseId = ref<string | null>(null)
   const filterTag = ref<string | null>(null)
-  const searchQuery = ref('')
+  const searchQuery = ref<string>('')
 
   const filteredNotes = computed<NoteDetail[]>(() => {
     let result = notes.value
@@ -67,11 +68,20 @@ export const useNoteStore = defineStore('note', () => {
     return Array.from(tagSet).sort()
   })
 
+  /** Return cached data if fetched within the last 30 seconds. */
+  function isCacheFresh(): boolean {
+    return Date.now() - lastFetched.value < 30_000
+  }
+
   async function fetchNotes(params: Record<string, unknown> = {}): Promise<void> {
+    if (!params.force && isCacheFresh() && notes.value.length > 0) {
+      return
+    }
     loading.value = true
     try {
       const response = await api.get<NoteDetail[]>('/notes', { params })
       notes.value = response.data
+      lastFetched.value = Date.now()
     } catch (error) {
       console.error('Error fetching notes:', error)
       throw error
@@ -99,6 +109,7 @@ export const useNoteStore = defineStore('note', () => {
     try {
       const response = await api.post<NoteDetail>('/notes', data)
       notes.value.unshift(response.data)
+      lastFetched.value = 0 // 使缓存失效，下次 fetch 拉最新
       return response.data
     } catch (error) {
       console.error('Error creating note:', error)
@@ -119,6 +130,7 @@ export const useNoteStore = defineStore('note', () => {
       if (currentNote.value?.id === noteId) {
         currentNote.value = response.data
       }
+      lastFetched.value = 0 // 使缓存失效
       return response.data
     } catch (error) {
       console.error('Error updating note:', error)
@@ -132,6 +144,7 @@ export const useNoteStore = defineStore('note', () => {
     try {
       await api.delete(`/notes/${noteId}`)
       notes.value = notes.value.filter(n => n.id !== noteId)
+      lastFetched.value = 0 // 使缓存失效
     } catch (error) {
       console.error('Error deleting note:', error)
       throw error
@@ -164,11 +177,13 @@ export const useNoteStore = defineStore('note', () => {
     notes,
     currentNote,
     loading,
+    lastFetched,
     filterCourseId,
     filterTag,
     searchQuery,
     filteredNotes,
     allTags,
+    isCacheFresh,
     fetchNotes,
     fetchNote,
     createNote,

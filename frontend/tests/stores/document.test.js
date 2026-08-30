@@ -100,4 +100,91 @@ describe('Document Store', () => {
     await uploadPromise
     expect(store.loading).toBe(false)
   })
+
+  describe('readyDocuments', () => {
+    it('returns only documents with status ready', () => {
+      store.documents = [
+        { id: '1', filename: 'ready.pdf', status: 'ready' },
+        { id: '2', filename: 'pending.pdf', status: 'processing' },
+        { id: '3', filename: 'ready2.pdf', status: 'ready' },
+      ]
+      expect(store.readyDocuments).toHaveLength(2)
+      expect(store.readyDocuments.map(d => d.filename)).toEqual(['ready.pdf', 'ready2.pdf'])
+    })
+
+    it('returns empty array when no documents are ready', () => {
+      store.documents = [
+        { id: '1', filename: 'pending.pdf', status: 'processing' },
+      ]
+      expect(store.readyDocuments).toHaveLength(0)
+    })
+  })
+
+  describe('hasDocuments', () => {
+    it('returns true when documents exist', () => {
+      store.documents = [{ id: '1', filename: 'doc.pdf', status: 'ready' }]
+      expect(store.hasDocuments).toBe(true)
+    })
+
+    it('returns false when no documents', () => {
+      store.documents = []
+      expect(store.hasDocuments).toBe(false)
+    })
+  })
+
+  describe('SWR cache', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('returns cached data when fetched within 30s (no API call)', async () => {
+      const mockDocs = [
+        { id: '1', filename: 'cached.pdf', status: 'ready' },
+      ]
+      api.get.mockResolvedValue({ data: mockDocs })
+
+      // First fetch
+      await store.fetchDocuments()
+      expect(api.get).toHaveBeenCalledTimes(1)
+
+      // Second fetch within 30s should skip API
+      await store.fetchDocuments()
+      expect(api.get).toHaveBeenCalledTimes(1) // Still 1, not 2
+    })
+
+    it('refreshes from API when cache is stale (>30s)', async () => {
+      const mockDocs = [
+        { id: '1', filename: 'doc.pdf', status: 'ready' },
+      ]
+      api.get.mockResolvedValue({ data: mockDocs })
+
+      // First fetch
+      await store.fetchDocuments()
+      expect(api.get).toHaveBeenCalledTimes(1)
+
+      // Advance 35 seconds
+      vi.advanceTimersByTime(35000)
+
+      // Second fetch should call API again
+      await store.fetchDocuments()
+      expect(api.get).toHaveBeenCalledTimes(2)
+    })
+
+    it('forceRefresh bypasses cache', async () => {
+      const mockDocs = [
+        { id: '1', filename: 'doc.pdf', status: 'ready' },
+      ]
+      api.get.mockResolvedValue({ data: mockDocs })
+
+      await store.fetchDocuments()
+      expect(api.get).toHaveBeenCalledTimes(1)
+
+      await store.fetchDocuments(true) // forceRefresh
+      expect(api.get).toHaveBeenCalledTimes(2)
+    })
+  })
 })

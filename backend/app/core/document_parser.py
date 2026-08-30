@@ -415,8 +415,8 @@ class DOCXParser(BaseParser):
     def supported_extensions(self) -> list[str]:
         return [".docx", ".doc"]
 
-    async def parse(self, file_path: str) -> dict[str, Any]:
-        """解析Word文档"""
+    def _parse_sync(self, file_path: str) -> dict[str, Any]:
+        """同步解析 Word 文档（在线程池中执行，避免阻塞事件循环）。"""
         from docx import Document
 
         doc = Document(file_path)
@@ -428,7 +428,7 @@ class DOCXParser(BaseParser):
             "author": core_props.author or "",
             "subject": core_props.subject or "",
             "creator": core_props.author or "",
-            "page_count": len(doc.paragraphs),  # Word没有页码概念，用段落数近似
+            "page_count": len(doc.paragraphs),
             "file_type": "docx",
         }
 
@@ -440,8 +440,6 @@ class DOCXParser(BaseParser):
         for para in doc.paragraphs:
             text = para.text.strip()
             if text:
-                # 检查是否是新段落的开始（可作为新页的标志）
-                # 这里简单按段落数分组，每20个段落作为一页
                 current_page_text.append(text)
 
                 if len(current_page_text) >= 20:
@@ -470,6 +468,10 @@ class DOCXParser(BaseParser):
 
         return {"metadata": metadata, "pages": text_content}
 
+    async def parse(self, file_path: str) -> dict[str, Any]:
+        """解析 Word 文档（线程池 offload）"""
+        return await asyncio.to_thread(self._parse_sync, file_path)
+
     async def extract_text(self, file_path: str) -> str:
         """提取纯文本"""
         result = await self.parse(file_path)
@@ -488,8 +490,8 @@ class PPTXParser(BaseParser):
     def supported_extensions(self) -> list[str]:
         return [".pptx", ".ppt"]
 
-    async def parse(self, file_path: str) -> dict[str, Any]:
-        """解析PowerPoint文件"""
+    def _parse_sync(self, file_path: str) -> dict[str, Any]:
+        """同步解析 PowerPoint 文件（在线程池中执行，避免阻塞事件循环）。"""
         from pptx import Presentation
 
         prs = Presentation(file_path)
@@ -509,12 +511,10 @@ class PPTXParser(BaseParser):
         for slide_num, slide in enumerate(prs.slides):
             slide_text = []
 
-            # 从形状中提取文本
             for shape in slide.shapes:
                 if hasattr(shape, "text") and shape.text.strip():
                     slide_text.append(shape.text.strip())
 
-                # 从表格中提取
                 if shape.has_table:
                     for row in shape.table.rows:
                         for cell in row.cells:
@@ -526,10 +526,13 @@ class PPTXParser(BaseParser):
                     {"page": slide_num + 1, "text": "\n".join(slide_text), "images": []}
                 )
             else:
-                # 空幻灯片也保留
                 text_content.append({"page": slide_num + 1, "text": "", "images": []})
 
         return {"metadata": metadata, "pages": text_content}
+
+    async def parse(self, file_path: str) -> dict[str, Any]:
+        """解析 PowerPoint 文件（线程池 offload）"""
+        return await asyncio.to_thread(self._parse_sync, file_path)
 
     async def extract_text(self, file_path: str) -> str:
         """提取纯文本"""

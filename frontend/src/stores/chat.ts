@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
-import api from '../services/api'
+import api, { cancelAll } from '../services/api'
 import type { Source } from '../types/models'
 
 /** 反思/思考步骤（后端 thinking 事件负载） */
@@ -53,24 +53,20 @@ export const useChatStore = defineStore('chat', () => {
   const currentSession = ref<string | null>(null)
   const currentSessionTitle = ref('')
   const loading = ref(false)
-  const streamingContent = ref('') // 流式内容暂存
-  const streamingSources = ref<Source[]>([]) // 流式来源信息
   const isStreaming = ref(false) // 是否正在流式输出
   const abortController = ref<AbortController | null>(null) // 用于取消流式请求
-  const config = reactive({
-    apiKey: localStorage.getItem('llmApiKey') || '',
-    baseUrl: localStorage.getItem('llmBaseUrl') || 'https://api.openai.com/v1',
-    provider: localStorage.getItem('llmProvider') || 'openrouter',
-    modelName: localStorage.getItem('llmModel') || 'gpt-4o-mini',
-    temperature: parseFloat(localStorage.getItem('llmTemperature') || '') || 0.7,
-    maxTokens: parseInt(localStorage.getItem('llmMaxTokens') || '', 10) || 2048,
-    adapter: localStorage.getItem('llmAdapter') || 'none'
-  })
+  const lastFetched = ref(0)
 
-  async function fetchSessions(): Promise<void> {
+  function isCacheFresh(): boolean {
+    return Date.now() - lastFetched.value < 30_000
+  }
+
+  async function fetchSessions(forceRefresh = false): Promise<void> {
+    if (!forceRefresh && isCacheFresh() && sessions.value.length > 0) return
     try {
       const response = await api.get<ChatSessionSummary[]>('/chat/history')
       sessions.value = response.data
+      lastFetched.value = Date.now()
     } catch (error) {
       console.error('Error fetching sessions:', error)
       throw error
@@ -85,6 +81,7 @@ export const useChatStore = defineStore('chat', () => {
       )
       messages.value = response.data.messages
       currentSession.value = sessionId
+      lastFetched.value = Date.now()
     } catch (error) {
       console.error('Error fetching history:', error)
       throw error
@@ -92,6 +89,16 @@ export const useChatStore = defineStore('chat', () => {
       loading.value = false
     }
   }
+
+  const config = reactive({
+    apiKey: localStorage.getItem('llmApiKey') || '',
+    baseUrl: localStorage.getItem('llmBaseUrl') || 'https://api.openai.com/v1',
+    provider: localStorage.getItem('llmProvider') || 'openrouter',
+    modelName: localStorage.getItem('llmModel') || 'gpt-4o-mini',
+    temperature: parseFloat(localStorage.getItem('llmTemperature') || '') || 0.7,
+    maxTokens: parseInt(localStorage.getItem('llmMaxTokens') || '', 10) || 2048,
+    adapter: localStorage.getItem('llmAdapter') || 'none'
+  })
 
   function saveConfig(): void {
     localStorage.setItem(
@@ -157,8 +164,6 @@ export const useChatStore = defineStore('chat', () => {
   ): Promise<{ success: boolean; cancelled?: boolean }> {
     loading.value = true
     isStreaming.value = true
-    streamingContent.value = ''
-    streamingSources.value = []
 
     // 创建 AbortController 用于取消流式请求
     const controller = new AbortController()
@@ -261,11 +266,6 @@ export const useChatStore = defineStore('chat', () => {
                 currentSession.value = data.session_id
               }
             } else if (data.type === 'sources') {
-              streamingSources.value = data.sources || []
-              // sources 事件也携带 session_id（兼容旧路径）
-              if (data.session_id) {
-                currentSession.value = data.session_id
-              }
               // 更新临时消息的来源信息
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
@@ -273,15 +273,13 @@ export const useChatStore = defineStore('chat', () => {
                 messages.value[msgIdx].filtered_sources = data.filtered_sources
               }
             } else if (data.type === 'token') {
-              streamingContent.value += data.content ?? ''
-              // 实时更新临时消息内容
+              // 实时更新临时消息内容（增量累加）
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
-                messages.value[msgIdx].content = streamingContent.value
+                messages.value[msgIdx].content += data.content ?? ''
               }
             } else if (data.type === 'answer') {
               // 非流式答案（DIRECT_ANSWER / OUT_OF_SCOPE / SUMMARY 路径）
-              streamingContent.value = data.content || ''
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
                 messages.value[msgIdx].content = data.content || ''
@@ -299,7 +297,6 @@ export const useChatStore = defineStore('chat', () => {
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
                 messages.value[msgIdx].content = data.content || ''
-                streamingContent.value = data.content || ''
               }
             } else if (data.type === 'done') {
               // 流式结束，更新最终状态
@@ -345,6 +342,8 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       loading.value = false
       isStreaming.value = false
+      // 清理该流式请求产生的所有待发请求（含自动重发）
+      cancelAll()
       abortController.value = null
     }
   }
@@ -390,6 +389,7 @@ export const useChatStore = defineStore('chat', () => {
     loading,
     config,
     saveConfig,
+    lastFetched,
     fetchSessions,
     fetchHistory,
     askQuestion,
@@ -398,8 +398,6 @@ export const useChatStore = defineStore('chat', () => {
     deleteSession,
     updateSessionTitle,
     clearMessages,
-    streamingContent,
-    streamingSources,
     isStreaming
   }
 })

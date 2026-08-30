@@ -5,6 +5,7 @@ from app.db.database import (
     ChatSession,
     CourseSpace,
     Document,
+    DocumentChunk,
     Message,
     Note,
     Quiz,

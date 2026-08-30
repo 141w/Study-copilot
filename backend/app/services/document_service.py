@@ -22,9 +22,9 @@ from app.core.chunker import (
     deduplicate_chunks,
 )
 from app.core.document_parser import document_parser
+from app.core.pgvector_store import PgVectorStore
 from app.core.task_worker import enqueue
-from app.core.vector_store import DocumentVectorStore
-from app.db import Document, User
+from app.db import Document, DocumentChunk, User
 from app.exceptions import (
     AppError,
     ContentTooLargeError,
@@ -198,10 +198,10 @@ async def _do_process_document(
             logger.error("Failed to chunk document: %s", e)
             raise ExternalServiceError(f"文档分块失败: {str(e)}")
 
-        # Build vector store
+        # Build vector store (pgvector SQL-backed)
         logger.info("Building vector store...")
-        store = DocumentVectorStore(doc_id, retrieval_type=DocumentVectorStore.RETRIEVAL_TYPE_HYBRID)
-        await store.add_chunks(chunks)
+        store = PgVectorStore(user_id=user.id)
+        await store.add_chunks(chunks, doc_id, db=db)
 
         # Mark ready
         doc.status = "ready"
@@ -248,9 +248,11 @@ async def get_document(
     user: User,
     doc_id: str,
 ) -> dict:
-    """Get a single document with its chunks. Raises NotFoundError if missing."""
+    """Get a single document with its chunks from the database."""
+    from sqlalchemy import select as sa_select
+
     result = await db.execute(
-        select(Document).where(
+        sa_select(Document).where(
             Document.id == doc_id,
             Document.user_id == user.id,
             Document.deleted_at.is_(None),
@@ -260,8 +262,19 @@ async def get_document(
     if not doc:
         raise NotFoundError("文档不存在")
 
-    store = DocumentVectorStore(doc_id)
-    await store.load()
+    # Fetch chunks from PostgreSQL (replaces file-based vector store load)
+    chunks_result = await db.execute(
+        sa_select(DocumentChunk)
+        .where(DocumentChunk.document_id == doc_id)
+        .order_by(DocumentChunk.chunk_index)
+    )
+    chunks = [
+        {
+            "text": c.content,
+            "metadata": c.metadata or {},
+        }
+        for c in chunks_result.scalars().all()
+    ]
 
     return {
         "id": doc.id,
@@ -270,7 +283,7 @@ async def get_document(
         "chunk_count": doc.chunk_count,
         "file_size": doc.file_size,
         "created_at": str(doc.created_at),
-        "chunks": store._store.chunks if store._store.chunks else [],
+        "chunks": chunks,
     }
 
 
@@ -279,7 +292,10 @@ async def delete_document(
     user: User,
     doc_id: str,
 ) -> None:
-    """软删除文档（进回收站，可 restore）：保留文件与索引，仅打标记。"""
+    """软删除文档（进回收站，可 restore）：保留文件与索引，仅打标记。
+
+    Vector store 数据在 DB 中，不需要额外的 evict。
+    """
     from datetime import UTC, datetime
 
     result = await db.execute(
@@ -319,15 +335,17 @@ async def purge_deleted_documents(
     user: User,
     older_than_days: int = 30,
 ) -> int:
-    """物理清除回收站中超期的文档（文件+索引+行）。返回清除数量。
+    """物理清除回收站中超期的文档（DB行+chunk+文件）。返回清除数量。
 
     仅供运维脚本/显式调用，不接入 HTTP。
     """
     from datetime import UTC, datetime, timedelta
 
+    from sqlalchemy import delete as sa_delete, select as sa_select
+
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=older_than_days)
     result = await db.execute(
-        select(Document).where(
+        sa_select(Document).where(
             Document.user_id == user.id,
             Document.deleted_at.is_not(None),
             Document.deleted_at < cutoff,
@@ -336,10 +354,14 @@ async def purge_deleted_documents(
     stale = list(result.scalars().all())
 
     for doc in stale:
+        # Delete associated chunks (cascading from documents FK is also fine,
+        # but explicit DELETE is safer for bulk purge)
+        await db.execute(
+            sa_delete(DocumentChunk).where(DocumentChunk.document_id == doc.id)
+        )
+        # Remove file
         if doc.file_path and os.path.exists(doc.file_path):
             os.remove(doc.file_path)
-        store = DocumentVectorStore(doc.id)
-        store.delete()
         await db.delete(doc)
 
     if stale:

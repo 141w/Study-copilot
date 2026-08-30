@@ -16,9 +16,7 @@
             @click="newChat"
             class="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
+            <IconPlus class="w-4 h-4" />
             新建对话
           </button>
 
@@ -28,9 +26,7 @@
             :disabled="chatStore.messages.length === 0"
             class="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+            <IconDownload class="w-4 h-4" />
             导出对话
           </button>
 
@@ -40,9 +36,7 @@
             class="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors"
             :class="showHistory ? 'bg-[var(--color-primary)] text-white' : 'border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <IconClock class="w-4 h-4" />
             {{ showHistory ? '隐藏记录' : '历史记录' }}
           </button>
 
@@ -60,7 +54,7 @@
         <div class="flex items-center gap-3 flex-wrap">
           <span class="text-sm text-[var(--text-muted)]">参考文档:</span>
           <label
-            v-for="doc in documentStore.documents.filter(d => d.status === 'ready')"
+            v-for="doc in readyDocs"
             :key="doc.id"
             class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors"
             :class="selectedDocs.includes(doc.id) ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
@@ -73,7 +67,7 @@
             />
             {{ doc.filename }}
           </label>
-          <span v-if="documentStore.documents.filter(d => d.status === 'ready').length === 0" class="text-sm text-[var(--text-muted)]">
+          <span v-if="!readyDocs.length" class="text-sm text-[var(--text-muted)]">
             暂无文档，请先上传
           </span>
         </div>
@@ -129,7 +123,7 @@
                 </svg>
                 <span>思考中...</span>
               </div>
-              <div v-else class="prose prose-sm max-w-none" v-html="renderMarkdown(msg.content)"></div>
+              <div v-else class="prose prose-sm max-w-none" v-html="renderMarkdown(msg.content, msg.isStreaming)"></div>
 
               <!-- 消息操作栏：朗读 + 复制（仅助手消息、非流式中、有内容时显示） -->
               <div
@@ -139,7 +133,7 @@
                 <TTSPlayer :text="msg.content" />
                 <button
                   @click="copyMessage(msg)"
-                  class="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  class="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
                   title="复制回答"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,16 +176,16 @@
                   v-for="(source, sidx) in msg.sources" 
                   :key="sidx"
                   :id="`source-card-${source.index}`"
-                  class="source-card p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm"
+                  class="source-card p-3 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] text-sm"
                 >
                   <div class="flex items-center gap-2 mb-1">
                     <span class="w-5 h-5 rounded-full bg-[#010120] text-white text-xs flex items-center justify-center">
                       {{ source.index }}
                     </span>
-                    <span v-if="source.source" class="font-medium text-gray-800">{{ source.source }}</span>
-                    <span v-if="source.page" class="text-xs text-gray-500">P{{ source.page }}</span>
+                    <span v-if="source.source" class="font-medium text-[var(--text-primary)]">{{ source.source }}</span>
+                    <span v-if="source.page" class="text-xs text-[var(--text-muted)]">P{{ source.page }}</span>
                   </div>
-                  <div class="text-xs text-gray-600 line-clamp-2">{{ source.text }}</div>
+                  <div class="text-xs text-[var(--text-secondary)] line-clamp-2">{{ source.text }}</div>
                 </div>
               </div>
             </div>
@@ -231,7 +225,7 @@ import { defineOptions } from 'vue'
 
 defineOptions({ name: 'ChatView' })
 
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import { useDocumentStore } from '../stores/document'
@@ -241,9 +235,13 @@ import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatE
 import TTSPlayer from '../components/TTSPlayer.vue'
 import { useMarkdown } from '../composables/useMarkdown'
 import gsap from 'gsap'
+import IconPlus from '../components/common/icons/IconPlus.vue'
+import IconDownload from '../components/common/icons/IconDownload.vue'
+import IconClock from '../components/common/icons/IconClock.vue'
 
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
+const readyDocs = computed(() => documentStore.readyDocuments)
 const selectedDocs = ref([])
 const showHistory = ref(false)
 const messagesRef = ref(null)
@@ -264,12 +262,20 @@ async function copyMessage(msg) {
 
 const { renderMarkdown: renderMarkdownBase } = useMarkdown()
 
-function renderMarkdown(text) {
+// Memoize markdown renders: key = content text, value = rendered HTML.
+// Streaming messages (isStreaming=true) bypass cache and render as plain text.
+const _mdCache = new Map()
+
+function renderMarkdown(text, isStreaming = false) {
   if (!text) return ''
+  if (isStreaming) return text.replace(/</g, '&lt;').replace(/\n/g, '<br>')
+  const cached = _mdCache.get(text)
+  if (cached) return cached
   let rendered = renderMarkdownBase(text)
   rendered = rendered.replace(/\[来源(\d+)\]/g, (match, num) => {
     return `<sup class="source-badge" data-index="${num}">[${num}]</sup>`
   })
+  _mdCache.set(text, rendered)
   return rendered
 }
 

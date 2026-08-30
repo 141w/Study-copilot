@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import api from '../services/api'
 import type { Document } from '../types/models'
 
@@ -7,12 +7,28 @@ export const useDocumentStore = defineStore('document', () => {
   const documents = ref<Document[]>([])
   const loading = ref(false)
   const currentDocument = ref<Document | null>(null)
+  const lastFetched = ref(0)
 
-  async function fetchDocuments(): Promise<void> {
+  const readyDocuments = computed(() =>
+    documents.value.filter(d => d.status === 'ready')
+  )
+
+  const hasDocuments = computed(() => documents.value.length > 0)
+
+  /** Return cached data if fetched within the last 30 seconds. */
+  function isCacheFresh(): boolean {
+    return Date.now() - lastFetched.value < 30_000
+  }
+
+  async function fetchDocuments(forceRefresh = false): Promise<void> {
+    if (!forceRefresh && isCacheFresh() && documents.value.length > 0) {
+      return // Stale-while-revalidate: return cached
+    }
     loading.value = true
     try {
       const response = await api.get<Document[]>('/documents')
       documents.value = response.data
+      lastFetched.value = Date.now()
     } catch (error) {
       console.error('Error fetching documents:', error)
       throw error
@@ -57,6 +73,9 @@ export const useDocumentStore = defineStore('document', () => {
     documents,
     loading,
     currentDocument,
+    lastFetched,
+    readyDocuments,
+    hasDocuments,
     fetchDocuments,
     uploadDocument,
     deleteDocument,

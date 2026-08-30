@@ -33,6 +33,11 @@ export const useQuizStore = defineStore('quiz', () => {
   const currentQuiz = ref<RuntimeQuiz | null>(null)
   const loading = ref(false)
   const quizResults = ref<QuizHistoryItem[]>([])
+  const lastFetched = ref(0)
+
+  function isCacheFresh(): boolean {
+    return Date.now() - lastFetched.value < 30_000 && quizResults.value.length > 0
+  }
 
   async function generateQuizzes(
     documentIds: string[],
@@ -79,12 +84,15 @@ export const useQuizStore = defineStore('quiz', () => {
     }
   }
 
-  async function fetchQuizHistory(): Promise<void> {
+  async function fetchQuizHistory(forceRefresh = false): Promise<void> {
+    if (!forceRefresh && isCacheFresh()) return
     try {
       const response = await api.get<QuizHistoryItem[]>('/quiz/result-history')
       quizResults.value = response.data
+      lastFetched.value = Date.now()
     } catch (error) {
       console.error('Error fetching quiz history:', error)
+      throw error
     }
   }
 
@@ -102,6 +110,7 @@ export const useQuizStore = defineStore('quiz', () => {
     currentQuiz,
     loading,
     quizResults,
+    lastFetched,
     generateQuizzes,
     submitAnswer,
     fetchQuizHistory,

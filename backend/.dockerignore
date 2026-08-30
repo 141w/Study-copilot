@@ -1,0 +1,41 @@
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.coverage
+htmlcov/
+*.egg-info
+dist/
+build/
+.venv/
+
+# Cache directories
+.mypy_cache/
+.ruff_cache/
+.embedding_cache/
+
+# Data (mounted as volumes at runtime)
+uploads/
+vectorstore/
+
+# Tests (not needed in production image)
+tests/
+
+# Database files (local dev only)
+*.db
+*.sqlite
+
+# Lock files (not needed at runtime)
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

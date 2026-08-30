@@ -1,11 +1,11 @@
 <template>
   <div ref="editorContainer" class="note-editor">
     <!-- Toolbar -->
-    <div class="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
+    <div class="flex items-center justify-between px-4 py-2 border-b border-[var(--border-default)] bg-[var(--bg-secondary)] rounded-t-lg">
       <div class="flex items-center gap-1">
         <button
           @click="insertMarkdown('**', '**')"
-          class="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)] rounded transition-colors"
           title="粗体"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -14,7 +14,7 @@
         </button>
         <button
           @click="insertMarkdown('*', '*')"
-          class="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)] rounded transition-colors"
           title="斜体"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -23,14 +23,14 @@
         </button>
         <button
           @click="insertLinePrefix('## ')"
-          class="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors text-xs font-bold"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)] rounded transition-colors text-xs font-bold"
           title="标题"
         >
           H
         </button>
         <button
           @click="insertLinePrefix('- ')"
-          class="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)] rounded transition-colors"
           title="列表"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -39,25 +39,25 @@
         </button>
         <button
           @click="insertMarkdown('`', '`')"
-          class="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors text-xs font-mono"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)] rounded transition-colors text-xs font-mono"
           title="代码"
         >
           &lt;/&gt;
         </button>
         <button
           @click="insertLinePrefix('> ')"
-          class="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)] rounded transition-colors"
           title="引用"
         >
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
             <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z" />
           </svg>
         </button>
-        <div class="w-px h-5 bg-gray-200 mx-1"></div>
+        <div class="w-px h-5 bg-[var(--bg-active)] mx-1"></div>
         <button
           @click="togglePreview"
           class="p-1.5 rounded transition-colors text-xs font-medium"
-          :class="showPreview ? 'text-[#010120] bg-gray-200' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'"
+          :class="showPreview ? 'text-[#010120] bg-[var(--bg-active)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)]'"
           title="预览"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -67,7 +67,7 @@
         </button>
         <button
           @click="openTransform"
-          class="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-purple-600 hover:bg-purple-50 rounded transition-colors"
           title="AI 内容转换"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -76,7 +76,7 @@
         </button>
       </div>
       <div class="flex items-center gap-2">
-        <span class="text-xs text-gray-400">{{ charCount }} 字</span>
+        <span class="text-xs text-[var(--text-muted)]">{{ charCount }} 字</span>
       </div>
     </div>
 
@@ -85,19 +85,19 @@
       v-model="localTitle"
       type="text"
       placeholder="笔记标题..."
-      class="w-full px-4 py-3 border-b border-gray-100 text-lg font-medium text-gray-900 placeholder-gray-300 focus:outline-none"
+      class="w-full px-4 py-3 border-b border-[var(--border-default)] text-lg font-medium text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
       @input="onTitleChange"
     />
 
     <!-- Tags Input -->
-    <div class="px-4 py-2 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+    <div class="px-4 py-2 border-b border-[var(--border-default)] flex items-center gap-2 flex-wrap">
       <span
         v-for="tag in localTags"
         :key="tag"
-        class="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full flex items-center gap-1"
+        class="text-xs px-2 py-0.5 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded-full flex items-center gap-1"
       >
         {{ tag }}
-        <button @click="removeTag(tag)" class="text-gray-400 hover:text-gray-600">
+        <button @click="removeTag(tag)" class="text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -107,7 +107,7 @@
         v-model="newTag"
         type="text"
         placeholder="添加标签..."
-        class="text-xs border-none outline-none bg-transparent w-20 placeholder-gray-300"
+        class="text-xs border-none outline-none bg-transparent w-20 placeholder-[var(--text-muted)]"
         @keydown.enter.prevent="addTag"
       />
     </div>
@@ -119,7 +119,7 @@
       ref="textareaEl"
       v-model="localContent"
       placeholder="开始记录笔记...支持 Markdown 语法"
-      class="w-full p-4 min-h-[300px] max-h-[60vh] overflow-y-auto text-gray-800 leading-relaxed resize-none focus:outline-none placeholder-gray-300 font-mono text-sm"
+      class="w-full p-4 min-h-[300px] max-h-[60vh] overflow-y-auto text-[var(--text-primary)] leading-relaxed resize-none focus:outline-none placeholder-[var(--text-muted)] font-mono text-sm"
       @input="onContentChange"
       @keydown.tab.prevent="handleTab"
     ></textarea>
@@ -172,9 +172,9 @@ const renderedContent = computed(() => {
     // Italic
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Inline code
-    .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm">$1</code>')
+    .replace(/`(.+?)`/g, '<code class="bg-[var(--bg-tertiary)] px-1 py-0.5 rounded text-sm">$1</code>')
     // Blockquote
-    .replace(/^> (.+)$/gm, '<blockquote class="pl-4 border-l-4 border-gray-200 text-gray-600 italic">$1</blockquote>')
+    .replace(/^> (.+)$/gm, '<blockquote class="pl-4 border-l-4 border-[var(--border-default)] text-[var(--text-secondary)] italic">$1</blockquote>')
     // Unordered list items
     .replace(/^- (.+)$/gm, '<li class="ml-4">$1</li>')
     // Links
@@ -287,19 +287,19 @@ function openTransform() {
 
 <style scoped>
 .note-editor {
-  @apply bg-white rounded-lg border border-gray-200;
+  @apply bg-white rounded-lg border border-[var(--border-default)];
 }
 
 :deep(.prose h1) {
-  @apply text-2xl font-bold text-gray-900 mb-2 mt-4;
+  @apply text-2xl font-bold text-[var(--text-primary)] mb-2 mt-4;
 }
 
 :deep(.prose h2) {
-  @apply text-xl font-semibold text-gray-900 mb-2 mt-3;
+  @apply text-xl font-semibold text-[var(--text-primary)] mb-2 mt-3;
 }
 
 :deep(.prose h3) {
-  @apply text-lg font-medium text-gray-900 mb-1 mt-2;
+  @apply text-lg font-medium text-[var(--text-primary)] mb-1 mt-2;
 }
 
 :deep(.prose li) {

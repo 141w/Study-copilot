@@ -8,7 +8,7 @@
   >
     <!-- Transform Type Selection -->
     <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-2">选择转换类型</label>
+      <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">选择转换类型</label>
       <div class="grid grid-cols-2 gap-2">
         <button
           v-for="t in transformations"
@@ -16,11 +16,11 @@
           @click="selectedType = t.key"
           class="p-3 text-left border rounded-lg transition-all text-sm"
           :class="selectedType === t.key
-            ? 'border-[#010120] bg-gray-50 ring-1 ring-[#010120]'
-            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'"
+            ? 'border-[#010120] bg-[var(--bg-secondary)] ring-1 ring-[#010120]'
+            : 'border-[var(--border-default)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-secondary)]'"
         >
-          <div class="font-medium text-gray-900">{{ t.name }}</div>
-          <div class="text-xs text-gray-500 mt-0.5">{{ t.description }}</div>
+          <div class="font-medium text-[var(--text-primary)]">{{ t.name }}</div>
+          <div class="text-xs text-[var(--text-muted)] mt-0.5">{{ t.description }}</div>
         </button>
       </div>
     </div>
@@ -28,10 +28,10 @@
     <!-- Result -->
     <div v-if="result" class="mt-4">
       <div class="flex items-center justify-between mb-2">
-        <label class="block text-sm font-medium text-gray-700">转换结果</label>
+        <label class="block text-sm font-medium text-[var(--text-secondary)]">转换结果</label>
         <button
           @click="copyResult"
-          class="text-xs text-gray-500 hover:text-[#010120] transition-colors flex items-center gap-1"
+          class="text-xs text-[var(--text-muted)] hover:text-[#010120] transition-colors flex items-center gap-1"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -40,13 +40,13 @@
         </button>
       </div>
       <div
-        class="p-4 bg-gray-50 rounded-lg border border-gray-200 max-h-60 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap leading-relaxed"
+        class="p-4 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] max-h-60 overflow-y-auto text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed"
       >{{ result }}</div>
     </div>
 
     <template #footer-left>
       <span v-if="copied" class="text-xs text-green-600">已复制到剪贴板</span>
-      <span v-else class="text-xs text-gray-400">选择类型后点击转换</span>
+      <span v-else class="text-xs text-[var(--text-muted)]">选择类型后点击转换</span>
     </template>
 
     <template #footer>

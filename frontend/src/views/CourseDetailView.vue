@@ -3,7 +3,7 @@
     <!-- Back Button -->
     <button
       @click="router.push('/courses')"
-      class="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors mb-6"
+      class="flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mb-6"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -12,11 +12,11 @@
     </button>
 
     <!-- Loading -->
-    <div v-if="loading" class="text-center py-16 text-gray-500">加载中...</div>
+    <div v-if="loading" class="text-center py-16 text-[var(--text-muted)]">加载中...</div>
 
     <!-- Not Found -->
     <div v-else-if="!course" class="text-center py-16">
-      <p class="text-gray-500 mb-4">课程不存在或已被删除</p>
+      <p class="text-[var(--text-muted)] mb-4">课程不存在或已被删除</p>
       <router-link to="/courses" class="btn-secondary text-sm">返回课程列表</router-link>
     </div>
 
@@ -35,8 +35,8 @@
               </svg>
             </div>
             <div>
-              <h1 class="text-2xl font-semibold text-gray-900">{{ course.name }}</h1>
-              <p v-if="course.description" class="text-sm text-gray-500 mt-1">{{ course.description }}</p>
+              <h1 class="text-2xl font-semibold text-[var(--text-primary)]">{{ course.name }}</h1>
+              <p v-if="course.description" class="text-sm text-[var(--text-muted)] mt-1">{{ course.description }}</p>
             </div>
           </div>
           <div class="flex items-center gap-2">
@@ -57,16 +57,16 @@
       </div>
 
       <!-- Tabs -->
-      <div class="flex items-center gap-6 border-b border-gray-200 mb-6">
+      <div class="flex items-center gap-6 border-b border-[var(--border-default)] mb-6">
         <button
           v-for="tab in tabs"
           :key="tab.key"
           @click="activeTab = tab.key"
           class="pb-3 text-sm font-medium transition-colors relative"
-          :class="activeTab === tab.key ? 'text-[#010120]' : 'text-gray-500 hover:text-gray-900'"
+          :class="activeTab === tab.key ? 'text-[#010120]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'"
         >
           {{ tab.label }}
-          <span v-if="tab.count !== undefined" class="ml-1 text-xs text-gray-400">({{ tab.count }})</span>
+          <span v-if="tab.count !== undefined" class="ml-1 text-xs text-[var(--text-muted)]">({{ tab.count }})</span>
           <div
             v-if="activeTab === tab.key"
             class="absolute bottom-0 left-0 right-0 h-0.5 bg-[#010120] rounded-full"
@@ -77,17 +77,17 @@
       <!-- Documents Tab -->
       <div v-if="activeTab === 'documents'">
         <div class="flex items-center justify-between mb-4">
-          <p class="text-sm text-gray-500">课程关联的文档</p>
+          <p class="text-sm text-[var(--text-muted)]">课程关联的文档</p>
           <button @click="showAddDocDialog = true" class="btn-secondary text-sm">添加文档</button>
         </div>
 
         <div v-if="courseDocuments.length === 0" class="text-center py-12">
-          <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-            <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="w-16 h-16 mx-auto mb-4 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center">
+            <svg class="w-8 h-8 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <p class="text-gray-500 mb-4">此课程暂无文档</p>
+          <p class="text-[var(--text-muted)] mb-4">此课程暂无文档</p>
           <button @click="showAddDocDialog = true" class="btn-secondary text-sm">添加第一个文档</button>
         </div>
 
@@ -103,12 +103,12 @@
               </svg>
             </div>
             <div class="flex-1 min-w-0">
-              <h3 class="font-medium text-gray-900 truncate">{{ doc.filename }}</h3>
-              <p class="text-sm text-gray-500">{{ doc.chunk_count }} chunks · {{ doc.status }}</p>
+              <h3 class="font-medium text-[var(--text-primary)] truncate">{{ doc.filename }}</h3>
+              <p class="text-sm text-[var(--text-muted)]">{{ doc.chunk_count }} chunks · {{ doc.status }}</p>
             </div>
             <button
               @click="removeDoc(doc.id)"
-              class="text-gray-400 hover:text-red-500 transition-colors"
+              class="text-[var(--text-muted)] hover:text-red-500 transition-colors"
               title="从课程移除"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,12 +136,12 @@
         </div>
 
         <div v-if="courseNotes.length === 0 && !showNewNote" class="text-center py-12">
-          <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-            <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="w-16 h-16 mx-auto mb-4 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center">
+            <svg class="w-8 h-8 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </div>
-          <p class="text-gray-500 mb-4">此课程暂无笔记</p>
+          <p class="text-[var(--text-muted)] mb-4">此课程暂无笔记</p>
           <button @click="showNewNote = true" class="btn-secondary text-sm">创建第一条笔记</button>
         </div>
 
@@ -178,18 +178,18 @@
       <div v-if="showAddDocDialog" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="absolute inset-0 bg-black/40" @click="showAddDocDialog = false"></div>
         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">添加文档到课程</h2>
-          <div v-if="availableDocs.length === 0" class="text-sm text-gray-500 py-4 text-center">
+          <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-4">添加文档到课程</h2>
+          <div v-if="availableDocs.length === 0" class="text-sm text-[var(--text-muted)] py-4 text-center">
             没有可添加的文档，请先上传文档
           </div>
           <div v-else class="space-y-2 max-h-64 overflow-y-auto mb-4">
             <label
               v-for="doc in availableDocs"
               :key="doc.id"
-              class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:border-[#010120] transition-colors"
+              class="flex items-center gap-3 p-3 rounded-lg border border-[var(--border-default)] cursor-pointer hover:border-[#010120] transition-colors"
             >
               <input type="radio" :value="doc.id" v-model="selectedDocId" class="accent-[#010120]" />
-              <span class="text-sm text-gray-900 truncate">{{ doc.filename }}</span>
+              <span class="text-sm text-[var(--text-primary)] truncate">{{ doc.filename }}</span>
             </label>
           </div>
           <div class="flex items-center justify-end gap-3">
@@ -205,8 +205,8 @@
       <div v-if="showDeleteNoteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="absolute inset-0 bg-black/40" @click="showDeleteNoteConfirm = false"></div>
         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-2">删除笔记</h2>
-          <p class="text-sm text-gray-600 mb-6">确定要删除此笔记吗？此操作不可撤销。</p>
+          <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-2">删除笔记</h2>
+          <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除此笔记吗？此操作不可撤销。</p>
           <div class="flex items-center justify-end gap-3">
             <button @click="showDeleteNoteConfirm = false" class="btn-secondary">取消</button>
             <button @click="doDeleteNote" class="px-4 py-2 bg-red-600 text-white rounded font-medium hover:bg-red-700 transition-colors">删除</button>

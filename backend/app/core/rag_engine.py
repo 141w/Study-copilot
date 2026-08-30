@@ -2,6 +2,7 @@
 RAG Engine for Study Copilot
 """
 
+import asyncio
 import logging
 import re
 from collections.abc import AsyncGenerator
@@ -13,11 +14,15 @@ from app.core.adaptive_retriever import adaptive_retriever
 from app.core.answer_reflector import answer_reflector
 from app.core.embedder import embedder
 from app.core.llm import LLM
+from app.core.pgvector_store import PgVectorStore
 from app.core.query_router import QueryType, query_router
 from app.core.retrieval_grader import retrieval_grader
 from app.core.template_manager import render_template
-from app.core.vector_store import DocumentVectorStore, result_relevance
+from app.core.vector_store import result_relevance
 from app.exceptions import classify_llm_error
+
+# LRU 向量存储缓存上限：每文档索引约 0.5-5 MB，20 上限 ~10-100 MB
+_VECTOR_STORE_CACHE_MAX = 20
 
 
 def _display_relevance(r: dict) -> float:
@@ -50,7 +55,7 @@ def extract_source_indices(text: str) -> list[int]:
 class RAGEngine:
     def __init__(self):
         self.top_k = settings.top_k if hasattr(settings, "top_k") else 5
-        self._vector_store_cache = {}
+        self._pg_vector_store: PgVectorStore | None = None
         self._reranker = None
         self._reranker_loaded = False
 
@@ -290,34 +295,27 @@ class RAGEngine:
         return deduped
 
     async def retrieve(self, doc_ids, query, top_k=5):
-        # Over-fetch from FAISS so reranker has more candidates
-        fetch_k = top_k * 2
-        all_results = []
-        for doc_id in doc_ids:
-            store = await self._get_vector_store(doc_id)
-            results = await store.search(query, fetch_k)
-            all_results.extend(results)
+        """Retrieve relevant chunks via pgvector hybrid search (vector + FTS RRF).
+
+        Replaces the old per-document FAISS search with a single SQL query
+        that combines cosine similarity and full-text search.
+        """
+        store = self._get_pg_vector_store()
+        all_results = await store.search(query, doc_ids, top_k * 2)
+
+        if not all_results:
+            return []
+
+        # Relevance filtering (batch-normalized scores from PgVectorStore)
+        all_results = [r for r in all_results if result_relevance(r) is not None and result_relevance(r) > 1e-6]
+
+        # Sort by relevance descending before dedup (ensures stable ordering)
         all_results.sort(key=_relevance_sort_key)
-
-        # Fix 3（2026-08-27 修订）：三种 store 的 distance 语义不一致——
-        # Hybrid 的 1-RRF 恒≈0.97+，旧绝对阈值 <=0.85 会把全部结果误杀，
-        # 导致任何文档问答都返回"没找到"。现按字段类型分族判定：
-        #   FAISS（含 similarity）沿用原阈值 sim>=0.15；
-        #   BM25/Hybrid 使用批内归一相关度，仅滤除零信号噪声。
-        def _relevant(r) -> bool:
-            if "similarity" in r:
-                return r["similarity"] >= 0.15
-            rel = result_relevance(r)
-            if rel is not None:
-                return rel > 1e-6
-            return r.get("distance", float("inf")) <= 0.85
-
-        all_results = [r for r in all_results if _relevant(r)]
 
         # Deduplicate chunks with similar text content before reranking
         all_results = self.deduplicate_results(all_results)
 
-        # Fix 1: Apply CrossEncoder reranking
+        # CrossEncoder reranking (kept unchanged — application-layer semantic rerank)
         reranker = self._ensure_reranker()
         if reranker and len(all_results) > 0:
             try:
@@ -332,12 +330,19 @@ class RAGEngine:
 
         return all_results[:top_k]
 
-    async def _get_vector_store(self, doc_id):
-        if doc_id not in self._vector_store_cache:
-            store = DocumentVectorStore(doc_id)
-            await store.load()
-            self._vector_store_cache[doc_id] = store
-        return self._vector_store_cache[doc_id]
+    def _get_pg_vector_store(self) -> PgVectorStore:
+        """Return the singleton PgVectorStore (replaces per-document LRU cache)."""
+        if self._pg_vector_store is None:
+            self._pg_vector_store = PgVectorStore(user_id="")
+        return self._pg_vector_store
+
+    def evict_vector_store(self, doc_id: str) -> None:
+        """No-op for pgvector backend (no in-memory cache to evict)."""
+        pass
+
+    def clear_vector_stores(self) -> None:
+        """No-op for pgvector backend."""
+        pass
 
     def _ensure_reranker(self):
         if not self._reranker_loaded:

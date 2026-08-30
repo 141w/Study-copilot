@@ -8,7 +8,7 @@
              transition-colors duration-200"
       :class="playing
         ? 'bg-indigo-100 text-indigo-700'
-        : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+        : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
       "
       :title="playing ? '停止播放' : '朗读内容'"
     >
@@ -33,7 +33,7 @@
     <select
       v-if="showVoiceSelect && voices.length > 0"
       v-model="selectedVoice"
-      class="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-600
+      class="text-xs border border-[var(--border-default)] rounded px-1.5 py-0.5 bg-white text-[var(--text-secondary)]
              focus:outline-none focus:ring-1 focus:ring-indigo-300"
     >
       <optgroup v-for="(group, lang) in voiceGroups" :key="lang" :label="lang">

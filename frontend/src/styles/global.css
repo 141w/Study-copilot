@@ -17,8 +17,8 @@
   }
   
   .btn-secondary {
-    @apply bg-transparent border border-gray-200 text-black px-4 py-2 rounded-sharp;
-    @apply hover:bg-gray-50 transition-all duration-150;
+    @apply bg-transparent border border-[var(--border-default)] text-black px-4 py-2 rounded-sharp;
+    @apply hover:bg-[var(--bg-secondary)] transition-all duration-150;
   }
   
   .btn-glass {
@@ -27,11 +27,11 @@
   }
   
   .card {
-    @apply bg-white rounded-comfortable shadow-card border border-gray-100;
+    @apply bg-white rounded-comfortable shadow-card border border-[var(--border-default)];
   }
   
   .input-field {
-    @apply w-full px-4 py-3 border border-gray-200 rounded-sharp;
+    @apply w-full px-4 py-3 border border-[var(--border-default)] rounded-sharp;
     @apply focus:outline-none focus:border-brand-dark focus:ring-1 focus:ring-brand-dark;
     @apply transition-all duration-150;
   }
@@ -41,6 +41,6 @@
   }
   
   .chat-message-ai {
-    @apply bg-gray-50 text-black mr-auto rounded-sharp-lg rounded-bl-sm border border-gray-100;
+    @apply bg-[var(--bg-secondary)] text-black mr-auto rounded-sharp-lg rounded-bl-sm border border-[var(--border-default)];
   }
 }

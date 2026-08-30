@@ -23,20 +23,28 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ---
 
-## Current State (2026-08-25)
+## Current State (2026-08-30)
 
-- **Git**: `master` 分支（含优化计划 v2 全部落地提交），待推送远端
-- **Changelog**: `CHANGELOG_2026-08-17.md`（8 commit，约 70 文件）
+- **Git**: `master` 分支（全部优化落地，未 push 远端）
+- **Tests**: 后端 420 passed / 前端 87 passed / 覆盖率 71.76% / vue-tsc exit 0
 - **Ports**: 前端 3000，后端 8000
 - **Frontend**: Vue3 + Vite + TypeScript + Pinia + TailwindCSS + GSAP
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL 16+ + FAISS + sentence-transformers
-- **打包**: backend/pyproject.toml（hatchling）+ uv.lock（192 包锁定）；requirements.txt 为兼容层
-- **CI**: uv 安装依赖 + ruff lint + mypy 类型门禁（渐进式棘轮配置）+ 覆盖率门禁 65% + 前端 vue-tsc/build/vitest 全链路
+- **打包**: backend/pyproject.toml（hatchling）+ uv.lock（~484 TOML 条目）；requirements.txt 为兼容层
+- **CI**: uv 安装依赖 + ruff lint + mypy 类型门禁（渐进式棘轮配置）+ 覆盖率门禁 65% + 前端 vitest/vue-tsc 全链路
 - **可观测性**: 结构化 JSON 日志（生产）/ 文本（开发）+ X-Trace-ID 纯 ASGI 追踪中间件 + /health DB 探测
 - **Docker**: 多阶段构建、非 root 运行、healthcheck；.dockerignore 收敛构建上下文
 
-### Recent Changes (2026-08-17)
+### Recent Changes (2026-08-17 ~ 2026-08-30)
 
+**2026-08-30 批次：**
+1. 测试扩展：`test_analysis_service.py`（+15）+ `test_transform_service.py`（+20），覆盖率 71.76%
+2. M-4: temperature ×10 隐式约定消除（migration + config_service 清理 + 测试修正）
+3. F-M3 补齐：`note.ts` SWR 30s 缓存 + CUD 失效，+4 缓存测试
+4. 文档清理：6 份过时文件移至 archive_docs/（UPGRADE_PLAN/OPTIMIZATION_CHECKLIST/CHANGELOG 等）
+5. 测试总览更新：README/docs testing.md 同步 420 用例清单
+
+**2026-08-17 批次（P0~P3）：**
 1. **P0 紧急修复** (237c052): git 提交、text import、requirements 补全、quiz 密文修复、config model_name 对齐、alembic env、notes 前后端契约、course tab 404
 2. **P1 对齐** (fdbc370): 端口 5173→3000 (14 处)、API 路径纠错、CI main→master、测试方法名同步、前端 mock
 3. **P2 迁移** (55d8502): 6 模块模板迁移（14 orphan→render_template）、typescript+vue-tsc、.env.example + upload_dir、死代码清理
@@ -57,7 +65,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - pytest 配置唯一源为 pyproject `[tool.pytest.ini_options]`（pytest.ini 已删除——它会静默遮蔽 pyproject，
   曾导致 loop_scope=session 失效、全量测试跨循环崩溃）；uv 缓存若被沙箱拒写可加 `UV_CACHE_DIR=/tmp/uv-cache`
 
-### Resolved Since 2026-08-17（详见 remaining_issues.md）
+### Resolved Since 2026-08-17（见 archive_docs/remaining_issues.md 历史记录）
 - BM25 索引/检索分词统一 _tokenize()（C5），旧索引加载自愈
 - 任务队列持久化：pending 落库 + worker 轮询 + recover_interrupted_tasks 接入 lifespan（C4）
 - CourseDetailView 文档 tab、analysis/wrong 方法语义、pytest-asyncio loop_scope 迁移均已完成

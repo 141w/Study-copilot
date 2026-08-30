@@ -207,17 +207,17 @@
       </button>
 
       <div v-if="wrongQuestions.length > 0" class="space-y-4 mt-6">
-        <h2 class="text-xl font-semibold text-gray-900">错题本</h2>
+        <h2 class="text-xl font-semibold text-[var(--text-primary)]">错题本</h2>
         <div
           v-for="q in wrongQuestions"
           :key="q.id"
           class="card p-5 border-l-4 border-red-400"
         >
-          <h3 class="text-base font-medium text-gray-900 mb-3">{{ q.question }}</h3>
+          <h3 class="text-base font-medium text-[var(--text-primary)] mb-3">{{ q.question }}</h3>
           <div class="space-y-1 text-sm">
             <p class="text-red-600">你的答案: {{ q.user_answer }}</p>
             <p class="text-green-600">正确答案: {{ q.correct_answer }}</p>
-            <p v-if="q.explanation" class="text-gray-500">解析: {{ q.explanation }}</p>
+            <p v-if="q.explanation" class="text-[var(--text-muted)]">解析: {{ q.explanation }}</p>
           </div>
           <button
             @click="redoQuestion(q)"

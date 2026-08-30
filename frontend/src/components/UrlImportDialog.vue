@@ -6,15 +6,15 @@
     @update:visible="$emit('update:visible', $event)"
     @close="close"
   >
-    <label class="block text-sm font-medium text-gray-700 mb-2">网页地址</label>
+    <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">网页地址</label>
     <input
       v-model="url"
       type="url"
       placeholder="https://example.com/article"
-      class="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] text-sm"
+      class="w-full px-4 py-2.5 border border-[var(--border-default)] rounded-lg bg-white focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] text-sm"
       @keydown.enter="importUrl"
     />
-    <p class="text-xs text-gray-400 mt-2">输入网页 URL，系统将自动提取正文内容并保存为文档</p>
+    <p class="text-xs text-[var(--text-muted)] mt-2">输入网页 URL，系统将自动提取正文内容并保存为文档</p>
 
     <!-- Status Messages -->
     <div v-if="error" class="mt-4 p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-600">

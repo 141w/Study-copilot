@@ -9,7 +9,7 @@ from app.core.rag_engine import RAGEngine, extract_source_indices
 
 
 def _make_retrieved(n=3):
-    """Build fake retrieval results."""
+    """Build fake retrieval results compatible with PgVectorStore output."""
     results = []
     for i in range(n):
         results.append(
@@ -20,7 +20,8 @@ def _make_retrieved(n=3):
                     "source": "doc.pdf",
                     "document_id": "doc1",
                 },
-                "distance": 0.1 * i,
+                "relevance": max(0.0, 1.0 - i * 0.1),  # batch-normalized relevance
+                "retrieval_type": "pgvector_hybrid",
             }
         )
     return results
@@ -212,59 +213,63 @@ class TestRAGEngineAsync:
     async def test_retrieve_calls_store_search(self, engine):
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(3)
-        engine._vector_store_cache["doc1"] = mock_store
-        # Disable reranker to avoid loading the real CrossEncoder model
-        engine._reranker = None
-        engine._reranker_loaded = True
+        engine._pg_vector_store = mock_store
 
         results = await engine.retrieve(["doc1"], "test query", top_k=3)
-        mock_store.search.assert_called_once()
+        mock_store.search.assert_called_once_with("test query", ["doc1"], 6)
         assert len(results) <= 3
 
     @pytest.mark.asyncio
     async def test_retrieve_filters_high_distance(self, engine):
         mock_store = AsyncMock()
-        # All results above threshold
+        # All results above threshold (relevance <= 1e-6)
         mock_store.search.return_value = [
-            {"chunk": {"text": f"t{i}"}, "distance": 0.99} for i in range(5)
+            {"chunk": {"text": f"t{i}"}, "relevance": 1e-7} for i in range(5)
         ]
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
         results = await engine.retrieve(["doc1"], "q", top_k=5)
         assert len(results) == 0
 
     @pytest.mark.asyncio
     async def test_retrieve_multiple_docs(self, engine):
         """Retrieve should merge results from multiple documents."""
-        for doc_id in ["doc1", "doc2"]:
-            mock_store = AsyncMock()
-            mock_store.search.return_value = [
-                {"chunk": {"text": f"{doc_id}_chunk", "document_id": doc_id}, "distance": 0.1}
-            ]
-            engine._vector_store_cache[doc_id] = mock_store
+        mock_store = AsyncMock()
+        mock_store.search.return_value = [
+            {"chunk": {"text": f"{doc_id}_chunk", "document_id": doc_id}, "relevance": 0.8}
+            for doc_id in ["doc1", "doc2"]
+        ]
+        engine._pg_vector_store = mock_store
 
         results = await engine.retrieve(["doc1", "doc2"], "query", top_k=5)
         assert len(results) == 2
 
     @pytest.mark.asyncio
-    async def test_retrieve_sorts_by_distance(self, engine):
+    async def test_retrieve_sorts_by_relevance(self, engine):
         mock_store = AsyncMock()
+        # Use distinct text for each chunk to avoid dedup false-positive
         mock_store.search.return_value = [
-            {"chunk": {"text": "far"}, "distance": 0.8},
-            {"chunk": {"text": "near"}, "distance": 0.1},
+            {"chunk": {"text": "content that is definitely far from the query"}, "relevance": 0.2},
+            {"chunk": {"text": "content that is near to the query"}, "relevance": 0.9},
         ]
-        engine._vector_store_cache["doc1"] = mock_store
-        # Disable reranker so sort order is purely by distance
+        engine._pg_vector_store = mock_store
+        # Disable reranker so sort order is purely by relevance
         engine._reranker = None
         engine._reranker_loaded = True
         results = await engine.retrieve(["doc1"], "q", top_k=5)
-        assert results[0]["chunk"]["text"] == "near"
+        assert results[0]["chunk"]["text"] == "content that is near to the query"
 
     @pytest.mark.asyncio
     async def test_retrieve_applies_reranker(self, engine):
         """If reranker is available, results should have reranker_score."""
+        # Use distinct first-100 chars per chunk to survive dedup,
+        # and batch-normalized relevance to survive post-filter.
         mock_store = AsyncMock()
-        mock_store.search.return_value = _make_retrieved(3)
-        engine._vector_store_cache["doc1"] = mock_store
+        mock_store.search.return_value = [
+            {"chunk": {"text": f"distinct content number {i}" * 5, "document_id": "d"},
+             "relevance": 0.9, "retrieval_type": "pgvector_hybrid"}
+            for i in range(3)
+        ]
+        engine._pg_vector_store = mock_store
 
         mock_reranker = MagicMock()
         mock_reranker.predict.return_value = [0.9, 0.5, 0.1]
@@ -279,9 +284,14 @@ class TestRAGEngineAsync:
     @pytest.mark.asyncio
     async def test_retrieve_reranker_failure_falls_back(self, engine):
         """If reranker raises, should fall back to original order."""
+        # Use distinct chunks to survive dedup with batch-normalized relevance
         mock_store = AsyncMock()
-        mock_store.search.return_value = _make_retrieved(3)
-        engine._vector_store_cache["doc1"] = mock_store
+        mock_store.search.return_value = [
+            {"chunk": {"text": f"fallback content number {i}" * 5, "document_id": "d"},
+             "relevance": 0.8, "retrieval_type": "pgvector_hybrid"}
+            for i in range(3)
+        ]
+        engine._pg_vector_store = mock_store
 
         mock_reranker = MagicMock()
         mock_reranker.predict.side_effect = RuntimeError("reranker fail")
@@ -289,7 +299,7 @@ class TestRAGEngineAsync:
         engine._reranker_loaded = True
 
         results = await engine.retrieve(["doc1"], "query", top_k=3)
-        # Should still return results (original order)
+        # Should still return results (original order after relevance sort)
         assert len(results) == 3
 
     @pytest.mark.asyncio
@@ -395,7 +405,7 @@ class TestRAGEngineAsync:
     async def test_ask_no_results(self, MockLLM, mock_embedder, engine):
         mock_store = AsyncMock()
         mock_store.search.return_value = []
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         result = await engine.ask(["doc1"], "question")
         assert result["context_used"] is False
@@ -410,7 +420,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(3)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         result = await engine.ask(["doc1"], "question")
         assert result["context_used"] is True
@@ -427,7 +437,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(3)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         result = await engine.ask(["doc1"], "question")
         assert result["used_source_indices"] == []
@@ -443,7 +453,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(3)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         result = await engine.ask(["doc1"], "question")
         assert result["used_source_indices"] == [2]
@@ -458,7 +468,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(1)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         config = {"api_key": "k", "base_url": "http://b", "model_name": "m"}
         result = await engine.ask(["doc1"], "question", user_config=config)
@@ -473,7 +483,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(1)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         history = [{"role": "user", "content": f"q{i}"} for i in range(20)]
         result = await engine.ask(["doc1"], "question", history=history)
@@ -517,7 +527,7 @@ class TestRAGEngineAsync:
     async def test_ask_stream_no_results(self, MockLLM, engine):
         mock_store = AsyncMock()
         mock_store.search.return_value = []
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         chunks = []
         async for event in engine.ask_stream(["doc1"], "question"):
@@ -540,7 +550,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(2)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         events = []
         async for event in engine.ask_stream(["doc1"], "question"):
@@ -555,19 +565,8 @@ class TestRAGEngineAsync:
         assert "".join(e["content"] for e in token_events) == "答案"
 
     @pytest.mark.asyncio
-    @patch("app.core.rag_engine.embedder")
-    async def test_get_vector_store_caches(self, mock_embedder, engine):
-        """_get_vector_store should cache loaded stores."""
-        with patch("app.core.rag_engine.DocumentVectorStore") as MockDVS:
-            mock_store = AsyncMock()
-            mock_instance = MagicMock()
-            mock_instance.load = AsyncMock(return_value=True)
-            MockDVS.return_value = mock_instance
-
-            store1 = await engine._get_vector_store("doc1")
-            store2 = await engine._get_vector_store("doc1")
-            assert store1 is store2
-            MockDVS.assert_called_once()
+    def test_pg_vector_store_init(self, engine):
+        assert engine._pg_vector_store is None
 
     def test_ensure_reranker_failure(self, engine):
         """When CrossEncoder can't be imported, reranker should be None."""
@@ -593,7 +592,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = []
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         with patch("app.core.rag_engine.LLM"):
             config = {"embedding_model": "new_model", "embedding_dimension": 512}
@@ -609,7 +608,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = []
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         with patch("app.core.rag_engine.LLM"):
             config = {"embedding_model": "same_model"}
@@ -630,7 +629,7 @@ class TestRAGEngineAsync:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(1)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         history = [{"role": "user", "content": "what is X"}]
         analysis = QueryAnalysis(QueryType.RAG_QA, "rewritten query")
@@ -648,7 +647,7 @@ class TestRAGEngineAsync:
         """Query without pronoun should NOT trigger rewrite."""
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(1)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         # Disable reranker to keep tests deterministic
         engine._reranker = None
@@ -670,7 +669,7 @@ class TestRAGEngineAsync:
         assert engine.top_k == 5
 
     def test_engine_vector_store_cache_init(self, engine):
-        assert engine._vector_store_cache == {}
+        assert engine._pg_vector_store is None
 
     def test_engine_reranker_init(self):
         # Use a pristine engine (the fixture disables the reranker for other tests)
@@ -769,7 +768,7 @@ class TestRAGEngineExtended:
         """Results should be limited to top_k after reranking."""
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(10)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         results = await engine.retrieve(["doc1"], "query", top_k=3)
         assert len(results) <= 3
@@ -779,12 +778,12 @@ class TestRAGEngineExtended:
         """Retrieve should request fetch_k = top_k * 2 from stores."""
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(2)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         await engine.retrieve(["doc1"], "query", top_k=5)
-        # Should call search with top_k * 2 = 10
+        # Should call search(query, doc_ids, top_k * 2=10)
         call_args = mock_store.search.call_args
-        assert call_args[0][1] == 10  # fetch_k = 5 * 2
+        assert call_args[0][2] == 10  # fetch_k = 5 * 2 (3rd positional arg)
 
     # generate_answer edge cases
     @pytest.mark.asyncio
@@ -829,7 +828,7 @@ class TestRAGEngineExtended:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(2)
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         events = []
         async for event in engine.ask_stream(["doc1"], "q"):
@@ -861,10 +860,11 @@ class TestRAGEngineExtended:
         mock_store.search.return_value = [
             {
                 "chunk": {"text": "t", "page": 5, "source": "a.pdf", "document_id": "d1"},
-                "distance": 0.1,
+                "relevance": 0.8,
+                "retrieval_type": "pgvector_hybrid",
             }
         ]
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         events = []
         async for event in engine.ask_stream(["doc1"], "q"):
@@ -883,7 +883,7 @@ class TestRAGEngineExtended:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = []
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         config = {"embedding_model": "new_model", "embedding_dimension": 512}
         with patch("app.core.rag_engine.LLM"):
@@ -904,10 +904,11 @@ class TestRAGEngineExtended:
         mock_store.search.return_value = [
             {
                 "chunk": {"text": "t", "page": 3, "source": "a.pdf", "document_id": "d1"},
-                "distance": 0.1,
+                "relevance": 0.8,
+                "retrieval_type": "pgvector_hybrid",
             }
         ]
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         result = await engine.ask(["doc1"], "q")
         assert isinstance(result["sources"][0]["page"], str)
@@ -925,10 +926,11 @@ class TestRAGEngineExtended:
         mock_store.search.return_value = [
             {
                 "chunk": {"text": "t", "page": None, "source": "a.pdf", "document_id": "d1"},
-                "distance": 0.1,
+                "relevance": 0.8,
+                "retrieval_type": "pgvector_hybrid",
             }
         ]
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         result = await engine.ask(["doc1"], "q")
         assert result["sources"][0]["page"] == ""
@@ -936,17 +938,18 @@ class TestRAGEngineExtended:
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
     async def test_ask_relevance_score_calculation(self, MockLLM, engine):
-        """relevance_score should be 1/(1+distance)."""
+        """relevance_score should be the batch-normalized relevance from search."""
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "answer"
         MockLLM.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = [
-            {"chunk": {"text": "t", "page": 1, "source": "s", "document_id": "d"}, "distance": 0.5}
+            {"chunk": {"text": "t", "page": 1, "source": "s", "document_id": "d"},
+             "relevance": 0.667, "retrieval_type": "pgvector_hybrid"}
         ]
-        engine._vector_store_cache["doc1"] = mock_store
+        engine._pg_vector_store = mock_store
 
         result = await engine.ask(["doc1"], "q")
         score = result["sources"][0]["relevance_score"]
-        assert abs(score - 1.0 / 1.5) < 0.001
+        assert abs(score - 0.667) < 0.001

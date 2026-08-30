@@ -83,18 +83,8 @@ async def _claim_next_job():
             query = query.with_for_update(skip_locked=True)
         result = await db.execute(query)
         task = result.scalar_one_or_none()
-        import logging
-
-        logging.getLogger(__name__).warning(
-            "CLAIM local=%r bind=%r found=%s",
-            AsyncSessionLocal, getattr(db, "bind", None), task is not None
-        )
         if task is None:
             return None
-
-    from sqlalchemy import select
-
-    from app.db import AsyncTask
 
     async with AsyncSessionLocal() as db:
         query = (

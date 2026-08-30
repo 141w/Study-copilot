@@ -1,11 +1,11 @@
 <template>
-  <div class="border-t border-gray-100 bg-white p-4">
+  <div class="border-t border-[var(--border-default)] bg-white p-4">
     <div class="flex gap-3 max-w-4xl mx-auto">
       <input
         v-model="inputText"
         type="text"
         placeholder="输入您的问题..."
-        class="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+        class="flex-1 px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
         @keydown.enter="sendMessage"
         :disabled="disabled"
       />
