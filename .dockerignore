@@ -9,12 +9,8 @@ htmlcov/
 dist/
 build/
 .venv/
-backend/.venv/
-backend/.mypy_cache/
-backend/.pytest_cache/
-backend/.coverage
-uv.lock
-backend/uv.lock
+.mypy_cache/
+.ruff_cache/
 
 # Data
 backend/.embedding_cache/
@@ -29,20 +25,6 @@ backend/tests/
 # CI/CD
 .github/
 
-# Documentation (keep README)
-*.md
-!README.md
-
-# Frontend
-frontend/
-node_modules/
-
-# Reference projects
-open-notebook-main/
-
-# Backups
-backups/
-
 # IDE
 .vscode/
 .idea/
@@ -54,5 +36,6 @@ backups/
 Thumbs.db
 
 # Databases
-backend/*.db
-backend/*.sqlite
+*.db
+*.sqlite
+

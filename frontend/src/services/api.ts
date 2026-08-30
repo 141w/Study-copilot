@@ -25,8 +25,9 @@ function _isIdempotent(method: string | undefined): boolean {
 }
 
 // Override request() to dedup concurrent idempotent calls
+// _origRequest must be captured BEFORE the override to avoid infinite recursion
+const _origRequest = api.request.bind(api)
 const _requestImpl = async function (config: InternalAxiosRequestConfig) {
-  const _origRequest = api.request.bind(api)
   if (_isIdempotent(config.method)) {
     const key = _dedupKey(config)
     const existing = _pending.get(key)
@@ -43,8 +44,7 @@ const _requestImpl = async function (config: InternalAxiosRequestConfig) {
 
 const _aborts = new Map<string, AbortController>()
 
-/** Cancel a specific pending GET by method+url match (supports wildcard *). */
-function cancelGet(pattern: string): void {
+function _cancelMatches(pattern: string): void {
   for (const [key, ctrl] of _aborts) {
     if (key === pattern || pattern === '*') {
       ctrl.abort()
@@ -53,7 +53,7 @@ function cancelGet(pattern: string): void {
   }
 }
 
-/** Cancel all pending requests (dedup + GET + non-GET). */
+/** Cancel all pending requests. Call on route change / component unmount. */
 function cancelAll(): void {
   for (const [, ctrl] of _aborts) {
     try { ctrl.abort() } catch { /* noop */ }
@@ -61,17 +61,35 @@ function cancelAll(): void {
   _aborts.clear()
 }
 
-// ── Auth interceptor ──────────────────────────────────────────────────────
+/** Cancel pending GETs matching pattern (supports wildcard '*'). */
+function cancelGet(pattern: string): void {
+  _cancelMatches(pattern)
+}
+
+export { cancelAll, cancelGet }
+
+// ── Request interceptor (auth + abort signal + dedup) ──────────────────────
 
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // Register AbortController so cancelAll() can reach in-flight requests
+    if (!config.signal) {
+      const key = `${config.method || 'get'}:${config.url}`
+      const ctrl = new AbortController()
+      _aborts.set(key, ctrl)
+      config.signal = ctrl.signal
+    }
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    // If request was aborted via cancelAll, the original controller
+    // is already removed from _aborts — nothing to clean up here
+    return Promise.reject(error)
+  }
 )
 
 // ── Response interceptor (retry + toast) ───────────────────────────────────
@@ -128,7 +146,4 @@ api.interceptors.response.use(
   }
 )
 
-export { cancelAll, cancelGet }
-export type RequestDedup = typeof _pending
-export type AbortRegistry = typeof _aborts
 export default api
