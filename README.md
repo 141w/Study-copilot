@@ -87,6 +87,10 @@
 └──────────────────────────────┼───────────────────────────────────┘
                                │ HTTP + SSE
 ┌──────────────────────────────┼───────────────────────────────────┐
+│              nginx（静态文件 + API 反向代理）                      │
+└──────────────────────────────┼───────────────────────────────────┘
+                               │ localhost:8000
+┌──────────────────────────────┼───────────────────────────────────┐
 │                         后端 (FastAPI)                            │
 │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
 │  │ 认证系统 │ │ 文档API │ │ 问答API │ │ 出题API │ │ 分析API │   │
@@ -97,7 +101,7 @@
 │  │                        核心引擎                            │    │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │    │
 │  │  │ 文档解析器   │  │ 向量存储    │  │ LLM 调用    │       │    │
-│  │  │ (Docling)   │  │ (FAISS)     │  │ (OpenRouter)│       │    │
+│  │  │ (Docling)   │  │ (pgvector)  │  │ (OpenRouter)│       │    │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘       │    │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │    │
 │  │  │ 文本分块器  │  │ 出题生成器   │  │ Embedder    │       │    │
@@ -107,10 +111,11 @@
 │  │  │ 查询重写器  │  │ Reranker    │                         │    │
 │  │  │ (Query Rew) │  │ (CrossEnc)  │                         │    │
 │  │  └─────────────┘  └─────────────┘                         │    │
-│  └────────────────────────────────────────────────────────────┘    │
+│  └────────────────────────────────────────────────────────────┘   │
 │                              │                                    │
 │  ┌──────────────┐  ┌─────────────────┐  ┌─────────────────┐       │
-│  │PostgreSQL 数据库│  │ 文件存储        │  │ 向量索引存储    │       │
+│  │PostgreSQL+pgvector│  │ 文件存储        │  │ 任务队列        │       │
+│  │  数据库       │  │ (uploads/)      │  │ (AsyncTask)    │       │
 │  └──────────────┘  └─────────────────┘  └─────────────────┘       │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -125,11 +130,12 @@
 |-----|------|---------|
 | **FastAPI** | Web 框架 | ≥ 0.109 |
 | **SQLAlchemy** | ORM 数据库（异步模式） | ≥ 2.0 |
-| **PostgreSQL** | 关系型数据库 | ≥ 16 |
+| **PostgreSQL + pgvector** | 关系型数据库 + 向量检索 | ≥ 16 |
 | **asyncpg** | PostgreSQL 异步驱动 | ≥ 0.29 |
 | **PyMuPDF** | PDF 文本提取 | - |
 | **Docling** | AI 文档解析（IBM 开源） | ≥ 2.0 |
-| **FAISS** | 向量相似度检索 | ≥ 1.7.4 |
+| **pgvector** | PostgreSQL 向量扩展（HNSW 索引，余弦相似度） | - |
+| **PostgreSQL FTS** | 全文关键词搜索（GIN tsvector 索引） | ≥ 16 |
 | **sentence-transformers** | 文本向量化 text2vec-base-chinese / BGE-M3（前端可切换） | ≥ 2.2 |
 | **CrossEncoder** | 检索结果重排序 | - |
 | **OpenAI SDK** | LLM 调用 | ≥ 1.10 |
@@ -191,7 +197,7 @@ study-copilot/
 │   │   ├── core/                   # 核心业务逻辑
 │   │   │   ├── document_parser.py # 统一文档解析（PDF/DOCX/PPTX/TXT）
 │   │   │   ├── chunker.py         # 文本分块（固定/语义/层级）
-│   │   │   ├── vector_store.py    # 混合向量检索（FAISS+BM25+RRF）
+│   │   │   ├── vector_store.py    # 混合向量检索（pgvector HNSW + FTS，FAISS/BM25 兼容层保留）
 │   │   │   ├── rag_engine.py      # Agentic RAG 引擎（路由+自适应+反思）
 │   │   │   ├── query_router.py    # 查询路由（意图分类+上下文改写）
 │   │   │   ├── retrieval_grader.py # 检索质量评估
@@ -204,6 +210,7 @@ study-copilot/
 │   │   │   ├── encryption.py      # Fernet 凭证加密
 │   │   │   ├── tts.py             # Edge TTS 语音合成
 │   │   │   ├── url_extractor.py   # 网页内容提取
+│   │   │   ├── pgvector_store.py  # pgvector 向量存储（替代 FAISS+BM25）
 │   │   │   ├── transformations.py # 内容转换引擎（8 种类型）
 │   │   │   ├── task_worker.py     # 异步任务 worker
 │   │   │   ├── template_manager.py # Jinja2 Prompt 模板管理
@@ -285,13 +292,13 @@ study-copilot/
 │   │   └── test_vector_store.py
 │   │
 │   ├── uploads/                    # 用户上传文件（gitignored）
-│   ├── vectorstore/                # FAISS 索引文件（gitignored）
+│   ├── vectorstore/                # 遗留索引目录（gitignored，已迁移至 pgvector）
 │   ├── .env                        # 环境变量（gitignored）
 │   ├── .env.example                # 环境变量模板
 │   ├── requirements.txt            # Python 依赖（兼容层）
 │   ├── pyproject.toml               # 项目配置（hatchling + ruff + pytest）
 │   ├── run.py                      # 启动脚本
-│   └── Dockerfile                  # Docker 镜像
+│   └── Dockerfile                  # 合并镜像（前端+后端+nginx，单容器部署）
 │
 ├── frontend/                        # 前端应用
 │   ├── src/
@@ -330,19 +337,20 @@ study-copilot/
 │   │   │   │   ├── BaseList.vue   # 列表
 │   │   │   │   ├── LoadingSpinner.vue # 加载动画
 │   │   │   │   ├── IconButton.vue # 图标按钮
-│   │   │   │   └── Toast.vue      # 通知提示
+│   │   │   │   ├── Toast.vue      # 通知提示
+│   │   │   │   └── icons/         # 内联 SVG 图标组件（22 个）
 │   │   │   └── chat/              # 聊天组件
 │   │   │       ├── ChatInput.vue  # 消息输入
 │   │   │       └── ChatHistoryPanel.vue # 聊天历史面板
 │   │   │
 │   │   ├── stores/                 # 10 个 Pinia store（全部 TypeScript）
 │   │   │   ├── auth.ts            # 认证状态
-│   │   │   ├── chat.ts            # 问答状态（含流式）
+│   │   │   ├── chat.ts            # 问答状态（含流式 + abort cleanup）
 │   │   │   ├── config.ts          # LLM 配置状态
-│   │   │   ├── course.ts          # 课程空间状态
-│   │   │   ├── document.ts        # 文档状态（SWR 缓存）
+│   │   │   ├── course.ts          # 课程空间状态（SWR 缓存）
+│   │   │   ├── document.ts        # 文档状态（SWR 缓存 + 请求去重）
 │   │   │   ├── note.ts            # 笔记状态（SWR 缓存）
-│   │   │   ├── quiz.ts            # 做题状态
+│   │   │   ├── quiz.ts            # 做题状态（SWR 缓存）
 │   │   │   ├── sidebar.ts         # 侧边栏状态
 │   │   │   ├── theme.ts           # 主题状态
 │   │   │   └── toast.ts           # 提示状态
@@ -350,6 +358,7 @@ study-copilot/
 │   │   ├── composables/            # 可复用组合函数
 │   │   │   ├── useApi.ts          # 统一 API 请求处理
 │   │   │   ├── useMarkdown.ts     # Markdown 渲染
+│   │   │   └── useChatExport.ts   # 对话导出
 │   │   │   └── useChatExport.ts   # 对话导出
 │   │   │
 │   │   ├── types/                  # TypeScript 类型定义
@@ -823,7 +832,7 @@ Step 4: 答案生成 + 自我反思
 
 ### 检索重排序（Rerank）
 
-FAISS 检索结果可能包含与问题语义相似但不直接相关的内容。CrossEncoder 重排序模块对检索结果进行二次排序，将真正相关的结果排在前面。
+pgvector 检索结果可能包含与问题语义相似但不直接相关的内容。CrossEncoder 重排序模块对检索结果进行二次排序，将真正相关的结果排在前面。
 
 - 使用 `cross-encoder/ms-marco-MiniLM-L-6-v2` 模型
 - 对 Top-K 结果逐对评分
@@ -844,7 +853,7 @@ RAG 问答中，LLM 生成的回答会标注引用来源，系统支持：
 
 删除文档时自动清理：
 1. 上传的文件
-2. FAISS 向量索引
+2. `document_chunks` 表中的向量数据（ON DELETE CASCADE）
 3. 数据库中的文档记录
 
 ### LLM 调用重试
@@ -1132,7 +1141,7 @@ ruff format .
 #### 初始完成的功能
 - 基于 FastAPI + Vue3 的完整架构
 - PDF / DOCX / PPTX 文档上传与解析
-- RAG 智能问答（FAISS + LLM）
+- RAG 智能问答（pgvector + LLM）
 - AI 自动出题与答题判分
 - 学习分析与错题管理
 - JWT 用户认证系统
@@ -1198,10 +1207,10 @@ docker compose up -d
 
 | 服务 | 地址 |
 |------|------|
-| 前端 | http://localhost:3000 |
-| 后端 API | http://localhost:8000 |
-| API 文档 | http://localhost:8000/docs |
-| 健康检查 | http://localhost:8000/health |
+| 应用（前端 + API） | http://localhost |
+| API 文档 | http://localhost/api/docs |
+| 健康检查 | http://localhost/health |
+| PostgreSQL | localhost:5433 |
 
 ### 开发模式
 
@@ -1209,23 +1218,23 @@ docker compose up -d
 
 ```bash
 docker compose up -d
-make shell         # 进 backend 容器调试
+make shell         # 进 app 容器调试
 ```
 
-前端在容器内监听 3000 端口（开发模式），nginx 在 80。
+前端在容器内通过 nginx serve，API 通过 nginx 反向代理到本地 uvicorn。
 
 ### Makefile 命令
 
 | 命令 | 说明 |
 |------|------|
-| `make build` | 构建所有镜像 |
+| `make build` | 构建合并镜像（前端+后端） |
 | `make up` | 启动服务（后台） |
 | `make down` | 停止服务（保留数据） |
 | `make restart` | 重启服务 |
 | `make logs` | 查看全部日志 |
-| `make logs-backend` | 查看后端日志 |
+| `make logs-app` | 查看应用日志 |
 | `make logs-db` | 查看数据库日志 |
-| `make shell` | 进入 backend 容器 |
+| `make shell` | 进入 app 容器 |
 | `make migrate` | 手动执行数据库迁移 |
 | `make clean` | 停止并删除所有数据（⚠️ 危险！） |
 | `make prune` | 清理未使用的 Docker 资源 |
@@ -1302,6 +1311,6 @@ MIT License - 欢迎开源贡献！
 - [FastAPI](https://fastapi.tiangolo.com/) - 现代 Python Web 框架
 - [Vue.js](https://vuejs.org/) - 渐进式 JavaScript 框架
 - [Docling](https://github.com/IBM/docling) - IBM 开源文档解析库
-- [FAISS](https://github.com/facebookresearch/faiss) - 高效向量检索
+- [pgvector](https://github.com/pgvector/pgvector) - PostgreSQL 向量扩展
 - [sentence-transformers](https://sbert.net/) - 文本向量化模型
 - [TailwindCSS](https://tailwindcss.com/) - 原子化 CSS 框架

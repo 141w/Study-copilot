@@ -20,7 +20,7 @@
 
 **Fast wins** (small effort, immediate impact): `document_parser` DOCX/PPTX thread offload; `vector_store` hybrid search + cross-doc retrieval parallelized; 4 composite DB indexes via Alembic migration; task_worker debug log cleanup; LLM retry jitter.
 
-## Done (2026-08-29 + 2026-08-30)
+## Done (2026-08-29 + 2026-08-30 + 2026-08-30 review)
 
 | Item | Files Changed | Verification |
 |------|--------------|-------------|
@@ -39,6 +39,12 @@
 | L-3: DB pool default without tuning | `database.py` — 4 env vars with SQLAlchemy-default fallbacks (pool_size=5, max_overflow=10, timeout=30, recycle=3600) | ruff ✅, 420 tests ✅ |
 | —: analysis_service tests | `tests/test_analysis_service.py` — 15 tests (7 wrong+4 stats+4 progress+3 API integration) | 400 tests ✅, coverage 70.7% |
 | —: transform_service tests | `tests/test_transform_service.py` — 20 tests (transform/note/document paths) | 420 tests ✅, transform_service coverage 23%→92% |
+| **INFRA-1: Docker 镜像合并** | `backend/Dockerfile` — 3-stage build (frontend-builder, backend-builder, runtime); `entrypoint.sh` — nginx + uvicorn dual-process; `docker-compose.yml` — 2 services (db + app), port 80 | vue-tsc ✅, 87 tests ✅ |
+| **F-M2: 请求去重 + GET abort** | `api.ts` — dedup Map for idempotent GET/HEAD; `_aborts` registry + request interceptor wiring; `cancelAll()` in chat stream cleanup | vue-tsc ✅, 87 tests ✅ |
+| **F-M2 review fix: 递归 bug** | `api.ts` — `_origRequest` captured BEFORE `api.request` override (was inside impl → infinite recursion) | vue-tsc ✅ |
+| **F-M2 review fix: 重复 export** | `api.ts` — removed duplicate `export { cancelAll, cancelGet }` and duplicate `export default api` | vue-tsc ✅ |
+| **SWR: chat/course/quiz stores** | `chat.ts` + `course.ts` + `quiz.ts` — `lastFetched` + `isCacheFresh()` + `forceRefresh` param on list queries | vue-tsc ✅, 87 tests ✅ |
+| **F-M5: 图标抽离** | 22 Icon*.vue SFC components in `icons/`; AppSidebar (9 icons), ChatView (4 icons), CourseCard (5 icons) replaced | vue-tsc ✅, 87 tests ✅ |
 
 ---
 
@@ -494,13 +500,21 @@ engine = create_async_engine(
 | Masked API key return | `config_service.py:35` — `api_key_masked`, never plaintext |
 | `/health` endpoint | `main.py:128-148` — liveness + DB ping |
 
-### Frontend — Done (2026-08-29)
+### Frontend — Done (2026-08-29 + 2026-08-30)
 
 | Item | Files Changed | Verification |
 |------|--------------|-------------|
-| F-H2: Double filter() in ChatView | `ChatView.vue` — use `documentStore.readyDocuments`; `stores/document.ts` — added `readyDocuments`, `hasDocuments`, SWR cache (30s) | vue-tsc ✅, 59 tests ✅ |
-| F-M1: Duplicate streamingContent/streamingSources | `stores/chat.ts` — removed 2 redundant refs; SSE handler now only writes to temp message item | vue-tsc ✅, 59 tests ✅ |
-| F-M4: Hardcoded gray colors (ChatView + AnalysisView) | `ChatView.vue` — 6 `gray-*` → CSS vars; `AnalysisView.vue` — 3 `gray-*` → CSS vars | vue-tsc ✅ |
+| F-H1: SSE markdown re-render cache | `stores/chat.ts` — `_mdCache` Map + streaming bypass (plain text during token delivery) | vue-tsc ✅, 87 tests ✅ |
+| F-H2: Double filter() in ChatView | `ChatView.vue` — use `documentStore.readyDocuments`; `stores/document.ts` — added `readyDocuments`, `hasDocuments`, SWR cache (30s) | vue-tsc ✅, 87 tests ✅ |
+| F-M1: Duplicate streamingContent/streamingSources | `stores/chat.ts` — removed 2 redundant refs; SSE handler now only writes to temp message item | vue-tsc ✅, 87 tests ✅ |
+| F-M2: 429/503 retry | `api.ts` — 429 respects retry-after header, 503 retries after 2s | vue-tsc ✅, 87 tests ✅ |
+| F-M2: Request dedup + GET abort cleanup | `api.ts` — `_pending` Map dedup for idempotent GET/HEAD; `_aborts` registry wired via request interceptor; `cancelAll()` in chat stream finally | vue-tsc ✅, 87 tests ✅ |
+| F-M2 review fix: recursion bug | `api.ts` — `_origRequest` captured BEFORE `api.request` override (was inside impl body, causing infinite recursion) | vue-tsc ✅ |
+| F-M2 review fix: duplicate exports | `api.ts` — removed duplicate `export { cancelAll, cancelGet }` and duplicate `export default api` | vue-tsc ✅ |
+| F-M3: SWR caching (document + course + quiz + chat) | `document.ts` — `lastFetched` + `isCacheFresh()`; `course.ts` + `quiz.ts` + `chat.ts` — same pattern, `forceRefresh` param | vue-tsc ✅, 87 tests ✅ |
+| F-M4: Hardcoded gray colors | All 11 view/component files — `gray-*` → CSS variables for dark mode | vue-tsc ✅ |
+| F-M5: Inline SVG icon extraction | 22 Icon*.vue SFC components; AppSidebar (9), ChatView (4), CourseCard (5) replaced | vue-tsc ✅, 87 tests ✅ |
+| INFRA-1: Docker 镜像合并 | `backend/Dockerfile` — 3-stage (frontend-builder, backend-builder, runtime); `entrypoint.sh` — nginx + uvicorn; `docker-compose.yml` — 2 services, port 80 | — |
 
 ---
 
@@ -615,7 +629,7 @@ Files: ChatView, AnalysisView, DocumentView, UploadView, ModelConfigView, NoteEd
 
 | Priority | Items | Effort | Impact |
 |----------|-------|--------|--------|
-| ✅ Done | F-H1 SSE markdown cache, F-H2 double filter, F-M1 duplicate state, F-M4 all 205 gray instances | Small–Medium | Streaming perf, correctness, dark mode |
+| ✅ Done | F-H1 SSE markdown cache, F-H2 double filter, F-M1 duplicate state, F-M2 dedup+abort+SWR+429retry, F-M4 all gray instances, F-M5 icon extraction (22 components) | Small–Medium | Streaming perf, correctness, dark mode, resilience |
 | ✅ Partial | F-M2 429/503 retry (done), dedup + abort cleanup (remaining) | Small + Medium | Resilience |
 | 🟡 Partial | F-M3 document.ts SWR (done), other stores (remaining) | Small | Perf |
 | Optional | F-M5 icon dedup | Medium | Bundle size |
