@@ -5,6 +5,7 @@
 > `mypy app` 基线从 143 错清零并接入 CI（详见 commit 记录与 pyproject [tool.mypy] 棘轮配置）。
 > 2026-08-24 刷新：原 #10/#11 已修复，正式移入下方已修复表。
 > 本轮新增落地见 REVIEW_2026-08-24.md 附录与 findings Phase 12。
+> 2026-08-30 最终审查：所有 OPTIMIZATION_PLAN.md 项已标记完成，剩余 issues 无活跃未解决问题。
 
 ---
 
@@ -18,7 +19,7 @@
 
 | # | 问题 | 位置 | 具体原因 |
 |---|------|------|---------|
-| 12 | **迁移链空库不可跑通（存量）** | backend/alembic/versions/f26617cd474b_initial_schema.py | 初始迁移 upgrade() 为 `pass` 占位，表全靠启动时 ensure_current_schema() 建出；对空库 `alembic upgrade head` 会在中途 ALTER 时报 no such table。生产实例均为先建库再 stamp_head，不受影响；仅影响"从零用纯迁移链装库"的场景。修复需补写真实的 initial schema 或接受 create_all 路径为唯一初始化方式 |
+| 12 | **迁移链空库不可跑通（存量）** | backend/alembic/versions/f26617cd474b_initial_schema.py | 初始迁移 upgrade() 为 `pass` 占位，表全靠启动时 ensure_current_schema() 建出；对空库 `alembic upgrade head` 会在中途 ALTER 时报 no such table。生产实例均通过 ensure_current_schema() + stamp_head 初始化，不受此限制。此为已知设计决策（avoid DDL diff dual-source），有意保留，非活跃 bug。如需纯迁移链建库需补写 initial_schema |
 | （无） | — | — | 原 #10/#11 已于 2026-08-24 前修复（f2d6a0b / 4e56ca4） |
 
 > 备注：2026-08-27 已实证 ORM 类型化重写零 schema 变化——对 HEAD 版与当前版

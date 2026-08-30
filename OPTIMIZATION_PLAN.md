@@ -629,9 +629,6 @@ Files: ChatView, AnalysisView, DocumentView, UploadView, ModelConfigView, NoteEd
 
 | Priority | Items | Effort | Impact |
 |----------|-------|--------|--------|
-| ✅ Done | F-H1 SSE markdown cache, F-H2 double filter, F-M1 duplicate state, F-M2 dedup+abort+SWR+429retry, F-M4 all gray instances, F-M5 icon extraction (22 components) | Small–Medium | Streaming perf, correctness, dark mode, resilience |
-| ✅ Partial | F-M2 429/503 retry (done), dedup + abort cleanup (remaining) | Small + Medium | Resilience |
-| 🟡 Partial | F-M3 document.ts SWR (done), other stores (remaining) | Small | Perf |
-| Optional | F-M5 icon dedup | Medium | Bundle size |
+| ✅ All done | F-H1 SSE cache, F-H2 double filter, F-M1 duplicate state, F-M2 dedup+abort+SWR+429retry, F-M3 SWR (all stores), F-M4 all gray instances, F-M5 icon extraction (22 components) | Small–Medium | Streaming perf, correctness, dark mode, resilience |
 
 **All High-priority frontend items resolved.** Remaining items are low-impact improvements.
