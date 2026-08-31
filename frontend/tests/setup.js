@@ -1,12 +1,14 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach } from 'vitest'
+import { beforeEach, vi } from 'vitest'
+import ElementPlus from 'element-plus'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import { createApp } from 'vue'
 
-// Create a fresh Pinia instance before each test
-beforeEach(() => {
-  setActivePinia(createPinia())
-})
+// Register Element Plus globally so tests can resolve el-* components
+const app = createApp({ template: '<div />' })
+app.use(ElementPlus, { locale: zhCn })
 
-// Mock axios to avoid isURLSameOrigin crash in jsdom with spaces in path
+// Mock axios
 vi.mock('@/services/api', () => ({
   default: {
     get: vi.fn().mockResolvedValue({ data: {} }),
@@ -18,25 +20,21 @@ vi.mock('@/services/api', () => ({
 }))
 
 // Mock localStorage
-const localStorageMock = (() => {
-  let store = {}
-  return {
-    getItem: vi.fn((key) => store[key] || null),
-    setItem: vi.fn((key, value) => { store[key] = value }),
-    removeItem: vi.fn((key) => { delete store[key] }),
-    clear: vi.fn(() => { store = {} }),
-  }
-})()
-
-Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock })
-
-// Mock window.location for router redirects
-Object.defineProperty(window, 'location', {
+const store = {}
+Object.defineProperty(globalThis, 'localStorage', {
   value: {
-    href: '/',
-    assign: vi.fn(),
-    replace: vi.fn(),
-    reload: vi.fn(),
+    getItem: vi.fn((k) => store[k] || null),
+    setItem: vi.fn((k, v) => { store[k] = v }),
+    removeItem: vi.fn((k) => { delete store[k] }),
+    clear: vi.fn(() => { Object.keys(store).forEach(k => delete store[k]) }),
   },
+})
+
+Object.defineProperty(window, 'location', {
+  value: { href: '/', assign: vi.fn(), replace: vi.fn(), reload: vi.fn() },
   writable: true,
+})
+
+beforeEach(() => {
+  setActivePinia(createPinia())
 })

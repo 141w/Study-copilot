@@ -12,8 +12,8 @@
             配置LLM模型参数，优化AI问答体验
           </p>
           <div class="flex gap-4 justify-center">
-            <router-link to="/chat" class="btn-primary px-8 py-3 text-base">
-              返回问答
+            <router-link to="/chat">
+              <el-button type="primary" size="large">返回问答</el-button>
             </router-link>
           </div>
         </div>
@@ -161,18 +161,19 @@
             </div>
 
             <div class="mt-6 flex gap-3">
-              <button 
+              <el-button
+                type="primary"
                 @click="saveConfig"
-                class="btn-primary px-6 py-3 font-medium"
+                class="px-6 py-3"
               >
                 保存配置
-              </button>
-              <button 
+              </el-button>
+              <el-button
                 @click="resetConfig"
-                class="btn-secondary px-6 py-3 font-medium"
+                class="px-6 py-3"
               >
                 重置为默认
-              </button>
+              </el-button>
             </div>
           </div>
         </div>
