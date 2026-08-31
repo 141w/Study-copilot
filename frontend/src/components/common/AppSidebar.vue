@@ -14,59 +14,49 @@
            md:translate-x-0"
     :class="sidebarStore.isOpen ? 'translate-x-0' : '-translate-x-full'"
   >
-    <nav class="p-4 h-full overflow-y-auto">
-      <div class="space-y-1">
-        <router-link
-          v-for="item in menuItems"
-          :key="item.path"
-          :to="item.path"
-          class="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
-          active-class="bg-[var(--surface-card)] shadow-sm text-[var(--text-primary)]"
-        >
-          <el-icon class="w-5 h-5 flex-shrink-0">
-            <component :is="item.icon" />
-          </el-icon>
-          <span class="text-sm font-medium">{{ item.label }}</span>
-        </router-link>
-      </div>
+    <el-menu
+      :default-active="currentRoute"
+      :collapse="false"
+      background-color="transparent"
+      text-color="var(--text-secondary)"
+      active-text-color="var(--text-primary)"
+      class="border-none"
+      @select="handleSelect"
+    >
+      <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
+        <el-icon class="w-5 h-5 flex-shrink-0">
+          <component :is="item.icon" />
+        </el-icon>
+        <span class="text-sm font-medium">{{ item.label }}</span>
+      </el-menu-item>
+    </el-menu>
 
-      <div class="mt-8">
-        <h3 class="px-4 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">
-          我的文档
-        </h3>
-        <div class="space-y-1">
-          <div
-            v-for="doc in documentStore.documents"
-            :key="doc.id"
-            class="flex items-center gap-2 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg cursor-pointer"
-            :class="{ 'bg-[var(--bg-hover)]': doc.id === selectedDocId }"
-            @click="toggleDoc(doc.id)"
-          >
-            <el-icon class="w-4 h-4 text-[var(--text-muted)] flex-shrink-0">
-              <Document />
-            </el-icon>
-            <span class="truncate flex-1">{{ doc.filename }}</span>
-          </div>
+    <!-- Documents section -->
+    <div class="px-4 mt-2">
+      <h3 class="px-2 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">
+        我的文档
+      </h3>
+      <div class="space-y-0.5">
+        <div
+          v-for="doc in documentStore.documents"
+          :key="doc.id"
+          class="flex items-center gap-2 px-2 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded cursor-pointer transition-colors"
+          :class="{ 'bg-[var(--bg-hover)]': doc.id === selectedDocId }"
+          @click="toggleDoc(doc.id)"
+        >
+          <el-icon class="w-4 h-4 text-[var(--text-muted)] flex-shrink-0">
+            <Document />
+          </el-icon>
+          <span class="truncate flex-1">{{ doc.filename }}</span>
         </div>
       </div>
-    </nav>
+    </div>
   </aside>
 </template>
 
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>
-
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useDocumentStore } from '../../stores/document'
 import { useSidebarStore } from '../../stores/sidebar'
 import {
@@ -74,9 +64,12 @@ import {
   ChatDotSquare, DocumentChecked, TrendCharts, Setting
 } from '@element-plus/icons-vue'
 
+const route = useRoute()
 const documentStore = useDocumentStore()
 const sidebarStore = useSidebarStore()
 const selectedDocId = ref(null)
+
+const currentRoute = route.path
 
 const menuItems = [
   { path: '/', label: '首页', icon: HomeFilled },
@@ -90,6 +83,10 @@ const menuItems = [
   { path: '/model-config', label: '模型配置', icon: Setting }
 ]
 
+function handleSelect(index) {
+  sidebarStore.close()
+}
+
 function toggleDoc(docId) {
   selectedDocId.value = selectedDocId.value === docId ? null : docId
   documentStore.selectDocument(documentStore.documents.find(d => d.id === docId))
@@ -99,3 +96,15 @@ onMounted(() => {
   documentStore.fetchDocuments()
 })
 </script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

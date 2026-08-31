@@ -15,17 +15,10 @@ from enum import Enum
 from app.core.llm import LLM
 from app.core.query_decomposer import query_decomposer
 from app.core.template_manager import render_template
-from app.core.vector_store import result_relevance
+from app.core.vector_store import _relevance_sort_key, result_relevance
 
 logger = logging.getLogger(__name__)
 
-
-def _relevance_sort_key(x: dict):
-    """合并多路结果时的统一排序键：相关度降序，旧格式回退距离升序。"""
-    rel = result_relevance(x)
-    if rel is not None:
-        return (0, -rel)
-    return (1, x.get("distance", float("inf")))
 
 class RetrievalStrategy(str, Enum):
     SINGLE = "single"
@@ -126,11 +119,7 @@ class AdaptiveRetriever:
             thinking_events = []
 
         llm_config = user_config or {}
-        llm = LLM(
-            api_key=llm_config.get("api_key"),
-            base_url=llm_config.get("base_url"),
-            model=llm_config.get("model_name"),
-        )
+        llm = LLM.from_config(llm_config)
 
         sub_queries = await query_decomposer.decompose(query, llm)
         logger.info("[Adaptive] MULTI_HOP: decomposed into %d sub-queries", len(sub_queries))
@@ -172,11 +161,7 @@ class AdaptiveRetriever:
             thinking_events = []
 
         llm_config = user_config or {}
-        llm = LLM(
-            api_key=llm_config.get("api_key"),
-            base_url=llm_config.get("base_url"),
-            model=llm_config.get("model_name"),
-        )
+        llm = LLM.from_config(llm_config)
 
         entities = await query_decomposer.extract_entities(query, llm)
 

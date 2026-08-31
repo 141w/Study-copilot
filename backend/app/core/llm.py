@@ -127,5 +127,15 @@ class LLM:
                     raise
         raise last_err  # type: ignore[misc]
 
+    @classmethod
+    def from_config(cls, cfg: dict | None = None) -> "LLM":
+        """从配置 dict 创建 LLM 实例（统一入口）。"""
+        c = cfg or {}
+        return cls(
+            api_key=c.get("api_key"),
+            base_url=c.get("base_url"),
+            model=c.get("model_name"),
+        )
+
 
 llm = LLM()

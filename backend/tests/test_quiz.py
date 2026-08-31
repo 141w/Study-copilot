@@ -135,7 +135,8 @@ class TestJudgeShortAnswer:
             "app.services.quiz_service.get_llm_config_with_secret",
             new=AsyncMock(return_value=None),
         ):
-            with patch("app.core.llm.LLM", return_value=mock_llm_instance):
+            with patch("app.core.llm.LLM", return_value=mock_llm_instance) as mock_llm_cls:
+                mock_llm_cls.from_config.return_value = mock_llm_instance
                 is_correct, reason = await _judge_short_answer(
                     db, user, quiz, "绿色植物利用光能合成有机物"
                 )
@@ -158,7 +159,8 @@ class TestJudgeShortAnswer:
             "app.services.quiz_service.get_llm_config_with_secret",
             new=AsyncMock(return_value=None),
         ):
-            with patch("app.core.llm.LLM", return_value=mock_llm_instance):
+            with patch("app.core.llm.LLM", return_value=mock_llm_instance) as mock_llm_cls:
+                mock_llm_cls.from_config.return_value = mock_llm_instance
                 is_correct, reason = await _judge_short_answer(
                     db, user, quiz, "呼吸作用释放能量"
                 )
@@ -178,7 +180,8 @@ class TestJudgeShortAnswer:
             "app.services.quiz_service.get_llm_config_with_secret",
             new=AsyncMock(return_value=None),
         ):
-            with patch("app.core.llm.LLM", return_value=mock_llm_instance):
+            with patch("app.core.llm.LLM", return_value=mock_llm_instance) as mock_llm_cls:
+                mock_llm_cls.from_config.return_value = mock_llm_instance
                 is_correct, reason = await _judge_short_answer(
                     db, user, quiz, "完全不同的错误答案"
                 )
@@ -199,7 +202,8 @@ class TestJudgeShortAnswer:
             "app.services.quiz_service.get_llm_config_with_secret",
             new=AsyncMock(return_value=None),
         ):
-            with patch("app.core.llm.LLM", return_value=mock_llm_instance):
+            with patch("app.core.llm.LLM", return_value=mock_llm_instance) as mock_llm_cls:
+                mock_llm_cls.from_config.return_value = mock_llm_instance
                 is_correct, reason = await _judge_short_answer(
                     db, user, quiz, "另一个不同的答案"
                 )

@@ -85,21 +85,6 @@ async def _claim_next_job():
         task = result.scalar_one_or_none()
         if task is None:
             return None
-
-    async with AsyncSessionLocal() as db:
-        query = (
-            select(AsyncTask)
-            .where(AsyncTask.status == "pending")
-            .order_by(AsyncTask.created_at.asc())
-            .limit(1)
-        )
-        # 行锁仅 PG 有意义；SQLite 加该子句会静默返回空集，故按方言条件启用
-        if db.bind.dialect.name == "postgresql":
-            query = query.with_for_update(skip_locked=True)
-        result = await db.execute(query)
-        task = result.scalar_one_or_none()
-        if task is None:
-            return None
         task.status = "running"
         await db.commit()
 

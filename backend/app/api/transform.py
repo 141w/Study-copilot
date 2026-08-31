@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
+from app.core.transformations import list_transformations
 from app.db import User, get_db
 from app.services import transform_service
 
@@ -20,7 +21,6 @@ class TransformRequest(BaseModel):
     """Request to transform content."""
 
     transform_type: str
-    # One of: source text directly, or reference to a note/document
     source_text: str | None = None
     source_title: str = ""
     note_id: str | None = None
@@ -49,9 +49,9 @@ class TransformationInfo(BaseModel):
 
 
 @router.get("/transformations", response_model=list[TransformationInfo])
-async def list_transformations():
+async def list_transformations_endpoint():
     """List all available transformation types."""
-    return transform_service.get_available_transformations()
+    return list_transformations()
 
 
 @router.post("", response_model=TransformResponse)

@@ -21,23 +21,10 @@ from app.services.config_service import get_llm_config_with_secret
 logger = logging.getLogger(__name__)
 
 
-def get_available_transformations() -> list[dict]:
-    """Return list of all available transformation types."""
-    return list_transformations()
-
-
 async def _build_llm(db: AsyncSession, user: User) -> LLM:
     """Build an LLM instance from the user's configuration."""
     cfg = await get_llm_config_with_secret(db, user)
-    api_key = cfg.get("api_key")
-    base_url = cfg.get("base_url")
-    model_name = cfg.get("model_name")
-
-    return LLM(
-        api_key=api_key,
-        base_url=base_url,
-        model=model_name,
-    )
+    return LLM.from_config(cfg)
 
 
 async def transform_content(

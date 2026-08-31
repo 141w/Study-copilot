@@ -9,14 +9,7 @@ logger = logging.getLogger(__name__)
 
 class QuizGenerator:
     def __init__(self, llm_config=None):
-        if llm_config:
-            self.llm = LLM(
-                api_key=llm_config.get("api_key"),
-                base_url=llm_config.get("base_url"),
-                model=llm_config.get("model_name"),
-            )
-        else:
-            self.llm = LLM()
+        self.llm = LLM.from_config(llm_config)
 
     async def generate_choice(self, context, count=1):
         prompt = f"""基于文档生成{count}道选择题，返回JSON数组：

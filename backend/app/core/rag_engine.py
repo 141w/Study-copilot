@@ -18,7 +18,7 @@ from app.core.pgvector_store import PgVectorStore
 from app.core.query_router import QueryType, query_router
 from app.core.retrieval_grader import retrieval_grader
 from app.core.template_manager import render_template
-from app.core.vector_store import result_relevance
+from app.core.vector_store import _relevance_sort_key, result_relevance
 from app.exceptions import classify_llm_error
 
 # LRU 向量存储缓存上限：每文档索引约 0.5-5 MB，20 上限 ~10-100 MB
@@ -31,14 +31,6 @@ def _display_relevance(r: dict) -> float:
     if rel is not None:
         return float(rel)
     return 1.0 / (1.0 + r.get("distance", 1))
-
-
-def _relevance_sort_key(r: dict):
-    """降序相关度排序键；无新字段的旧结果回退为升序距离。"""
-    rel = result_relevance(r)
-    if rel is not None:
-        return (0, -rel)
-    return (1, r.get("distance", float("inf")))
 
 
 def extract_source_indices(text: str) -> list[int]:
@@ -70,14 +62,7 @@ class RAGEngine:
                 history_parts.append(f"{role_label}: {msg.get('content', '')}")
             history_text = "\n".join(history_parts)
             rewrite_prompt = render_template("rag/query_rewrite.jinja2", history_text=history_text, query=query)
-            if user_config:
-                llm = LLM(
-                    api_key=user_config.get("api_key"),
-                    base_url=user_config.get("base_url"),
-                    model=user_config.get("model_name"),
-                )
-            else:
-                llm = LLM()
+            llm = LLM.from_config(user_config)
             rewrite_messages = [{"role": "user", "content": rewrite_prompt}]
             rewritten_query = await llm.chat(rewrite_messages, temperature=0.0, max_tokens=256)
             rewritten_query = rewritten_query.strip()
@@ -89,12 +74,7 @@ class RAGEngine:
 
     def _get_llm(self, user_config=None):
         """创建一个 LLM 实例（复用配置）"""
-        cfg = user_config or {}
-        return LLM(
-            api_key=cfg.get("api_key"),
-            base_url=cfg.get("base_url"),
-            model=cfg.get("model_name"),
-        )
+        return LLM.from_config(user_config)
 
     async def _build_history_context(self, history: list[dict] | None, llm: LLM) -> list[dict]:
         """构建对话历史上下文：短对话直接用，长对话生成摘要。
@@ -184,14 +164,7 @@ class RAGEngine:
 
     async def _direct_answer(self, query, user_config=None) -> str:
         """不依赖文档，直接用 LLM 回答通用问题。"""
-        if user_config:
-            llm = LLM(
-                api_key=user_config.get("api_key"),
-                base_url=user_config.get("base_url"),
-                model=user_config.get("model_name"),
-            )
-        else:
-            llm = LLM()
+        llm = LLM.from_config(user_config)
 
         messages = [
             {"role": "system", "content": "你是一个学习助手。请直接回答用户的问题。"},
@@ -214,14 +187,7 @@ class RAGEngine:
 
         ctx = self.build_context(all_results, max_context_tokens=12000)
 
-        if user_config:
-            llm = LLM(
-                api_key=user_config.get("api_key"),
-                base_url=user_config.get("base_url"),
-                model=user_config.get("model_name"),
-            )
-        else:
-            llm = LLM()
+        llm = LLM.from_config(user_config)
 
         messages = [
             {
@@ -424,14 +390,7 @@ class RAGEngine:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        if llm_config:
-            llm = LLM(
-                api_key=llm_config.get("api_key"),
-                base_url=llm_config.get("base_url"),
-                model=llm_config.get("model_name"),
-            )
-        else:
-            llm = LLM()
+        llm = LLM.from_config(llm_config)
         try:
             if llm_config:
                 temperature = llm_config.get("temperature", 0.7)
@@ -453,18 +412,9 @@ class RAGEngine:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        if llm_config:
-            llm = LLM(
-                api_key=llm_config.get("api_key"),
-                base_url=llm_config.get("base_url"),
-                model=llm_config.get("model_name"),
-            )
-            temperature = llm_config.get("temperature", 0.7)
-            max_tokens = llm_config.get("max_tokens")
-        else:
-            llm = LLM()
-            temperature = 0.7
-            max_tokens = None
+        llm = LLM.from_config(llm_config)
+        temperature = llm_config.get("temperature", 0.7) if llm_config else 0.7
+        max_tokens = llm_config.get("max_tokens") if llm_config else None
         try:
             async for token in llm.chat_stream(
                 messages, temperature=temperature, max_tokens=max_tokens

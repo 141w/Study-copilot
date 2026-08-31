@@ -22,14 +22,7 @@ import numpy as np
 
 def result_relevance(result: dict) -> float | None:
     """统一读取检索结果的 [0,1] 相关度。
-
-    三种 store 的 ``distance`` 语义互不相同（FAISS=1-余弦、BM25=1-无界原始分、
-    Hybrid=1-RRF 融合分恒≈0.97+），直接比较或套绝对阈值会误杀结果
-    （2026-08-27 真机冒烟定位）。各 store 已在返回值中附带批内归一化的
-    ``relevance``；本函数作为唯一可信读取口：
-      - 有 ``relevance`` 直接用；
-      - 否则回退 FAISS 的 ``similarity``；
-      - 都没有则 None（调用方自行决定 legacy 行为）。
+    ...
     """
     rel = result.get("relevance")
     if rel is not None:
@@ -38,6 +31,14 @@ def result_relevance(result: dict) -> float | None:
     if sim is not None:
         return max(0.0, min(1.0, float(sim)))
     return None
+
+
+def _relevance_sort_key(r: dict):
+    """降序相关度排序键；无新字段的旧结果回退为升序距离。"""
+    rel = result_relevance(r)
+    if rel is not None:
+        return (0, -rel)
+    return (1, r.get("distance", float("inf")))
 
 
 class BaseVectorStore(ABC):
@@ -595,7 +596,3 @@ class DocumentVectorStore:
 
     def delete(self):
         return self._store.delete(self.get_path())
-
-
-# 导出默认实例
-vector_store = FAISSVectorStore()

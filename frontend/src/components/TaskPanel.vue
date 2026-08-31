@@ -3,14 +3,11 @@
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
       <h3 class="text-sm font-medium text-[var(--text-secondary)] flex items-center gap-2">
-        <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
+        <el-icon class="w-4 h-4 text-indigo-500"><Document /></el-icon>
         后台任务
-        <span v-if="runningCount > 0" class="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
+        <el-tag v-if="runningCount > 0" type="primary" size="small" effect="plain">
           {{ runningCount }} 运行中
-        </span>
+        </el-tag>
       </h3>
     </div>
 
@@ -26,52 +23,45 @@
         <div class="flex items-center justify-between mb-1.5">
           <div class="flex items-center gap-2">
             <!-- Status icon -->
-            <span v-if="task.status === 'running'" class="flex h-2 w-2">
-              <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-indigo-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-            </span>
-            <span v-else-if="task.status === 'completed'" class="text-[var(--color-success)]">
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-              </svg>
-            </span>
-            <span v-else-if="task.status === 'failed'" class="text-[var(--color-error)]">
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-              </svg>
-            </span>
-            <span v-else class="text-[var(--text-muted)]">
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-              </svg>
-            </span>
+            <el-icon v-if="task.status === 'running'" class="w-4 h-4 text-indigo-500 is-loading">
+              <Loading />
+            </el-icon>
+            <el-icon v-else-if="task.status === 'completed'" class="w-4 h-4 text-green-500">
+              <CircleCheckFilled />
+            </el-icon>
+            <el-icon v-else-if="task.status === 'failed'" class="w-4 h-4 text-red-500">
+              <CircleCloseFilled />
+            </el-icon>
+            <el-icon v-else class="w-4 h-4 text-[var(--text-muted)]">
+              <Clock />
+            </el-icon>
 
             <span class="font-medium text-[var(--text-primary)]">{{ taskTypeName(task.task_type) }}</span>
           </div>
 
           <!-- Cancel button for pending/running tasks -->
-          <button
+          <el-button
             v-if="task.status === 'pending' || task.status === 'running'"
+            link
+            size="small"
+            type="danger"
             @click="cancelTask(task.id)"
-            class="text-xs text-[var(--text-muted)] hover:text-red-500 transition-colors"
             title="取消任务"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+            <el-icon class="w-4 h-4"><Close /></el-icon>
+          </el-button>
         </div>
 
         <!-- Progress bar -->
-        <div v-if="task.status === 'running' || task.status === 'pending'" class="w-full bg-[var(--bg-active)] rounded-full h-1.5 mb-1">
-          <div
-            class="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
-            :style="{ width: (task.progress * 100) + '%' }"
-          ></div>
-        </div>
+        <el-progress
+          v-if="task.status === 'running' || task.status === 'pending'"
+          :percentage="Math.round(task.progress * 100)"
+          :status="task.status === 'completed' ? 'success' : task.status === 'failed' ? 'exception' : ''"
+          :stroke-width="6"
+        />
 
         <!-- Status text -->
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between mt-1.5">
           <span class="text-xs" :class="statusTextClass(task)">
             {{ statusText(task) }}
           </span>
@@ -91,6 +81,10 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import api from '../services/api'
 import { useToastStore } from '../stores/toast'
+import {
+  Document, CircleCheckFilled, CircleCloseFilled,
+  Clock, Loading, Close
+} from '@element-plus/icons-vue'
 
 const toast = useToastStore()
 const tasks = ref([])
@@ -122,7 +116,7 @@ function taskBorderClass(task) {
   }
 }
 
- function statusTextClass(task) {
+function statusTextClass(task) {
   switch (task.status) {
     case 'running': return 'text-[var(--color-primary)]'
     case 'completed': return 'text-[var(--color-success)]'
@@ -158,7 +152,6 @@ async function fetchTasks() {
     const resp = await api.get('/tasks', { params: { limit: 20 } })
     const newTasks = resp.data.tasks || []
 
-    // Check for newly completed tasks — show toast
     const oldTaskMap = new Map(tasks.value.map(t => [t.id, t.status]))
     for (const task of newTasks) {
       const oldStatus = oldTaskMap.get(task.id)
@@ -188,7 +181,6 @@ async function cancelTask(taskId) {
 }
 
 function startAutoRefresh() {
-  // Refresh every 3 seconds when there are running tasks
   refreshTimer = setInterval(() => {
     if (runningCount.value > 0) {
       fetchTasks()

@@ -204,11 +204,7 @@ async def _judge_short_answer(
             return False, None
 
         user_config = await get_llm_config_with_secret(db, user) or {}
-        llm = LLM(
-            api_key=user_config.get("api_key"),
-            base_url=user_config.get("base_url"),
-            model=user_config.get("model_name"),
-        )
+        llm = LLM.from_config(user_config)
 
         prompt = render_template(
             "quiz/judge_short_answer.jinja2",

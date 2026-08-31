@@ -89,12 +89,7 @@ class RetrievalGrader:
     ) -> bool:
         """用 LLM 判断检索结果是否与问题相关"""
         try:
-            llm_config = user_config or {}
-            llm = LLM(
-                api_key=llm_config.get("api_key"),
-                base_url=llm_config.get("base_url"),
-                model=llm_config.get("model_name"),
-            )
+            llm = LLM.from_config(user_config)
 
             fragments = []
             for i, r in enumerate(top_results):

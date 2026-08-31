@@ -4,7 +4,6 @@ Text-to-Speech module using Edge TTS (free, no API key needed).
 Provides a TTS provider abstraction and an EdgeTTS implementation.
 """
 
-import abc
 import logging
 import os
 import time
@@ -104,21 +103,7 @@ VOICES = {
 DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
 
 
-class TTSProvider(abc.ABC):
-    """Abstract TTS provider interface."""
-
-    @abc.abstractmethod
-    async def generate_speech(self, text: str, voice: str | None = None, speed: float = 1.0) -> str:
-        """Generate speech audio from text. Returns the file path of the audio."""
-        ...
-
-    @abc.abstractmethod
-    def get_voices(self) -> dict[str, list[dict]]:
-        """Return available voices grouped by language."""
-        ...
-
-
-class EdgeTTSProvider(TTSProvider):
+class EdgeTTSProvider:
     """Edge TTS provider — free Microsoft Edge neural voices."""
 
     async def generate_speech(self, text: str, voice: str | None = None, speed: float = 1.0) -> str:
@@ -161,9 +146,9 @@ class EdgeTTSProvider(TTSProvider):
 
 
 # Module-level singleton
-tts_provider: TTSProvider = EdgeTTSProvider()
+tts_provider = EdgeTTSProvider()
 
 
-def get_tts_provider() -> TTSProvider:
+def get_tts_provider() -> EdgeTTSProvider:
     """Get the current TTS provider."""
     return tts_provider

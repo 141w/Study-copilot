@@ -2,7 +2,6 @@
   <header class="fixed top-0 left-0 right-0 h-16 bg-[var(--surface-card)] border-b border-[var(--border-default)] z-50 transition-colors duration-200">
     <div class="flex items-center justify-between h-full px-4 md:px-6">
       <div class="flex items-center gap-3">
-        <!-- Hamburger menu button (mobile only) -->
         <button
           v-if="showSidebar"
           class="md:hidden p-2 -ml-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -23,63 +22,35 @@
       </div>
 
       <div class="flex items-center gap-2 md:gap-4">
-        <!-- Theme toggle button -->
-        <button
+        <el-button
+          circle
+          size="small"
           @click="themeStore.toggleTheme()"
-          class="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
           :title="themeStore.isDark ? '切换到亮色模式' : '切换到暗色模式'"
         >
-          <!-- Sun icon (show in dark mode) -->
-          <svg v-if="themeStore.isDark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <!-- Moon icon (show in light mode) -->
-          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        </button>
+          <el-icon class="w-5 h-5">
+            <Sunny v-if="themeStore.isDark" />
+            <Moon v-else />
+          </el-icon>
+        </el-button>
 
         <template v-if="authStore.isAuthenticated">
-          <!-- Desktop user info -->
-          <div class="hidden md:flex items-center gap-4">
-            <span class="text-sm text-[var(--text-secondary)]">{{ authStore.user?.username }}</span>
-            <button @click="logout" class="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-              退出
-            </button>
-          </div>
-
-          <!-- Mobile user menu -->
-          <div class="md:hidden relative" ref="userMenuRef">
-            <button
-              @click="showUserMenu = !showUserMenu"
-              class="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </button>
-
-            <Transition name="dropdown">
-              <div
-                v-if="showUserMenu"
-                class="absolute right-0 top-full mt-2 w-48 bg-[var(--surface-card)] border border-[var(--border-default)] rounded-lg shadow-lg py-2"
-              >
-                <div class="px-4 py-2 border-b border-[var(--border-default)]">
-                  <p class="text-sm font-medium text-[var(--text-primary)]">{{ authStore.user?.username }}</p>
-                </div>
-                <button
-                  @click="logout"
-                  class="w-full text-left px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
-                >
-                  退出登录
-                </button>
-              </div>
-            </Transition>
-          </div>
+          <el-dropdown trigger="click" @command="handleCommand">
+            <span class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+              <el-icon class="w-5 h-5"><User /></el-icon>
+              <span class="text-sm hidden md:inline">{{ authStore.user?.username }}</span>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="profile">{{ authStore.user?.username }}</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
         <template v-else>
-          <router-link to="/login" class="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-            登录
+          <router-link to="/login">
+            <el-button text>登录</el-button>
           </router-link>
           <router-link to="/register">
             <el-button type="primary" size="small">注册</el-button>
@@ -91,11 +62,12 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useSidebarStore } from '../../stores/sidebar'
 import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
+import { User, Sunny, Moon } from '@element-plus/icons-vue'
 
 const authStore = useAuthStore()
 const sidebarStore = useSidebarStore()
@@ -106,40 +78,10 @@ const showSidebar = computed(() => {
   return router.currentRoute.value.path !== '/login' && router.currentRoute.value.path !== '/register'
 })
 
-const showUserMenu = ref(false)
-const userMenuRef = ref(null)
-
-function logout() {
-  showUserMenu.value = false
-  authStore.logout()
-  router.push('/login')
-}
-
-// Close user menu when clicking outside
-function handleClickOutside(event) {
-  if (userMenuRef.value && !userMenuRef.value.contains(event.target)) {
-    showUserMenu.value = false
+function handleCommand(command) {
+  if (command === 'logout') {
+    authStore.logout()
+    router.push('/login')
   }
 }
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
 </script>
-
-<style scoped>
-.dropdown-enter-active,
-.dropdown-leave-active {
-  transition: all 0.2s ease;
-}
-
-.dropdown-enter-from,
-.dropdown-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-</style>

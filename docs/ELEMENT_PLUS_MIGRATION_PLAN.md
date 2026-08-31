@@ -487,15 +487,15 @@ git checkout -b feat/element-plus-migration
 ## 8. 进度追踪
 
 ```
-Phase 0: ✓ 已完成（当前 master 分支，80 个测试全部通过）
+Phase 0: ✓ 已完成（当前 master 分支）
 Phase 1: ✓ 已完成（Element Plus 已安装，CSS 变量主题已配置，auto-import 配置完成）
 Phase 2: ✓ 已完成（BaseButton→el-button, BaseDialog→el-dialog, BaseInput→el-input，全部迁移）
 Phase 3: ✓ 已完成（TransformDialog, UrlImportDialog, ChatInput, TTSPlayer 已迁移）
-Phase 4: ◐ 部分完成（AppSidebar 图标已迁移，导航结构保留 router-link + el-icon）
+Phase 4: ✓ 已完成（AppHeader → el-dropdown，AppSidebar → el-menu，布局组件全部迁移）
 Phase 5: ✓ 已完成（20 个 Icon*.vue → Element Plus 图标，19 个文件已删除）
-Phase 6: ◐ 大部分完成（LoginView, ChatView, HomeView, CourseListView, NotesView, CourseDetailView, QuizView, AnalysisView, ModelConfigView, UploadView, RegisterView 已迁移；DocumentView 部分完成）
+Phase 6: ✓ 已完成（所有 views 中 Base* 组件替换为 el-*，按钮/输入框/卡片已迁移）
 Phase 7: ✓ 已完成（CSS 变量主题已配置，暗色模式通过 CSS 变量自动适配）
-Phase 8: ◐ 部分完成（已删除 Base* 组件 10 个、图标 19 个、Toast 组件、tailwind.config.js、postcss.config.js）
+Phase 8: ✓ 已完成（已删除 Base* 组件 10 个、图标 19 个、Toast 组件、tailwind.config.js、postcss.config.js；global.css 中 @tailwind 指令已清理）
 ```
 
 ---

@@ -308,6 +308,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "这是答案[来源1]"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         answer = await engine.generate_answer("问题", "上下文", "来源列表")
         assert answer == "这是答案[来源1]"
@@ -318,10 +319,11 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "答案"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         config = {"api_key": "k", "base_url": "http://b", "model_name": "m", "temperature": 0.5}
         await engine.generate_answer("q", "ctx", llm_config=config)
-        MockLLM.assert_called_with(api_key="k", base_url="http://b", model="m")
+        MockLLM.from_config.assert_called_with(config)
 
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
@@ -329,6 +331,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "答案"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         config = {"api_key": "k", "base_url": "http://b", "model_name": "m", "max_tokens": 512}
         await engine.generate_answer("q", "ctx", llm_config=config)
@@ -342,6 +345,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "独立的问题"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         history = [
             {"role": "user", "content": "什么是深度学习"},
@@ -357,6 +361,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.side_effect = RuntimeError("fail")
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         result = await engine._rewrite_query("原始问题", [])
         assert result == "原始问题"
@@ -368,6 +373,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = ""
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         result = await engine._rewrite_query("原始问题", [{"role": "user", "content": "hi"}])
         assert result == "原始问题"
@@ -378,10 +384,11 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "rewritten"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         config = {"api_key": "k", "base_url": "http://b", "model_name": "m"}
         await engine._rewrite_query("它是什么", [{"role": "user", "content": "hi"}], config)
-        MockLLM.assert_called_with(api_key="k", base_url="http://b", model="m")
+        MockLLM.from_config.assert_called_with(config)
 
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
@@ -390,6 +397,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "rewritten"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         history = [{"role": "user", "content": f"msg{i}"} for i in range(20)]
         await engine._rewrite_query("它是什么", history)
@@ -417,6 +425,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "答案内容[来源1]"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(3)
@@ -434,6 +443,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "答案没有引用来源"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(3)
@@ -450,6 +460,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "见[来源2]"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(3)
@@ -465,6 +476,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "答案"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(1)
@@ -480,6 +492,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "答案"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(1)
@@ -499,6 +512,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat_stream = fake_stream
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         tokens = []
         async for tok in engine.generate_answer_stream("q", "ctx"):
@@ -514,13 +528,14 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat_stream = fake_stream
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         config = {"api_key": "k", "base_url": "http://b", "model_name": "m", "temperature": 0.3}
         tokens = []
         async for tok in engine.generate_answer_stream("q", "ctx", llm_config=config):
             tokens.append(tok)
         assert tokens == ["token1"]
-        MockLLM.assert_called_with(api_key="k", base_url="http://b", model="m")
+        MockLLM.from_config.assert_called_with(config)
 
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
@@ -547,6 +562,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat_stream = fake_stream
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(2)
@@ -626,6 +642,7 @@ class TestRAGEngineAsync:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "rewritten query"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(1)
@@ -659,6 +676,7 @@ class TestRAGEngineAsync:
                     mock_llm = AsyncMock()
                     mock_llm.chat.return_value = "answer"
                     MockLLM.return_value = mock_llm
+                    MockLLM.from_config.return_value = mock_llm
                     await engine.ask(
                         ["doc1"], "什么是机器学习", history=[{"role": "user", "content": "hi"}]
                     )
@@ -793,10 +811,11 @@ class TestRAGEngineExtended:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "回答"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         answer = await engine.generate_answer("问题", "上下文")
         assert answer == "回答"
-        MockLLM.assert_called_with()
+        MockLLM.from_config.assert_called_with(None)
 
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
@@ -805,6 +824,7 @@ class TestRAGEngineExtended:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "answer"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         history = [{"role": "user", "content": "prev question"}]
         await engine.generate_answer("q", "ctx", history=history)
@@ -825,6 +845,7 @@ class TestRAGEngineExtended:
         mock_llm = AsyncMock()
         mock_llm.chat_stream = fake_stream
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = _make_retrieved(2)
@@ -855,6 +876,7 @@ class TestRAGEngineExtended:
         mock_llm = AsyncMock()
         mock_llm.chat_stream = fake_stream
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = [
@@ -899,6 +921,7 @@ class TestRAGEngineExtended:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "answer"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = [
@@ -921,6 +944,7 @@ class TestRAGEngineExtended:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "answer"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = [
@@ -942,6 +966,7 @@ class TestRAGEngineExtended:
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "answer"
         MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
 
         mock_store = AsyncMock()
         mock_store.search.return_value = [
