@@ -26,7 +26,7 @@
         <h2 class="text-xl font-semibold text-[var(--text-primary)] mb-6">快速开始</h2>
         <div ref="quickActions" class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <router-link to="/upload" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-error-light)] dark:group-hover:bg-[var(--color-error)]/20 transition-colors">
+            <div class="w-12 h-12 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-error-light)] dark:group-hover:bg-[var(--color-error)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-error)]"><Upload /></el-icon>
             </div>
             <h3 class="font-semibold text-[var(--text-primary)] mb-1">上传文档</h3>
@@ -34,7 +34,7 @@
           </router-link>
 
           <router-link to="/documents" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-[var(--color-info-light)] dark:bg-[var(--color-info)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-info-light)] dark:group-hover:bg-[var(--color-info)]/20 transition-colors">
+            <div class="w-12 h-12 bg-[var(--color-info-light)] dark:bg-[var(--color-info)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-info-light)] dark:group-hover:bg-[var(--color-info)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-info)]"><Document /></el-icon>
             </div>
             <h3 class="font-semibold text-[var(--text-primary)] mb-1">文档管理</h3>
@@ -42,7 +42,7 @@
           </router-link>
 
           <router-link to="/chat" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-accent-light, #f3f0ff)] dark:group-hover:bg-[var(--color-accent)]/20 transition-colors">
+            <div class="w-12 h-12 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-accent-light, #f3f0ff)] dark:group-hover:bg-[var(--color-accent)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-accent)]"><ChatDotSquare /></el-icon>
             </div>
             <h3 class="font-semibold text-[var(--text-primary)] mb-1">智能问答</h3>
@@ -50,7 +50,7 @@
           </router-link>
 
           <router-link to="/quiz" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-success-light)] dark:group-hover:bg-[var(--color-success)]/20 transition-colors">
+            <div class="w-12 h-12 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-success-light)] dark:group-hover:bg-[var(--color-success)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-success)]"><DocumentChecked /></el-icon>
             </div>
             <h3 class="font-semibold text-[var(--text-primary)] mb-1">AI出题</h3>
@@ -69,7 +69,7 @@
           <!-- Feature 1 -->
           <div class="el-card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div class="w-14 h-14 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-error)]"><Tickets /></el-icon>
               </div>
               <div>
@@ -85,7 +85,7 @@
           <!-- Feature 2 -->
           <div class="el-card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div class="w-14 h-14 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-accent)]"><MagicStick /></el-icon>
               </div>
               <div>
@@ -101,7 +101,7 @@
           <!-- Feature 3 -->
           <div class="el-card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div class="w-14 h-14 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-success)]"><DocumentChecked /></el-icon>
               </div>
               <div>
@@ -117,7 +117,7 @@
           <!-- Feature 4 -->
           <div class="el-card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-[var(--color-warning-light)] dark:bg-[var(--color-warning)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div class="w-14 h-14 bg-[var(--color-warning-light)] dark:bg-[var(--color-warning)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-warning)]"><TrendCharts /></el-icon>
               </div>
               <div>
@@ -204,6 +204,7 @@ import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDocumentStore } from '../stores/document'
 import { useChatStore } from '../stores/chat'
+import { Upload, Document, ChatDotSquare, DocumentChecked, Tickets, MagicStick, TrendCharts } from '@element-plus/icons-vue'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
