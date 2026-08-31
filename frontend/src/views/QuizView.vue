@@ -19,7 +19,7 @@
     </div>
 
     <!-- Generate Quiz -->
-    <div class="card p-6 mb-8">
+    <div class="el-card p-6 mb-8">
       <h2 class="font-semibold text-[var(--text-primary)] mb-4">生成题目</h2>
 
       <div class="mb-4">
@@ -83,7 +83,7 @@
       <div
         v-for="(quiz, index) in quizStore.quizzes"
         :key="quiz.id"
-        class="card p-6"
+        class="el-card p-6"
       >
         <div class="flex items-start gap-3 mb-4">
           <span class="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-sm flex items-center justify-center flex-shrink-0">
@@ -180,7 +180,7 @@
         </el-button>
       </div>
 
-      <div v-if="examMode && examSummary" class="card p-6 mt-6 bg-[var(--color-info-light)] border border-[var(--color-info)]">
+      <div v-if="examMode && examSummary" class="el-card p-6 mt-6 bg-[var(--color-info-light)] border border-[var(--color-info)]">
         <h3 class="text-lg font-semibold text-[var(--color-info)] mb-2">考试结果</h3>
         <p class="text-[var(--color-info)]">
           正确 <span class="font-bold">{{ examSummary.correct }}</span> / {{ examSummary.total }} 题，
@@ -211,7 +211,7 @@
         <div
           v-for="q in wrongQuestions"
           :key="q.id"
-          class="card p-5 border-l-4 border-[var(--color-error)]"
+          class="el-card p-5 border-l-4 border-[var(--color-error)]"
         >
           <h3 class="text-base font-medium text-[var(--text-primary)] mb-3">{{ q.question }}</h3>
           <div class="space-y-1 text-sm">

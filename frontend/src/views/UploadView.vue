@@ -58,7 +58,7 @@
     />
 
     <!-- Document List -->
-    <div ref="docList" class="card">
+    <div ref="docList" class="el-card">
       <div class="p-4 border-b border-[var(--border-default)]">
         <h2 class="font-semibold text-[var(--text-primary)]">我的文档</h2>
       </div>

@@ -37,7 +37,7 @@
     </div>
 
     <!-- Document Content -->
-    <div v-if="selectedDoc" class="card !p-0">
+    <div v-if="selectedDoc" class="el-card !p-0">
       <!-- Header -->
       <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)] rounded-t-lg">
         <div>

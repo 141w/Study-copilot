@@ -81,8 +81,8 @@
           <router-link to="/login" class="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             登录
           </router-link>
-          <router-link to="/register" class="btn-primary text-sm">
-            注册
+          <router-link to="/register">
+            <el-button type="primary" size="small">注册</el-button>
           </router-link>
         </template>
       </div>

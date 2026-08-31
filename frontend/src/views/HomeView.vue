@@ -13,8 +13,8 @@
             文档解析 · 智能问答 · AI出题 · 错题分析
           </p>
           <div ref="heroButtons" class="flex gap-4 justify-center">
-            <router-link to="/upload" class="btn-primary px-8 py-3 text-base">上传文档</router-link>
-            <router-link to="/chat" class="btn-secondary px-8 py-3 text-base">开始问答</router-link>
+            <router-link to="/upload"><el-button type="primary" size="large">上传文档</el-button></router-link>
+            <router-link to="/chat"><el-button size="large">开始问答</el-button></router-link>
           </div>
         </div>
       </div>
@@ -25,7 +25,7 @@
       <div class="max-w-6xl mx-auto px-6">
         <h2 class="text-xl font-semibold text-[var(--text-primary)] mb-6">快速开始</h2>
         <div ref="quickActions" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <router-link to="/upload" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
+          <router-link to="/upload" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
             <div class="w-12 h-12 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-error-light)] dark:group-hover:bg-[var(--color-error)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-error)]"><Upload /></el-icon>
             </div>
@@ -33,7 +33,7 @@
             <p class="text-sm text-[var(--text-muted)]">上传PDF学习资料</p>
           </router-link>
 
-          <router-link to="/documents" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
+          <router-link to="/documents" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
             <div class="w-12 h-12 bg-[var(--color-info-light)] dark:bg-[var(--color-info)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-info-light)] dark:group-hover:bg-[var(--color-info)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-info)]"><Document /></el-icon>
             </div>
@@ -41,7 +41,7 @@
             <p class="text-sm text-[var(--text-muted)]">查看已上传文档</p>
           </router-link>
 
-          <router-link to="/chat" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
+          <router-link to="/chat" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
             <div class="w-12 h-12 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-accent-light, #f3f0ff)] dark:group-hover:bg-[var(--color-accent)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-accent)]"><ChatDotSquare /></el-icon>
             </div>
@@ -49,7 +49,7 @@
             <p class="text-sm text-[var(--text-muted)]">基于文档的RAG问答</p>
           </router-link>
 
-          <router-link to="/quiz" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
+          <router-link to="/quiz" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
             <div class="w-12 h-12 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-success-light)] dark:group-hover:bg-[var(--color-success)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-success)]"><DocumentChecked /></el-icon>
             </div>
@@ -67,7 +67,7 @@
 
         <div ref="featureCards" class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <!-- Feature 1 -->
-          <div class="card p-6">
+          <div class="el-card p-6">
             <div class="flex items-start gap-4">
               <div class="w-14 h-14 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-error)]"><Tickets /></el-icon>
@@ -83,7 +83,7 @@
           </div>
 
           <!-- Feature 2 -->
-          <div class="card p-6">
+          <div class="el-card p-6">
             <div class="flex items-start gap-4">
               <div class="w-14 h-14 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-accent)]"><MagicStick /></el-icon>
@@ -99,7 +99,7 @@
           </div>
 
           <!-- Feature 3 -->
-          <div class="card p-6">
+          <div class="el-card p-6">
             <div class="flex items-start gap-4">
               <div class="w-14 h-14 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-success)]"><DocumentChecked /></el-icon>
@@ -115,7 +115,7 @@
           </div>
 
           <!-- Feature 4 -->
-          <div class="card p-6">
+          <div class="el-card p-6">
             <div class="flex items-start gap-4">
               <div class="w-14 h-14 bg-[var(--color-warning-light)] dark:bg-[var(--color-warning)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-warning)]"><TrendCharts /></el-icon>
@@ -138,7 +138,7 @@
       <div class="max-w-6xl mx-auto px-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <!-- Recent Documents -->
-          <div class="card">
+          <div class="el-card">
             <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
               <h3 class="font-semibold text-[var(--text-primary)]">最近文档</h3>
               <router-link to="/documents" class="text-sm text-[var(--color-primary)] hover:underline">查看全部</router-link>
@@ -148,7 +148,7 @@
                 <el-icon class="w-8 h-8 text-[var(--text-muted)]"><Tickets /></el-icon>
               </div>
               <p class="text-[var(--text-muted)] mb-4">暂无文档</p>
-              <router-link to="/upload" class="btn-secondary text-sm">上传文档</router-link>
+              <router-link to="/upload"><el-button type="primary" size="small">上传文档</el-button></router-link>
             </div>
             <div v-else class="divide-y divide-[var(--border-default)]">
               <div v-for="doc in recentDocs" :key="doc.id" class="p-4 hover:bg-[var(--bg-hover)] cursor-pointer" @click="goToChat(doc.id)">
@@ -167,7 +167,7 @@
           </div>
 
           <!-- Recent Chats -->
-          <div class="card">
+          <div class="el-card">
             <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
               <h3 class="font-semibold text-[var(--text-primary)]">最近对话</h3>
               <router-link to="/chat" class="text-sm text-[var(--color-primary)] hover:underline">查看全部</router-link>
@@ -177,7 +177,7 @@
                 <el-icon class="w-8 h-8 text-[var(--text-muted)]"><ChatDotSquare /></el-icon>
               </div>
               <p class="text-[var(--text-muted)] mb-4">暂无对话</p>
-              <router-link to="/chat" class="btn-secondary text-sm">开始问答</router-link>
+              <router-link to="/chat"><el-button type="primary" size="small">开始问答</el-button></router-link>
             </div>
             <div v-else class="divide-y divide-[var(--border-default)]">
               <div v-for="chat in recentChats" :key="chat.session_id" class="p-4 hover:bg-[var(--bg-hover)] cursor-pointer" @click="router.push('/chat')">

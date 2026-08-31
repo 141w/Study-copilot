@@ -11,7 +11,7 @@
         <p class="text-[var(--text-muted)] mt-2">使用您的账户登录</p>
       </div>
 
-      <form ref="loginCard" @submit.prevent="handleLogin" class="card p-8">
+      <el-card class="p-8">
         <div class="space-y-4">
           <el-input
             v-model="form.username"
@@ -28,17 +28,18 @@
             required
           />
 
-          <button
-            type="submit"
+          <el-button
+            type="primary"
+            class="w-full"
             :disabled="loading"
-            class="w-full btn-primary py-3"
+            native-type="submit"
           >
             {{ loading ? '登录中...' : '登录' }}
-          </button>
+          </el-button>
 
           <p v-if="error" class="text-sm text-[var(--color-error)] text-center">{{ error }}</p>
         </div>
-      </form>
+      </el-card>
 
       <p class="text-center mt-6 text-[var(--text-muted)]">
         还没有账户?

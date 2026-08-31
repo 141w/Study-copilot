@@ -1,7 +1,7 @@
 <template>
   <div
     ref="cardEl"
-    class="card p-5 hover:border-[var(--color-primary)] border-2 border-transparent transition-all cursor-pointer group"
+    class="el-card p-5 hover:border-[var(--color-primary)] border-2 border-transparent transition-all cursor-pointer group"
     @click="$emit('click', course)"
   >
     <div class="flex items-start justify-between mb-3">

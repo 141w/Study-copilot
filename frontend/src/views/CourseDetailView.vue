@@ -40,7 +40,7 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <el-button @click="showNewNote = true" class="btn-secondary flex items-center gap-2 text-sm">
+            <el-button @click="showNewNote = true" type="default" class="flex items-center gap-2 text-sm">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
@@ -91,7 +91,7 @@
           <el-button @click="showAddDocDialog = true" >添加第一个文档</el-button>
         </div>
 
-        <div v-else class="card divide-y divide-gray-100">
+        <div v-else class="el-card divide-y divide-gray-100">
           <div
             v-for="doc in courseDocuments"
             :key="doc.id"
@@ -131,7 +131,7 @@
           />
           <div class="flex items-center justify-end gap-3 mt-3">
             <el-button @click="cancelNewNote" >取消</el-button>
-            <el-button @click="saveNewNote" class="btn-primary text-sm">保存笔记</el-button>
+            <el-button @click="saveNewNote" type="primary">保存笔记</el-button>
           </div>
         </div>
 
@@ -157,7 +157,7 @@
               />
               <div class="flex items-center justify-end gap-3 mt-3">
                 <el-button @click="cancelEditNote" >取消</el-button>
-                <el-button @click="saveEditNote" class="btn-primary text-sm">保存</el-button>
+                <el-button @click="saveEditNote" type="primary">保存</el-button>
               </div>
             </div>
             <NoteCard

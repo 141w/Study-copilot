@@ -23,9 +23,8 @@
     <!-- Config Form -->
     <section class="py-16">
       <div class="max-w-4xl mx-auto px-6">
-        <div class="card">
-          <div class="p-6">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)] mb-6">模型配置</h2>
+        <el-card>
+          <h2 class="text-xl font-semibold text-[var(--text-primary)] mb-6">模型配置</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -175,9 +174,8 @@
                 重置为默认
               </el-button>
             </div>
-          </div>
+          </el-card>
         </div>
-      </div>
     </section>
   </div>
 </template>
