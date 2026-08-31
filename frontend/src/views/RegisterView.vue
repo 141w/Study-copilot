@@ -11,14 +11,12 @@
         <p class="text-[var(--text-muted)] mt-2">创建您的账户</p>
       </div>
 
-      <form @submit.prevent="handleRegister" class="card p-8">
+      <el-card class="p-8">
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">用户名</label>
-            <input
+            <el-input
               v-model="form.username"
-              type="text"
-              class="input"
               placeholder="请输入用户名"
               required
             />
@@ -26,10 +24,9 @@
 
           <div>
             <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">邮箱</label>
-            <input
+            <el-input
               v-model="form.email"
               type="email"
-              class="input"
               placeholder="请输入邮箱"
               required
             />
@@ -37,26 +34,26 @@
 
           <div>
             <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">密码</label>
-            <input
+            <el-input
               v-model="form.password"
               type="password"
-              class="input"
               placeholder="请输入密码"
               required
             />
           </div>
 
-          <button
-            type="submit"
-            :disabled="loading"
-            class="w-full btn-primary py-3"
+          <el-button
+            type="primary"
+            class="w-full"
+            :loading="loading"
+            native-type="submit"
           >
             {{ loading ? '注册中...' : '注册' }}
-          </button>
+          </el-button>
 
           <p v-if="error" class="text-sm text-[var(--color-error)] text-center">{{ error }}</p>
         </div>
-      </form>
+      </el-card>
 
       <p class="text-center mt-6 text-[var(--text-muted)]">
         已有账户?

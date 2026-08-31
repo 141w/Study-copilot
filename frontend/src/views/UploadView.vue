@@ -24,13 +24,12 @@
         ref="fileInput"
         @change="handleFileSelect"
       />
-      <button
+      <el-button
         @click="$refs.fileInput.click()"
         :disabled="uploading"
-        class="btn-secondary"
       >
         {{ uploading ? '上传中...' : '选择文件' }}
-      </button>
+      </el-button>
       <p class="text-sm text-[var(--text-muted)] mt-4">支持 PDF、DOCX、PPTX 格式，最大 50MB</p>
       <div class="flex justify-center gap-4 mt-3">
         <span class="text-xs px-2 py-1 bg-[var(--color-error-light)] text-[var(--color-error)] rounded">PDF</span>
