@@ -4,18 +4,18 @@
 
     <!-- Mode Toggle -->
     <div class="flex gap-2 mb-6">
-      <button
+      <el-button
         @click="examMode = false; examSubmitted = false"
-        :class="!examMode ? 'btn-primary' : 'btn-secondary'"
+        :class="!examMode ? 'primary' : 'default'"
       >
         练习模式
-      </button>
-      <button
+      </el-button>
+      <el-button
         @click="examMode = true; examSubmitted = false"
-        :class="examMode ? 'btn-primary' : 'btn-secondary'"
+        :class="examMode ? 'primary' : 'default'"
       >
         考试模式
-      </button>
+      </el-button>
     </div>
 
     <!-- Generate Quiz -->
@@ -64,13 +64,13 @@
           />
         </div>
 
-        <button
+        <el-button
           @click="generateQuiz"
           :disabled="generating || quizStore.loading || selectedDocs.length === 0"
-          class="btn-primary"
+          type="primary"
         >
           {{ (generating || quizStore.loading) ? '生成中...' : '生成题目' }}
-        </button>
+        </el-button>
       </div>
 
       <p class="text-sm text-[var(--text-muted)]">
@@ -136,13 +136,13 @@
 
         <!-- Submit Button (practice mode only) -->
         <div v-if="!examMode" class="ml-9">
-          <button
+          <el-button
             @click="submitAnswer(quiz)"
             :disabled="!selectedAnswers[quiz.id] || quiz.submitted || submitting[quiz.id]"
-            class="btn-primary"
+            type="primary"
           >
             {{ (quiz.submitted || submitting[quiz.id]) ? '提交中...' : '提交答案' }}
-          </button>
+          </el-button>
         </div>
 
         <!-- Result -->
@@ -171,13 +171,13 @@
 
       <!-- Exam Mode: Submit All & Summary -->
       <div v-if="examMode && !examSubmitted" class="text-center mt-6">
-        <button
+        <el-button
           @click="submitAll"
           :disabled="Object.keys(selectedAnswers).length === 0"
-          class="btn-primary text-lg px-8 py-3"
+          type="primary"
         >
           交卷
-        </button>
+        </el-button>
       </div>
 
       <div v-if="examMode && examSummary" class="card p-6 mt-6 bg-[var(--color-info-light)] border border-[var(--color-info)]">
@@ -198,13 +198,13 @@
 
     <!-- Wrong Questions Section -->
     <div class="mt-10">
-      <button
+      <el-button
         @click="loadWrongQuestions"
         :disabled="loadingWrong"
-        class="btn-secondary"
+        
       >
         {{ loadingWrong ? '加载中...' : '加载错题' }}
-      </button>
+      </el-button>
 
       <div v-if="wrongQuestions.length > 0" class="space-y-4 mt-6">
         <h2 class="text-xl font-semibold text-[var(--text-primary)]">错题本</h2>
@@ -219,12 +219,12 @@
             <p class="text-[var(--color-success)]">正确答案: {{ q.correct_answer }}</p>
             <p v-if="q.explanation" class="text-[var(--text-muted)]">解析: {{ q.explanation }}</p>
           </div>
-          <button
+          <el-button
             @click="redoQuestion(q)"
-            class="btn-primary mt-3 text-sm"
+            type="primary"
           >
             重做此题
-          </button>
+          </el-button>
         </div>
       </div>
     </div>

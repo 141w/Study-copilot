@@ -1,7 +1,7 @@
 <template>
   <div ref="pageContainer" class="max-w-6xl mx-auto px-6 py-8">
     <!-- Back Button -->
-    <button
+    <el-button
       @click="router.push('/courses')"
       class="flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mb-6"
     >
@@ -9,7 +9,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
       </svg>
       <span class="text-sm">返回课程列表</span>
-    </button>
+    </el-button>
 
     <!-- Loading -->
     <div v-if="loading" class="text-center py-16 text-[var(--text-muted)]">加载中...</div>
@@ -17,7 +17,7 @@
     <!-- Not Found -->
     <div v-else-if="!course" class="text-center py-16">
       <p class="text-[var(--text-muted)] mb-4">课程不存在或已被删除</p>
-      <router-link to="/courses" class="btn-secondary text-sm">返回课程列表</router-link>
+      <router-link to="/courses" >返回课程列表</router-link>
     </div>
 
     <!-- Course Detail -->
@@ -40,13 +40,13 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <button @click="showNewNote = true" class="btn-secondary flex items-center gap-2 text-sm">
+            <el-button @click="showNewNote = true" class="btn-secondary flex items-center gap-2 text-sm">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               新建笔记
-            </button>
-            <router-link to="/upload" class="btn-primary flex items-center gap-2 text-sm">
+            </el-button>
+            <router-link to="/upload" type="primary">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
@@ -58,7 +58,7 @@
 
       <!-- Tabs -->
       <div class="flex items-center gap-6 border-b border-[var(--border-default)] mb-6">
-        <button
+        <el-button
           v-for="tab in tabs"
           :key="tab.key"
           @click="activeTab = tab.key"
@@ -71,14 +71,14 @@
             v-if="activeTab === tab.key"
             class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-primary)] rounded-full"
           ></div>
-        </button>
+        </el-button>
       </div>
 
       <!-- Documents Tab -->
       <div v-if="activeTab === 'documents'">
         <div class="flex items-center justify-between mb-4">
           <p class="text-sm text-[var(--text-muted)]">课程关联的文档</p>
-          <button @click="showAddDocDialog = true" class="btn-secondary text-sm">添加文档</button>
+          <el-button @click="showAddDocDialog = true" >添加文档</el-button>
         </div>
 
         <div v-if="courseDocuments.length === 0" class="text-center py-12">
@@ -88,7 +88,7 @@
             </svg>
           </div>
           <p class="text-[var(--text-muted)] mb-4">此课程暂无文档</p>
-          <button @click="showAddDocDialog = true" class="btn-secondary text-sm">添加第一个文档</button>
+          <el-button @click="showAddDocDialog = true" >添加第一个文档</el-button>
         </div>
 
         <div v-else class="card divide-y divide-gray-100">
@@ -106,7 +106,7 @@
               <h3 class="font-medium text-[var(--text-primary)] truncate">{{ doc.filename }}</h3>
               <p class="text-sm text-[var(--text-muted)]">{{ doc.chunk_count }} chunks · {{ doc.status }}</p>
             </div>
-            <button
+            <el-button
               @click="removeDoc(doc.id)"
               class="text-[var(--text-muted)] hover:text-red-500 transition-colors"
               title="从课程移除"
@@ -114,7 +114,7 @@
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
-            </button>
+            </el-button>
           </div>
         </div>
       </div>
@@ -130,8 +130,8 @@
             @save="debouncedSaveNewNote"
           />
           <div class="flex items-center justify-end gap-3 mt-3">
-            <button @click="cancelNewNote" class="btn-secondary text-sm">取消</button>
-            <button @click="saveNewNote" class="btn-primary text-sm">保存笔记</button>
+            <el-button @click="cancelNewNote" >取消</el-button>
+            <el-button @click="saveNewNote" class="btn-primary text-sm">保存笔记</el-button>
           </div>
         </div>
 
@@ -142,7 +142,7 @@
             </svg>
           </div>
           <p class="text-[var(--text-muted)] mb-4">此课程暂无笔记</p>
-          <button @click="showNewNote = true" class="btn-secondary text-sm">创建第一条笔记</button>
+          <el-button @click="showNewNote = true" >创建第一条笔记</el-button>
         </div>
 
         <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -156,8 +156,8 @@
                 @save="debouncedSaveEditNote"
               />
               <div class="flex items-center justify-end gap-3 mt-3">
-                <button @click="cancelEditNote" class="btn-secondary text-sm">取消</button>
-                <button @click="saveEditNote" class="btn-primary text-sm">保存</button>
+                <el-button @click="cancelEditNote" >取消</el-button>
+                <el-button @click="saveEditNote" class="btn-primary text-sm">保存</el-button>
               </div>
             </div>
             <NoteCard

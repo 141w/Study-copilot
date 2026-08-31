@@ -6,15 +6,15 @@
         <h1 ref="pageTitle" class="text-2xl font-semibold text-[var(--text-primary)]">课程空间</h1>
         <p ref="pageSubtitle" class="text-sm text-[var(--text-muted)] mt-1">按课程组织你的文档和笔记</p>
       </div>
-      <button
+      <el-button
         @click="openCreateModal"
-        class="btn-primary flex items-center gap-2"
+        type="primary"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
         新建课程
-      </button>
+      </el-button>
     </div>
 
     <!-- Search -->
@@ -41,7 +41,7 @@
       </div>
       <p class="text-[var(--text-muted)] mb-2" v-if="searchQuery">未找到匹配的课程</p>
       <p class="text-[var(--text-muted)] mb-4" v-else>还没有课程，创建你的第一个课程吧</p>
-      <button @click="openCreateModal" class="btn-secondary text-sm">新建课程</button>
+      <el-button @click="openCreateModal" >新建课程</el-button>
     </div>
 
     <!-- Course Grid -->
@@ -84,14 +84,14 @@
         <div>
           <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">课程颜色</label>
           <div class="flex items-center gap-2">
-            <button
+            <el-button
               v-for="color in colorOptions"
               :key="color"
               @click="form.color = color"
               class="w-8 h-8 rounded-full border-2 transition-all"
               :class="form.color === color ? 'border-[var(--color-primary)] scale-110' : 'border-transparent'"
               :style="{ backgroundColor: color }"
-            ></button>
+            ></el-button>
           </div>
         </div>
       </div>

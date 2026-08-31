@@ -6,12 +6,12 @@
         <h1 ref="pageTitle" class="text-2xl font-semibold text-[var(--text-primary)]">笔记</h1>
         <p ref="pageSubtitle" class="text-sm text-[var(--text-muted)] mt-1">记录和管理你的学习笔记</p>
       </div>
-      <button @click="openCreateNote" class="btn-primary flex items-center gap-2">
+      <el-button @click="openCreateNote" type="primary">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
         新建笔记
-      </button>
+      </el-button>
     </div>
 
     <!-- Filters -->
@@ -34,14 +34,14 @@
       </select>
 
       <div class="flex items-center gap-2 flex-wrap">
-        <button
+        <el-button
           @click="clearTagFilter"
           class="text-xs px-3 py-1.5 rounded-full transition-colors"
           :class="!selectedTag ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
         >
           全部标签
-        </button>
-        <button
+        </el-button>
+        <el-button
           v-for="tag in noteStore.allTags"
           :key="tag"
           @click="selectTag(tag)"
@@ -49,16 +49,16 @@
           :class="selectedTag === tag ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
         >
           {{ tag }}
-        </button>
+        </el-button>
       </div>
 
-      <button
+      <el-button
         v-if="hasActiveFilters"
         @click="clearAllFilters"
         class="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors ml-auto"
       >
         清除筛选
-      </button>
+      </el-button>
     </div>
 
     <!-- Create Note -->
@@ -75,8 +75,8 @@
           <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
         <div class="flex items-center gap-3">
-          <button @click="cancelCreate" class="btn-secondary text-sm">取消</button>
-          <button @click="saveNewNote" class="btn-primary text-sm">保存笔记</button>
+          <el-button @click="cancelCreate" >取消</el-button>
+          <el-button @click="saveNewNote" type="primary">保存笔记</el-button>
         </div>
       </div>
     </div>
@@ -93,7 +93,7 @@
       </div>
       <p class="text-[var(--text-muted)] mb-2" v-if="hasActiveFilters">未找到匹配的笔记</p>
       <p class="text-[var(--text-muted)] mb-4" v-else>还没有笔记，开始记录吧</p>
-      <button @click="openCreateNote" class="btn-secondary text-sm">新建笔记</button>
+      <el-button @click="openCreateNote" >新建笔记</el-button>
     </div>
 
     <!-- Notes Grid -->
@@ -113,8 +113,8 @@
               <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
             <div class="flex items-center gap-3">
-              <button @click="cancelEdit" class="btn-secondary text-sm">取消</button>
-              <button @click="saveEditNote" class="btn-primary text-sm">保存</button>
+              <el-button @click="cancelEdit" >取消</el-button>
+              <el-button @click="saveEditNote" type="primary">保存</el-button>
             </div>
           </div>
         </div>
