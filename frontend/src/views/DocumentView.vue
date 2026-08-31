@@ -16,8 +16,8 @@
           v-for="doc in documents"
           :key="doc.id"
           @click="selectDocument(doc)"
-          class="p-4 border rounded-lg cursor-pointer transition-all bg-white shadow-sm hover:shadow-md"
-          :class="selectedDoc?.id === doc.id ? 'border-l-4 border-l-[#010120] ring-1 ring-[#010120]' : 'border-[var(--border-default)] hover:border-[var(--border-hover)]'"
+          class="p-4 border rounded-lg cursor-pointer transition-all bg-[var(--surface-card)] shadow-sm hover:shadow-md"
+          :class="selectedDoc?.id === doc.id ? 'border-l-4 border-l-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)] hover:border-[var(--border-hover)]'"
         >
           <div class="flex items-center gap-2 mb-2">
             <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
@@ -25,7 +25,7 @@
               <path d="M14 2v6h6"/>
             </svg>
             <span class="text-xs px-2 py-0.5 rounded"
-              :class="doc.status === 'ready' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
+              :class="doc.status === 'ready' ? 'bg-[var(--color-success-light)] text-[var(--color-success)]' : 'bg-[var(--color-warning-light)] text-[var(--color-warning)]'"
             >
               {{ doc.status === 'ready' ? '已就绪' : '处理中' }}
             </span>
@@ -39,7 +39,7 @@
     <!-- Document Content -->
     <div v-if="selectedDoc" class="card !p-0">
       <!-- Header -->
-      <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-white rounded-t-lg">
+      <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)] rounded-t-lg">
         <div>
           <h2 class="font-medium text-[var(--text-primary)]">{{ selectedDoc.filename }}</h2>
           <p class="text-sm text-[var(--text-muted)] mt-1">共 {{ filteredChunks.length }} 个段落</p>
@@ -72,7 +72,7 @@
           v-model="searchQuery"
           type="text"
           placeholder="搜索文档内容..."
-          class="w-full px-4 py-2.5 border border-[var(--border-default)] rounded-lg bg-white focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] text-base"
+          class="w-full px-4 py-2.5 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] text-base"
         />
       </div>
       
@@ -85,7 +85,7 @@
           <div
             v-for="(chunk, idx) in paginatedChunks"
             :key="chunk.idx"
-            class="group bg-white rounded-lg shadow-sm border border-[var(--border-default)] hover:shadow-md hover:border-[var(--border-default)] transition-all duration-200"
+            class="group bg-[var(--surface-card)] rounded-lg shadow-sm border border-[var(--border-default)] hover:shadow-md hover:border-[var(--border-hover)] transition-all duration-200"
           >
             <!-- Chunk Header -->
             <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)] bg-[var(--bg-secondary)]/50 rounded-t-lg">
@@ -135,7 +135,7 @@
       </div>
       
       <!-- Pagination -->
-      <div v-if="filteredChunks.length > pageSize" class="p-4 border-t border-[var(--border-default)] flex items-center justify-between bg-white rounded-b-lg">
+      <div v-if="filteredChunks.length > pageSize" class="p-4 border-t border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)] rounded-b-lg">
         <button
           @click="prevPage"
           :disabled="currentPage === 1"
@@ -160,7 +160,7 @@
     <button
       v-if="showBackToTop"
       @click="scrollToTop"
-      class="fixed bottom-8 right-8 w-12 h-12 bg-[#010120] text-white rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-all"
+      class="fixed bottom-8 right-8 w-12 h-12 bg-[var(--color-primary)] text-white rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-all"
     >
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
@@ -364,9 +364,3 @@ onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
 })
 </script>
-
-<style scoped>
-.card {
-  @apply bg-white rounded-lg shadow-sm border border-[var(--border-default)];
-}
-</style>

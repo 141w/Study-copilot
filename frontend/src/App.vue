@@ -13,7 +13,6 @@
         </router-view>
       </main>
     </div>
-    <Toast />
   </div>
 </template>
 
@@ -23,7 +22,6 @@ import { useRoute } from 'vue-router'
 import { useSidebarStore } from './stores/sidebar'
 import AppHeader from './components/common/AppHeader.vue'
 import AppSidebar from './components/common/AppSidebar.vue'
-import Toast from './components/common/Toast.vue'
 
 const route = useRoute()
 const sidebarStore = useSidebarStore()

@@ -25,19 +25,20 @@ def upgrade() -> None:
     # Enable pgvector extension
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
-    # Create document_chunks table
-    op.create_table(
-        "document_chunks",
-        sa.Column("id", sa.String(), nullable=False),
-        sa.Column("document_id", sa.String(), nullable=False),
-        sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("embedding", sa.Numeric(precision=-1, scale=-1), nullable=True),
-        sa.Column("chunk_index", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("chunk_metadata", sa.JSON(), nullable=False, server_default=sa.text("'{}'::jsonb")),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("NOW()")),
-        sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
+    # Create document_chunks table (use raw SQL for pgvector VECTOR type)
+    op.execute("""
+        CREATE TABLE document_chunks (
+            id VARCHAR NOT NULL,
+            document_id VARCHAR NOT NULL,
+            content TEXT NOT NULL,
+            embedding vector(768),
+            chunk_index INTEGER DEFAULT 0 NOT NULL,
+            chunk_metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+            created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL,
+            PRIMARY KEY (id),
+            FOREIGN KEY(document_id) REFERENCES documents (id) ON DELETE CASCADE
+        )
+    """)
 
     # HNSW index for cosine similarity vector search
     op.execute("""
@@ -48,6 +49,10 @@ def upgrade() -> None:
     """)
 
     # GIN index for full-text keyword search (replaces BM25)
+    # Create a simple zh text search configuration for CJK (no stop words + simple segmentation)
+    op.execute("""
+        CREATE TEXT SEARCH CONFIGURATION zh (COPY = simple)
+    """)
     op.execute("""
         CREATE INDEX ix_document_chunks_content_fts
         ON document_chunks
@@ -65,7 +70,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_document_chunks_metadata",
         "document_chunks",
-        ["metadata"],
+        ["chunk_metadata"],
         postgresql_using="gin",
     )
 

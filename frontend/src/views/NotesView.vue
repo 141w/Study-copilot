@@ -130,19 +130,18 @@
     </div>
 
     <!-- Delete Confirmation -->
-    <Teleport to="body">
-      <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/40" @click="showDeleteConfirm = false"></div>
-        <div class="relative bg-[var(--surface-card)] rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-2">删除笔记</h2>
-          <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除「{{ deletingNote?.title || '未命名笔记' }}」吗？此操作不可撤销。</p>
-          <div class="flex items-center justify-end gap-3">
-            <button @click="showDeleteConfirm = false" class="btn-secondary">取消</button>
-            <button @click="doDeleteNote" class="px-4 py-2 bg-[var(--color-error)] text-white rounded font-medium hover:opacity-90 transition-colors">删除</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <el-dialog
+      v-model="showDeleteConfirm"
+      title="删除笔记"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除「{{ deletingNote?.title || '未命名笔记' }}」吗？此操作不可撤销。</p>
+      <template #footer>
+        <el-button @click="showDeleteConfirm = false">取消</el-button>
+        <el-button type="danger" @click="doDeleteNote">删除</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

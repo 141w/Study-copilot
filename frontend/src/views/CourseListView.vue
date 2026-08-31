@@ -57,75 +57,68 @@
     </div>
 
     <!-- Create/Edit Modal -->
-    <Teleport to="body">
-      <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/40" @click="closeModal"></div>
-        <div ref="modalEl" class="relative bg-[var(--surface-card)] rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-4">{{ editingCourse ? '编辑课程' : '新建课程' }}</h2>
-
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">课程名称</label>
-              <input
-                v-model="form.name"
-                type="text"
-                placeholder="输入课程名称"
-                class="input"
-                @keydown.enter="saveCourse"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">课程描述</label>
-              <textarea
-                v-model="form.description"
-                placeholder="简单描述这门课程（可选）"
-                rows="3"
-                class="input resize-none"
-              ></textarea>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">课程颜色</label>
-              <div class="flex items-center gap-2">
-                <button
-                  v-for="color in colorOptions"
-                  :key="color"
-                  @click="form.color = color"
-                  class="w-8 h-8 rounded-full border-2 transition-all"
-                  :class="form.color === color ? 'border-[var(--color-primary)] scale-110' : 'border-transparent'"
-                  :style="{ backgroundColor: color }"
-                ></button>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-center justify-end gap-3 mt-6">
-            <button @click="closeModal" class="btn-secondary">取消</button>
-            <button @click="saveCourse" class="btn-primary" :disabled="!form.name.trim() || saving">
-              {{ saving ? '保存中...' : '保存' }}
-            </button>
+    <el-dialog
+      v-model="showModal"
+      :title="editingCourse ? '编辑课程' : '新建课程'"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">课程名称</label>
+          <el-input
+            v-model="form.name"
+            placeholder="输入课程名称"
+            @keydown.enter="saveCourse"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">课程描述</label>
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="3"
+            placeholder="简单描述这门课程（可选）"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">课程颜色</label>
+          <div class="flex items-center gap-2">
+            <button
+              v-for="color in colorOptions"
+              :key="color"
+              @click="form.color = color"
+              class="w-8 h-8 rounded-full border-2 transition-all"
+              :class="form.color === color ? 'border-[var(--color-primary)] scale-110' : 'border-transparent'"
+              :style="{ backgroundColor: color }"
+            ></button>
           </div>
         </div>
       </div>
-    </Teleport>
+
+      <template #footer>
+        <el-button @click="closeModal">取消</el-button>
+        <el-button type="primary" :disabled="!form.name.trim() || saving" @click="saveCourse">
+          {{ saving ? '保存中...' : '保存' }}
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- Delete Confirmation -->
-    <Teleport to="body">
-      <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/40" @click="showDeleteConfirm = false"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-2">删除课程</h2>
-          <p class="text-sm text-[var(--text-secondary)] mb-6">
-            确定要删除「{{ deletingCourse?.name }}」吗？课程内的文档不会被删除。
-          </p>
-          <div class="flex items-center justify-end gap-3">
-            <button @click="showDeleteConfirm = false" class="btn-secondary">取消</button>
-            <button @click="doDelete" class="px-4 py-2 bg-red-600 text-white rounded font-medium hover:bg-red-700 transition-colors">
-              删除
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <el-dialog
+      v-model="showDeleteConfirm"
+      title="删除课程"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <p class="text-sm text-[var(--text-secondary)] mb-6">
+        确定要删除「{{ deletingCourse?.name }}」吗？课程内的文档不会被删除。
+      </p>
+      <template #footer>
+        <el-button @click="showDeleteConfirm = false">取消</el-button>
+        <el-button type="danger" @click="confirmDelete">删除</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

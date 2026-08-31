@@ -33,9 +33,9 @@
       </button>
       <p class="text-sm text-[var(--text-muted)] mt-4">支持 PDF、DOCX、PPTX 格式，最大 50MB</p>
       <div class="flex justify-center gap-4 mt-3">
-        <span class="text-xs px-2 py-1 bg-red-50 text-red-600 rounded">PDF</span>
-        <span class="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded">Word</span>
-        <span class="text-xs px-2 py-1 bg-orange-50 text-orange-600 rounded">PowerPoint</span>
+        <span class="text-xs px-2 py-1 bg-[var(--color-error-light)] text-[var(--color-error)] rounded">PDF</span>
+        <span class="text-xs px-2 py-1 bg-[var(--color-info-light)] text-[var(--color-info)] rounded">Word</span>
+        <span class="text-xs px-2 py-1 bg-[var(--color-warning-light)] text-[var(--color-warning)] rounded">PowerPoint</span>
       </div>
     </div>
 
@@ -81,8 +81,8 @@
           :key="doc.id"
           class="p-4 flex items-center gap-4"
         >
-          <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="w-10 h-10 bg-[var(--color-error-light)] rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
@@ -187,9 +187,9 @@ function onUrlImported(doc) {
 
 function statusColor(status) {
   switch (status) {
-    case 'ready': return 'text-green-500'
-    case 'processing': return 'text-yellow-500'
-    case 'error': return 'text-red-500'
+    case 'ready': return 'text-[var(--color-success)]'
+    case 'processing': return 'text-[var(--color-warning)]'
+    case 'error': return 'text-[var(--color-error)]'
     default: return 'text-[var(--text-muted)]'
   }
 }

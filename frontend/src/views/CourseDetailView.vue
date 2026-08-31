@@ -63,13 +63,13 @@
           :key="tab.key"
           @click="activeTab = tab.key"
           class="pb-3 text-sm font-medium transition-colors relative"
-          :class="activeTab === tab.key ? 'text-[#010120]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'"
+          :class="activeTab === tab.key ? 'text-[var(--color-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'"
         >
           {{ tab.label }}
           <span v-if="tab.count !== undefined" class="ml-1 text-xs text-[var(--text-muted)]">({{ tab.count }})</span>
           <div
             v-if="activeTab === tab.key"
-            class="absolute bottom-0 left-0 right-0 h-0.5 bg-[#010120] rounded-full"
+            class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-primary)] rounded-full"
           ></div>
         </button>
       </div>
@@ -97,8 +97,8 @@
             :key="doc.id"
             class="p-4 flex items-center gap-4"
           >
-            <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-10 h-10 bg-[var(--color-error-light)] rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
@@ -174,46 +174,44 @@
     </template>
 
     <!-- Add Document Dialog -->
-    <Teleport to="body">
-      <div v-if="showAddDocDialog" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/40" @click="showAddDocDialog = false"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-4">添加文档到课程</h2>
-          <div v-if="availableDocs.length === 0" class="text-sm text-[var(--text-muted)] py-4 text-center">
-            没有可添加的文档，请先上传文档
-          </div>
-          <div v-else class="space-y-2 max-h-64 overflow-y-auto mb-4">
-            <label
-              v-for="doc in availableDocs"
-              :key="doc.id"
-              class="flex items-center gap-3 p-3 rounded-lg border border-[var(--border-default)] cursor-pointer hover:border-[#010120] transition-colors"
-            >
-              <input type="radio" :value="doc.id" v-model="selectedDocId" class="accent-[#010120]" />
-              <span class="text-sm text-[var(--text-primary)] truncate">{{ doc.filename }}</span>
-            </label>
-          </div>
-          <div class="flex items-center justify-end gap-3">
-            <button @click="showAddDocDialog = false" class="btn-secondary">取消</button>
-            <button @click="addDoc" :disabled="!selectedDocId" class="btn-primary">添加</button>
-          </div>
-        </div>
+    <el-dialog
+      v-model="showAddDocDialog"
+      title="添加文档到课程"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <div v-if="availableDocs.length === 0" class="text-sm text-[var(--text-muted)] py-4 text-center">
+        没有可添加的文档，请先上传文档
       </div>
-    </Teleport>
+      <div v-else class="space-y-2 max-h-64 overflow-y-auto">
+        <label
+          v-for="doc in availableDocs"
+          :key="doc.id"
+          class="flex items-center gap-3 p-3 rounded-lg border border-[var(--border-default)] cursor-pointer hover:border-[var(--color-primary)] transition-colors"
+        >
+          <input type="radio" :value="doc.id" v-model="selectedDocId" class="accent-[var(--color-primary)]" />
+          <span class="text-sm text-[var(--text-primary)] truncate">{{ doc.filename }}</span>
+        </label>
+      </div>
+      <template #footer>
+        <el-button @click="showAddDocDialog = false">取消</el-button>
+        <el-button type="primary" :disabled="!selectedDocId" @click="addDoc">添加</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Delete Note Confirmation -->
-    <Teleport to="body">
-      <div v-if="showDeleteNoteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/40" @click="showDeleteNoteConfirm = false"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-2">删除笔记</h2>
-          <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除此笔记吗？此操作不可撤销。</p>
-          <div class="flex items-center justify-end gap-3">
-            <button @click="showDeleteNoteConfirm = false" class="btn-secondary">取消</button>
-            <button @click="doDeleteNote" class="px-4 py-2 bg-red-600 text-white rounded font-medium hover:bg-red-700 transition-colors">删除</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <el-dialog
+      v-model="showDeleteNoteConfirm"
+      title="删除笔记"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除此笔记吗？此操作不可撤销。</p>
+      <template #footer>
+        <el-button @click="showDeleteNoteConfirm = false">取消</el-button>
+        <el-button type="danger" @click="doDeleteNote">删除</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

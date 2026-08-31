@@ -16,7 +16,7 @@
             @click="newChat"
             class="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
           >
-            <IconPlus class="w-4 h-4" />
+            <el-icon class="w-4 h-4"><Plus /></el-icon>
             新建对话
           </button>
 
@@ -26,7 +26,7 @@
             :disabled="chatStore.messages.length === 0"
             class="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <IconDownload class="w-4 h-4" />
+            <el-icon class="w-4 h-4"><Download /></el-icon>
             导出对话
           </button>
 
@@ -36,7 +36,7 @@
             class="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors"
             :class="showHistory ? 'bg-[var(--color-primary)] text-white' : 'border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
           >
-            <IconClock class="w-4 h-4" />
+            <el-icon class="w-4 h-4"><Clock /></el-icon>
             {{ showHistory ? '隐藏记录' : '历史记录' }}
           </button>
 
@@ -102,8 +102,8 @@
               class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center"
               :class="msg.role === 'user' ? 'bg-[var(--color-primary)] text-white' : 'bg-gradient-to-br from-[#ef2cc1] to-[#fc4c02] text-white'"
             >
-              <IconUser v-if="msg.role === 'user'" class="w-4 h-4" />
-              <IconRobot v-else class="w-4 h-4" />
+              <el-icon v-if="msg.role === 'user'" class="w-4 h-4"><User /></el-icon>
+              <el-icon v-else class="w-4 h-4"><MagicStick /></el-icon>
             </div>
 
             <!-- Message Content -->
@@ -113,7 +113,7 @@
             >
               <!-- 思考中状态 -->
               <div v-if="msg.role === 'assistant' && msg.isStreaming && !msg.content" class="flex items-center gap-2 text-[var(--text-muted)]">
-                <IconSpinner class="w-4 h-4" />
+              <el-icon class="w-4 h-4 is-loading"><RefreshRight /></el-icon>
                 <span>思考中...</span>
               </div>
               <div v-else class="prose prose-sm max-w-none" v-html="renderMarkdown(msg.content, msg.isStreaming)"></div>
@@ -129,7 +129,7 @@
                   class="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
                   title="复制回答"
                 >
-                  <IconCopy class="w-3.5 h-3.5" />
+                  <el-icon class="w-3.5 h-3.5"><DocumentCopy /></el-icon>
                   <span>{{ copiedMsgId === msg.id ? '已复制' : '复制' }}</span>
                 </button>
               </div>
@@ -170,7 +170,7 @@
                   class="source-card p-3 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] text-sm"
                 >
                   <div class="flex items-center gap-2 mb-1">
-                    <span class="w-5 h-5 rounded-full bg-[#010120] text-white text-xs flex items-center justify-center">
+                    <span class="w-5 h-5 rounded-full bg-[var(--color-primary)] text-white text-xs flex items-center justify-center">
                       {{ source.index }}
                     </span>
                     <span v-if="source.source" class="font-medium text-[var(--text-primary)]">{{ source.source }}</span>
@@ -226,12 +226,7 @@ import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatE
 import TTSPlayer from '../components/TTSPlayer.vue'
 import { useMarkdown } from '../composables/useMarkdown'
 import gsap from 'gsap'
-import IconPlus from '../components/common/icons/IconPlus.vue'
-import IconDownload from '../components/common/icons/IconDownload.vue'
-import IconClock from '../components/common/icons/IconClock.vue'
-import IconUser from '../components/common/icons/IconUser.vue'
-import IconRobot from '../components/common/icons/IconRobot.vue'
-import IconSpinner from '../components/common/icons/IconSpinner.vue'
+import { Plus, Download, Clock, User, MagicStick, RefreshRight, DocumentCopy } from '@element-plus/icons-vue'
 
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()

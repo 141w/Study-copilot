@@ -44,7 +44,7 @@
             </div>
             <span
               class="text-sm font-medium"
-              :class="group.correct_rate >= 70 ? 'text-green-500' : group.correct_rate >= 40 ? 'text-yellow-500' : 'text-red-500'"
+              :class="group.correct_rate >= 70 ? 'text-[var(--color-success)]' : group.correct_rate >= 40 ? 'text-[var(--color-warning)]' : 'text-[var(--color-error)]'"
             >
               正确率: {{ group.correct_rate }}%
             </span>
@@ -58,7 +58,7 @@
             >
               <span
                 class="w-6 h-6 rounded-full text-xs flex items-center justify-center flex-shrink-0"
-                :class="item.is_correct ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'"
+                :class="item.is_correct ? 'bg-[var(--color-success-light)] text-[var(--color-success)]' : 'bg-[var(--color-error-light)] text-[var(--color-error)]'"
               >
                 {{ item.is_correct ? '✓' : '✗' }}
               </span>
@@ -94,12 +94,12 @@
 
         <div v-else class="grid grid-cols-3 gap-6">
           <div class="text-center">
-            <div class="text-3xl font-semibold text-[#010120]">{{ stats.total_quizzes }}</div>
+            <div class="text-3xl font-semibold text-[var(--color-primary)]">{{ stats.total_quizzes }}</div>
             <div class="text-sm text-[var(--text-muted)] mt-1">总做题数</div>
           </div>
 
           <div class="text-center">
-            <div class="text-3xl font-semibold text-green-500">{{ stats.correct_count }}</div>
+            <div class="text-3xl font-semibold text-[var(--color-success)]">{{ stats.correct_count }}</div>
             <div class="text-sm text-[var(--text-muted)] mt-1">正确数</div>
           </div>
 
@@ -160,7 +160,7 @@
               <div class="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden mb-3">
                 <div
                   class="h-full transition-all duration-500"
-                  :class="area.accuracy_rate < 50 ? 'bg-red-500' : area.accuracy_rate < 70 ? 'bg-yellow-500' : 'bg-green-500'"
+                  :class="area.accuracy_rate < 50 ? 'bg-[var(--color-error)]' : area.accuracy_rate < 70 ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-success)]'"
                   :style="{ width: `${area.accuracy_rate}%` }"
                 ></div>
               </div>
@@ -264,9 +264,9 @@ async function analyzeWeakness() {
 }
 
 function accuracyColor(rate) {
-  if (rate < 50) return 'text-red-500'
-  if (rate < 70) return 'text-yellow-500'
-  return 'text-green-500'
+  if (rate < 50) return 'text-[var(--color-error)]'
+  if (rate < 70) return 'text-[var(--color-warning)]'
+  return 'text-[var(--color-success)]'
 }
 
 onMounted(async () => {

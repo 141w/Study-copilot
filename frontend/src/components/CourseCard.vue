@@ -1,27 +1,27 @@
 <template>
   <div
     ref="cardEl"
-    class="card p-5 hover:border-[#010120] border-2 border-transparent transition-all cursor-pointer group"
+    class="card p-5 hover:border-[var(--color-primary)] border-2 border-transparent transition-all cursor-pointer group"
     @click="$emit('click', course)"
   >
     <div class="flex items-start justify-between mb-3">
-      <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-purple-100 transition-colors">
-        <IconCourse class="w-5 h-5 text-purple-500" />
+      <div class="w-10 h-10 bg-[var(--color-accent-light, #f3f0ff)] rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--color-accent-light, #f3f0ff)] transition-colors">
+        <el-icon class="w-5 h-5 text-[var(--color-accent)]"><Reading /></el-icon>
       </div>
       <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           @click.stop="$emit('edit', course)"
-          class="p-1.5 text-[var(--text-muted)] hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-info)] hover:bg-[var(--color-info-light)] rounded transition-colors"
           title="编辑课程"
         >
-          <IconEdit class="w-4 h-4" />
+          <el-icon class="w-4 h-4"><Edit /></el-icon>
         </button>
         <button
           @click.stop="$emit('delete', course)"
-          class="p-1.5 text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-light)] rounded transition-colors"
           title="删除课程"
         >
-          <IconTrash class="w-4 h-4" />
+          <el-icon class="w-4 h-4"><Delete /></el-icon>
         </button>
       </div>
     </div>
@@ -31,11 +31,11 @@
 
     <div class="flex items-center gap-3 mt-auto text-xs text-[var(--text-muted)]">
       <span class="flex items-center gap-1">
-        <IconFileText class="w-3.5 h-3.5" />
+        <el-icon class="w-3.5 h-3.5"><Tickets /></el-icon>
         {{ course.document_count || 0 }} 份文档
       </span>
       <span v-if="course.note_count" class="flex items-center gap-1">
-        <IconNotes class="w-3.5 h-3.5" />
+        <el-icon class="w-3.5 h-3.5"><Edit /></el-icon>
         {{ course.note_count }} 条笔记
       </span>
       <span v-if="course.color" class="ml-auto">
@@ -46,11 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import IconCourse from './icons/IconCourse.vue'
-import IconEdit from './icons/IconEdit.vue'
-import IconTrash from './icons/IconTrash.vue'
-import IconFileText from './icons/IconFileText.vue'
-import IconNotes from './icons/IconNotes.vue'
+import { Reading, Edit, Delete, Tickets } from '@element-plus/icons-vue'
 import type { Course } from '../types/models'
 
 defineProps<{

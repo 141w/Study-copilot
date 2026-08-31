@@ -1,7 +1,7 @@
 <template>
   <div
     ref="cardEl"
-    class="card p-5 hover:border-[#010120] border-2 border-transparent transition-all cursor-pointer group"
+    class="card p-5 hover:border-[var(--color-primary)] border-2 border-transparent transition-all cursor-pointer group"
     @click="$emit('click', note)"
   >
     <div class="flex items-start justify-between mb-2">
@@ -9,7 +9,7 @@
       <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
         <button
           @click.stop="$emit('edit', note)"
-          class="p-1.5 text-[var(--text-muted)] hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-info)] hover:bg-[var(--color-info-light)] rounded transition-colors"
           title="编辑笔记"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -18,7 +18,7 @@
         </button>
         <button
           @click.stop="$emit('delete', note)"
-          class="p-1.5 text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-light)] rounded transition-colors"
           title="删除笔记"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,7 +41,7 @@
 
     <div class="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-default)]">
       <span class="text-xs text-[var(--text-muted)]">{{ formatDate(note.updated_at || note.created_at) }}</span>
-      <span v-if="courseName" class="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+      <span v-if="courseName" class="text-xs text-[var(--color-accent)] bg-[var(--color-accent-light, #f3f0ff)] px-2 py-0.5 rounded-full">
         {{ courseName }}
       </span>
     </div>

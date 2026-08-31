@@ -26,8 +26,8 @@
         <h2 class="text-xl font-semibold text-[var(--text-primary)] mb-6">快速开始</h2>
         <div ref="quickActions" class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <router-link to="/upload" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-red-50 dark:bg-red-500/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-red-100 dark:group-hover:bg-red-500/20 transition-colors">
-              <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-12 h-12 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-error-light)] dark:group-hover:bg-[var(--color-error)]/20 transition-colors">
+              <svg class="w-6 h-6 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
             </div>
@@ -36,8 +36,8 @@
           </router-link>
 
           <router-link to="/documents" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-blue-50 dark:bg-blue-500/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-100 dark:group-hover:bg-blue-500/20 transition-colors">
-              <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-12 h-12 bg-[var(--color-info-light)] dark:bg-[var(--color-info)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-info-light)] dark:group-hover:bg-[var(--color-info)]/20 transition-colors">
+              <svg class="w-6 h-6 text-[var(--color-info)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
               </svg>
             </div>
@@ -46,8 +46,8 @@
           </router-link>
 
           <router-link to="/chat" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-purple-50 dark:bg-purple-500/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-purple-100 dark:group-hover:bg-purple-500/20 transition-colors">
-              <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-12 h-12 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-accent-light, #f3f0ff)] dark:group-hover:bg-[var(--color-accent)]/20 transition-colors">
+              <svg class="w-6 h-6 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
             </div>
@@ -56,8 +56,8 @@
           </router-link>
 
           <router-link to="/quiz" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-green-50 dark:bg-green-500/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-green-100 dark:group-hover:bg-green-500/20 transition-colors">
-              <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-12 h-12 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-success-light)] dark:group-hover:bg-[var(--color-success)]/20 transition-colors">
+              <svg class="w-6 h-6 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
             </div>
@@ -77,8 +77,8 @@
           <!-- Feature 1 -->
           <div class="card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-red-50 dark:bg-red-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                <svg class="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="w-14 h-14 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg class="w-7 h-7 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
@@ -95,8 +95,8 @@
           <!-- Feature 2 -->
           <div class="card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-purple-50 dark:bg-purple-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                <svg class="w-7 h-7 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="w-14 h-14 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg class="w-7 h-7 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.548A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.548z" />
                 </svg>
               </div>
@@ -113,8 +113,8 @@
           <!-- Feature 3 -->
           <div class="card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-green-50 dark:bg-green-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                <svg class="w-7 h-7 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="w-14 h-14 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg class="w-7 h-7 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
               </div>
@@ -131,8 +131,8 @@
           <!-- Feature 4 -->
           <div class="card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-orange-50 dark:bg-orange-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                <svg class="w-7 h-7 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="w-14 h-14 bg-[var(--color-warning-light)] dark:bg-[var(--color-warning)]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg class="w-7 h-7 text-[var(--color-warning)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
@@ -171,8 +171,8 @@
             <div v-else class="divide-y divide-[var(--border-default)]">
               <div v-for="doc in recentDocs" :key="doc.id" class="p-4 hover:bg-[var(--bg-hover)] cursor-pointer" @click="goToChat(doc.id)">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 bg-red-50 dark:bg-red-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div class="w-10 h-10 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
@@ -204,8 +204,8 @@
             <div v-else class="divide-y divide-[var(--border-default)]">
               <div v-for="chat in recentChats" :key="chat.session_id" class="p-4 hover:bg-[var(--bg-hover)] cursor-pointer" @click="router.push('/chat')">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 bg-purple-50 dark:bg-purple-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div class="w-10 h-10 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
                   </div>
@@ -224,7 +224,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDocumentStore } from '../stores/document'
 import { useChatStore } from '../stores/chat'
@@ -265,9 +265,11 @@ function goToChat(docId) {
   router.push({ path: '/chat', query: { docId } })
 }
 
-onMounted(() => {
-  Promise.all([documentStore.fetchDocuments(), chatStore.fetchSessions()])
+onMounted(async () => {
+  await Promise.all([documentStore.fetchDocuments(), chatStore.fetchSessions()])
 
+  // Refresh layout after async data fetch (documents/chats may shift DOM)
+  await nextTick()
   if (!homeContainer.value) return
   ctx = gsap.context(() => {
     // Task 1: Hero entrance animation
@@ -303,7 +305,8 @@ onMounted(() => {
         ease: 'power2.out',
         scrollTrigger: {
           trigger: quickActions.value,
-          start: 'top 85%'
+          start: 'top 85%',
+          once: true
         }
       })
     }
@@ -319,11 +322,14 @@ onMounted(() => {
         ease: 'power2.out',
         scrollTrigger: {
           trigger: featureCards.value,
-          start: 'top 85%'
+          start: 'top 85%',
+          once: true
         }
       })
     }
   }, homeContainer.value)
+  // Refresh after all ScrollTrigger animations are registered
+  ScrollTrigger.refresh()
 })
 
 onUnmounted(() => {

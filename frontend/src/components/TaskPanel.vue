@@ -30,12 +30,12 @@
               <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-indigo-400 opacity-75"></span>
               <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
             </span>
-            <span v-else-if="task.status === 'completed'" class="text-green-500">
+            <span v-else-if="task.status === 'completed'" class="text-[var(--color-success)]">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
               </svg>
             </span>
-            <span v-else-if="task.status === 'failed'" class="text-red-500">
+            <span v-else-if="task.status === 'failed'" class="text-[var(--color-error)]">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
               </svg>
@@ -79,7 +79,7 @@
         </div>
 
         <!-- Error message -->
-        <p v-if="task.status === 'failed' && task.error" class="text-xs text-red-500 mt-1.5 truncate">
+        <p v-if="task.status === 'failed' && task.error" class="text-xs text-[var(--color-error)] mt-1.5 truncate">
           {{ task.error }}
         </p>
       </div>
@@ -114,19 +114,19 @@ function taskTypeName(type) {
 
 function taskBorderClass(task) {
   switch (task.status) {
-    case 'running': return 'border-indigo-200 bg-indigo-50/30'
-    case 'completed': return 'border-green-200 bg-green-50/30'
-    case 'failed': return 'border-red-200 bg-red-50/30'
+    case 'running': return 'border-[var(--color-primary)]/20 bg-[var(--color-primary-light)]'
+    case 'completed': return 'border-[var(--color-success)]/20 bg-[var(--color-success-light)]'
+    case 'failed': return 'border-[var(--color-error)]/20 bg-[var(--color-error-light)]'
     case 'cancelled': return 'border-[var(--border-default)] bg-[var(--bg-secondary)]/30'
     default: return 'border-[var(--border-default)]'
   }
 }
 
-function statusTextClass(task) {
+ function statusTextClass(task) {
   switch (task.status) {
-    case 'running': return 'text-indigo-600'
-    case 'completed': return 'text-green-600'
-    case 'failed': return 'text-red-600'
+    case 'running': return 'text-[var(--color-primary)]'
+    case 'completed': return 'text-[var(--color-success)]'
+    case 'failed': return 'text-[var(--color-error)]'
     case 'cancelled': return 'text-[var(--text-muted)]'
     default: return 'text-[var(--text-muted)]'
   }

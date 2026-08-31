@@ -211,12 +211,12 @@
         <div
           v-for="q in wrongQuestions"
           :key="q.id"
-          class="card p-5 border-l-4 border-red-400"
+          class="card p-5 border-l-4 border-[var(--color-error)]"
         >
           <h3 class="text-base font-medium text-[var(--text-primary)] mb-3">{{ q.question }}</h3>
           <div class="space-y-1 text-sm">
-            <p class="text-red-600">你的答案: {{ q.user_answer }}</p>
-            <p class="text-green-600">正确答案: {{ q.correct_answer }}</p>
+            <p class="text-[var(--color-error)]">你的答案: {{ q.user_answer }}</p>
+            <p class="text-[var(--color-success)]">正确答案: {{ q.correct_answer }}</p>
             <p v-if="q.explanation" class="text-[var(--text-muted)]">解析: {{ q.explanation }}</p>
           </div>
           <button

@@ -1,39 +1,33 @@
 <template>
-  <div class="border-t border-[var(--border-default)] bg-white p-4">
+  <div class="border-t border-[var(--border-default)] bg-[var(--bg-primary)] p-4">
     <div class="flex gap-3 max-w-4xl mx-auto">
-      <input
+      <el-input
         v-model="inputText"
-        type="text"
         placeholder="输入您的问题..."
-        class="flex-1 px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
-        @keydown.enter="sendMessage"
+        class="flex-1"
         :disabled="disabled"
+        @keydown.enter="sendMessage"
       />
-      <button
+      <el-button
         v-if="loading"
+        type="danger"
+        :icon="Close"
         @click="stopStream"
-        class="px-6 py-3 bg-red-500 text-white rounded-lg font-medium transition-all hover:bg-red-600"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-      <button
+      />
+      <el-button
         v-else
-        @click="sendMessage"
+        type="primary"
+        :icon="Promotion"
         :disabled="disabled || !inputText.trim()"
-        class="px-6 py-3 bg-[#010120] text-white rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-        </svg>
-      </button>
+        @click="sendMessage"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import { Close, Promotion } from '@element-plus/icons-vue'
 
 const props = defineProps({
   loading: Boolean,

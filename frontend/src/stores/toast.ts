@@ -1,3 +1,4 @@
+import { ElMessage } from 'element-plus'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
@@ -13,37 +14,14 @@ export const useToastStore = defineStore('toast', () => {
   let idCounter = 0
 
   function show(msg: string, toastType: Toast['type'] = 'info', duration = 3000): void {
-    const id = ++idCounter
-    toasts.value.push({ id, message: msg, type: toastType, visible: true })
-
-    // Enforce max 3 visible toasts — remove oldest if over limit
-    if (toasts.value.length > 3) {
-      toasts.value.splice(0, toasts.value.length - 3)
-    }
-
-    setTimeout(() => {
-      remove(id)
-    }, duration)
-  }
-
-  function remove(id: number): void {
-    const idx = toasts.value.findIndex(t => t.id === id)
-    if (idx !== -1) {
-      toasts.value[idx].visible = false
-      // Wait for leave animation then splice out
-      setTimeout(() => {
-        const i = toasts.value.findIndex(t => t.id === id)
-        if (i !== -1) toasts.value.splice(i, 1)
-      }, 300)
-    }
+    const method = toastType === 'error' ? 'error' :
+                   toastType === 'warning' ? 'warning' :
+                   toastType === 'success' ? 'success' : 'info'
+    ElMessage({ message: msg, type: method, duration })
   }
 
   function hide(): void {
-    // Hide all toasts
-    toasts.value.forEach(t => { t.visible = false })
-    setTimeout(() => {
-      toasts.value = []
-    }, 300)
+    ElMessage.closeAll()
   }
 
   function success(msg: string, duration?: number): void {
@@ -66,7 +44,6 @@ export const useToastStore = defineStore('toast', () => {
     toasts,
     show,
     hide,
-    remove,
     success,
     error,
     warning,

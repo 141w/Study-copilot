@@ -35,7 +35,7 @@
                 <select 
                   v-model="config.provider"
                   @change="onProviderChange"
-                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
                 >
                   <option value="openrouter">OpenRouter</option>
                   <option value="openai">OpenAI</option>
@@ -53,7 +53,7 @@
                   v-model="config.modelName"
                   type="text"
                   :placeholder="modelPlaceholder"
-                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
                 />
               </div>
 
@@ -67,7 +67,7 @@
                   :placeholder="baseUrlPlaceholder"
                   :disabled="!isCustomProvider"
                   :class="{ 'bg-[var(--bg-secondary)]': !isCustomProvider }"
-                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
                 />
               </div>
 
@@ -79,7 +79,7 @@
                   v-model="config.apiKey"
                   type="password"
                   :placeholder="apiKeyPlaceholder"
-                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
                 />
                 <p v-if="savedKeyMasked" class="mt-1.5 text-xs text-[var(--text-muted)]">
                   已保存：{{ savedKeyMasked }}（留空保存 = 保留原 Key，输入新值 = 覆盖）
@@ -114,7 +114,7 @@
                   type="number"
                   min="100"
                   max="4096"
-                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
                   placeholder="2048"
                 />
               </div>
@@ -125,7 +125,7 @@
                 </label>
                 <select
                   v-model="config.adapter"
-                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
                 >
                   <option value="none">无适配器</option>
                   <option value="lora">LoRA 适配器</option>
@@ -140,7 +140,7 @@
                 <select
                   v-model="config.embeddingModel"
                   @change="onEmbeddingModelChange"
-                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] transition-all"
+                  class="w-full px-4 py-3 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
                 >
                   <option value="shibing624/text2vec-base-chinese">text2vec-base-chinese (中文, 768维)</option>
                   <option value="BAAI/bge-m3">bge-m3 (多语言, 1024维)</option>
@@ -314,10 +314,4 @@ onMounted(async () => {
   background-clip: text;
 }
 
-.card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
 </style>

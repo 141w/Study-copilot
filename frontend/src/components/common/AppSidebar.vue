@@ -23,7 +23,9 @@
           class="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
           active-class="bg-[var(--surface-card)] shadow-sm text-[var(--text-primary)]"
         >
-          <component :is="item.icon" class="w-5 h-5 flex-shrink-0" />
+          <el-icon class="w-5 h-5 flex-shrink-0">
+            <component :is="item.icon" />
+          </el-icon>
           <span class="text-sm font-medium">{{ item.label }}</span>
         </router-link>
       </div>
@@ -40,7 +42,9 @@
             :class="{ 'bg-[var(--bg-hover)]': doc.id === selectedDocId }"
             @click="toggleDoc(doc.id)"
           >
-            <IconDocument class="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
+            <el-icon class="w-4 h-4 text-[var(--text-muted)] flex-shrink-0">
+              <Document />
+            </el-icon>
             <span class="truncate flex-1">{{ doc.filename }}</span>
           </div>
         </div>
@@ -65,30 +69,25 @@
 import { ref, onMounted } from 'vue'
 import { useDocumentStore } from '../../stores/document'
 import { useSidebarStore } from '../../stores/sidebar'
-import IconHome from './icons/IconHome.vue'
-import IconUpload from './icons/IconUpload.vue'
-import IconChat from './icons/IconChat.vue'
-import IconQuiz from './icons/IconQuiz.vue'
-import IconAnalysis from './icons/IconAnalysis.vue'
-import IconSettings from './icons/IconSettings.vue'
-import IconDocument from './icons/IconDocument.vue'
-import IconCourse from './icons/IconCourse.vue'
-import IconNotes from './icons/IconNotes.vue'
+import {
+  HomeFilled, Upload, Document, Reading, Edit,
+  ChatDotSquare, DocumentChecked, TrendCharts, Setting
+} from '@element-plus/icons-vue'
 
 const documentStore = useDocumentStore()
 const sidebarStore = useSidebarStore()
 const selectedDocId = ref(null)
 
 const menuItems = [
-  { path: '/', label: '首页', icon: IconHome },
-  { path: '/upload', label: '上传文档', icon: IconUpload },
-  { path: '/documents', label: '文档阅读', icon: IconDocument },
-  { path: '/courses', label: '课程空间', icon: IconCourse },
-  { path: '/notes', label: '笔记', icon: IconNotes },
-  { path: '/chat', label: 'AI问答', icon: IconChat },
-  { path: '/quiz', label: '做题练习', icon: IconQuiz },
-  { path: '/analysis', label: '学习分析', icon: IconAnalysis },
-  { path: '/model-config', label: '模型配置', icon: IconSettings }
+  { path: '/', label: '首页', icon: HomeFilled },
+  { path: '/upload', label: '上传文档', icon: Upload },
+  { path: '/documents', label: '文档阅读', icon: Document },
+  { path: '/courses', label: '课程空间', icon: Reading },
+  { path: '/notes', label: '笔记', icon: Edit },
+  { path: '/chat', label: 'AI问答', icon: ChatDotSquare },
+  { path: '/quiz', label: '做题练习', icon: DocumentChecked },
+  { path: '/analysis', label: '学习分析', icon: TrendCharts },
+  { path: '/model-config', label: '模型配置', icon: Setting }
 ]
 
 function toggleDoc(docId) {

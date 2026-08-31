@@ -57,7 +57,7 @@
         <button
           @click="togglePreview"
           class="p-1.5 rounded transition-colors text-xs font-medium"
-          :class="showPreview ? 'text-[#010120] bg-[var(--bg-active)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)]'"
+          :class="showPreview ? 'text-[var(--color-primary)] bg-[var(--bg-active)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-active)]'"
           title="预览"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -67,7 +67,7 @@
         </button>
         <button
           @click="openTransform"
-          class="p-1.5 text-[var(--text-muted)] hover:text-purple-600 hover:bg-purple-50 rounded transition-colors"
+          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-light, #f3f0ff)] rounded transition-colors"
           title="AI 内容转换"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,7 +98,7 @@
       >
         {{ tag }}
         <button @click="removeTag(tag)" class="text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -287,7 +287,7 @@ function openTransform() {
 
 <style scoped>
 .note-editor {
-  @apply bg-white rounded-lg border border-[var(--border-default)];
+  @apply bg-[var(--surface-card)] rounded-lg border border-[var(--border-default)];
 }
 
 :deep(.prose h1) {

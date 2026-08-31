@@ -13,14 +13,14 @@
 
       <form ref="loginCard" @submit.prevent="handleLogin" class="card p-8">
         <div class="space-y-4">
-          <BaseInput
+          <el-input
             v-model="form.username"
             label="用户名"
             placeholder="请输入用户名"
             required
           />
 
-          <BaseInput
+          <el-input
             v-model="form.password"
             type="password"
             label="密码"
@@ -56,7 +56,6 @@ import gsap from 'gsap'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { useConfigStore } from '../stores/config'
-import BaseInput from '../components/common/BaseInput.vue'
 import type { AxiosError } from 'axios'
 
 const authStore = useAuthStore()

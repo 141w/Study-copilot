@@ -1,47 +1,45 @@
 <template>
-  <BaseDialog
-    :visible="visible"
+  <el-dialog
+    v-model="localVisible"
     title="从 URL 导入"
-    size="md"
-    @update:visible="$emit('update:visible', $event)"
-    @close="close"
+    width="500px"
+    :close-on-click-modal="false"
+    @closed="onClosed"
   >
     <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">网页地址</label>
-    <input
+    <el-input
       v-model="url"
       type="url"
       placeholder="https://example.com/article"
-      class="w-full px-4 py-2.5 border border-[var(--border-default)] rounded-lg bg-white focus:outline-none focus:border-[#010120] focus:ring-1 focus:ring-[#010120] text-sm"
       @keydown.enter="importUrl"
     />
     <p class="text-xs text-[var(--text-muted)] mt-2">输入网页 URL，系统将自动提取正文内容并保存为文档</p>
 
     <!-- Status Messages -->
-    <div v-if="error" class="mt-4 p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-600">
+    <div v-if="error" class="mt-4 p-3 bg-[var(--color-error-light)] border border-[var(--color-error)]/20 rounded-lg text-sm text-[var(--color-error)]">
       {{ error }}
     </div>
-    <div v-if="success" class="mt-4 p-3 bg-green-50 border border-green-100 rounded-lg text-sm text-green-700">
+    <div v-if="success" class="mt-4 p-3 bg-[var(--color-success-light)] border border-[var(--color-success)]/20 rounded-lg text-sm text-[var(--color-success)]">
       导入成功！已生成 {{ chunkCount }} 个知识块
     </div>
 
     <template #footer>
-      <BaseButton variant="secondary" @click="close">取消</BaseButton>
-      <BaseButton
+      <el-button @click="close">取消</el-button>
+      <el-button
+        type="primary"
         :disabled="!url.trim()"
         :loading="loading"
         @click="importUrl"
       >
         {{ loading ? '导入中...' : '开始导入' }}
-      </BaseButton>
+      </el-button>
     </template>
-  </BaseDialog>
+  </el-dialog>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
 import api from '../services/api'
-import BaseDialog from './common/BaseDialog.vue'
-import BaseButton from './common/BaseButton.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false }
@@ -54,6 +52,28 @@ const loading = ref(false)
 const error = ref('')
 const success = ref(false)
 const chunkCount = ref(0)
+const localVisible = ref(false)
+
+watch(() => props.visible, (val) => {
+  localVisible.value = val
+  if (val) {
+    url.value = ''
+    error.value = ''
+    success.value = false
+  }
+})
+
+function close() {
+  url.value = ''
+  error.value = ''
+  success.value = false
+  localVisible.value = false
+}
+
+function onClosed() {
+  emit('update:visible', false)
+  emit('close')
+}
 
 async function importUrl() {
   if (!url.value.trim() || loading.value) return
@@ -87,20 +107,4 @@ async function importUrl() {
     loading.value = false
   }
 }
-
-function close() {
-  url.value = ''
-  error.value = ''
-  success.value = false
-  emit('update:visible', false)
-  emit('close')
-}
-
-watch(() => props.visible, (val) => {
-  if (val) {
-    url.value = ''
-    error.value = ''
-    success.value = false
-  }
-})
 </script>

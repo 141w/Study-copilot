@@ -1,10 +1,10 @@
 <template>
-  <BaseDialog
-    :visible="visible"
+  <el-dialog
+    v-model="localVisible"
     title="内容转换"
-    size="lg"
-    @update:visible="$emit('update:visible', $event)"
-    @close="close"
+    width="60%"
+    :close-on-click-modal="false"
+    @closed="onClosed"
   >
     <!-- Transform Type Selection -->
     <div class="mb-4">
@@ -44,29 +44,28 @@
       >{{ result }}</div>
     </div>
 
-    <template #footer-left>
-      <span v-if="copied" class="text-xs text-green-600">已复制到剪贴板</span>
-      <span v-else class="text-xs text-[var(--text-muted)]">选择类型后点击转换</span>
-    </template>
-
     <template #footer>
-      <BaseButton variant="secondary" @click="close">关闭</BaseButton>
-      <BaseButton
-        :disabled="!selectedType"
-        :loading="loading"
-        @click="execute"
-      >
-        {{ loading ? '转换中...' : '开始转换' }}
-      </BaseButton>
+      <div class="flex gap-2">
+        <span v-if="copied" class="text-xs text-[var(--color-success)]">已复制到剪贴板</span>
+        <span v-else class="text-xs text-[var(--text-muted)]">选择类型后点击转换</span>
+        <div class="flex-1"></div>
+        <el-button @click="close">关闭</el-button>
+        <el-button
+          type="primary"
+          :disabled="!selectedType"
+          :loading="loading"
+          @click="execute"
+        >
+          {{ loading ? '转换中...' : '开始转换' }}
+        </el-button>
+      </div>
     </template>
-  </BaseDialog>
+  </el-dialog>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
 import api from '../services/api'
-import BaseDialog from './common/BaseDialog.vue'
-import BaseButton from './common/BaseButton.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -83,6 +82,20 @@ const selectedType = ref('')
 const result = ref('')
 const loading = ref(false)
 const copied = ref(false)
+const localVisible = ref(false)
+
+watch(() => props.visible, (val) => {
+  localVisible.value = val
+})
+
+function close() {
+  localVisible.value = false
+}
+
+function onClosed() {
+  emit('update:visible', false)
+  emit('close')
+}
 
 // Fetch available transformations
 async function fetchTransformations() {
@@ -133,13 +146,8 @@ function copyResult() {
   }
 }
 
-function close() {
-  emit('update:visible', false)
-  emit('close')
-}
-
 // Fetch transformations when dialog becomes visible
-watch(() => props.visible, (val) => {
+watch(() => localVisible.value, (val) => {
   if (val && transformations.value.length === 0) {
     fetchTransformations()
   }
