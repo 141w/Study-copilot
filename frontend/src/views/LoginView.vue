@@ -11,6 +11,7 @@
         <p class="text-[var(--text-muted)] mt-2">使用您的账户登录</p>
       </div>
 
+      <form @submit.prevent="handleLogin">
       <el-card class="p-8">
         <div class="space-y-4">
           <el-input
@@ -40,6 +41,7 @@
           <p v-if="error" class="text-sm text-[var(--color-error)] text-center">{{ error }}</p>
         </div>
       </el-card>
+      </form>
 
       <p class="text-center mt-6 text-[var(--text-muted)]">
         还没有账户?

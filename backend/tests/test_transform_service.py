@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.transformations import list_transformations
 from app.db import Document, Note, User
 from app.exceptions import ExternalServiceError, NotFoundError, ValidationError
 from app.services import transform_service
@@ -52,19 +53,19 @@ def _note(user_id: str, course_id: str | None = None) -> Note:
 class TestGetAvailableTransformations:
 
     def test_returns_list(self):
-        result = transform_service.get_available_transformations()
+        result = list_transformations()
         assert isinstance(result, list)
         assert len(result) == 8
 
     def test_each_has_required_keys(self):
-        for t in transform_service.get_available_transformations():
+        for t in list_transformations():
             assert "key" in t
             assert "name" in t
             assert "name_en" in t
             assert "description" in t
 
     def test_includes_all_expected_types(self):
-        keys = {t["key"] for t in transform_service.get_available_transformations()}
+        keys = {t["key"] for t in list_transformations()}
         expected = {"summary", "keypoints", "outline", "flashcards",
                      "mindmap", "qa_pairs", "translate_en", "translate_zh"}
         assert keys == expected

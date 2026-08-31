@@ -1,19 +1,10 @@
 import { ElMessage } from 'element-plus'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
 
-interface Toast {
-  id: number
-  message: string
-  type: 'info' | 'success' | 'warning' | 'error'
-  visible: boolean
-}
+type ToastType = 'info' | 'success' | 'warning' | 'error'
 
 export const useToastStore = defineStore('toast', () => {
-  const toasts = ref<Toast[]>([])
-  let idCounter = 0
-
-  function show(msg: string, toastType: Toast['type'] = 'info', duration = 3000): void {
+  function show(msg: string, toastType: ToastType = 'info', duration = 3000): void {
     const method = toastType === 'error' ? 'error' :
                    toastType === 'warning' ? 'warning' :
                    toastType === 'success' ? 'success' : 'info'
@@ -41,7 +32,6 @@ export const useToastStore = defineStore('toast', () => {
   }
 
   return {
-    toasts,
     show,
     hide,
     success,

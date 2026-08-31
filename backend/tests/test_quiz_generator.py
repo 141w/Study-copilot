@@ -27,10 +27,10 @@ class TestQuizGenerator:
 
     def test_init_with_llm_config(self):
         with patch("app.core.quiz_generator.LLM") as MockLLM:
-            MockLLM.return_value = AsyncMock()
+            MockLLM.from_config.return_value = AsyncMock()
             config = {"api_key": "k", "base_url": "http://b", "model_name": "m"}
             gen = QuizGenerator(llm_config=config)
-            MockLLM.assert_called_with(api_key="k", base_url="http://b", model="m")
+            MockLLM.from_config.assert_called_with(config)
 
     # ── generate_choice ──────────────────────────────────────────────────────
 
