@@ -16,6 +16,7 @@ declare module 'vue' {
     ChatHistoryPanel: typeof import('./components/chat/ChatHistoryPanel.vue')['default']
     ChatInput: typeof import('./components/chat/ChatInput.vue')['default']
     ConfirmDialog: typeof import('./components/common/ConfirmDialog.vue')['default']
+    CopilotBotAvatar: typeof import('./components/CopilotBotAvatar.vue')['default']
     CourseCard: typeof import('./components/CourseCard.vue')['default']
     DocumentPicker: typeof import('./components/common/DocumentPicker.vue')['default']
     ElButton: typeof import('element-plus/es/components/button/index.mjs')['ElButton']

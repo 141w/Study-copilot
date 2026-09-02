@@ -85,7 +85,8 @@ describe('Config Store', () => {
   })
 
   it('saveLLMConfig puts existing config', async () => {
-    api.get.mockResolvedValue({ data: { provider: 'openai', model_name: 'gpt-3.5' } })
+    // 判据是 existing.id（后端 /config/llm 已保存时返回 id），mock 需带 id 走 PUT 分支
+    api.get.mockResolvedValue({ data: { id: 'cfg-1', provider: 'openai', model_name: 'gpt-3.5' } })
     api.put.mockResolvedValue({
       data: { provider: 'openai', model_name: 'gpt-4', temperature: 0.9 },
     })
