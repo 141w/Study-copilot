@@ -11,34 +11,27 @@
           </span>
         </div>
         <div class="flex items-center gap-3">
+          <!-- 按钮尺寸统一：手写 36px 按钮换 el-button（32px，与全站一致） -->
           <!-- New Chat Button -->
-          <button
-            @click="newChat"
-            class="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl hover:opacity-90 transition-opacity"
-          >
-            <el-icon class="w-4 h-4"><Plus /></el-icon>
-            新建对话
-          </button>
+          <el-button type="primary" :icon="Plus" @click="newChat">新建对话</el-button>
 
           <!-- Export Chat Button -->
-          <button
-            @click="exportChat"
+          <el-button
+            :icon="Download"
             :disabled="chatStore.messages.length === 0"
-            class="flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            @click="exportChat"
           >
-            <el-icon class="w-4 h-4"><Download /></el-icon>
             导出对话
-          </button>
+          </el-button>
 
           <!-- Toggle History Sidebar -->
-          <button
+          <el-button
+            :type="showHistory ? 'primary' : 'default'"
+            :icon="Clock"
             @click="showHistory = !showHistory"
-            class="flex items-center gap-2 px-3 py-2 rounded-xl transition-colors"
-            :class="showHistory ? 'bg-[var(--color-primary)] text-white' : 'border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
           >
-            <el-icon class="w-4 h-4"><Clock /></el-icon>
             {{ showHistory ? '隐藏记录' : '历史记录' }}
-          </button>
+          </el-button>
 
           <router-link
             to="/model-config"
@@ -62,11 +55,7 @@
       <!-- Messages Area -->
       <div ref="messagesRef" class="flex-1 overflow-y-auto p-6 bg-[var(--bg-secondary)]">
         <div v-if="chatStore.messages.length === 0" class="max-w-2xl mx-auto text-center py-16">
-          <div class="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] rounded-2xl flex items-center justify-center">
-            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </div>
+          <CopilotBotAvatar :size="120" mood="idle" />
           <h2 class="text-2xl font-semibold text-[var(--text-primary)] mb-2">你好，我是 Study Copilot</h2>
           <p class="text-[var(--text-muted)] mb-6">基于你的文档知识库，我可以回答你的问题</p>
           <div class="flex flex-wrap justify-center gap-2 text-sm text-[var(--text-muted)]">
@@ -83,13 +72,20 @@
             class="flex gap-4"
             :class="msg.role === 'user' ? 'flex-row-reverse' : ''"
           >
-            <!-- Avatar -->
-            <div
-              class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center"
-              :class="msg.role === 'user' ? 'bg-[var(--color-primary)] text-white' : 'bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] text-white'"
-            >
-              <el-icon v-if="msg.role === 'user'" class="w-4 h-4"><User /></el-icon>
-              <el-icon v-else class="w-4 h-4"><MagicStick /></el-icon>
+            <!-- Avatar with mood-driven animation -->
+            <div class="flex-shrink-0">
+              <CopilotBotAvatar
+                v-if="msg.role === 'assistant'"
+                :is-streaming="msg.isStreaming"
+                :size="32"
+                :mood="msg === chatStore.messages[chatStore.messages.length - 1] ? botMood : 'idle'"
+              />
+              <div
+                v-else
+                class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--color-primary)] text-white"
+              >
+                <el-icon class="w-4 h-4"><User /></el-icon>
+              </div>
             </div>
 
             <!-- Message Content -->
@@ -104,20 +100,24 @@
               </div>
               <div v-else class="prose prose-sm max-w-none" v-html="renderMarkdown(msg.content, msg.isStreaming)"></div>
 
-              <!-- 消息操作栏：朗读 + 复制（仅助手消息、非流式中、有内容时显示） -->
+              <!-- 消息操作栏：朗读 + 复制（仅助手消息、非流式中、有内容时显示）
+                   按钮尺寸统一：复制钮由 26px 手写改 el-button small（24px），
+                   与 TTSPlayer 朗读钮同高 -->
               <div
                 v-if="msg.role === 'assistant' && !msg.isStreaming && msg.content"
                 class="flex items-center gap-3 mt-2 pt-2 border-t border-[var(--border-default)]"
               >
                 <TTSPlayer :text="msg.content" />
-                <button
+                <el-button
+                  size="small"
+                  text
+                  bg
                   @click="copyMessage(msg)"
-                  class="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
                   title="复制回答"
                 >
-                  <el-icon class="w-3.5 h-3.5"><DocumentCopy /></el-icon>
-                  <span>{{ copiedMsgId === msg.id ? '已复制' : '复制' }}</span>
-                </button>
+                  <el-icon class="w-3.5 h-3.5 mr-1"><DocumentCopy /></el-icon>
+                  {{ copiedMsgId === msg.id ? '已复制' : '复制' }}
+                </el-button>
               </div>
 
               <!-- Sources -->
@@ -205,6 +205,7 @@ import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import type { ChatStreamMessage } from '../stores/chat'
+import type { BotMood } from '../components/CopilotBotAvatar.vue'
 import { useDocumentStore } from '../stores/document'
 import ChatInput from '../components/chat/ChatInput.vue'
 import ChatHistoryPanel from '../components/chat/ChatHistoryPanel.vue'
@@ -213,13 +214,15 @@ import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatE
 import TTSPlayer from '../components/TTSPlayer.vue'
 import { useMarkdown } from '../composables/useMarkdown'
 import gsap from 'gsap'
-import { Plus, Download, Clock, User, MagicStick, RefreshRight, DocumentCopy } from '@element-plus/icons-vue'
+import CopilotBotAvatar from '../components/CopilotBotAvatar.vue'
+import { Plus, Download, Clock, User, RefreshRight, DocumentCopy } from '@element-plus/icons-vue'
 
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 const readyDocs = computed(() => documentStore.readyDocuments)
 const selectedDocs = ref<string[]>([])
 const showHistory = ref(false)
+const botMood = ref<BotMood>('idle')
 const messagesRef = ref<HTMLElement | null>(null)
 const route = useRoute()
 
@@ -351,6 +354,14 @@ function scrollToBottom(): void {
 // GSAP animation context for cleanup
 let gsapCtx: gsap.Context | null = null
 
+// ── Bot mood driven by message state ──────────────────────────────────
+function updateBotMood(msg: ChatStreamMessage, isLast: boolean): void {
+  if (!isLast || msg.role !== 'assistant') { botMood.value = 'idle'; return }
+  if (msg.isStreaming && !msg.content) botMood.value = 'acknowledge'
+  else if (msg.isStreaming && msg.content) botMood.value = 'answering'
+  else botMood.value = 'done'
+}
+
 // Track previous message count to only animate on new messages (not streaming updates)
 let prevMsgCount = 0
 
@@ -368,6 +379,9 @@ watch(() => chatStore.messages.length, (newLen) => {
         }
       }
     }
+    // Update bot mood for the last assistant message
+    const last = chatStore.messages[newLen - 1]
+    if (last) updateBotMood(last, true)
     prevMsgCount = newLen
   })
 })
