@@ -1,7 +1,7 @@
 <template>
   <div ref="editorContainer" class="note-editor">
     <!-- Toolbar -->
-    <div class="flex items-center justify-between px-4 py-2 border-b border-[var(--border-default)] bg-[var(--bg-secondary)] rounded-t-lg">
+    <div class="flex items-center justify-between px-4 py-2 border-b border-[var(--border-default)] bg-[var(--bg-secondary)] rounded-t-xl">
       <div class="flex items-center gap-1">
         <el-button circle size="small" @click="insertMarkdown('**', '**')" title="粗体">
           <el-icon class="font-bold text-xs">B</el-icon>
@@ -99,62 +99,63 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import { useMarkdown } from '../composables/useMarkdown'
 import TransformDialog from './TransformDialog.vue'
 
-const props = defineProps({
-  title: { type: String, default: '' },
-  content: { type: String, default: '' },
-  tags: { type: Array, default: () => [] },
-  noteId: { type: String, default: null }
+const props = withDefaults(defineProps<{
+  title?: string
+  content?: string
+  tags?: string[]
+  noteId?: string
+}>(), {
+  title: '',
+  content: '',
+  tags: () => [],
+  noteId: undefined
 })
 
-const emit = defineEmits(['update:title', 'update:content', 'update:tags', 'save'])
+const emit = defineEmits<{
+  'update:title': [value: string]
+  'update:content': [value: string]
+  'update:tags': [value: string[]]
+  save: []
+}>()
 
-const editorContainer = ref(null)
-const textareaEl = ref(null)
 const showPreview = ref(false)
 const newTag = ref('')
 const localTitle = ref(props.title)
 const localContent = ref(props.content)
-const localTags = ref([...props.tags])
+const localTags = ref<string[]>([...props.tags])
+
+// el-input textarea 的组件实例（.textarea 是原生元素引用）
+const textareaEl = ref<{ textarea?: HTMLTextAreaElement } | null>(null)
 
 // Transform dialog
 const showTransformDialog = ref(false)
 
+const { renderMarkdown } = useMarkdown()
+
 const charCount = computed(() => localContent.value.length)
 
-const renderedContent = computed(() => {
-  let html = localContent.value
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$2</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code class="inline-code">$1</code>')
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-blue-600 underline" target="_blank">$1</a>')
-    .replace(/\n/g, '<br>')
-  return html
-})
+const renderedContent = computed(() => renderMarkdown(localContent.value))
 
 watch(() => props.title, (val) => { localTitle.value = val })
 watch(() => props.content, (val) => { localContent.value = val })
 watch(() => props.tags, (val) => { localTags.value = [...val] })
 
-function onTitleChange() {
+function onTitleChange(): void {
   emit('update:title', localTitle.value)
   emit('save')
 }
 
-function onContentChange() {
+function onContentChange(): void {
   emit('update:content', localContent.value)
   emit('save')
 }
 
-function addTag() {
+function addTag(): void {
   const tag = newTag.value.trim()
   if (tag && !localTags.value.includes(tag)) {
     localTags.value.push(tag)
@@ -164,18 +165,18 @@ function addTag() {
   newTag.value = ''
 }
 
-function removeTag(tag) {
+function removeTag(tag: string): void {
   localTags.value = localTags.value.filter(t => t !== tag)
   emit('update:tags', [...localTags.value])
   emit('save')
 }
 
-function togglePreview() {
+function togglePreview(): void {
   showPreview.value = !showPreview.value
 }
 
-function insertMarkdown(before, after) {
-  const textarea = textareaEl.value?.textareaEl
+function insertMarkdown(before: string, after: string): void {
+  const textarea = textareaEl.value?.textarea
   if (!textarea) return
 
   const start = textarea.selectionStart
@@ -196,8 +197,8 @@ function insertMarkdown(before, after) {
   emit('update:content', localContent.value)
 }
 
-function insertLinePrefix(prefix) {
-  const textarea = textareaEl.value?.textareaEl
+function insertLinePrefix(prefix: string): void {
+  const textarea = textareaEl.value?.textarea
   if (!textarea) return
 
   const start = textarea.selectionStart
@@ -216,8 +217,8 @@ function insertLinePrefix(prefix) {
   emit('update:content', localContent.value)
 }
 
-function handleTab(e) {
-  const textarea = textareaEl.value?.textareaEl
+function handleTab(_e: Event): void {
+  const textarea = textareaEl.value?.textarea
   if (!textarea) return
 
   const start = textarea.selectionStart
@@ -236,7 +237,7 @@ function handleTab(e) {
   emit('update:content', localContent.value)
 }
 
-function openTransform() {
+function openTransform(): void {
   showTransformDialog.value = true
 }
 </script>

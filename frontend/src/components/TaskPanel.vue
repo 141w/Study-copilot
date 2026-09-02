@@ -16,7 +16,7 @@
       <div
         v-for="task in tasks"
         :key="task.id"
-        class="border rounded-lg p-3 text-sm transition-colors"
+        class="border rounded-xl p-3 text-sm transition-colors"
         :class="taskBorderClass(task)"
       >
         <!-- Task header -->
@@ -56,7 +56,6 @@
         <el-progress
           v-if="task.status === 'running' || task.status === 'pending'"
           :percentage="Math.round(task.progress * 100)"
-          :status="task.status === 'completed' ? 'success' : task.status === 'failed' ? 'exception' : ''"
           :stroke-width="6"
         />
 
@@ -77,24 +76,26 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import api from '../services/api'
 import { useToastStore } from '../stores/toast'
+import { formatTime } from '../composables/useFormat'
+import type { Task } from '../types/models'
 import {
   Document, CircleCheckFilled, CircleCloseFilled,
   Clock, Loading, Close
 } from '@element-plus/icons-vue'
 
 const toast = useToastStore()
-const tasks = ref([])
-let refreshTimer = null
+const tasks = ref<Task[]>([])
+let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const runningCount = computed(() => {
   return tasks.value.filter(t => t.status === 'running' || t.status === 'pending').length
 })
 
-const taskTypeNames = {
+const taskTypeNames: Record<string, string> = {
   'document_process': '文档处理',
   'quiz_generate': '生成测验',
   'tts_generate': '语音合成',
@@ -102,11 +103,11 @@ const taskTypeNames = {
   'vector_index': '索引构建',
 }
 
-function taskTypeName(type) {
+function taskTypeName(type: string): string {
   return taskTypeNames[type] || type
 }
 
-function taskBorderClass(task) {
+function taskBorderClass(task: Task): string {
   switch (task.status) {
     case 'running': return 'border-[var(--color-primary)]/20 bg-[var(--color-primary-light)]'
     case 'completed': return 'border-[var(--color-success)]/20 bg-[var(--color-success-light)]'
@@ -116,7 +117,7 @@ function taskBorderClass(task) {
   }
 }
 
-function statusTextClass(task) {
+function statusTextClass(task: Task): string {
   switch (task.status) {
     case 'running': return 'text-[var(--color-primary)]'
     case 'completed': return 'text-[var(--color-success)]'
@@ -126,7 +127,7 @@ function statusTextClass(task) {
   }
 }
 
-function statusText(task) {
+function statusText(task: Task): string {
   switch (task.status) {
     case 'pending': return '等待中...'
     case 'running': return `进行中 ${Math.round(task.progress * 100)}%`
@@ -137,20 +138,12 @@ function statusText(task) {
   }
 }
 
-function formatTime(timeStr) {
-  if (!timeStr) return ''
-  try {
-    const d = new Date(timeStr)
-    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return ''
-  }
-}
+// P2-1：formatTime 由 useFormat 提供（原为本地平行实现）
 
-async function fetchTasks() {
+async function fetchTasks(): Promise<void> {
   try {
-    const resp = await api.get('/tasks', { params: { limit: 20 } })
-    const newTasks = resp.data.tasks || []
+    const resp = await api.get<{ tasks: Task[] }>('/tasks', { params: { limit: 20 } })
+    const newTasks: Task[] = resp.data.tasks || []
 
     const oldTaskMap = new Map(tasks.value.map(t => [t.id, t.status]))
     for (const task of newTasks) {
@@ -170,7 +163,7 @@ async function fetchTasks() {
   }
 }
 
-async function cancelTask(taskId) {
+async function cancelTask(taskId: string): Promise<void> {
   try {
     await api.delete(`/tasks/${taskId}`)
     toast.show('任务已取消', 'info')
@@ -180,7 +173,7 @@ async function cancelTask(taskId) {
   }
 }
 
-function startAutoRefresh() {
+function startAutoRefresh(): void {
   refreshTimer = setInterval(() => {
     if (runningCount.value > 0) {
       fetchTasks()

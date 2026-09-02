@@ -65,7 +65,7 @@ export const useDocumentStore = defineStore('document', () => {
     }
   }
 
-  function selectDocument(doc: Document): void {
+  function selectDocument(doc: Document | null): void {
     currentDocument.value = doc
   }
 

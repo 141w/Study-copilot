@@ -2,7 +2,7 @@
   <div class="min-h-screen flex items-center justify-center bg-[var(--bg-secondary)]">
     <div class="w-full max-w-md">
       <div class="text-center mb-8">
-        <div ref="logoIcon" class="w-12 h-12 bg-gradient-to-br from-[#ef2cc1] to-[#fc4c02] rounded-xl flex items-center justify-center mx-auto mb-4">
+        <div class="login-logo w-12 h-12 bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] rounded-2xl flex items-center justify-center mx-auto mb-4">
           <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
           </svg>
@@ -12,22 +12,28 @@
       </div>
 
       <form @submit.prevent="handleLogin">
-      <el-card class="p-8">
+      <el-card ref="loginCard" class="p-8">
         <div class="space-y-4">
-          <el-input
-            v-model="form.username"
-            label="用户名"
-            placeholder="请输入用户名"
-            required
-          />
+          <div>
+            <label for="login-username" class="block text-sm text-[var(--text-secondary)] mb-1">用户名</label>
+            <el-input
+              id="login-username"
+              v-model="form.username"
+              placeholder="请输入用户名"
+              required
+            />
+          </div>
 
-          <el-input
-            v-model="form.password"
-            type="password"
-            label="密码"
-            placeholder="请输入密码"
-            required
-          />
+          <div>
+            <label for="login-password" class="block text-sm text-[var(--text-secondary)] mb-1">密码</label>
+            <el-input
+              id="login-password"
+              v-model="form.password"
+              type="password"
+              placeholder="请输入密码"
+              required
+            />
+          </div>
 
           <el-button
             type="primary"
@@ -57,16 +63,16 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import gsap from 'gsap'
 import { useAuthStore } from '../stores/auth'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useConfigStore } from '../stores/config'
 import type { AxiosError } from 'axios'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const configStore = useConfigStore()
 
 const loginCard = ref<HTMLElement | null>(null)
-const logoIcon = ref<HTMLElement | null>(null)
 let ctx: gsap.Context | null = null
 
 const form = ref({
@@ -83,7 +89,9 @@ async function handleLogin(): Promise<void> {
   try {
     await authStore.login(form.value.username, form.value.password)
     await configStore.syncToChatStore()
-    router.push('/')
+    // 回跳到登录前想访问的页面；无记录则回首页（P0-3）
+    const redirect = route.query.redirect
+    router.push(typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/')
   } catch (e) {
     const axiosError = e as AxiosError<{ detail: string }>
     error.value = axiosError.response?.data?.detail || '登录失败，请检查用户名和密码'
@@ -94,18 +102,24 @@ async function handleLogin(): Promise<void> {
 
 onMounted(() => {
   ctx = gsap.context(() => {
-    gsap.from(loginCard.value, {
-      y: 30,
-      opacity: 0,
-      duration: 0.6,
-      ease: 'power2.out'
-    })
+    // 卡片容器：el-card 根节点（loginCard 绑定到 el-card 的 DOM）
+    if (loginCard.value) {
+      gsap.from(loginCard.value, {
+        y: 30,
+        opacity: 0,
+        duration: 0.6,
+        ease: 'power2.out'
+      })
+    }
 
-    gsap.from(logoIcon.value, {
-      scale: 0,
-      duration: 0.6,
-      ease: 'back.out(1.7)'
-    })
+    const logoEl = document.querySelector('.login-logo')
+    if (logoEl) {
+      gsap.from(logoEl, {
+        scale: 0,
+        duration: 0.6,
+        ease: 'back.out(1.7)'
+      })
+    }
   })
 })
 

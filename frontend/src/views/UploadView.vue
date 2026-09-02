@@ -5,8 +5,8 @@
 <!-- Upload Area -->
     <div
       ref="uploadArea"
-      class="border-2 border-dashed border-[var(--border-default)] rounded-xl p-12 text-center mb-8"
-      :class="{ 'border-[#010120] bg-[var(--bg-secondary)]': isDragging }"
+      class="border-2 border-dashed border-[var(--border-default)] rounded-2xl p-12 text-center mb-8"
+      :class="{ 'border-[var(--color-primary)] bg-[var(--bg-secondary)]': isDragging }"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="handleDrop"
@@ -25,7 +25,7 @@
         @change="handleFileSelect"
       />
       <el-button
-        @click="$refs.fileInput.click()"
+        @click="fileInput?.click()"
         :disabled="uploading"
       >
         {{ uploading ? '上传中...' : '选择文件' }}
@@ -42,7 +42,7 @@
     <div class="flex justify-center mb-8">
       <button
         @click="showUrlDialog = true"
-        class="flex items-center gap-2 px-4 py-2.5 text-sm border border-[var(--border-default)] rounded-lg text-[var(--text-secondary)] hover:text-[#010120] hover:border-[#010120] transition-all"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm border border-[var(--border-default)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--color-primary)] transition-all"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -58,7 +58,7 @@
     />
 
     <!-- Document List -->
-    <div ref="docList" class="el-card">
+    <div ref="docList" class="card">
       <div class="p-4 border-b border-[var(--border-default)]">
         <h2 class="font-semibold text-[var(--text-primary)]">我的文档</h2>
       </div>
@@ -74,7 +74,7 @@
         暂无文档，请先上传
       </div>
       
-      <div v-else class="divide-y divide-gray-100">
+      <div v-else class="divide-y divide-[var(--border-default)]">
         <div 
           v-for="doc in documentStore.documents" 
           :key="doc.id"
@@ -94,9 +94,10 @@
             </p>
           </div>
           
-          <button 
-            @click="deleteDoc(doc.id)"
+          <button
+            @click="confirmDeleteDoc(doc)"
             class="text-[var(--text-muted)] hover:text-red-500 transition-colors"
+            :aria-label="`删除文档 ${doc.filename}`"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -105,30 +106,41 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete Confirmation（P2-2：ConfirmDialog 替换手写 el-dialog） -->
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      title="删除文档"
+      :message="`确定要删除「${deletingDoc?.filename}」吗？其向量索引将一并移除，此操作不可撤销。`"
+      :loading="deleting"
+      @confirm="doDeleteDoc"
+    />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import gsap from 'gsap'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
+import type { Document as DocumentModel } from '../types/models'
 import UrlImportDialog from '../components/UrlImportDialog.vue'
+import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 
 const documentStore = useDocumentStore()
 const toastStore = useToastStore()
 const isDragging = ref(false)
 const uploading = ref(false)
-const fileInput = ref(null)
-const uploadArea = ref(null)
-const docList = ref(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploadArea = ref<HTMLElement | null>(null)
+const docList = ref<HTMLElement | null>(null)
 const showUrlDialog = ref(false)
-let ctx = null
+let ctx: gsap.Context | null = null
 
-function handleDrop(e) {
+function handleDrop(e: DragEvent): void {
   isDragging.value = false
-  const files = e.dataTransfer.files
-  if (files.length > 0) {
+  const files = e.dataTransfer?.files
+  if (files && files.length > 0) {
     if (files[0].size > 50 * 1024 * 1024) {
       toastStore.error('文件大小超过 50MB 限制')
       return
@@ -137,9 +149,9 @@ function handleDrop(e) {
   }
 }
 
-function handleFileSelect(e) {
-  const files = e.target.files
-  if (files.length > 0) {
+function handleFileSelect(e: Event): void {
+  const files = (e.target as HTMLInputElement).files
+  if (files && files.length > 0) {
     if (files[0].size > 50 * 1024 * 1024) {
       toastStore.error('文件大小超过 50MB 限制')
       return
@@ -148,7 +160,7 @@ function handleFileSelect(e) {
   }
 }
 
-async function uploadFile(file) {
+async function uploadFile(file: File): Promise<void> {
   uploading.value = true
   try {
     const result = await documentStore.uploadDocument(file)
@@ -156,8 +168,9 @@ async function uploadFile(file) {
     toastStore.success(`文档上传成功！共生成 ${chunkCount} 个知识块`)
   } catch (error) {
     console.error('Upload failed:', error)
-    const detail = error.response?.data?.detail || ''
-    let message
+    const axiosError = error as { response?: { data?: { detail?: string } } }
+    const detail = axiosError.response?.data?.detail || ''
+    let message: string
     if (detail.includes('文档解析失败')) {
       message = '无法解析此文档，请确认文件未损坏'
     } else if (detail.includes('文档内容不足')) {
@@ -173,18 +186,39 @@ async function uploadFile(file) {
   }
 }
 
-async function deleteDoc(docId) {
-  await documentStore.deleteDocument(docId)
+// P0-4：删除确认（原为无确认直接删）
+const showDeleteConfirm = ref(false)
+const deletingDoc = ref<DocumentModel | null>(null)
+const deleting = ref(false)
+
+function confirmDeleteDoc(doc: DocumentModel): void {
+  deletingDoc.value = doc
+  showDeleteConfirm.value = true
+}
+
+async function doDeleteDoc(): Promise<void> {
+  if (!deletingDoc.value) return
+  deleting.value = true
+  try {
+    await documentStore.deleteDocument(deletingDoc.value.id)
+    toastStore.success('文档已删除')
+    showDeleteConfirm.value = false
+    deletingDoc.value = null
+  } catch (_e) {
+    toastStore.error('删除失败，请重试')
+  } finally {
+    deleting.value = false
+  }
 }
 
 // 修复（2026-08-19）：模板绑定了 @imported="onUrlImported" 但函数未定义，
 // URL 导入成功后列表不刷新、无提示。补上 handler。
-function onUrlImported(doc) {
+function onUrlImported(doc: { filename?: string } | null): void {
   toastStore.success(`URL 导入成功：${doc?.filename || '文档已加入列表'}`)
   documentStore.fetchDocuments()
 }
 
-function statusColor(status) {
+function statusColor(status: string): string {
   switch (status) {
     case 'ready': return 'text-[var(--color-success)]'
     case 'processing': return 'text-[var(--color-warning)]'
@@ -193,7 +227,7 @@ function statusColor(status) {
   }
 }
 
-function statusText(status) {
+function statusText(status: string): string {
   switch (status) {
     case 'ready': return '就绪'
     case 'processing': return '处理中'

@@ -10,21 +10,9 @@ vi.mock('@/services/api', () => ({
   },
 }))
 
-// Mock chat store
-vi.mock('@/stores/chat', () => ({
-  useChatStore: () => ({
-    config: {
-      provider: '',
-      modelName: '',
-      temperature: 0.7,
-      maxTokens: 2048,
-      baseUrl: '',
-    },
-  }),
-}))
-
 import { setActivePinia, createPinia } from 'pinia'
 import { useConfigStore } from '@/stores/config'
+import { useChatStore } from '@/stores/chat'
 import api from '@/services/api'
 
 describe('Config Store', () => {
@@ -54,10 +42,8 @@ describe('Config Store', () => {
     const result = await store.fetchLLMConfig()
 
     expect(result).toEqual(config)
-    expect(localStorage.setItem).toHaveBeenCalledWith('llmProvider', 'openai')
-    expect(localStorage.setItem).toHaveBeenCalledWith('llmModel', 'gpt-4')
-    expect(localStorage.setItem).toHaveBeenCalledWith('llmTemperature', '0.7')
-    expect(localStorage.setItem).toHaveBeenCalledWith('llmMaxTokens', '2048')
+    // P3-1：配置不再写 localStorage（服务端为唯一事实源）
+    expect(localStorage.setItem).not.toHaveBeenCalled()
   })
 
   it('fetchLLMConfig returns null on error', async () => {
@@ -133,11 +119,16 @@ describe('Config Store', () => {
     api.get.mockResolvedValue({
       data: { provider: 'openai', model_name: 'gpt-4', temperature: 0.8, max_tokens: 4096, base_url: 'https://api.openai.com/v1' },
     })
+    const chatStore = useChatStore()
 
     await store.syncToChatStore()
 
-    expect(localStorage.setItem).toHaveBeenCalledWith('llmProvider', 'openai')
-    expect(localStorage.setItem).toHaveBeenCalledWith('llmModel', 'gpt-4')
+    // P3-1：同步目标改为 chatStore.config 回显镜像（不再写 localStorage）
+    expect(chatStore.config.provider).toBe('openai')
+    expect(chatStore.config.modelName).toBe('gpt-4')
+    expect(chatStore.config.temperature).toBe(0.8)
+    expect(chatStore.config.maxTokens).toBe(4096)
+    expect(localStorage.setItem).not.toHaveBeenCalled()
   })
 
   it('syncToChatStore handles missing config gracefully', async () => {

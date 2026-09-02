@@ -3,10 +3,10 @@
     <div class="flex gap-3 max-w-4xl mx-auto">
       <el-input
         v-model="inputText"
-        placeholder="输入您的问题..."
+        :placeholder="placeholder"
         class="flex-1"
         :disabled="disabled"
-        @keydown.enter="sendMessage"
+        @keydown.enter="handleEnter"
       />
       <el-button
         v-if="loading"
@@ -25,27 +25,43 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { Close, Promotion } from '@element-plus/icons-vue'
 
-const props = defineProps({
-  loading: Boolean,
-  disabled: Boolean
+const props = withDefaults(defineProps<{
+  loading?: boolean
+  disabled?: boolean
+  placeholder?: string
+}>(), {
+  loading: false,
+  disabled: false,
+  placeholder: '输入您的问题...'
 })
 
-const emit = defineEmits(['send', 'stop'])
+const emit = defineEmits<{
+  send: [content: string]
+  stop: []
+}>()
 
 const inputText = ref('')
 
-function sendMessage() {
+function handleEnter(event: Event | KeyboardEvent): void {
+  // isComposing 为 true 表示输入法组合中（中文输入选词阶段的回车不发送）；
+  // 模板事件签名是联合类型，收窄后取 isComposing
+  const ke = event as KeyboardEvent
+  if (ke.isComposing) return
+  sendMessage()
+}
+
+function sendMessage(): void {
   if (inputText.value.trim() && !props.disabled) {
     emit('send', inputText.value.trim())
     inputText.value = ''
   }
 }
 
-function stopStream() {
+function stopStream(): void {
   emit('stop')
 }
 </script>

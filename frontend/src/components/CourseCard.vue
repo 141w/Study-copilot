@@ -1,16 +1,22 @@
 <template>
   <div
     ref="cardEl"
-    class="el-card p-5 hover:border-[var(--color-primary)] border-2 border-transparent transition-all cursor-pointer group"
+    class="card p-5 hover:border-[var(--color-primary)] border-2 border-transparent transition-all cursor-pointer group"
+    tabindex="0"
+    role="button"
+    :aria-label="course.name ? `打开课程: ${course.name}` : '打开课程'"
     @click="$emit('click', course)"
+    @keydown.enter="$emit('click', course)"
+    @keydown.space.prevent="$emit('click', course)"
   >
     <div class="flex items-start justify-between mb-3">
-      <div class="w-10 h-10 bg-[var(--color-accent-light, #f3f0ff)] rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--color-accent-light, #f3f0ff)] transition-colors">
+      <div class="w-10 h-10 bg-[var(--color-accent-light)] rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--color-accent-light)] transition-colors">
         <el-icon class="w-5 h-5 text-[var(--color-accent)]"><Reading /></el-icon>
       </div>
-      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div class="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
         <button
           @click.stop="$emit('edit', course)"
+          aria-label="编辑课程"
           class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-info)] hover:bg-[var(--color-info-light)] rounded transition-colors"
           title="编辑课程"
         >
@@ -18,6 +24,7 @@
         </button>
         <button
           @click.stop="$emit('delete', course)"
+          aria-label="删除课程"
           class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-light)] rounded transition-colors"
           title="删除课程"
         >

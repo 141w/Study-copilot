@@ -3,13 +3,13 @@
   <Transition name="fade">
     <div
       v-if="sidebarStore.isOpen"
-      class="fixed inset-0 bg-black/30 z-30 md:hidden"
+      class="fixed inset-0 bg-[var(--surface-overlay)] z-30 md:hidden"
       @click="sidebarStore.close()"
     ></div>
   </Transition>
 
   <aside
-    class="fixed left-0 top-16 bottom-0 w-64 bg-[var(--bg-secondary)] border-r border-[var(--border-default)] z-40
+    class="fixed left-0 top-[var(--layout-header-height)] bottom-0 w-[var(--layout-sidebar-width)] bg-[var(--bg-secondary)] border-r border-[var(--border-default)] z-40
            transition-transform duration-300 ease-in-out
            md:translate-x-0"
     :class="sidebarStore.isOpen ? 'translate-x-0' : '-translate-x-full'"
@@ -17,6 +17,7 @@
     <el-menu
       :default-active="currentRoute"
       :collapse="false"
+      :router="true"
       background-color="transparent"
       text-color="var(--text-secondary)"
       active-text-color="var(--text-primary)"
@@ -40,38 +41,52 @@
         <div
           v-for="doc in documentStore.documents"
           :key="doc.id"
+          role="button"
+          tabindex="0"
+          :aria-label="`选择文档 ${doc.filename}`"
           class="flex items-center gap-2 px-2 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded cursor-pointer transition-colors"
           :class="{ 'bg-[var(--bg-hover)]': doc.id === selectedDocId }"
           @click="toggleDoc(doc.id)"
+          @keydown.enter.prevent="toggleDoc(doc.id)"
+          @keydown.space.prevent="toggleDoc(doc.id)"
         >
           <el-icon class="w-4 h-4 text-[var(--text-muted)] flex-shrink-0">
             <Document />
           </el-icon>
           <span class="truncate flex-1">{{ doc.filename }}</span>
-        </div>
-      </div>
+        </div>      </div>
     </div>
   </aside>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDocumentStore } from '../../stores/document'
 import { useSidebarStore } from '../../stores/sidebar'
+import type { Document as DocumentModel } from '../../types/models'
 import {
   HomeFilled, Upload, Document, Reading, Edit,
-  ChatDotSquare, DocumentChecked, TrendCharts, Setting
+  ChatDotSquare, DocumentChecked, TrendCharts, Setting, List
 } from '@element-plus/icons-vue'
+import type { Component } from 'vue'
 
 const route = useRoute()
 const documentStore = useDocumentStore()
 const sidebarStore = useSidebarStore()
-const selectedDocId = ref(null)
 
-const currentRoute = route.path
+const currentRoute = computed(() => route.path)
 
-const menuItems = [
+// P3-2：高亮态直接派生自 store（单一来源），外部视图选文档时侧栏自动联动
+const selectedDocId = computed(() => documentStore.currentDocument?.id ?? null)
+
+interface MenuItem {
+  path: string
+  label: string
+  icon: Component
+}
+
+const menuItems: MenuItem[] = [
   { path: '/', label: '首页', icon: HomeFilled },
   { path: '/upload', label: '上传文档', icon: Upload },
   { path: '/documents', label: '文档阅读', icon: Document },
@@ -80,16 +95,24 @@ const menuItems = [
   { path: '/chat', label: 'AI问答', icon: ChatDotSquare },
   { path: '/quiz', label: '做题练习', icon: DocumentChecked },
   { path: '/analysis', label: '学习分析', icon: TrendCharts },
-  { path: '/model-config', label: '模型配置', icon: Setting }
+  { path: '/model-config', label: '模型配置', icon: Setting },
+  // P3-2：后台任务入口（原侧栏缺失，TasksView 只能 URL 直达）
+  { path: '/tasks', label: '后台任务', icon: List }
 ]
 
-function handleSelect(index) {
+function handleSelect(_index: string): void {
   sidebarStore.close()
 }
 
-function toggleDoc(docId) {
-  selectedDocId.value = selectedDocId.value === docId ? null : docId
-  documentStore.selectDocument(documentStore.documents.find(d => d.id === docId))
+function toggleDoc(docId: string): void {
+  const doc: DocumentModel | undefined = documentStore.documents.find(d => d.id === docId)
+  if (!doc) return
+  // P3-2：选中态由 store 派生，这里只写 store
+  if (documentStore.currentDocument?.id === docId) {
+    documentStore.selectDocument(null)
+  } else {
+    documentStore.selectDocument(doc)
+  }
 }
 
 onMounted(() => {

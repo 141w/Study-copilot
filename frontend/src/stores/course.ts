@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../services/api'
-import type { Course } from '../types/models'
+import type { Course, Document } from '../types/models'
 
 /** 创建/更新课程时前端提交的字段 */
 export interface CoursePayload {
@@ -92,9 +92,10 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  async function fetchCourseDocuments(courseId: string): Promise<Course[]> {
+  async function fetchCourseDocuments(courseId: string): Promise<Document[]> {
     try {
-      const response = await api.get<Course[]>(`/courses/${courseId}/documents`)
+      // 注：后端该端点返回课程关联的文档列表（原泛型误标为 Course[]）
+      const response = await api.get<Document[]>(`/courses/${courseId}/documents`)
       return response.data
     } catch (error) {
       console.error('Error fetching course documents:', error)

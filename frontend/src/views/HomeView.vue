@@ -5,8 +5,10 @@
       <div class="absolute inset-0 pastel-gradient opacity-50"></div>
       <div class="relative max-w-6xl mx-auto px-6 py-20">
         <div class="text-center">
-          <h1 ref="heroTitle" class="text-5xl font-semibold text-[var(--text-primary)] mb-6" style="letter-spacing: -0.02em">
-            欢迎使用<span class="gradient-text">Study Copilot</span>
+          <!-- 精修（批次3）：移除负字距——对全角 CJK 字形有害；
+               拉丁品牌名单独保留紧凑字距 -->
+          <h1 ref="heroTitle" class="text-5xl font-semibold text-[var(--text-primary)] mb-6">
+            欢迎使用<span class="gradient-text letter-spacing-tight">Study Copilot</span>
           </h1>
           <p ref="heroSubtitle" class="text-xl text-[var(--text-secondary)] mb-8 max-w-2xl mx-auto">
             您的AI学习助手<br/>
@@ -25,15 +27,16 @@
       <div class="max-w-6xl mx-auto px-6">
         <h2 class="text-xl font-semibold text-[var(--text-primary)] mb-6">快速开始</h2>
         <div ref="quickActions" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <router-link to="/upload" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-error-light)] dark:group-hover:bg-[var(--color-error)]/20 transition-colors">
-              <el-icon class="w-6 h-6 text-[var(--color-error)]"><Upload /></el-icon>
+          <router-link to="/upload" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
+            <!-- 精修（批次3）：上传是主动作，误用 error 红（红=危险）改主色 -->
+            <div class="w-12 h-12 bg-[var(--color-primary-light)] dark:bg-[var(--color-primary)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-primary-light)] dark:group-hover:bg-[var(--color-primary)]/20 transition-colors">
+              <el-icon class="w-6 h-6 text-[var(--color-primary)]"><Upload /></el-icon>
             </div>
             <h3 class="font-semibold text-[var(--text-primary)] mb-1">上传文档</h3>
             <p class="text-sm text-[var(--text-muted)]">上传PDF学习资料</p>
           </router-link>
 
-          <router-link to="/documents" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
+          <router-link to="/documents" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
             <div class="w-12 h-12 bg-[var(--color-info-light)] dark:bg-[var(--color-info)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-info-light)] dark:group-hover:bg-[var(--color-info)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-info)]"><Document /></el-icon>
             </div>
@@ -41,15 +44,15 @@
             <p class="text-sm text-[var(--text-muted)]">查看已上传文档</p>
           </router-link>
 
-          <router-link to="/chat" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
-            <div class="w-12 h-12 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-accent-light, #f3f0ff)] dark:group-hover:bg-[var(--color-accent)]/20 transition-colors">
+          <router-link to="/chat" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
+            <div class="w-12 h-12 bg-[var(--color-accent-light)] dark:bg-[var(--color-accent)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-accent-light)] dark:group-hover:bg-[var(--color-accent)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-accent)]"><ChatDotSquare /></el-icon>
             </div>
             <h3 class="font-semibold text-[var(--text-primary)] mb-1">智能问答</h3>
             <p class="text-sm text-[var(--text-muted)]">基于文档的RAG问答</p>
           </router-link>
 
-          <router-link to="/quiz" class="el-card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
+          <router-link to="/quiz" class="card p-6 hover:border-[var(--color-primary)] border-2 transition-colors group">
             <div class="w-12 h-12 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-[var(--color-success-light)] dark:group-hover:bg-[var(--color-success)]/20 transition-colors">
               <el-icon class="w-6 h-6 text-[var(--color-success)]"><DocumentChecked /></el-icon>
             </div>
@@ -67,7 +70,7 @@
 
         <div ref="featureCards" class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <!-- Feature 1 -->
-          <div class="el-card p-6">
+          <div class="card p-6">
             <div class="flex items-start gap-4">
               <div class="w-14 h-14 bg-[var(--color-error-light)] dark:bg-[var(--color-error)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-error)]"><Tickets /></el-icon>
@@ -83,9 +86,9 @@
           </div>
 
           <!-- Feature 2 -->
-          <div class="el-card p-6">
+          <div class="card p-6">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <div class="w-14 h-14 bg-[var(--color-accent-light)] dark:bg-[var(--color-accent)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-accent)]"><MagicStick /></el-icon>
               </div>
               <div>
@@ -99,7 +102,7 @@
           </div>
 
           <!-- Feature 3 -->
-          <div class="el-card p-6">
+          <div class="card p-6">
             <div class="flex items-start gap-4">
               <div class="w-14 h-14 bg-[var(--color-success-light)] dark:bg-[var(--color-success)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-success)]"><DocumentChecked /></el-icon>
@@ -115,7 +118,7 @@
           </div>
 
           <!-- Feature 4 -->
-          <div class="el-card p-6">
+          <div class="card p-6">
             <div class="flex items-start gap-4">
               <div class="w-14 h-14 bg-[var(--color-warning-light)] dark:bg-[var(--color-warning)]/10 rounded-2xl flex items-center justify-center flex-shrink-0">
                 <el-icon class="w-7 h-7 text-[var(--color-warning)]"><TrendCharts /></el-icon>
@@ -138,7 +141,7 @@
       <div class="max-w-6xl mx-auto px-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <!-- Recent Documents -->
-          <div class="el-card">
+          <div class="card">
             <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
               <h3 class="font-semibold text-[var(--text-primary)]">最近文档</h3>
               <router-link to="/documents" class="text-sm text-[var(--color-primary)] hover:underline">查看全部</router-link>
@@ -167,7 +170,7 @@
           </div>
 
           <!-- Recent Chats -->
-          <div class="el-card">
+          <div class="card">
             <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
               <h3 class="font-semibold text-[var(--text-primary)]">最近对话</h3>
               <router-link to="/chat" class="text-sm text-[var(--color-primary)] hover:underline">查看全部</router-link>
@@ -182,7 +185,7 @@
             <div v-else class="divide-y divide-[var(--border-default)]">
               <div v-for="chat in recentChats" :key="chat.session_id" class="p-4 hover:bg-[var(--bg-hover)] cursor-pointer" @click="router.push('/chat')">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 bg-[var(--color-accent-light, #f3f0ff)] dark:bg-[var(--color-accent)]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div class="w-10 h-10 bg-[var(--color-accent-light)] dark:bg-[var(--color-accent)]/10 rounded-lg flex items-center justify-center flex-shrink-0">
                     <el-icon class="w-5 h-5 text-[var(--color-accent)]"><ChatDotSquare /></el-icon>
                   </div>
                   <div class="flex-1 min-w-0">
@@ -199,12 +202,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDocumentStore } from '../stores/document'
 import { useChatStore } from '../stores/chat'
 import { Upload, Document, ChatDotSquare, DocumentChecked, Tickets, MagicStick, TrendCharts } from '@element-plus/icons-vue'
+import { formatDayLabel } from '../composables/useFormat'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
@@ -215,30 +219,22 @@ const documentStore = useDocumentStore()
 const chatStore = useChatStore()
 
 // Template refs
-const homeContainer = ref(null)
-const heroTitle = ref(null)
-const heroSubtitle = ref(null)
-const heroButtons = ref(null)
-const quickActions = ref(null)
-const featureCards = ref(null)
+const homeContainer = ref<HTMLElement | null>(null)
+const heroTitle = ref<HTMLElement | null>(null)
+const heroSubtitle = ref<HTMLElement | null>(null)
+const heroButtons = ref<HTMLElement | null>(null)
+const quickActions = ref<HTMLElement | null>(null)
+const featureCards = ref<HTMLElement | null>(null)
 
-let ctx
+let ctx: gsap.Context | null = null
 
 const recentDocs = computed(() => documentStore.documents.slice(0, 5))
 const recentChats = computed(() => chatStore.sessions.slice(0, 5))
 
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diff = now - date
-  if (diff < 86400000) return '今天'
-  if (diff < 172800000) return '昨天'
-  if (diff < 604800000) return Math.floor(diff / 86400000) + '天前'
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-}
+// P2-1：formatDate 由 useFormat.formatDayLabel 替换（原为 4 处平行实现之一）
+const formatDate = formatDayLabel
 
-function goToChat(docId) {
+function goToChat(docId: string): void {
   router.push({ path: '/chat', query: { docId } })
 }
 
@@ -250,20 +246,20 @@ onMounted(async () => {
   if (!homeContainer.value) return
   ctx = gsap.context(() => {
     // Task 1: Hero entrance animation
-    gsap.from(heroTitle.value, {
+    gsap.from(heroTitle.value!, {
       y: 40,
       opacity: 0,
       duration: 0.8,
       ease: 'power2.out'
     })
-    gsap.from(heroSubtitle.value, {
+    gsap.from(heroSubtitle.value!, {
       y: 40,
       opacity: 0,
       duration: 0.8,
       delay: 0.2,
       ease: 'power2.out'
     })
-    gsap.from(heroButtons.value, {
+    gsap.from(heroButtons.value!, {
       y: 40,
       opacity: 0,
       duration: 0.8,

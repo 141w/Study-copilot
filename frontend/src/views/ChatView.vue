@@ -14,7 +14,7 @@
           <!-- New Chat Button -->
           <button
             @click="newChat"
-            class="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
+            class="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl hover:opacity-90 transition-opacity"
           >
             <el-icon class="w-4 h-4"><Plus /></el-icon>
             新建对话
@@ -24,7 +24,7 @@
           <button
             @click="exportChat"
             :disabled="chatStore.messages.length === 0"
-            class="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            class="flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <el-icon class="w-4 h-4"><Download /></el-icon>
             导出对话
@@ -33,7 +33,7 @@
           <!-- Toggle History Sidebar -->
           <button
             @click="showHistory = !showHistory"
-            class="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors"
+            class="flex items-center gap-2 px-3 py-2 rounded-xl transition-colors"
             :class="showHistory ? 'bg-[var(--color-primary)] text-white' : 'border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
           >
             <el-icon class="w-4 h-4"><Clock /></el-icon>
@@ -49,34 +49,20 @@
         </div>
       </div>
 
-      <!-- Document Selector -->
+      <!-- Document Selector（P2-3：DocumentPicker multiple 标签模式） -->
       <div class="border-b border-[var(--border-default)] px-6 py-3 bg-[var(--bg-secondary)]">
-        <div class="flex items-center gap-3 flex-wrap">
-          <span class="text-sm text-[var(--text-muted)]">参考文档:</span>
-          <label
-            v-for="doc in readyDocs"
-            :key="doc.id"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors"
-            :class="selectedDocs.includes(doc.id) ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
-          >
-            <input
-              type="checkbox"
-              :value="doc.id"
-              v-model="selectedDocs"
-              class="hidden"
-            />
-            {{ doc.filename }}
-          </label>
-          <span v-if="!readyDocs.length" class="text-sm text-[var(--text-muted)]">
-            暂无文档，请先上传
-          </span>
-        </div>
+        <DocumentPicker
+          v-model="selectedDocs"
+          mode="multiple"
+          label="参考文档"
+          :documents="readyDocs"
+        />
       </div>
       
       <!-- Messages Area -->
       <div ref="messagesRef" class="flex-1 overflow-y-auto p-6 bg-[var(--bg-secondary)]">
         <div v-if="chatStore.messages.length === 0" class="max-w-2xl mx-auto text-center py-16">
-          <div class="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-[#ef2cc1] to-[#fc4c02] rounded-2xl flex items-center justify-center">
+          <div class="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] rounded-2xl flex items-center justify-center">
             <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
@@ -100,7 +86,7 @@
             <!-- Avatar -->
             <div
               class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center"
-              :class="msg.role === 'user' ? 'bg-[var(--color-primary)] text-white' : 'bg-gradient-to-br from-[#ef2cc1] to-[#fc4c02] text-white'"
+              :class="msg.role === 'user' ? 'bg-[var(--color-primary)] text-white' : 'bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] text-white'"
             >
               <el-icon v-if="msg.role === 'user'" class="w-4 h-4"><User /></el-icon>
               <el-icon v-else class="w-4 h-4"><MagicStick /></el-icon>
@@ -149,7 +135,7 @@
                     v-for="(source, sidx) in (msg.filtered_sources && msg.filtered_sources.length > 0 ? msg.filtered_sources : msg.sources)"
                     :key="sidx"
                     @click="scrollToSource(source.index)"
-                    class="source-card-btn text-xs px-3 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--color-primary)] hover:text-white hover:border-[var(--color-primary)] transition-all flex items-center gap-1.5"
+                    class="source-card-btn text-xs px-3 py-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--color-primary)] hover:text-white hover:border-[var(--color-primary)] transition-all flex items-center gap-1.5"
                     :data-source-index="source.index"
                   >
                     <span class="w-5 h-5 rounded-full bg-[var(--color-primary)] text-white text-xs flex items-center justify-center">
@@ -167,7 +153,7 @@
                   v-for="(source, sidx) in msg.sources" 
                   :key="sidx"
                   :id="`source-card-${source.index}`"
-                  class="source-card p-3 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] text-sm"
+                  class="source-card p-3 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-default)] text-sm"
                 >
                   <div class="flex items-center gap-2 mb-1">
                     <span class="w-5 h-5 rounded-full bg-[var(--color-primary)] text-white text-xs flex items-center justify-center">
@@ -211,17 +197,18 @@
   </div>
 </template>
 
-<script setup>
-import { defineOptions } from 'vue'
-
+<script setup lang="ts">
+// defineOptions 是编译器宏，无需导入
 defineOptions({ name: 'ChatView' })
 
 import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChatStore } from '../stores/chat'
+import type { ChatStreamMessage } from '../stores/chat'
 import { useDocumentStore } from '../stores/document'
 import ChatInput from '../components/chat/ChatInput.vue'
 import ChatHistoryPanel from '../components/chat/ChatHistoryPanel.vue'
+import DocumentPicker from '../components/common/DocumentPicker.vue'
 import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatExport'
 import TTSPlayer from '../components/TTSPlayer.vue'
 import { useMarkdown } from '../composables/useMarkdown'
@@ -231,19 +218,22 @@ import { Plus, Download, Clock, User, MagicStick, RefreshRight, DocumentCopy } f
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 const readyDocs = computed(() => documentStore.readyDocuments)
-const selectedDocs = ref([])
+const selectedDocs = ref<string[]>([])
 const showHistory = ref(false)
-const messagesRef = ref(null)
+const messagesRef = ref<HTMLElement | null>(null)
 const route = useRoute()
 
 // 复制消息状态
-const copiedMsgId = ref(null)
+const copiedMsgId = ref<string | number | null>(null)
+// P1-2：复制状态复位 timer，卸载时清理（原悬空未回收）
+let copiedResetTimer: ReturnType<typeof setTimeout> | null = null
 
-async function copyMessage(msg) {
+async function copyMessage(msg: ChatStreamMessage): Promise<void> {
   try {
     await navigator.clipboard.writeText(msg.content)
     copiedMsgId.value = msg.id
-    setTimeout(() => { copiedMsgId.value = null }, 2000)
+    if (copiedResetTimer) clearTimeout(copiedResetTimer)
+    copiedResetTimer = setTimeout(() => { copiedMsgId.value = null }, 2000)
   } catch (e) {
     console.error('Copy failed:', e)
   }
@@ -253,52 +243,64 @@ const { renderMarkdown: renderMarkdownBase } = useMarkdown()
 
 // Memoize markdown renders: key = content text, value = rendered HTML.
 // Streaming messages (isStreaming=true) bypass cache and render as plain text.
-const _mdCache = new Map()
+// P1-1：LRU 上限 —— 原无界 Map 在长会话中随消息数线性增长（内存泄漏隐患）
+const MD_CACHE_LIMIT = 200
+const _mdCache = new Map<string, string>()
 
-function renderMarkdown(text, isStreaming = false) {
+function _mdCacheGet(key: string): string | undefined {
+  if (!_mdCache.has(key)) return undefined
+  // touch：删除重插实现 LRU 顺序
+  const val = _mdCache.get(key)
+  _mdCache.delete(key)
+  _mdCache.set(key, val!)
+  return val
+}
+
+function _mdCacheSet(key: string, val: string): void {
+  if (_mdCache.size >= MD_CACHE_LIMIT) {
+    // 逐出最旧（首个插入且未再访问的 key）
+    const oldest = _mdCache.keys().next().value
+    if (oldest !== undefined) _mdCache.delete(oldest)
+  }
+  _mdCache.set(key, val)
+}
+
+function renderMarkdown(text: string, isStreaming = false): string {
   if (!text) return ''
   if (isStreaming) return text.replace(/</g, '&lt;').replace(/\n/g, '<br>')
-  const cached = _mdCache.get(text)
+  const cached = _mdCacheGet(text)
   if (cached) return cached
   let rendered = renderMarkdownBase(text)
-  rendered = rendered.replace(/\[来源(\d+)\]/g, (match, num) => {
+  rendered = rendered.replace(/\[来源(\d+)\]/g, (_match, num: string) => {
     return `<sup class="source-badge" data-index="${num}">[${num}]</sup>`
   })
-  _mdCache.set(text, rendered)
+  _mdCacheSet(text, rendered)
   return rendered
 }
 
-function scrollToSource(index) {
+function scrollToSource(index: number): void {
   const lastMsg = chatStore.messages[chatStore.messages.length - 1]
   if (lastMsg && lastMsg.role === 'assistant') {
     // 切换来源卡片展开状态
     const msgIndex = chatStore.messages.length - 1
     chatStore.messages[msgIndex].expandedSources = !chatStore.messages[msgIndex].expandedSources
-    
+
     setTimeout(() => {
       // 滚动到对应的来源卡片
       const card = document.getElementById(`source-card-${index}`)
       if (card) {
         card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        card.classList.add('ring-2', 'ring-[#010120]', 'bg-blue-50')
-        setTimeout(() => card.classList.remove('ring-2', 'ring-[#010120]', 'bg-blue-50'), 3000)
+        card.classList.add('ring-2', 'ring-[var(--color-navy)]', 'bg-[var(--color-primary-light)]')
+        setTimeout(() => card.classList.remove('ring-2', 'ring-[var(--color-navy)]', 'bg-[var(--color-primary-light)]'), 3000)
       }
     }, 100)
   }
 }
 
-// 点击来源卡片跳转回正文引用位置
-function scrollToReference(sourceIndex) {
-  // 查找正文中对应的引用徽章
-  const badges = document.querySelectorAll(`.source-badge[data-index="${sourceIndex}"]`)
-  if (badges.length > 0) {
-    badges[0].scrollIntoView({ behavior: 'smooth', block: 'center' })
-    badges[0].classList.add('scale-125')
-    setTimeout(() => badges[0].classList.remove('scale-125'), 3000)
-  }
-}
+// 注：原 scrollToReference（来源卡跳回正文徽章）从未接线——模板的来源卡
+// 点击走的是 scrollToSource，该死函数已在工程化批次删除。
 
-async function handleSend(content) {
+async function handleSend(content: string): Promise<void> {
   if (selectedDocs.value.length === 0) return
   // 使用流式接口
   await chatStore.askQuestionStream(content, selectedDocs.value)
@@ -306,38 +308,37 @@ async function handleSend(content) {
   scrollToBottom()
 }
 
-function handleStop() {
+function handleStop(): void {
   chatStore.cancelStream()
 }
 
-function exportChat() {
+function exportChat(): void {
   if (chatStore.messages.length === 0) return
   const md = buildChatMarkdown(chatStore.messages, chatStore.currentSessionTitle || '对话')
   downloadChatMarkdown(md)
 }
 
-function newChat() {
+function newChat(): void {
   chatStore.clearMessages()
   chatStore.currentSession = null
   chatStore.currentSessionTitle = ''
   showHistory.value = false
 }
 
-function onSessionLoaded(sessionId) {
+function onSessionLoaded(_sessionId: string): void {
   // 面板已完成 fetchHistory 与标题恢复；父级负责滚动与收起
-  void sessionId
   nextTick(() => scrollToBottom())
   showHistory.value = false
 }
 
-function onSessionDeleted(sessionId) {
+function onSessionDeleted(sessionId: string): void {
   // 删除的是当前会话时重置视图
   if (chatStore.currentSession === sessionId) {
     newChat()
   }
 }
 
-function scrollToBottom() {
+function scrollToBottom(): void {
   if (messagesRef.value) {
     const el = messagesRef.value
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
@@ -348,7 +349,7 @@ function scrollToBottom() {
 }
 
 // GSAP animation context for cleanup
-let gsapCtx
+let gsapCtx: gsap.Context | null = null
 
 // Track previous message count to only animate on new messages (not streaming updates)
 let prevMsgCount = 0
@@ -386,12 +387,12 @@ onMounted(async () => {
   const contextQuery = route.query.context
   const docId = route.query.docId
 
-  if (docId && !selectedDocs.value.includes(docId)) {
-    selectedDocs.value = [docId]
+  if (docId && !selectedDocs.value.includes(docId as string)) {
+    selectedDocs.value = [docId as string]
   }
 
   if (contextQuery) {
-    await handleSend(contextQuery)
+    await handleSend(contextQuery as string)
   }
 
   // Animate the empty state icon
@@ -400,15 +401,21 @@ onMounted(async () => {
     if (emptyIcon) {
       gsap.from(emptyIcon, { scale: 0.8, opacity: 0, duration: 0.5, ease: 'back.out(1.2)' })
     }
-  }, messagesRef.value)
+  }, messagesRef.value ?? undefined)
 })
 
 onUnmounted(() => {
   gsapCtx?.revert()
+  // P1-2：清理悬空 timer
+  if (copiedResetTimer) clearTimeout(copiedResetTimer)
 })
 </script>
 
 <style>
+/* 精修（批次3）：中文正文行高 1.7（舒适区），作用于 AI 回答正文 */
+.prose p {
+  line-height: var(--leading-body, 1.7);
+}
 .prose pre.hljs {
   background: var(--bg-tertiary);
   padding: 1rem;
@@ -438,7 +445,7 @@ onUnmounted(() => {
   font-size: 0.625rem;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #ef2cc1 0%, #fc4c02 100%);
+  background: var(--gradient-brand);
   border-radius: 9999px;
   cursor: pointer;
   vertical-align: super;
@@ -446,6 +453,6 @@ onUnmounted(() => {
 }
 .prose .source-badge:hover {
   transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(239, 44, 193, 0.4);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-brand-from) 40%, transparent);
 }
 </style>

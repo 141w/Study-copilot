@@ -1,21 +1,19 @@
 <template>
   <div ref="pageContainer" class="max-w-6xl mx-auto px-6 py-8">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-8">
-      <div>
-        <h1 ref="pageTitle" class="text-2xl font-semibold text-[var(--text-primary)]">课程空间</h1>
-        <p ref="pageSubtitle" class="text-sm text-[var(--text-muted)] mt-1">按课程组织你的文档和笔记</p>
-      </div>
-      <el-button
-        @click="openCreateModal"
-        type="primary"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        新建课程
-      </el-button>
-    </div>
+    <!-- Header（P2-2：PageHeader） -->
+    <PageHeader title="课程空间" subtitle="按课程组织你的文档和笔记">
+      <template #actions>
+        <el-button
+          @click="openCreateModal"
+          type="primary"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          新建课程
+        </el-button>
+      </template>
+    </PageHeader>
 
     <!-- Search -->
     <div class="mb-6">
@@ -32,17 +30,15 @@
       加载中...
     </div>
 
-    <!-- Empty State -->
-    <div v-else-if="filteredCourses.length === 0" class="text-center py-16">
-      <div class="w-20 h-20 mx-auto mb-4 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center">
-        <svg class="w-10 h-10 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-        </svg>
-      </div>
-      <p class="text-[var(--text-muted)] mb-2" v-if="searchQuery">未找到匹配的课程</p>
-      <p class="text-[var(--text-muted)] mb-4" v-else>还没有课程，创建你的第一个课程吧</p>
-      <el-button @click="openCreateModal" >新建课程</el-button>
-    </div>
+    <!-- Empty State（P2-2：EmptyState） -->
+    <EmptyState
+      v-else-if="filteredCourses.length === 0"
+      size="lg"
+      svg-path="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+      :message="searchQuery ? '未找到匹配的课程' : '还没有课程，创建你的第一个课程吧'"
+    >
+      <el-button @click="openCreateModal">新建课程</el-button>
+    </EmptyState>
 
     <!-- Course Grid -->
     <div v-else ref="courseGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -104,49 +100,48 @@
       </template>
     </el-dialog>
 
-    <!-- Delete Confirmation -->
-    <el-dialog
+    <!-- Delete Confirmation（P2-2：ConfirmDialog） -->
+    <ConfirmDialog
       v-model="showDeleteConfirm"
       title="删除课程"
-      width="400px"
-      :close-on-click-modal="false"
-    >
-      <p class="text-sm text-[var(--text-secondary)] mb-6">
-        确定要删除「{{ deletingCourse?.name }}」吗？课程内的文档不会被删除。
-      </p>
-      <template #footer>
-        <el-button @click="showDeleteConfirm = false">取消</el-button>
-        <el-button type="danger" @click="confirmDelete">删除</el-button>
-      </template>
-    </el-dialog>
+      :message="`确定要删除「${deletingCourse?.name}」吗？课程内的文档不会被删除。`"
+      @confirm="doDelete"
+    />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCourseStore } from '../stores/course'
 import { useToastStore } from '../stores/toast'
+import type { Course } from '../types/models'
 import CourseCard from '../components/CourseCard.vue'
+import PageHeader from '../components/common/PageHeader.vue'
+import EmptyState from '../components/common/EmptyState.vue'
+import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import gsap from 'gsap'
 
 const router = useRouter()
 const courseStore = useCourseStore()
 const toast = useToastStore()
 
-const pageContainer = ref(null)
-const pageTitle = ref(null)
-const pageSubtitle = ref(null)
-const courseGrid = ref(null)
-const modalEl = ref(null)
+const pageContainer = ref<HTMLElement | null>(null)
+const modalEl = ref<HTMLElement | null>(null)
 const searchQuery = ref('')
 const showModal = ref(false)
 const showDeleteConfirm = ref(false)
-const editingCourse = ref(null)
-const deletingCourse = ref(null)
+const editingCourse = ref<Course | null>(null)
+const deletingCourse = ref<Course | null>(null)
 const saving = ref(false)
 
-const form = ref({
+interface CourseForm {
+  name: string
+  description: string
+  color: string
+}
+
+const form = ref<CourseForm>({
   name: '',
   description: '',
   color: '#8b5cf6'
@@ -157,11 +152,11 @@ const colorOptions = [
   '#3b82f6', '#8b5cf6', '#ec4899', '#010120'
 ]
 
-let ctx
+let ctx: gsap.Context | null = null
 
 const loading = computed(() => courseStore.loading)
 
-const filteredCourses = computed(() => {
+const filteredCourses = computed<Course[]>(() => {
   if (!searchQuery.value.trim()) return courseStore.courses
   const q = searchQuery.value.toLowerCase()
   return courseStore.courses.filter(c =>
@@ -170,14 +165,14 @@ const filteredCourses = computed(() => {
   )
 })
 
-function openCreateModal() {
+function openCreateModal(): void {
   editingCourse.value = null
   form.value = { name: '', description: '', color: '#8b5cf6' }
   showModal.value = true
   nextTick(() => animateModalIn())
 }
 
-function openEditModal(course) {
+function openEditModal(course: Course): void {
   editingCourse.value = course
   form.value = {
     name: course.name,
@@ -188,12 +183,12 @@ function openEditModal(course) {
   nextTick(() => animateModalIn())
 }
 
-function closeModal() {
+function closeModal(): void {
   showModal.value = false
   editingCourse.value = null
 }
 
-async function saveCourse() {
+async function saveCourse(): Promise<void> {
   if (!form.value.name.trim()) return
   saving.value = true
   try {
@@ -205,35 +200,35 @@ async function saveCourse() {
       toast.success('课程已创建')
     }
     closeModal()
-  } catch (e) {
+  } catch (_e) {
     toast.error('操作失败，请重试')
   } finally {
     saving.value = false
   }
 }
 
-function confirmDelete(course) {
+function confirmDelete(course: Course): void {
   deletingCourse.value = course
   showDeleteConfirm.value = true
 }
 
-async function doDelete() {
+async function doDelete(): Promise<void> {
   if (!deletingCourse.value) return
   try {
     await courseStore.deleteCourse(deletingCourse.value.id)
     toast.success('课程已删除')
-  } catch (e) {
+  } catch (_e) {
     toast.error('删除失败')
   }
   showDeleteConfirm.value = false
   deletingCourse.value = null
 }
 
-function goToCourse(course) {
+function goToCourse(course: Course): void {
   router.push(`/courses/${course.id}`)
 }
 
-function animateModalIn() {
+function animateModalIn(): void {
   if (modalEl.value) {
     gsap.from(modalEl.value, {
       y: 20,
@@ -248,20 +243,27 @@ onMounted(() => {
   courseStore.fetchCourses()
 
   ctx = gsap.context(() => {
-    gsap.from(pageTitle.value, {
-      y: 30,
-      opacity: 0,
-      duration: 0.6,
-      ease: 'power2.out'
-    })
-    gsap.from(pageSubtitle.value, {
-      y: 20,
-      opacity: 0,
-      duration: 0.6,
-      delay: 0.1,
-      ease: 'power2.out'
-    })
-  }, pageContainer.value)
+    // P2-2：PageHeader 内化标题后按结构选择（h1 + 其后副标题）
+    const header = pageContainer.value?.querySelector('h1')
+    const subtitle = header?.nextElementSibling
+    if (header) {
+      gsap.from(header, {
+        y: 30,
+        opacity: 0,
+        duration: 0.6,
+        ease: 'power2.out'
+      })
+    }
+    if (subtitle) {
+      gsap.from(subtitle, {
+        y: 20,
+        opacity: 0,
+        duration: 0.6,
+        delay: 0.1,
+        ease: 'power2.out'
+      })
+    }
+  }, pageContainer.value ?? undefined)
 })
 
 onUnmounted(() => {

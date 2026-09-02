@@ -15,10 +15,14 @@
     <div v-if="loading" class="text-center py-16 text-[var(--text-muted)]">加载中...</div>
 
     <!-- Not Found -->
-    <div v-else-if="!course" class="text-center py-16">
-      <p class="text-[var(--text-muted)] mb-4">课程不存在或已被删除</p>
-      <router-link to="/courses" >返回课程列表</router-link>
-    </div>
+    <EmptyState
+      v-else-if="!course"
+      size="lg"
+      svg-path="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+      message="课程不存在或已被删除"
+    >
+      <router-link to="/courses"><el-button>返回课程列表</el-button></router-link>
+    </EmptyState>
 
     <!-- Course Detail -->
     <template v-else>
@@ -27,7 +31,7 @@
         <div class="flex items-start justify-between">
           <div class="flex items-center gap-4">
             <div
-              class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+              class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
               :style="{ backgroundColor: (course.color || '#8b5cf6') + '20' }"
             >
               <svg class="w-7 h-7" :style="{ color: course.color || '#8b5cf6' }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -40,58 +44,41 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <el-button @click="showNewNote = true" type="default" class="flex items-center gap-2 text-sm">
+            <el-button v-if="activeTab === 'notes'" @click="showNewNote = true" type="default" class="flex items-center gap-2 text-sm">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               新建笔记
             </el-button>
-            <router-link to="/upload" type="primary">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              上传文档
+            <router-link to="/upload">
+              <el-button type="primary">上传文档</el-button>
             </router-link>
           </div>
         </div>
       </div>
 
-      <!-- Tabs -->
-      <div class="flex items-center gap-6 border-b border-[var(--border-default)] mb-6">
-        <el-button
-          v-for="tab in tabs"
-          :key="tab.key"
-          @click="activeTab = tab.key"
-          class="pb-3 text-sm font-medium transition-colors relative"
-          :class="activeTab === tab.key ? 'text-[var(--color-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'"
-        >
-          {{ tab.label }}
-          <span v-if="tab.count !== undefined" class="ml-1 text-xs text-[var(--text-muted)]">({{ tab.count }})</span>
-          <div
-            v-if="activeTab === tab.key"
-            class="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-primary)] rounded-full"
-          ></div>
-        </el-button>
-      </div>
+      <!-- Tabs（P2-5：el-tabs 替换手写按钮） -->
+      <el-tabs v-model="activeTab" class="mb-6">
+        <el-tab-pane :label="`课程文档 (${courseDocuments.length})`" name="documents" />
+        <el-tab-pane :label="`课程笔记 (${courseNotes.length})`" name="notes" />
+      </el-tabs>
 
       <!-- Documents Tab -->
       <div v-if="activeTab === 'documents'">
         <div class="flex items-center justify-between mb-4">
           <p class="text-sm text-[var(--text-muted)]">课程关联的文档</p>
-          <el-button @click="showAddDocDialog = true" >添加文档</el-button>
+          <el-button @click="showAddDocDialog = true">添加文档</el-button>
         </div>
 
-        <div v-if="courseDocuments.length === 0" class="text-center py-12">
-          <div class="w-16 h-16 mx-auto mb-4 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center">
-            <svg class="w-8 h-8 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <p class="text-[var(--text-muted)] mb-4">此课程暂无文档</p>
-          <el-button @click="showAddDocDialog = true" >添加第一个文档</el-button>
-        </div>
+        <EmptyState
+          v-if="courseDocuments.length === 0"
+          svg-path="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+          message="此课程暂无文档"
+        >
+          <el-button @click="showAddDocDialog = true">添加第一个文档</el-button>
+        </EmptyState>
 
-        <div v-else class="el-card divide-y divide-gray-100">
+        <div v-else class="card divide-y divide-[var(--border-default)]">
           <div
             v-for="doc in courseDocuments"
             :key="doc.id"
@@ -110,6 +97,7 @@
               @click="removeDoc(doc.id)"
               class="text-[var(--text-muted)] hover:text-red-500 transition-colors"
               title="从课程移除"
+              aria-label="从课程移除"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -124,39 +112,37 @@
         <!-- New Note Editor -->
         <div v-if="showNewNote" class="mb-6">
           <NoteEditor
-            v-model:title="newNoteTitle"
-            v-model:content="newNoteContent"
-            v-model:tags="newNoteTags"
-            @save="debouncedSaveNewNote"
+            v-model:title="newNote.title"
+            v-model:content="newNote.content"
+            v-model:tags="newNote.tags"
+            @save="onNewNoteDraftInput"
           />
           <div class="flex items-center justify-end gap-3 mt-3">
-            <el-button @click="cancelNewNote" >取消</el-button>
+            <el-button @click="cancelNewNote">取消</el-button>
             <el-button @click="saveNewNote" type="primary">保存笔记</el-button>
           </div>
         </div>
 
-        <div v-if="courseNotes.length === 0 && !showNewNote" class="text-center py-12">
-          <div class="w-16 h-16 mx-auto mb-4 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center">
-            <svg class="w-8 h-8 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </div>
-          <p class="text-[var(--text-muted)] mb-4">此课程暂无笔记</p>
-          <el-button @click="showNewNote = true" >创建第一条笔记</el-button>
-        </div>
+        <EmptyState
+          v-if="courseNotes.length === 0 && !showNewNote"
+          svg-path="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+          message="此课程暂无笔记"
+        >
+          <el-button @click="showNewNote = true">创建第一条笔记</el-button>
+        </EmptyState>
 
         <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Inline edit note -->
           <template v-for="note in courseNotes" :key="note.id">
             <div v-if="editingNoteId === note.id" class="md:col-span-2">
               <NoteEditor
-                v-model:title="editNoteTitle"
-                v-model:content="editNoteContent"
-                v-model:tags="editNoteTags"
-                @save="debouncedSaveEditNote"
+                v-model:title="editNote.title"
+                v-model:content="editNote.content"
+                v-model:tags="editNote.tags"
+                @save="onEditNoteDraftInput"
               />
               <div class="flex items-center justify-end gap-3 mt-3">
-                <el-button @click="cancelEditNote" >取消</el-button>
+                <el-button @click="cancelEditNote">取消</el-button>
                 <el-button @click="saveEditNote" type="primary">保存</el-button>
               </div>
             </div>
@@ -173,58 +159,58 @@
       </div>
     </template>
 
-    <!-- Add Document Dialog -->
+    <!-- Add Document Dialog（P2-3：DocumentPicker radio 模式） -->
     <el-dialog
       v-model="showAddDocDialog"
       title="添加文档到课程"
       width="500px"
       :close-on-click-modal="false"
     >
-      <div v-if="availableDocs.length === 0" class="text-sm text-[var(--text-muted)] py-4 text-center">
-        没有可添加的文档，请先上传文档
-      </div>
-      <div v-else class="space-y-2 max-h-64 overflow-y-auto">
-        <label
-          v-for="doc in availableDocs"
-          :key="doc.id"
-          class="flex items-center gap-3 p-3 rounded-lg border border-[var(--border-default)] cursor-pointer hover:border-[var(--color-primary)] transition-colors"
-        >
-          <input type="radio" :value="doc.id" v-model="selectedDocId" class="accent-[var(--color-primary)]" />
-          <span class="text-sm text-[var(--text-primary)] truncate">{{ doc.filename }}</span>
-        </label>
-      </div>
+      <DocumentPicker
+        v-model="selectedDocId"
+        mode="radio"
+        :documents="availableDocs"
+        empty-text="没有可添加的文档，请先上传文档"
+      />
       <template #footer>
         <el-button @click="showAddDocDialog = false">取消</el-button>
         <el-button type="primary" :disabled="!selectedDocId" @click="addDoc">添加</el-button>
       </template>
     </el-dialog>
 
-    <!-- Delete Note Confirmation -->
-    <el-dialog
+    <!-- Delete Note Confirmation（P2-2：ConfirmDialog） -->
+    <ConfirmDialog
       v-model="showDeleteNoteConfirm"
       title="删除笔记"
-      width="400px"
-      :close-on-click-modal="false"
-    >
-      <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除此笔记吗？此操作不可撤销。</p>
-      <template #footer>
-        <el-button @click="showDeleteNoteConfirm = false">取消</el-button>
-        <el-button type="danger" @click="doDeleteNote">删除</el-button>
-      </template>
-    </el-dialog>
+      message="确定要删除此笔记吗？此操作不可撤销。"
+      @confirm="doDeleteNote"
+    />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '../stores/course'
 import { useNoteStore } from '../stores/note'
+import type { NoteDetail } from '../stores/note'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
+import { useNoteDraft, writeNoteDraft, readNoteDraft, removeNoteDraft } from '../composables/useNoteDraft'
+import type { NoteDraftData } from '../composables/useNoteDraft'
+import type { Document as DocumentModel } from '../types/models'
 import NoteCard from '../components/NoteCard.vue'
 import NoteEditor from '../components/NoteEditor.vue'
+import EmptyState from '../components/common/EmptyState.vue'
+import ConfirmDialog from '../components/common/ConfirmDialog.vue'
+import DocumentPicker from '../components/common/DocumentPicker.vue'
 import gsap from 'gsap'
+
+interface NoteFormState {
+  title: string
+  content: string
+  tags: string[]
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -233,67 +219,61 @@ const noteStore = useNoteStore()
 const documentStore = useDocumentStore()
 const toast = useToastStore()
 
-const pageContainer = ref(null)
-const courseHeader = ref(null)
-const activeTab = ref('documents')
+const pageContainer = ref<HTMLElement | null>(null)
+const courseHeader = ref<HTMLElement | null>(null)
+const activeTab = ref<'documents' | 'notes'>('documents')
 const showNewNote = ref(false)
-const editingNoteId = ref(null)
+const editingNoteId = ref<string | null>(null)
 
 // Documents tab
-const courseDocuments = ref([])
+const courseDocuments = ref<DocumentModel[]>([])
 const showAddDocDialog = ref(false)
-const selectedDocId = ref(null)
+const selectedDocId = ref<string | null>(null)
 
 // New note form
-const newNoteTitle = ref('')
-const newNoteContent = ref('')
-const newNoteTags = ref([])
+const newNote = ref<NoteFormState>({ title: '', content: '', tags: [] })
 
 // Edit note form
-const editNoteTitle = ref('')
-const editNoteContent = ref('')
-const editNoteTags = ref([])
+const editNote = ref<NoteFormState>({ title: '', content: '', tags: [] })
 
 // Delete note
 const showDeleteNoteConfirm = ref(false)
-const deletingNote = ref(null)
+const deletingNote = ref<NoteDetail | null>(null)
 
-let ctx
-let saveDebounceTimer = null
+let ctx: gsap.Context | null = null
+// P2-4：草稿逻辑。新建草稿 key 含课程 ID（setup 时 route.params 已可读）；
+// 编辑草稿 key 含笔记 ID（运行期确定），用纯函数 + 本地 timer
+const newDraft = useNoteDraft(`note_draft_${route.params.id as string}`)
+let editDraftTimer: ReturnType<typeof setTimeout> | null = null
 
-const courseId = computed(() => route.params.id)
+const courseId = computed(() => route.params.id as string)
 const course = computed(() => courseStore.currentCourse)
 const loading = computed(() => courseStore.loading)
-const courseNotes = computed(() =>
+const courseNotes = computed<NoteDetail[]>(() =>
   noteStore.notes.filter(n => n.course_space_id === courseId.value)
 )
-const availableDocs = computed(() => {
+const availableDocs = computed<DocumentModel[]>(() => {
   const inCourse = new Set(courseDocuments.value.map(d => d.id))
   return documentStore.documents.filter(d => d.status === 'ready' && !inCourse.has(d.id))
 })
 
-const tabs = computed(() => [
-  { key: 'documents', label: '课程文档', count: courseDocuments.value.length },
-  { key: 'notes', label: '课程笔记', count: courseNotes.value.length }
-])
-
-async function loadCourseData() {
+async function loadCourseData(): Promise<void> {
   try {
     await courseStore.fetchCourse(courseId.value)
-  } catch (e) {
+  } catch (_e) {
     toast.error('加载课程数据失败')
   }
 }
 
-async function loadCourseDocuments() {
+async function loadCourseDocuments(): Promise<void> {
   try {
     courseDocuments.value = await courseStore.fetchCourseDocuments(courseId.value)
-  } catch (e) {
+  } catch (_e) {
     courseDocuments.value = []
   }
 }
 
-async function addDoc() {
+async function addDoc(): Promise<void> {
   if (!selectedDocId.value) return
   try {
     await courseStore.addDocumentToCourse(courseId.value, selectedDocId.value)
@@ -301,108 +281,111 @@ async function addDoc() {
     showAddDocDialog.value = false
     selectedDocId.value = null
     await loadCourseDocuments()
-  } catch (e) {
+  } catch (_e) {
     toast.error('添加失败')
   }
 }
 
-async function removeDoc(docId) {
+async function removeDoc(docId: string): Promise<void> {
   try {
     await courseStore.removeDocumentFromCourse(courseId.value, docId)
     toast.success('文档已从课程移除')
     await loadCourseDocuments()
-  } catch (e) {
+  } catch (_e) {
     toast.error('移除失败')
   }
 }
 
-// Note CRUD
-function cancelNewNote() {
-  showNewNote.value = false
-  newNoteTitle.value = ''
-  newNoteContent.value = ''
-  newNoteTags.value = []
+// Note CRUD（P2-4：草稿由 useNoteDraft 提供）
+function onNewNoteDraftInput(): void {
+  newDraft.saveDraftDebounced({ ...newNote.value } as NoteDraftData)
 }
 
-async function saveNewNote() {
-  if (!newNoteTitle.value.trim() && !newNoteContent.value.trim()) return
+function onEditNoteDraftInput(): void {
+  if (!editingNoteId.value) return
+  if (editDraftTimer) clearTimeout(editDraftTimer)
+  const key = `note_edit_draft_${editingNoteId.value}`
+  const data = { ...editNote.value } as NoteDraftData
+  editDraftTimer = setTimeout(() => writeNoteDraft(key, data), 1000)
+}
+
+function cancelNewNote(): void {
+  showNewNote.value = false
+  newNote.value = { title: '', content: '', tags: [] }
+  newDraft.clearDraft()
+}
+
+async function saveNewNote(): Promise<void> {
+  if (!newNote.value.title.trim() && !newNote.value.content.trim()) return
   try {
     await noteStore.createNote({
-      title: newNoteTitle.value,
-      content: newNoteContent.value,
-      tags: newNoteTags.value,
+      title: newNote.value.title,
+      content: newNote.value.content,
+      tags: newNote.value.tags,
       course_id: courseId.value
     })
     toast.success('笔记已保存')
     cancelNewNote()
-  } catch (e) {
+  } catch (_e) {
     toast.error('保存失败')
   }
 }
 
-function debouncedSaveNewNote() {
-  clearTimeout(saveDebounceTimer)
-  saveDebounceTimer = setTimeout(() => {
-    if (newNoteTitle.value.trim() || newNoteContent.value.trim()) {
-      // Auto-save draft to localStorage
-      localStorage.setItem(`note_draft_${courseId.value}`, JSON.stringify({
-        title: newNoteTitle.value,
-        content: newNoteContent.value,
-        tags: newNoteTags.value
-      }))
-    }
-  }, 1000)
-}
-
-function openEditNote(note) {
+function openEditNote(note: NoteDetail): void {
   editingNoteId.value = note.id
-  editNoteTitle.value = note.title || ''
-  editNoteContent.value = note.content || ''
-  editNoteTags.value = [...(note.tags || [])]
+  editNote.value = {
+    title: note.title || '',
+    content: note.content || '',
+    tags: [...(note.tags || [])] as string[]
+  }
+  // 恢复该笔记的编辑草稿（如有）
+  const restored = readNoteDraft(`note_edit_draft_${note.id}`)
+  if (restored && (restored.title || restored.content)) {
+    editNote.value.title = restored.title
+    editNote.value.content = restored.content
+    editNote.value.tags = restored.tags || editNote.value.tags
+  }
 }
 
-function cancelEditNote() {
+function cancelEditNote(): void {
   editingNoteId.value = null
+  if (editDraftTimer) {
+    clearTimeout(editDraftTimer)
+    editDraftTimer = null
+  }
 }
 
-async function saveEditNote() {
+async function saveEditNote(): Promise<void> {
   if (!editingNoteId.value) return
   try {
     await noteStore.updateNote(editingNoteId.value, {
-      title: editNoteTitle.value,
-      content: editNoteContent.value,
-      tags: editNoteTags.value
+      title: editNote.value.title,
+      content: editNote.value.content,
+      tags: editNote.value.tags
     })
     toast.success('笔记已更新')
+    removeNoteDraft(`note_edit_draft_${editingNoteId.value}`)
+    if (editDraftTimer) {
+      clearTimeout(editDraftTimer)
+      editDraftTimer = null
+    }
     editingNoteId.value = null
-  } catch (e) {
+  } catch (_e) {
     toast.error('更新失败')
   }
 }
 
-function debouncedSaveEditNote() {
-  clearTimeout(saveDebounceTimer)
-  saveDebounceTimer = setTimeout(() => {
-    // Auto-save to localStorage as draft
-    localStorage.setItem(`note_edit_draft_${editingNoteId.value}`, JSON.stringify({
-      title: editNoteTitle.value,
-      content: editNoteContent.value,
-      tags: editNoteTags.value
-    }))
-  }, 1000)
-}
-
-function confirmDeleteNote(note) {
+function confirmDeleteNote(note: NoteDetail): void {
   deletingNote.value = note
   showDeleteNoteConfirm.value = true
 }
 
-async function doDeleteNote() {
+async function doDeleteNote(): Promise<void> {
   if (!deletingNote.value) return
   try {
     await noteStore.deleteNote(deletingNote.value.id)
     toast.success('笔记已删除')
-  } catch (e) {
+  } catch (_e) {
     toast.error('删除失败')
   }
   showDeleteNoteConfirm.value = false
@@ -417,18 +400,15 @@ onMounted(async () => {
     loadCourseDocuments()
   ])
 
-  // Restore draft if exists
-  const draft = localStorage.getItem(`note_draft_${courseId.value}`)
+  // 恢复本课程的新建草稿（key 含课程 ID；P2-4）
+  const draft = newDraft.restoreDraft()
   if (draft) {
-    try {
-      const parsed = JSON.parse(draft)
-      if (parsed.title || parsed.content) {
-        newNoteTitle.value = parsed.title || ''
-        newNoteContent.value = parsed.content || ''
-        newNoteTags.value = parsed.tags || []
-        showNewNote.value = true
-      }
-    } catch (e) { /* ignore */ }
+    newNote.value = {
+      title: draft.title,
+      content: draft.content,
+      tags: draft.tags || []
+    }
+    showNewNote.value = true
   }
 
   ctx = gsap.context(() => {
@@ -440,11 +420,11 @@ onMounted(async () => {
         ease: 'power2.out'
       })
     }
-  }, pageContainer.value)
+  }, pageContainer.value ?? undefined)
 })
 
 onUnmounted(() => {
   ctx?.revert()
-  clearTimeout(saveDebounceTimer)
+  if (editDraftTimer) clearTimeout(editDraftTimer)
 })
 </script>

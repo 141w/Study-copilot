@@ -14,9 +14,9 @@
           v-for="t in transformations"
           :key="t.key"
           @click="selectedType = t.key"
-          class="p-3 text-left border rounded-lg transition-all text-sm"
+          class="p-3 text-left border rounded-xl transition-all text-sm"
           :class="selectedType === t.key
-            ? 'border-[#010120] bg-[var(--bg-secondary)] ring-1 ring-[#010120]'
+            ? 'border-[var(--color-primary)] bg-[var(--bg-secondary)] ring-1 ring-[var(--color-primary)]'
             : 'border-[var(--border-default)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-secondary)]'"
         >
           <div class="font-medium text-[var(--text-primary)]">{{ t.name }}</div>
@@ -31,7 +31,7 @@
         <label class="block text-sm font-medium text-[var(--text-secondary)]">转换结果</label>
         <button
           @click="copyResult"
-          class="text-xs text-[var(--text-muted)] hover:text-[#010120] transition-colors flex items-center gap-1"
+          class="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -40,7 +40,7 @@
         </button>
       </div>
       <div
-        class="p-4 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] max-h-60 overflow-y-auto text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed"
+        class="p-4 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-default)] max-h-60 overflow-y-auto text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed"
       >{{ result }}</div>
     </div>
 
@@ -63,21 +63,31 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import api from '../services/api'
+import type { Transformation } from '../types/models'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  sourceText: { type: String, default: '' },
-  sourceTitle: { type: String, default: '' },
-  noteId: { type: String, default: null },
-  documentId: { type: String, default: null }
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  sourceText?: string
+  sourceTitle?: string
+  noteId?: string | null
+  documentId?: string | null
+}>(), {
+  visible: false,
+  sourceText: '',
+  sourceTitle: '',
+  noteId: null,
+  documentId: null
 })
 
-const emit = defineEmits(['update:visible', 'close'])
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  close: []
+}>()
 
-const transformations = ref([])
+const transformations = ref<Transformation[]>([])
 const selectedType = ref('')
 const result = ref('')
 const loading = ref(false)
@@ -88,26 +98,26 @@ watch(() => props.visible, (val) => {
   localVisible.value = val
 })
 
-function close() {
+function close(): void {
   localVisible.value = false
 }
 
-function onClosed() {
+function onClosed(): void {
   emit('update:visible', false)
   emit('close')
 }
 
 // Fetch available transformations
-async function fetchTransformations() {
+async function fetchTransformations(): Promise<void> {
   try {
-    const response = await api.get('/transform/transformations')
+    const response = await api.get<Transformation[]>('/transform/transformations')
     transformations.value = response.data
   } catch (error) {
     console.error('Failed to fetch transformations:', error)
   }
 }
 
-async function execute() {
+async function execute(): Promise<void> {
   if (!selectedType.value) return
 
   loading.value = true
@@ -115,7 +125,7 @@ async function execute() {
   copied.value = false
 
   try {
-    const payload = {
+    const payload: Record<string, string> = {
       transform_type: selectedType.value,
       source_title: props.sourceTitle
     }
@@ -128,7 +138,7 @@ async function execute() {
       payload.source_text = props.sourceText
     }
 
-    const response = await api.post('/transform', payload)
+    const response = await api.post<{ result: string }>('/transform', payload)
     result.value = response.data.result
   } catch (error) {
     console.error('Transform failed:', error)
@@ -138,7 +148,7 @@ async function execute() {
   }
 }
 
-function copyResult() {
+function copyResult(): void {
   if (result.value) {
     navigator.clipboard.writeText(result.value)
     copied.value = true

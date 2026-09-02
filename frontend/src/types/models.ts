@@ -20,6 +20,8 @@ export interface Document {
   status: 'processing' | 'ready' | 'error'
   created_at?: string
   chunk_count?: number
+  /** 字节大小（列表接口返回；DocumentView 格式化展示用） */
+  file_size?: number
 }
 
 export interface Source {
@@ -101,9 +103,10 @@ export interface AnswerResult {
 export interface Task {
   id: string
   task_type: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   progress: number
-  result?: any
+  /** 任务结果负载（document_process/quiz_generate/tts_generate 等各异） */
+  result?: Record<string, unknown>
   error?: string
   created_at: string
   completed_at?: string

@@ -1,18 +1,16 @@
 <template>
   <div ref="pageContainer" class="max-w-6xl mx-auto px-6 py-8">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-8">
-      <div>
-        <h1 ref="pageTitle" class="text-2xl font-semibold text-[var(--text-primary)]">笔记</h1>
-        <p ref="pageSubtitle" class="text-sm text-[var(--text-muted)] mt-1">记录和管理你的学习笔记</p>
-      </div>
-      <el-button @click="openCreateNote" type="primary">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        新建笔记
-      </el-button>
-    </div>
+    <!-- Header（P2-2：PageHeader） -->
+    <PageHeader title="笔记" subtitle="记录和管理你的学习笔记">
+      <template #actions>
+        <el-button @click="openCreateNote" type="primary">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          新建笔记
+        </el-button>
+      </template>
+    </PageHeader>
 
     <!-- Filters -->
     <div class="flex items-center gap-4 mb-6 flex-wrap">
@@ -36,8 +34,10 @@
       <div class="flex items-center gap-2 flex-wrap">
         <el-button
           @click="clearTagFilter"
-          class="text-xs px-3 py-1.5 rounded-full transition-colors"
-          :class="!selectedTag ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
+          size="small"
+          round
+          :type="!selectedTag ? 'primary' : 'info'"
+          :plain="!!selectedTag"
         >
           全部标签
         </el-button>
@@ -45,8 +45,10 @@
           v-for="tag in noteStore.allTags"
           :key="tag"
           @click="selectTag(tag)"
-          class="text-xs px-3 py-1.5 rounded-full transition-colors"
-          :class="selectedTag === tag ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
+          size="small"
+          round
+          :type="selectedTag === tag ? 'primary' : 'info'"
+          :plain="selectedTag !== tag"
         >
           {{ tag }}
         </el-button>
@@ -55,7 +57,8 @@
       <el-button
         v-if="hasActiveFilters"
         @click="clearAllFilters"
-        class="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors ml-auto"
+        text
+        class="text-xs text-[var(--text-muted)]"
       >
         清除筛选
       </el-button>
@@ -64,18 +67,18 @@
     <!-- Create Note -->
     <div v-if="showCreateEditor" class="mb-6">
       <NoteEditor
-        v-model:title="newNoteTitle"
-        v-model:content="newNoteContent"
-        v-model:tags="newNoteTags"
-        @save="debouncedSaveNewNote"
+        v-model:title="newNote.title"
+        v-model:content="newNote.content"
+        v-model:tags="newNote.tags"
+        @save="onDraftInput('create')"
       />
       <div class="flex items-center justify-between mt-3">
-        <select v-model="newNoteCourseId" class="input max-w-[200px] text-sm">
+        <select v-model="newNote.course_id" class="input max-w-[200px] text-sm">
           <option value="">不关联课程</option>
           <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
         <div class="flex items-center gap-3">
-          <el-button @click="cancelCreate" >取消</el-button>
+          <el-button @click="cancelCreate">取消</el-button>
           <el-button @click="saveNewNote" type="primary">保存笔记</el-button>
         </div>
       </div>
@@ -84,36 +87,34 @@
     <!-- Loading -->
     <div v-if="noteStore.loading" class="text-center py-16 text-[var(--text-muted)]">加载中...</div>
 
-    <!-- Empty State -->
-    <div v-else-if="noteStore.filteredNotes.length === 0" class="text-center py-16">
-      <div class="w-20 h-20 mx-auto mb-4 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center">
-        <svg class="w-10 h-10 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-        </svg>
-      </div>
-      <p class="text-[var(--text-muted)] mb-2" v-if="hasActiveFilters">未找到匹配的笔记</p>
-      <p class="text-[var(--text-muted)] mb-4" v-else>还没有笔记，开始记录吧</p>
-      <el-button @click="openCreateNote" >新建笔记</el-button>
-    </div>
+    <!-- Empty State（P2-2：EmptyState） -->
+    <EmptyState
+      v-else-if="noteStore.filteredNotes.length === 0"
+      size="lg"
+      :svg-path="'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'"
+      :message="hasActiveFilters ? '未找到匹配的笔记' : '还没有笔记，开始记录吧'"
+    >
+      <el-button v-if="!hasActiveFilters" @click="openCreateNote">新建笔记</el-button>
+    </EmptyState>
 
     <!-- Notes Grid -->
-    <div v-else ref="notesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <!-- Inline edit -->
       <template v-for="note in noteStore.filteredNotes" :key="note.id">
         <div v-if="editingNoteId === note.id" class="md:col-span-2 lg:col-span-3">
           <NoteEditor
-            v-model:title="editNoteTitle"
-            v-model:content="editNoteContent"
-            v-model:tags="editNoteTags"
-            @save="debouncedSaveEditNote"
+            v-model:title="editNote.title"
+            v-model:content="editNote.content"
+            v-model:tags="editNote.tags"
+            @save="onDraftInput('edit')"
           />
           <div class="flex items-center justify-between mt-3">
-            <select v-model="editNoteCourseId" class="input max-w-[200px] text-sm">
+            <select v-model="editNote.course_id" class="input max-w-[200px] text-sm">
               <option value="">不关联课程</option>
               <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
             <div class="flex items-center gap-3">
-              <el-button @click="cancelEdit" >取消</el-button>
+              <el-button @click="cancelEdit">取消</el-button>
               <el-button @click="saveEditNote" type="primary">保存</el-button>
             </div>
           </div>
@@ -129,201 +130,209 @@
       </template>
     </div>
 
-    <!-- Delete Confirmation -->
-    <el-dialog
+    <!-- Delete Confirmation（P2-2：ConfirmDialog 替换手写 el-dialog） -->
+    <ConfirmDialog
       v-model="showDeleteConfirm"
       title="删除笔记"
-      width="400px"
-      :close-on-click-modal="false"
-    >
-      <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除「{{ deletingNote?.title || '未命名笔记' }}」吗？此操作不可撤销。</p>
-      <template #footer>
-        <el-button @click="showDeleteConfirm = false">取消</el-button>
-        <el-button type="danger" @click="doDeleteNote">删除</el-button>
-      </template>
-    </el-dialog>
+      :message="`确定要删除「${deletingNote?.title || '未命名笔记'}」吗？此操作不可撤销。`"
+      @confirm="doDeleteNote"
+    />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useNoteStore } from '../stores/note'
+import type { NoteDetail } from '../stores/note'
 import { useCourseStore } from '../stores/course'
 import { useToastStore } from '../stores/toast'
+import { useNoteDraft, writeNoteDraft, readNoteDraft, removeNoteDraft } from '../composables/useNoteDraft'
+import type { NoteDraftData } from '../composables/useNoteDraft'
 import NoteCard from '../components/NoteCard.vue'
 import NoteEditor from '../components/NoteEditor.vue'
+import PageHeader from '../components/common/PageHeader.vue'
+import EmptyState from '../components/common/EmptyState.vue'
+import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import gsap from 'gsap'
+
+interface NoteFormState {
+  title: string
+  content: string
+  tags: string[]
+  course_id: string
+}
 
 const noteStore = useNoteStore()
 const courseStore = useCourseStore()
 const toast = useToastStore()
 
-const pageContainer = ref(null)
-const pageTitle = ref(null)
-const pageSubtitle = ref(null)
-const notesGrid = ref(null)
+const pageContainer = ref<HTMLElement | null>(null)
+
+// P2-4：草稿逻辑由 useNoteDraft 提供（新建场景 key 固定）；
+// 编辑场景 key 含笔记 ID（运行期确定），用配套纯函数 + 本地 timer
+const newDraft = useNoteDraft('note_draft_notes_page')
+let editDraftTimer: ReturnType<typeof setTimeout> | null = null
 
 // Filters
 const searchInput = ref('')
 const selectedCourseId = ref('')
-const selectedTag = ref(null)
+const selectedTag = ref<string | null>(null)
 
 // Create note
 const showCreateEditor = ref(false)
-const newNoteTitle = ref('')
-const newNoteContent = ref('')
-const newNoteTags = ref([])
-const newNoteCourseId = ref('')
+const newNote = ref<NoteFormState>({ title: '', content: '', tags: [], course_id: '' })
 
 // Edit note
-const editingNoteId = ref(null)
-const editNoteTitle = ref('')
-const editNoteContent = ref('')
-const editNoteTags = ref([])
-const editNoteCourseId = ref('')
+const editingNoteId = ref<string | null>(null)
+const editNote = ref<NoteFormState>({ title: '', content: '', tags: [], course_id: '' })
 
 // Delete note
 const showDeleteConfirm = ref(false)
-const deletingNote = ref(null)
+const deletingNote = ref<NoteDetail | null>(null)
 
-let ctx
-let searchDebounce = null
-let saveDebounceTimer = null
+let ctx: gsap.Context | null = null
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
 
 const courses = computed(() => courseStore.courses)
 const hasActiveFilters = computed(() =>
   searchInput.value.trim() || selectedCourseId.value || selectedTag.value
 )
 
-function courseNameFor(note) {
+function courseNameFor(note: NoteDetail): string {
   if (!note.course_space_id) return ''
   const c = courses.value.find(c => c.id === note.course_space_id)
   return c ? c.name : ''
 }
 
-function onSearchInput() {
-  clearTimeout(searchDebounce)
+function onSearchInput(): void {
+  if (searchDebounce) clearTimeout(searchDebounce)
   searchDebounce = setTimeout(() => {
     noteStore.setSearchQuery(searchInput.value)
   }, 300)
 }
 
-function onCourseFilter() {
+function onCourseFilter(): void {
   noteStore.setFilterCourse(selectedCourseId.value || null)
 }
 
-function selectTag(tag) {
+function selectTag(tag: string): void {
   selectedTag.value = selectedTag.value === tag ? null : tag
   noteStore.setFilterTag(selectedTag.value)
 }
 
-function clearTagFilter() {
+function clearTagFilter(): void {
   selectedTag.value = null
   noteStore.setFilterTag(null)
 }
 
-function clearAllFilters() {
+function clearAllFilters(): void {
   searchInput.value = ''
   selectedCourseId.value = ''
   selectedTag.value = null
   noteStore.clearFilters()
 }
 
+/** 草稿防抖统一入口（NoteEditor @save 触发） */
+function onDraftInput(which: 'create' | 'edit'): void {
+  if (which === 'create') {
+    newDraft.saveDraftDebounced({ ...newNote.value } as NoteDraftData)
+  } else if (editingNoteId.value) {
+    // 编辑草稿按笔记 ID 分 key（纯函数 + 独立 timer）
+    if (editDraftTimer) clearTimeout(editDraftTimer)
+    const key = `note_edit_draft_${editingNoteId.value}`
+    const data = { ...editNote.value } as NoteDraftData
+    editDraftTimer = setTimeout(() => writeNoteDraft(key, data), 1000)
+  }
+}
+
 // Create
-function openCreateNote() {
+function openCreateNote(): void {
   showCreateEditor.value = true
-  newNoteTitle.value = ''
-  newNoteContent.value = ''
-  newNoteTags.value = []
-  newNoteCourseId.value = ''
+  newNote.value = { title: '', content: '', tags: [], course_id: '' }
 }
 
-function cancelCreate() {
+function cancelCreate(): void {
   showCreateEditor.value = false
-  localStorage.removeItem('note_draft_notes_page')
+  newDraft.clearDraft()
 }
 
-async function saveNewNote() {
-  if (!newNoteTitle.value.trim() && !newNoteContent.value.trim()) return
+async function saveNewNote(): Promise<void> {
+  if (!newNote.value.title.trim() && !newNote.value.content.trim()) return
   try {
     await noteStore.createNote({
-      title: newNoteTitle.value,
-      content: newNoteContent.value,
-      tags: newNoteTags.value,
-      course_id: newNoteCourseId.value || null
+      title: newNote.value.title,
+      content: newNote.value.content,
+      tags: newNote.value.tags,
+      course_id: newNote.value.course_id || null
     })
     toast.success('笔记已保存')
     showCreateEditor.value = false
-    localStorage.removeItem('note_draft_notes_page')
-  } catch (e) {
+    newDraft.clearDraft()
+  } catch (_e) {
     toast.error('保存失败')
   }
 }
 
-function debouncedSaveNewNote() {
-  clearTimeout(saveDebounceTimer)
-  saveDebounceTimer = setTimeout(() => {
-    localStorage.setItem('note_draft_notes_page', JSON.stringify({
-      title: newNoteTitle.value,
-      content: newNoteContent.value,
-      tags: newNoteTags.value,
-      course_id: newNoteCourseId.value
-    }))
-  }, 1000)
-}
-
 // Edit
-function openEditNote(note) {
+function openEditNote(note: NoteDetail): void {
   editingNoteId.value = note.id
-  editNoteTitle.value = note.title || ''
-  editNoteContent.value = note.content || ''
-  editNoteTags.value = [...(note.tags || [])]
-  editNoteCourseId.value = note.course_space_id || ''
+  editNote.value = {
+    title: note.title || '',
+    content: note.content || '',
+    tags: [...(note.tags || [])] as string[],
+    course_id: note.course_space_id || ''
+  }
+  // 恢复该笔记的编辑草稿（如有；P2-4 readNoteDraft 纯函数）
+  const restored = readNoteDraft(`note_edit_draft_${note.id}`)
+  if (restored && (restored.title || restored.content)) {
+    editNote.value.title = restored.title
+    editNote.value.content = restored.content
+    editNote.value.tags = restored.tags || editNote.value.tags
+  }
 }
 
-function cancelEdit() {
+function cancelEdit(): void {
   editingNoteId.value = null
+  if (editDraftTimer) {
+    clearTimeout(editDraftTimer)
+    editDraftTimer = null
+  }
 }
 
-async function saveEditNote() {
+async function saveEditNote(): Promise<void> {
   if (!editingNoteId.value) return
   try {
     await noteStore.updateNote(editingNoteId.value, {
-      title: editNoteTitle.value,
-      content: editNoteContent.value,
-      tags: editNoteTags.value,
-      course_id: editNoteCourseId.value || null
+      title: editNote.value.title,
+      content: editNote.value.content,
+      tags: editNote.value.tags,
+      course_id: editNote.value.course_id || null
     })
     toast.success('笔记已更新')
+    // 清除该笔记的编辑草稿
+    removeNoteDraft(`note_edit_draft_${editingNoteId.value}`)
+    if (editDraftTimer) {
+      clearTimeout(editDraftTimer)
+      editDraftTimer = null
+    }
     editingNoteId.value = null
-  } catch (e) {
+  } catch (_e) {
     toast.error('更新失败')
   }
 }
 
-function debouncedSaveEditNote() {
-  clearTimeout(saveDebounceTimer)
-  saveDebounceTimer = setTimeout(() => {
-    localStorage.setItem(`note_edit_draft_${editingNoteId.value}`, JSON.stringify({
-      title: editNoteTitle.value,
-      content: editNoteContent.value,
-      tags: editNoteTags.value
-    }))
-  }, 1000)
-}
-
 // Delete
-function confirmDeleteNote(note) {
+function confirmDeleteNote(note: NoteDetail): void {
   deletingNote.value = note
   showDeleteConfirm.value = true
 }
 
-async function doDeleteNote() {
+async function doDeleteNote(): Promise<void> {
   if (!deletingNote.value) return
   try {
     await noteStore.deleteNote(deletingNote.value.id)
     toast.success('笔记已删除')
-  } catch (e) {
+  } catch (_e) {
     toast.error('删除失败')
   }
   showDeleteConfirm.value = false
@@ -336,41 +345,34 @@ onMounted(async () => {
     courseStore.fetchCourses()
   ])
 
-  // Restore draft
-  const draft = localStorage.getItem('note_draft_notes_page')
+  // 恢复新建草稿（P2-4：useNoteDraft.restoreDraft）
+  const draft = newDraft.restoreDraft()
   if (draft) {
-    try {
-      const parsed = JSON.parse(draft)
-      if (parsed.title || parsed.content) {
-        newNoteTitle.value = parsed.title || ''
-        newNoteContent.value = parsed.content || ''
-        newNoteTags.value = parsed.tags || []
-        newNoteCourseId.value = parsed.course_id || ''
-        showCreateEditor.value = true
-      }
-    } catch (e) { /* ignore */ }
+    newNote.value = {
+      title: draft.title,
+      content: draft.content,
+      tags: draft.tags || [],
+      course_id: draft.course_id || ''
+    }
+    showCreateEditor.value = true
   }
 
   ctx = gsap.context(() => {
-    gsap.from(pageTitle.value, {
-      y: 30,
-      opacity: 0,
-      duration: 0.6,
-      ease: 'power2.out'
-    })
-    gsap.from(pageSubtitle.value, {
-      y: 20,
-      opacity: 0,
-      duration: 0.6,
-      delay: 0.1,
-      ease: 'power2.out'
-    })
-  }, pageContainer.value)
+    // PageHeader 内的标题/副标题（P2-2 组件化后无模板 ref，按结构选择）
+    const header = pageContainer.value?.querySelector('h1')
+    const subtitle = pageContainer.value?.querySelector('h1 + p')
+    if (header) {
+      gsap.from(header, { y: 30, opacity: 0, duration: 0.6, ease: 'power2.out' })
+    }
+    if (subtitle) {
+      gsap.from(subtitle, { y: 20, opacity: 0, duration: 0.6, delay: 0.1, ease: 'power2.out' })
+    }
+  }, pageContainer.value ?? undefined)
 })
 
 onUnmounted(() => {
   ctx?.revert()
-  clearTimeout(searchDebounce)
-  clearTimeout(saveDebounceTimer)
+  if (searchDebounce) clearTimeout(searchDebounce)
+  if (editDraftTimer) clearTimeout(editDraftTimer)
 })
 </script>

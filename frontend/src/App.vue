@@ -1,9 +1,9 @@
 <template>
   <div class="min-h-screen bg-[var(--bg-primary)] transition-colors duration-200">
     <AppHeader />
-    <div class="flex pt-16">
+    <div class="flex pt-[var(--layout-header-height)]">
       <AppSidebar v-if="showSidebar" />
-      <main class="flex-1 min-w-0" :class="showSidebar ? 'md:ml-64' : ''">
+      <main class="flex-1 min-w-0" :class="showSidebar ? 'md:ml-[var(--layout-sidebar-width)]' : ''">
         <router-view v-slot="{ Component }">
           <keep-alive :include="['QuizView', 'ChatView', 'AnalysisView']">
             <Transition name="page">
@@ -16,7 +16,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSidebarStore } from './stores/sidebar'
@@ -31,9 +31,12 @@ const showSidebar = computed(() => {
 })
 
 // Close sidebar on route change (mobile UX)
-watch(() => route.path, () => {
-  sidebarStore.close()
-})
+watch(
+  () => route.path,
+  () => {
+    sidebarStore.close()
+  }
+)
 </script>
 
 <style>

@@ -38,28 +38,38 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onBeforeUnmount } from 'vue'
+<script setup lang="ts">
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { VideoPlay, VideoPause, Loading } from '@element-plus/icons-vue'
 import api from '../services/api'
 import { useToastStore } from '../stores/toast'
 
-const props = defineProps({
-  text: { type: String, required: true },
-  voice: { type: String, default: null },
-  showVoiceSelect: { type: Boolean, default: false },
+/** TTS 语音元数据（/tts/voices 响应展平后） */
+interface TtsVoice {
+  id: string
+  name: string
+  language: string
+}
+
+const props = withDefaults(defineProps<{
+  text: string
+  voice?: string | null
+  showVoiceSelect?: boolean
+}>(), {
+  voice: null,
+  showVoiceSelect: false,
 })
 
 const toast = useToastStore()
 const loading = ref(false)
 const playing = ref(false)
 const selectedVoice = ref(props.voice || 'zh-CN-XiaoxiaoNeural')
-const voices = ref([])
-let audioElement = null
-let audioUrl = null
+const voices = ref<TtsVoice[]>([])
+let audioElement: HTMLAudioElement | null = null
+let audioUrl: string | null = null
 
-const voiceGroups = computed(() => {
-  const groups = {}
+const voiceGroups = computed<Record<string, TtsVoice[]>>(() => {
+  const groups: Record<string, TtsVoice[]> = {}
   for (const v of voices.value) {
     if (!groups[v.language]) groups[v.language] = []
     groups[v.language].push(v)
@@ -68,10 +78,11 @@ const voiceGroups = computed(() => {
 })
 
 // Load voices on mount if voice selector is shown
-async function loadVoices() {
+// P1-7：setup 顶层直接发请求改为 onMounted（原在组件实例化期发起副作用）
+async function loadVoices(): Promise<void> {
   if (voices.value.length > 0) return
   try {
-    const resp = await api.get('/tts/voices')
+    const resp = await api.get<{ voices: Record<string, TtsVoice[]> }>('/tts/voices')
     const allVoices = resp.data.voices || {}
     voices.value = Object.values(allVoices).flat()
   } catch {
@@ -79,11 +90,13 @@ async function loadVoices() {
   }
 }
 
-if (props.showVoiceSelect) {
-  loadVoices()
-}
+onMounted(() => {
+  if (props.showVoiceSelect) {
+    loadVoices()
+  }
+})
 
-async function togglePlay() {
+async function togglePlay(): Promise<void> {
   if (playing.value) {
     stopPlaying()
     return
@@ -128,7 +141,7 @@ async function togglePlay() {
   }
 }
 
-function stopPlaying() {
+function stopPlaying(): void {
   if (audioElement) {
     audioElement.pause()
     audioElement.currentTime = 0
@@ -137,7 +150,7 @@ function stopPlaying() {
   cleanupAudio()
 }
 
-function cleanupAudio() {
+function cleanupAudio(): void {
   if (audioElement) {
     audioElement = null
   }

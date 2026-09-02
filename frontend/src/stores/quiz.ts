@@ -22,9 +22,26 @@ export interface QuizHistoryItem {
   submitted_at: string
 }
 
+/** /analysis/knowledge 响应 */
+export interface KnowledgeStats {
+  total_quizzes: number
+  correct_count: number
+  accuracy_rate: number
+}
+
+/** /analysis/wrong 响应中的单个薄弱知识点 */
+export interface WeakArea {
+  topic: string
+  wrong_count: number
+  total_count: number
+  accuracy_rate: number
+}
+
 /** 运行时测验题（在 models.Quiz 基础上叠加作答状态） */
 export type RuntimeQuiz = Quiz & {
   user_answer?: string
+  /** 视图层作答标记（提交后禁用按钮） */
+  submitted?: boolean
   result?: QuizSubmitResult
 }
 
@@ -34,9 +51,36 @@ export const useQuizStore = defineStore('quiz', () => {
   const loading = ref(false)
   const quizResults = ref<QuizHistoryItem[]>([])
   const lastFetched = ref(0)
+  // P1-5：学习分析数据下沉到 store（原 AnalysisView 直连 3 个 api.get）
+  const knowledgeStats = ref<KnowledgeStats>({ total_quizzes: 0, correct_count: 0, accuracy_rate: 0 })
+  const weakAreas = ref<WeakArea[]>([])
+  const analyzing = ref(false)
 
   function isCacheFresh(): boolean {
     return Date.now() - lastFetched.value < 30_000 && quizResults.value.length > 0
+  }
+
+  async function fetchKnowledgeStats(): Promise<void> {
+    try {
+      const response = await api.get<KnowledgeStats>('/analysis/knowledge')
+      knowledgeStats.value = response.data
+    } catch (error) {
+      console.error('Error fetching knowledge stats:', error)
+      throw error
+    }
+  }
+
+  async function analyzeWrongAnswers(): Promise<void> {
+    analyzing.value = true
+    try {
+      const response = await api.get<{ weak_areas: WeakArea[] }>('/analysis/wrong')
+      weakAreas.value = response.data.weak_areas || []
+    } catch (error) {
+      console.error('Error analyzing wrong answers:', error)
+      throw error
+    } finally {
+      analyzing.value = false
+    }
   }
 
   async function generateQuizzes(
@@ -111,9 +155,14 @@ export const useQuizStore = defineStore('quiz', () => {
     loading,
     quizResults,
     lastFetched,
+    knowledgeStats,
+    weakAreas,
+    analyzing,
     generateQuizzes,
     submitAnswer,
     fetchQuizHistory,
+    fetchKnowledgeStats,
+    analyzeWrongAnswers,
     setCurrentQuiz,
     clearQuizzes
   }

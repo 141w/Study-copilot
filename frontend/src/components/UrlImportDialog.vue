@@ -16,10 +16,10 @@
     <p class="text-xs text-[var(--text-muted)] mt-2">输入网页 URL，系统将自动提取正文内容并保存为文档</p>
 
     <!-- Status Messages -->
-    <div v-if="error" class="mt-4 p-3 bg-[var(--color-error-light)] border border-[var(--color-error)]/20 rounded-lg text-sm text-[var(--color-error)]">
+    <div v-if="error" class="mt-4 p-3 bg-[var(--color-error-light)] border border-[var(--color-error)]/20 rounded-xl text-sm text-[var(--color-error)]">
       {{ error }}
     </div>
-    <div v-if="success" class="mt-4 p-3 bg-[var(--color-success-light)] border border-[var(--color-success)]/20 rounded-lg text-sm text-[var(--color-success)]">
+    <div v-if="success" class="mt-4 p-3 bg-[var(--color-success-light)] border border-[var(--color-success)]/20 rounded-xl text-sm text-[var(--color-success)]">
       导入成功！已生成 {{ chunkCount }} 个知识块
     </div>
 
@@ -37,15 +37,22 @@
   </el-dialog>
 </template>
 
-<script setup>
-import { ref, watch } from 'vue'
+<script setup lang="ts">
+import { ref, watch, onBeforeUnmount } from 'vue'
 import api from '../services/api'
+import type { Document as DocumentModel } from '../types/models'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false }
+const props = withDefaults(defineProps<{
+  visible?: boolean
+}>(), {
+  visible: false
 })
 
-const emit = defineEmits(['update:visible', 'close', 'imported'])
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  close: []
+  imported: [doc: DocumentModel]
+}>()
 
 const url = ref('')
 const loading = ref(false)
@@ -53,6 +60,8 @@ const error = ref('')
 const success = ref(false)
 const chunkCount = ref(0)
 const localVisible = ref(false)
+// P1-2：自动关闭 timer 引用
+let autoCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(() => props.visible, (val) => {
   localVisible.value = val
@@ -63,19 +72,31 @@ watch(() => props.visible, (val) => {
   }
 })
 
-function close() {
+function close(): void {
+  if (autoCloseTimer) {
+    clearTimeout(autoCloseTimer)
+    autoCloseTimer = null
+  }
   url.value = ''
   error.value = ''
   success.value = false
   localVisible.value = false
 }
 
-function onClosed() {
+onBeforeUnmount(() => {
+  // P1-2：组件卸载时清理自动关闭 timer
+  if (autoCloseTimer) {
+    clearTimeout(autoCloseTimer)
+    autoCloseTimer = null
+  }
+})
+
+function onClosed(): void {
   emit('update:visible', false)
   emit('close')
 }
 
-async function importUrl() {
+async function importUrl(): Promise<void> {
   if (!url.value.trim() || loading.value) return
 
   loading.value = true
@@ -83,19 +104,22 @@ async function importUrl() {
   success.value = false
 
   try {
-    const response = await api.post('/documents/from-url', {
+    const response = await api.post<DocumentModel>('/documents/from-url', {
       url: url.value.trim()
     })
-    chunkCount.value = response.data.chunk_count || 0
+    chunkCount.value = (response.data as unknown as { chunk_count?: number }).chunk_count || 0
     success.value = true
     emit('imported', response.data)
 
-    // Auto-close after 2 seconds
-    setTimeout(() => {
+    // Auto-close after 2 seconds（P1-2：timer 存引用，卸载/关闭时清理）
+    if (autoCloseTimer) clearTimeout(autoCloseTimer)
+    autoCloseTimer = setTimeout(() => {
       close()
+      autoCloseTimer = null
     }, 2000)
   } catch (err) {
-    const detail = err.response?.data?.detail || ''
+    const axiosError = err as { response?: { data?: { detail?: string } } }
+    const detail = axiosError.response?.data?.detail || ''
     if (detail.includes('无法访问')) {
       error.value = '无法访问该 URL，请检查链接是否正确'
     } else if (detail.includes('无法从该 URL 中提取')) {

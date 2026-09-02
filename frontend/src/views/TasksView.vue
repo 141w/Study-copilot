@@ -6,7 +6,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import TaskPanel from '../components/TaskPanel.vue'
 import api from '../services/api'

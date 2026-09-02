@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
 import type { ChatSessionSummary } from '../../stores/chat'
+import { formatRelativeTime } from '../../composables/useFormat'
 
 /**
  * 对话历史侧边栏（含会话重命名、删除确认弹窗）。
@@ -27,19 +28,8 @@ const deleteModal = ref({
   title: '',
 })
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前'
-  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前'
-  if (diff < 604800000) return Math.floor(diff / 86400000) + '天前'
-
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-}
+// P2-1：formatDate 由 useFormat.formatRelativeTime 替换（原为平行实现之一）
+const formatDate = formatRelativeTime
 
 async function loadSession(sessionId: string) {
   await chatStore.fetchHistory(sessionId)
@@ -98,6 +88,7 @@ async function deleteSession() {
     <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
       <h2 class="font-medium text-[var(--text-primary)]">对话历史</h2>
       <button
+        aria-label="关闭历史记录"
         class="text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
         @click="emit('close')"
       >
@@ -140,9 +131,10 @@ async function deleteSession() {
                 <span class="text-sm text-[var(--text-secondary)] truncate block flex-1">
                   {{ session.title || '新对话' }}
                 </span>
-                <!-- Edit Button -->
+                <!-- Edit Button（P3-3：触屏/md 悬停双态可见） -->
                 <button
-                  class="text-[var(--text-muted)] hover:text-[var(--color-primary)] opacity-0 group-hover:opacity-100"
+                  aria-label="重命名对话"
+                  class="text-[var(--text-muted)] hover:text-[var(--color-primary)] opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
                   @click.stop="startEditTitle(session)"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,10 +149,11 @@ async function deleteSession() {
           </div>
         </div>
 
-        <!-- Delete Button (hover show) -->
+        <!-- Delete Button（P3-3：触屏常显） -->
         <div class="px-3 pb-2 flex justify-end">
           <button
-            class="text-xs text-[var(--color-error)] hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="删除对话"
+            class="text-xs text-[var(--color-error)] hover:opacity-80 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition-opacity"
             @click.stop="confirmDelete(session)"
           >
             删除
@@ -174,10 +167,14 @@ async function deleteSession() {
   <Teleport to="body">
     <div
       v-if="deleteModal.show"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="`确认删除对话: ${deleteModal.title}`"
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       @click.self="deleteModal.show = false"
+      @keydown.escape="deleteModal.show = false"
     >
-      <div class="bg-[var(--bg-secondary)] rounded-lg p-6 max-w-sm w-full mx-4" @click.stop>
+      <div class="bg-[var(--bg-secondary)] rounded-xl p-6 max-w-sm w-full mx-4" @click.stop>
         <h3 class="text-lg font-medium text-[var(--text-primary)] mb-4">确认删除</h3>
         <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除「{{ deleteModal.title }}」吗？此操作无法撤销。</p>
         <div class="flex gap-3 justify-end">
@@ -188,7 +185,7 @@ async function deleteSession() {
             取消
           </button>
           <button
-            class="px-4 py-2 bg-[var(--color-error)] text-white rounded-lg hover:opacity-90"
+            class="px-4 py-2 bg-[var(--color-error)] text-white rounded-xl hover:opacity-90"
             @click="deleteSession"
           >
             删除

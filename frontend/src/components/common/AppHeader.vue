@@ -1,9 +1,10 @@
 <template>
-  <header class="fixed top-0 left-0 right-0 h-16 bg-[var(--surface-card)] border-b border-[var(--border-default)] z-50 transition-colors duration-200">
+  <header class="fixed top-0 left-0 right-0 h-[var(--layout-header-height)] bg-[var(--surface-card)] border-b border-[var(--border-default)] z-50 transition-colors duration-200">
     <div class="flex items-center justify-between h-full px-4 md:px-6">
       <div class="flex items-center gap-3">
         <button
           v-if="showSidebar"
+          aria-label="打开菜单"
           class="md:hidden p-2 -ml-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
           @click="sidebarStore.toggle()"
         >
@@ -12,7 +13,7 @@
           </svg>
         </button>
         <router-link to="/" class="flex items-center gap-2">
-          <div class="w-8 h-8 bg-gradient-to-br from-[#ef2cc1] to-[#fc4c02] rounded-lg flex items-center justify-center">
+          <div class="w-8 h-8 bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] rounded-lg flex items-center justify-center">
             <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
@@ -25,6 +26,7 @@
         <el-button
           circle
           size="small"
+          aria-label="切换主题"
           @click="themeStore.toggleTheme()"
           :title="themeStore.isDark ? '切换到亮色模式' : '切换到暗色模式'"
         >
@@ -61,7 +63,7 @@
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useSidebarStore } from '../../stores/sidebar'
@@ -78,7 +80,7 @@ const showSidebar = computed(() => {
   return router.currentRoute.value.path !== '/login' && router.currentRoute.value.path !== '/register'
 })
 
-function handleCommand(command) {
+function handleCommand(command: string | number | object): void {
   if (command === 'logout') {
     authStore.logout()
     router.push('/login')

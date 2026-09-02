@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import api, { cancelAll } from '../services/api'
+import { refreshAccessToken } from '../services/authRefresh'
 import type { Source } from '../types/models'
 
 /** 反思/思考步骤（后端 thinking 事件负载） */
@@ -90,28 +91,28 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /**
+   * P3-1：LLM 配置的只读回显镜像。
+   *
+   * 历史包袱说明：早期前端请求会把 key/参数发给后端，config 从 localStorage
+   * 读取且 saveConfig 会写回。安全重构（2026-08-19）后，请求不再携带任何
+   * 凭证与配置（后端服务端自行解密使用），config.saveConfig 与
+   * llmApiKey/llmBaseUrl 等 localStorage 读写链已零消费——保留只会造成
+   * 「状态源分散」的假象（四处写同一批值）。
+   *
+   * 现在它只是 configStore 拉取的服务端配置的 UI 回显（由
+   * configStore.syncToChatStore / saveLLMConfig 单向写入），
+   * 不再从 localStorage 初始化，也不再提供写回方法。
+   */
   const config = reactive({
-    apiKey: localStorage.getItem('llmApiKey') || '',
-    baseUrl: localStorage.getItem('llmBaseUrl') || 'https://api.openai.com/v1',
-    provider: localStorage.getItem('llmProvider') || 'openrouter',
-    modelName: localStorage.getItem('llmModel') || 'gpt-4o-mini',
-    temperature: parseFloat(localStorage.getItem('llmTemperature') || '') || 0.7,
-    maxTokens: parseInt(localStorage.getItem('llmMaxTokens') || '', 10) || 2048,
-    adapter: localStorage.getItem('llmAdapter') || 'none'
+    apiKey: '',
+    baseUrl: '',
+    provider: 'openrouter',
+    modelName: 'gpt-4o-mini',
+    temperature: 0.7,
+    maxTokens: 2048,
+    adapter: 'none'
   })
-
-  function saveConfig(): void {
-    localStorage.setItem(
-      'llmConfig',
-      JSON.stringify({
-        provider: config.provider,
-        modelName: config.modelName,
-        temperature: config.temperature,
-        maxTokens: config.maxTokens,
-        adapter: config.adapter
-      })
-    )
-  }
 
   async function askQuestion(
     question: string,
@@ -178,7 +179,7 @@ export const useChatStore = defineStore('chat', () => {
     })
 
     // 创建临时AI消息占位
-    const tempMsgId = Date.now() + 1
+    const tempMsgId = crypto.randomUUID()
     messages.value.push({
       id: tempMsgId,
       role: 'assistant',
@@ -208,27 +209,16 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     try {
-      let token = localStorage.getItem('token')
+      const token = localStorage.getItem('token')
       let response = await doFetch(token)
 
       // Auto-refresh on 401: try refreshing the token once
+      // P1-3：复用共享 refreshAccessToken（原先此处手写了一份与 api.ts
+      // 拦截器平行的刷新逻辑，两份实现易漂移）
       if (response.status === 401) {
-        const refreshToken = localStorage.getItem('refreshToken')
-        if (refreshToken) {
-          try {
-            const refreshResp = await fetch('/api/auth/refresh', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${refreshToken}` }
-            })
-            if (refreshResp.ok) {
-              const data = await refreshResp.json()
-              localStorage.setItem('token', data.access_token)
-              localStorage.setItem('refreshToken', data.refresh_token)
-              response = await doFetch(data.access_token)
-            }
-          } catch (_) {
-            // refresh failed, fall through to original error
-          }
+        const outcome = await refreshAccessToken()
+        if (outcome.ok && outcome.accessToken) {
+          response = await doFetch(outcome.accessToken)
         }
       }
 
@@ -296,7 +286,7 @@ export const useChatStore = defineStore('chat', () => {
               // 答案反思后修正（替换已流式输出的内容）
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
-                messages.value[msgIdx].content = data.content || ''
+                messages.value[msgIdx].content = data.content || messages.value[msgIdx].content
               }
             } else if (data.type === 'done') {
               // 流式结束，更新最终状态
@@ -388,7 +378,6 @@ export const useChatStore = defineStore('chat', () => {
     currentSessionTitle,
     loading,
     config,
-    saveConfig,
     lastFetched,
     fetchSessions,
     fetchHistory,
