@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
+// Element Plus 组件由 unplugin-vue-components 按需自动导入（见 vite.config.js）；
+// 指令式 API（ElMessage）在使用处显式 import。不再全量注册，避免 926KB vendor chunk。
 import './styles/element-plus-theme.css'
 import App from './App.vue'
 import router from './router'
@@ -12,5 +12,4 @@ const pinia = createPinia()
 
 app.use(pinia)
 app.use(router)
-app.use(ElementPlus)
 app.mount('#app')

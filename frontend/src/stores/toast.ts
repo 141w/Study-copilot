@@ -1,4 +1,6 @@
-import { ElMessage } from 'element-plus'
+// 子路径导入：避免 'element-plus' 根入口 re-export 全量组件（曾致 vendor chunk 945KB）
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import 'element-plus/es/components/message/style/css'
 import { defineStore } from 'pinia'
 
 type ToastType = 'info' | 'success' | 'warning' | 'error'
