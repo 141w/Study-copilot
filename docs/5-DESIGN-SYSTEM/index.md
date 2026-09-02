@@ -24,43 +24,43 @@ Study Copilot 前端的唯一设计规范参考。所有前端开发者必须遵
 |------|------|--------|--------|
 | 主色 | `--color-primary` | `#3b82f6` | `#60a5fa` |
 | 主色悬停 | `--color-primary-hover` | `#2563eb` | `#3b82f6` |
-| 主色浅底 | `--color-primary-light` | `#eff6ff` | `rgba(96,165,250,0.1)` |
+| 主色浅底 | `--color-primary-light` | `#eff6ff` | `rgba(96,165,250,0.12)` |
 | 强调色 | `--color-accent` | `#8b5cf6` | `#a78bfa` |
-| 强调色浅底 | `--color-accent-light` | *(未定义，降级 `#f3f0ff`)* | — |
+| 强调色浅底 | `--color-accent-light` | `#f3f0ff` | `rgba(167,139,250,0.12)` |
 | 次要色 | `--color-secondary` | `#6b7280` | `#9ca3af` |
 | 成功 | `--color-success` | `#10b981` | `#34d399` |
-| 成功浅底 | `--color-success-light` | `#ecfdf5` | `rgba(52,211,153,0.1)` |
+| 成功浅底 | `--color-success-light` | `#ecfdf5` | `rgba(52,211,153,0.12)` |
 | 警告 | `--color-warning` | `#f59e0b` | `#fbbf24` |
-| 警告浅底 | `--color-warning-light` | `#fffbeb` | `rgba(251,191,36,0.1)` |
+| 警告浅底 | `--color-warning-light` | `#fffbeb` | `rgba(251,191,36,0.12)` |
 | 错误 | `--color-error` | `#ef4444` | `#f87171` |
-| 错误浅底 | `--color-error-light` | `#fef2f2` | `rgba(248,113,113,0.1)` |
+| 错误浅底 | `--color-error-light` | `#fef2f2` | `rgba(248,113,113,0.12)` |
 | 信息 | `--color-info` | `#3b82f6` | `#60a5fa` |
-| 信息浅底 | `--color-info-light` | `#eff6ff` | `rgba(96,165,250,0.1)` |
+| 信息浅底 | `--color-info-light` | `#eff6ff` | `rgba(96,165,250,0.12)` |
 
 ### 背景 & 表面
 
 | 语义 | 变量 | 亮色 | 暗色 |
 |------|------|------|------|
-| 主背景 | `--bg-primary` | `#ffffff` | `#111827` |
-| 次背景 | `--bg-secondary` | `#f9fafb` | `#1f2937` |
-| 三级背景 | `--bg-tertiary` | `#f3f4f6` | `#374151` |
-| 悬停 | `--bg-hover` | `#f3f4f6` | `#374151` |
-| 激活 | `--bg-active` | `#e5e7eb` | `#4b5563` |
-| 卡片表面 | `--surface-card` | `#ffffff` | `#1f2937` |
-| 遮罩层 | `--surface-overlay` | `rgba(0,0,0,0.5)` | `rgba(0,0,0,0.7)` |
-| 玻璃效果 | `--surface-glass` | `rgba(255,255,255,0.8)` | `rgba(17,24,39,0.8)` |
+| 主背景 | `--bg-primary` | `#fafaf9` | `#161618` |
+| 次背景 | `--bg-secondary` | `#f5f5f4` | `#1c1c1e` |
+| 三级背景 | `--bg-tertiary` | `#f0f0ef` | `#242426` |
+| 悬停 | `--bg-hover` | `#ececeb` | `#2a2a2d` |
+| 激活 | `--bg-active` | `#e4e4e3` | `#323235` |
+| 卡片表面 | `--surface-card` | `#ffffff` | `#1c1c1e` |
+| 遮罩层 | `--surface-overlay` | `rgba(0,0,0,0.4)` | `rgba(0,0,0,0.6)` |
+| 玻璃效果 | `--surface-glass` | `rgba(255,255,255,0.75)` | `rgba(22,22,24,0.8)` |
 
 ### 文字 & 边框
 
 | 语义 | 变量 | 亮色 | 暗色 |
 |------|------|------|------|
-| 主文字 | `--text-primary` | `#111827` | `#f9fafb` |
-| 次要文字 | `--text-secondary` | `#6b7280` | `#d1d5db` |
-| 弱化文字 | `--text-muted` | `#9ca3af` | `#9ca3af` |
-| 反色文字 | `--text-inverse` | `#ffffff` | `#111827` |
+| 主文字 | `--text-primary` | `#1d1d1f` | `#f5f5f7` |
+| 次要文字 | `--text-secondary` | `#6e6e73` | `#a1a1a6` |
+| 弱化文字 | `--text-muted` | `#9e9ea4` | `#7a7a80` |
+| 反色文字 | `--text-inverse` | `#ffffff` | `#1d1d1f` |
 | 链接色 | `--text-link` | `#3b82f6` | `#60a5fa` |
-| 默认边框 | `--border-default` | `#e5e7eb` | `#374151` |
-| 悬停边框 | `--border-hover` | `#d1d5db` | `#4b5563` |
+| 默认边框 | `--border-default` | `#eceef1` | `#2c2c2e` |
+| 悬停边框 | `--border-hover` | `#d4d7dc` | `#3a3a3d` |
 | 聚焦边框 | `--border-focus` | `#3b82f6` | `#60a5fa` |
 
 > **禁止**在组件模板中直接使用 `text-red-500`、`bg-green-50`、`#010120` 等硬编码颜色。
@@ -110,24 +110,28 @@ Toast 使用 border-left 色带方案：背景使用 `var(--surface-card)`，类
 
 ### 圆角
 
-| 变量 | 值 | Tailwind 映射 |
-|------|-----|---------------|
-| `--radius-sm` | 4px | `rounded-sm` |
-| `--radius-md` | 8px | `rounded-md` |
-| `--radius-lg` | 12px | `rounded-lg` |
-| `--radius-xl` | 16px | `rounded-xl` |
-| `--radius-full` | 9999px | `rounded-full` |
+| 变量 | 值 | Tailwind 映射 | 用途 |
+|------|-----|---------------|------|
+| `--radius-xs` | 6px | `rounded-xs` | 极小徽章 |
+| `--radius-sm` | 10px | `rounded-sm` | 小标签 |
+| `--radius-md` | 14px | `rounded-md` | el-input / 按钮 (Element Plus) |
+| `--radius-lg` | 18px | `rounded-lg` | 卡片、面板、列表项 |
+| `--radius-xl` | 24px | `rounded-xl` | 大容器、对话框 |
+| `--radius-2xl` | 32px | `rounded-2xl` | 特殊场景 |
+| `--radius-full` | 9999px | `rounded-full` | 圆形头像/按钮 |
 
-> Tailwind `borderRadius` 已全部映射到 CSS 变量，使用 `rounded-lg` 即等于 `12px`。
+> Tailwind `borderRadius` 已在 `tailwind.config.js` 中扩展，`rounded-lg` = 18px，`rounded-xl` = 24px。
 
 ### 阴影
 
 | 变量 | 值 |
 |------|-----|
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` |
-| `--shadow-md` | `0 4px 6px -1px rgba(0,0,0,0.1)` |
-| `--shadow-lg` | `0 10px 15px -3px rgba(0,0,0,0.1)` |
-| `--shadow-card` | `0 4px 10px rgba(1,1,32,0.08)` |
+| `--shadow-sm` | `0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)` |
+| `--shadow-md` | `0 4px 12px rgba(0,0,0,0.06)` |
+| `--shadow-lg` | `0 12px 28px rgba(0,0,0,0.08)` |
+| `--shadow-card` | `0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)` |
+
+> 所有阴影均为弥散型（无锐利投射），降低视觉割裂感。
 
 ---
 
@@ -145,47 +149,32 @@ Toast 使用 border-left 色带方案：背景使用 `var(--surface-card)`，类
 
 ### 图标库
 
-所有图标位于 `frontend/src/components/common/icons/`，统一格式：
-- `fill="none" stroke="currentColor"` — 颜色由 CSS `color` 属性控制
-- `stroke-width="2" stroke-linecap="round" stroke-linejoin="round"` — 一致的笔画
+使用 [Element Plus Icons](https://element-plus.org/zh-CN/component/icon.html)（`@element-plus/icons-vue`），通过 `unplugin-vue-components` 自动导入。
 
-### 尺寸约束
+```vue
+<!-- 直接在模板中使用，无需手动 import -->
+<el-icon class="w-5 h-5"><Edit /></el-icon>
+
+<!-- 或在 script 中 import 后使用 -->
+<script setup>
+import { Edit, Delete } from '@element-plus/icons-vue'
+</script>
+```
+
+### 尺寸规范
 
 | 尺寸 | CSS 类 | 像素 | 适用场景 |
 |------|--------|------|----------|
-| 微型 | `w-3 h-3` | 12px | 标签内嵌删除按钮 (Tag close) |
-| 小 | `w-4 h-4` | 16px | 列表项、按钮内嵌图标、工具栏按钮 |
-| 标准 | `w-5 h-5` | 20px | 导航栏、卡片操作按钮、弹窗关闭按钮 |
-| 中 | `w-6 h-6` | 24px | Header 区域、区块标题图标 |
-| 大 | `w-8 h-8` | 32px | Hero 区域、空状态图标 |
-| 超大 | `w-12 h-12` | 48px | 空状态大图标、品牌 Logo 容器 |
+| 微型 | `w-3 h-3` | 12px | 标签内嵌图标 |
+| 小 | `w-4 h-4` | 16px | 列表项、工具栏按钮 |
+| 标准 | `w-5 h-5` | 20px | 导航栏、卡片操作 |
+| 中 | `w-6 h-6` | 24px | 区块标题图标 |
+| 大 | `w-8 h-8` | 32px | Hero 区域、空状态 |
+| 超大 | `w-12 h-12` | 48px | 品牌 Logo |
 
-> 使用 `<IconXxx class="w-5 h-5" />` 传递尺寸。图标组件本身不设置固定宽高。
+### 容器圆角
 
-### 图标索引
-
-| 文件名 | 语义 | 用途 |
-|--------|------|------|
-| `IconAnalysis.vue` | 分析图表 | 分析页面 |
-| `IconChat.vue` | 对话气泡 | AI问答 |
-| `IconClock.vue` | 时钟 | 最近对话时间 |
-| `IconCopy.vue` | 复制 | 复制文本 |
-| `IconCourse.vue` | 课程书本 | 课程卡片 |
-| `IconDocument.vue` | 文档轮廓 | 侧边栏文档项 |
-| `IconDownload.vue` | 下载 | 导出 |
-| `IconEdit.vue` | 铅笔编辑 | 编辑操作（同时作为 IconNotes 别名） |
-| `IconFileText.vue` | 文件带文字行 | 文档相关计数 |
-| `IconHome.vue` | 首页 | 侧边栏首页 |
-| `IconPlus.vue` | 加号 | 新建操作 |
-| `IconQuiz.vue` | 答题卡 | 做题练习 |
-| `IconRedo.vue` | 重做 | 重做题目 |
-| `IconRobot.vue` | AI 机器人 | AI 相关功能 |
-| `IconSend.vue` | 发送 | 发送消息 |
-| `IconSettings.vue` | 齿轮 | 设置 |
-| `IconSpinner.vue` | 加载旋转 | 加载状态 |
-| `IconTrash.vue` | 垃圾桶 | 删除操作 |
-| `IconUpload.vue` | 上传 | 上传文档 |
-| `IconUser.vue` | 用户 | 用户相关 |
+图标背景容器（`w-8`~`w-14` 的方块）使用 `rounded-lg`（18px），大容器使用 `rounded-xl`（24px）。
 
 ---
 
@@ -195,32 +184,68 @@ Toast 使用 border-left 色带方案：背景使用 `var(--surface-card)`，类
 
 | 类名 | 说明 | 定义位置 |
 |------|------|----------|
-| `.card` | 通用卡片容器（16px 圆角 + shadow-card + 1px border + 24px padding） | `variables.css` |
-| `.card-sm` | 紧凑卡片（12px 圆角 + 16px padding） | `variables.css` |
-| `.btn-primary` | 主按钮（var(--color-primary) 背景） | `variables.css` + `global.css @layer` |
-| `.btn-secondary` | 次按钮（透明底 + 边框） | `variables.css` |
-| `.btn-ghost` | 幽灵按钮 | `variables.css` |
-| `.btn-danger` | 危险按钮（var(--color-error) 背景） | `variables.css` |
-| `.input` | 通用输入框 | `variables.css` |
-| `.badge` | 徽章 | `variables.css` |
-| `.badge-success` / `.badge-warning` / `.badge-error` / `.badge-info` | 状态徽章 | `variables.css` |
+| `.el-card` | 卡片容器别名（同 `.card`） | `global.css` |
 | `.gradient-text` | 渐变文字（品牌色） | `variables.css` |
 | `.pastel-gradient` | 柔和渐变背景 | `variables.css` |
 
-### 通用组件
+> `--button-primary` / `.card` / `.card-sm` / `.btn-*` / `.input` / `.badge-*` 等旧类已删除，使用 Element Plus 组件替代。
+
+### Element Plus 组件映射
+
+| 场景 | 使用组件 | 关键属性 |
+|------|----------|----------|
+| 按钮 | `el-button` | `type="primary\|default\|danger"`, `size`, `:loading` |
+| 卡片 | `el-card` | 默认样式，通过 CSS 变量主题化 |
+| 输入框 | `el-input` | `label`, `placeholder`, `v-model` |
+| 文本域 | `el-input type="textarea"` | `:autosize`, `v-model` |
+| 下拉选择 | `el-select` + `el-option` | `v-model`, `placeholder` |
+| 对话框 | `el-dialog` | `v-model`, `title`, `width` |
+| 进度条 | `el-progress` | `:percentage`, `:status` |
+| 标签 | `el-tag` | `type`, `size`, `effect` |
+| 菜单 | `el-menu` | `:default-active`, `:router`, `@select` |
+| 下拉菜单 | `el-dropdown` | `trigger="click"`, `@command` |
+| 通知 | `ElMessage` | `ElMessage.success/warning/error/info` |
+| 加载 | `v-loading` 指令 | 绑定到容器元素 |
+
+### 表单优化
+
+| 维度 | 默认值 | 自定义覆盖 |
+|------|--------|------------|
+| 输入框圆角 | 8px | `14px` (`--el-border-radius-base`) |
+| 输入框聚焦阴影 | `box-shadow: 0 0 0 4px light-9` | `inset 0 0 0 1px var(--el-color-primary)` |
+| 文本域阴影 | 同输入框 | `inset 0 0 0 1px` |
+
+### 通用组件（保留）
 
 | 组件 | 路径 | 用途 |
 |------|------|------|
-| `BaseButton` | `components/common/BaseButton.vue` | 所有按钮交互（primary/secondary/ghost/danger + sm/md/lg） |
-| `BaseDialog` | `components/common/BaseDialog.vue` | 所有弹窗/确认框（支持 sm/md/lg/xl 尺寸） |
-| `BaseInput` | `components/common/BaseInput.vue` | 表单输入（支持 label/error/hint） |
-| `BaseSelect` | `components/common/BaseSelect.vue` | 下拉选择 |
-| `BaseTextarea` | `components/common/BaseTextarea.vue` | 多行文本输入 |
-| `BaseTable` | `components/common/BaseTable.vue` | 数据表格（排序/分页） |
-| `BaseList` | `components/common/BaseList.vue` | 列表容器（加载/空状态） |
-| `LoadingSpinner` | `components/common/LoadingSpinner.vue` | 加载动画 |
-| `IconButton` | `components/common/IconButton.vue` | 图标按钮（ghost/primary/danger + xs/sm/md/lg） |
-| `Toast` | `components/common/Toast.vue` | 通知提示（全局使用） |
+| `AppHeader` | `components/common/AppHeader.vue` | 顶部导航栏（品牌 + 主题切换 + 用户菜单） |
+| `AppSidebar` | `components/common/AppSidebar.vue` | 侧边导航（`el-menu` + 路由联动） |
+| `NoteEditor` | `components/NoteEditor.vue` | Markdown 编辑器（`el-input` textarea + 工具栏） |
+| `TaskPanel` | `components/TaskPanel.vue` | 后台任务面板（`el-progress` + `el-tag`） |
+| `TransformDialog` | `components/TransformDialog.vue` | 内容转换弹窗 |
+| `TTSPlayer` | `components/TTSPlayer.vue` | 语音播放控制 |
+| `UrlImportDialog` | `components/UrlImportDialog.vue` | URL 导入弹窗 |
+| `ChatInput` | `components/chat/ChatInput.vue` | 聊天输入区 |
+| `ChatHistoryPanel` | `components/chat/ChatHistoryPanel.vue` | 对话历史面板 |
+| `CourseCard` | `components/CourseCard.vue` | 课程卡片 |
+| `NoteCard` | `components/NoteCard.vue` | 笔记卡片 |
+
+### 已删除的通用组件
+
+| 组件 | 替代方案 |
+|------|----------|
+| `BaseButton` | `el-button` |
+| `BaseDialog` | `el-dialog` |
+| `BaseInput` | `el-input` |
+| `BaseSelect` | `el-select` + `el-option` |
+| `BaseTextarea` | `el-input type="textarea"` |
+| `BaseTable` | `el-table` + `el-table-column` |
+| `BaseList` | 自定义容器 + `el-scrollbar` |
+| `LoadingSpinner` | `v-loading` 指令 |
+| `IconButton` | `el-button circle` |
+| `Toast` | `ElMessage` / `ElNotification` |
+| 自研 Icon*.vue (已全部删除，从未大规模存在) | `@element-plus/icons-vue` |
 
 ---
 
@@ -247,24 +272,44 @@ Toast 使用 border-left 色带方案：背景使用 `var(--surface-card)`，类
 
 | 旧写法 | 新写法 |
 |--------|--------|
-| `<a class="btn-primary">` | `<a class="btn-primary">`（保持 CSS 类即可） |
-| `<button class="bg-[#010120] ...">` | `<BaseButton variant="primary">` |
-| `<button class="bg-red-600 ...">` | `<BaseButton variant="danger">` |
-| `<button class="px-4 py-2 bg-red-600 ...">`（内联弹窗中） | `<BaseButton variant="danger">` |
+| `<a class="btn-primary">` | `<el-button type="primary">` |
+| `<button class="bg-[#010120] ...">` | `<el-button type="primary">` |
+| `<button class="bg-red-600 ...">` | `<el-button type="danger">` |
+| `<button class="px-4 py-2 bg-red-600 ...">`（内联弹窗中） | `<el-button type="danger">` |
 
 ### 弹窗迁移
 
 | 旧写法 | 新写法 |
 |--------|--------|
-| `<Teleport><div v-if="show">...手动实现...</div></Teleport>` | `<BaseDialog :visible="show" @update:visible="...">` |
+| `<Teleport><div v-if="show">...手动实现...</div></Teleport>` | `<el-dialog v-model="show">` |
 
-BaseDialog 提供：Esc 关闭、backdrop 点击、进入/退出过渡动画。详见 [BaseDialog.vue](..\components\common\BaseDialog.vue)。
+el-dialog 提供：Esc 关闭、backdrop 点击、进入/退出过渡动画。
 
 ### 卡片迁移
 
 | 旧写法 | 新写法 |
 |--------|--------|
-| `class="bg-white rounded-lg shadow-sm border ..."` | `class="card"` |
-| `class="card" style="padding: 16px"` | `class="card card-sm"` |
-| scoped `.card { @apply ... }` | **删除**，统一使用全局 `.card` |
-| `:deep(.card) { ... }` | **删除** |
+| `class="bg-white rounded-lg shadow-sm border ..."` | `<el-card>` |
+| `class="el-card"`（CSS 类别名） | `<el-card>` 组件（推荐）或保持 `class="el-card"`（兼容） |
+
+### 图标迁移
+
+| 旧写法 | 新写法 |
+|--------|--------|
+| `<IconUpload class="w-5 h-5" />` | `<el-icon class="w-5 h-5"><Upload /></el-icon>` |
+
+> 所有 20 个自研 Icon*.vue 组件已删除，统一使用 Element Plus 图标。
+> 图标必须在 `<script setup>` 中 import 或在模板中使用 `<component :is="..." />`，否则 Vue 无法 resolve。
+
+---
+
+## 当前技术栈状态
+
+| 维度 | 方案 |
+|------|------|
+| UI 框架 | Element Plus 2.x |
+| 图标 | `@element-plus/icons-vue` |
+| 样式 | TailwindCSS utilities（仅布局/间距） + CSS 变量主题 |
+| 动画 | GSAP（保留，与 Element Plus 无冲突） |
+| 状态管理 | Pinia + TypeScript |
+| 构建 | Vite + unplugin-vue-components（auto-import） |

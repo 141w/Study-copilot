@@ -8,8 +8,8 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ### v3 Features (Current)
 - **TypeScript**: 渐进式 TypeScript 迁移，stores 全面 TS，views/composables 渐进覆盖
-- **组件复用**: BaseDialog、BaseButton、LoadingSpinner 等通用组件
-- **Prompt 模板化**: Jinja2 模板管理 30+ 个 LLM prompt
+- **组件复用**: Element Plus (el-button, el-card, el-input 等通用组件); Base 通用组件待实现
+- **Prompt 模板化**: Jinja2 模板管理 27 个 LLM prompt (7 个子目录)
 - **设计系统**: 完整的 CSS 变量系统（间距、字体、颜色、组件样式）
 - **Composables**: useApi、useMarkdown 等可复用逻辑
 - **主题系统**: Light/Dark 主题切换，CSS 变量驱动
@@ -41,7 +41,7 @@ This file provides architectural guidance for contributors working on Study Copi
 │          Frontend (Vue3 + Vite)              │
 │          frontend/ @ port 3000               │
 ├──────────────────────────────────────────────┤
-│ - 13 views (Home, Login, Upload, Document, Chat, Quiz, Analysis, ModelConfig, CourseList, CourseDetail, Notes, Tasks, Register) │
+│ - 13 views (Home, Login, Register, Upload, Document, Chat, Quiz, Analysis, ModelConfig, CourseList, CourseDetail, Notes, Tasks) │
 │ - 10 Pinia stores                             │
 │ - 12 common components + 9 feature components │
 │ - TailwindCSS + GSAP styling                  │
@@ -52,20 +52,19 @@ This file provides architectural guidance for contributors working on Study Copi
 │          Backend (FastAPI)                   │
 │          backend/ @ port 8000                │
 ├──────────────────────────────────────────────┤
-│ - 12 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis)
+│ - 13 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis)
 │ - Agentic RAG (Router + Adaptive + Corrective + Reflection) │
-│ - Hybrid vector search (FAISS + BM25 + RRF)  │
+│ - Vector search via PostgreSQL+pgvector (production)  │
 │ - Multi-provider LLM abstraction (OpenAI SDK)│
 │ - JWT authentication (access + refresh)      │
-│ - Services orchestration layer               │
+│ - 10 service orchestration modules (analysis, auth, chat, config, course, document, note, quiz, task, transform)               │
 └──────────────────┬───────────────────────────┘
                    │
 ┌──────────────────▼───────────────────────────┐
 │          Data Layer                          │
 ├──────────────────────────────────────────────┤
-│ - PostgreSQL 16+ (async via asyncpg + SQLAlchemy) │
-│ - FAISS vector indices (per-document files)  │
-│ - BM25 indices (per-document)                │
+│ - PostgreSQL 16+ + pgvector extension (production vector search) │
+│ - Legacy: FAISS + BM25 + RRF file-based (backward compat) │
 │ - File storage (uploads/)                    │
 │ - Alembic migrations                         │
 └──────────────────────────────────────────────┘
@@ -102,34 +101,75 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Rendering**: markdown-it 14.1 + highlight.js 11.9
 - **Animations**: GSAP 3.15
 - **Testing**: Vitest 4.1 + Vue Test Utils 2.4 + Testing Library
+- **UI Library**: Element Plus 2.14 (auto-imported via unplugin-vue-components)
 
 ### 通用组件 (`frontend/src/components/common/`)
-- `BaseDialog.vue` — 通用对话框（支持尺寸、标题、插槽）
-- `BaseButton.vue` — 通用按钮（支持 variant、size、loading 状态）
-- `BaseInput.vue` — 输入框（支持 label、error、hint）
-- `BaseSelect.vue` — 下拉选择（支持 options、placeholder）
-- `BaseTextarea.vue` — 文本域（支持 maxlength、rows）
-- `BaseTable.vue` — 表格（支持排序、分页、自定义列）
-- `BaseList.vue` — 列表（支持加载、空状态、加载更多）
-- `LoadingSpinner.vue` — 加载动画（支持多尺寸）
-- `IconButton.vue` — 图标按钮（支持 ghost/primary/danger 变体）
-- `AppHeader.vue` — 全局头部导航（支持主题切换、移动端菜单）
-- `AppSidebar.vue` — 侧边栏导航（响应式，移动端遮罩）
-- `Toast.vue` — 通知提示
+- `AppHeader.vue` — 全局头部导航（支持主题切换、移动端菜单、用户下拉）
+- `AppSidebar.vue` — 侧边栏导航（响应式，移动端遮罩，文档列表）
+
+> **Note**: Base 通用组件（BaseDialog、BaseButton、BaseInput、BaseSelect、BaseTable 等）在当前架构中改为使用 Element Plus 组件直接实现，无需重新实现。（v3 Feature 组件复用已迁移至 Element Plus。）
 
 ### Composables (`frontend/src/composables/`)
 - `useApi.ts` — 统一 API 请求处理（错误处理、toast 通知）
 - `useMarkdown.ts` — Markdown 渲染（markdown-it 封装）
+- `useChatExport.ts` — 聊天导出 Markdown 构建（buildChatMarkdown, formatDate）
+
+### Backend Internal Modules (`backend/app/`)
+
+#### Core (`app/core/` — 23 modules)
+| Module | Responsibility |
+|--------|---------------|
+| `llm.py` | OpenAI SDK wrapper with retry/backoff |
+| `embedder.py` | sentence-transformers wrapper (async + caching) |
+| `rag_engine.py` | Agentic RAG orchestrator (5-step pipeline) |
+| `query_router.py` | Intent classification + context rewrite |
+| `adaptive_retriever.py` | Adaptive retrieval strategy selection (4 strategies) |
+| `retrieval_grader.py` | Two-level retrieval quality assessment |
+| `query_decomposer.py` | Query decomposition + entity extraction |
+| `answer_reflector.py` | Answer quality self-reflection |
+| `document_parser.py` | Factory: Docling / PyMuPDF / python-docx / python-pptx |
+| `chunker.py` | Fixed / Semantic / Hierarchical chunking |
+| `quiz_generator.py` | LLM-based question generation |
+| `transformations.py` | 8 transformation types (summary/keypoints/outline/flashcards/mindmap/qa/translate/explain) |
+| `encryption.py` | Fernet credential encryption |
+| `tts.py` | Edge TTS wrapper |
+| `url_extractor.py` | Web content extraction |
+| `rate_limit.py` | Sliding-window IPRateLimiter |
+| `logger.py` | Structured logging with trace-id ContextVar |
+| `template_manager.py` | Jinja2 template renderer for LLM prompts |
+| `task_worker.py` | Background task enqueue/dequeue/process |
+| `pgvector_store.py` | **Production** vector search via PostgreSQL+pgvector |
+| `vector_store.py` | Legacy FAISS/BM25/Hybrid file-based (backward compat) |
+
+#### Services (`app/services/` — 10 modules)
+| Module | Responsibility |
+|--------|---------------|
+| `analysis_service.py` | Wrong answer analysis, knowledge stats, progress |
+| `auth_service.py` | Register, login, refresh_token |
+| `chat_service.py` | Ask question, stream answer, history management |
+| `config_service.py` | Get/create/update LLM config |
+| `course_service.py` | Course CRUD, document associations |
+| `document_service.py` | Upload, delete, list, get documents |
+| `note_service.py` | Notes CRUD, tagging, semantic search |
+| `quiz_service.py` | Quiz generation, submission, history |
+| `task_service.py` | Async task CRUD, cancel, recover interrupted |
+| `transform_service.py` | Content transformation orchestration |
+
+#### Other
+- **Middleware**: `trace.py` — TraceIdMiddleware (X-Trace-ID propagation, structured logs via ContextVar)
+- **Utils**: `auth.py` — Password hashing (bcrypt), JWT create/decode, get_current_user
+- **Templates**: 27 .jinja2 prompt files across 7 directories (rag/, quiz/, reflector/, retriever/, router/, decomposer/, transformations/)
+- **No `schemas/` directory**: Pydantic schemas defined inline in each router
+- **No `models/` directory**: ORM models defined in `app/db/database.py`
 
 ---
-
 ## Key Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Vector DB | FAISS (file-based) | No extra service; simple deployment |
+| Vector DB | PostgreSQL+pgvector (production); FAISS+BM25+RRF (legacy, backward compat) | pgvector: no extra service, SQL-native; legacy kept for migration path |
 | Keyword Search | BM25 (rank-bm25) | Complements semantic search with exact matching |
-| Hybrid Retrieval | RRF fusion | Best of both worlds; no reranking needed for fusion |
+| Hybrid Retrieval | RRF fusion (legacy file-based); pgvector IVFFlat (production) | Best of both worlds; no reranking needed for fusion |
 | Embedding | Local SBERT models | Privacy, no API cost, Chinese support |
 | Streaming | SSE (fetch + ReadableStream) | Standard HTTP, no WebSocket complexity |
 | LLM abstraction | OpenAI-compatible API | Swap providers without code changes |
@@ -138,10 +178,10 @@ This file provides architectural guidance for contributors working on Study Copi
 | Chunking | Markdown-aware + semantic + hierarchical | Preserves document structure, supports all use cases |
 | Prompt Management | Jinja2 templates | 易于维护、版本控制、A/B 测试 |
 | Frontend Types | TypeScript (渐进式) | 类型安全、IDE 提示、减少运行时错误 |
-| Component Design | Base* 通用组件 | 代码复用、样式一致、维护成本低 |
+| Component Design | Element Plus 通用组件 | UI 一致、维护成本低、无需自建基础组件 |
 | Theme System | CSS Variables + Dark mode | 用户体验、系统级适配、易于扩展 |
 | Responsive | Mobile-first + 断点适配 | 移动端体验、自适应布局 |
-| Form Components | BaseInput/Select/Textarea | 统一交互、验证、可访问性 |
+| Form Components | Element Plus Input/Select/InputNumber | 统一交互、表单验证、可访问性 |
 
 ---
 
@@ -190,7 +230,7 @@ This file provides architectural guidance for contributors working on Study Copi
 1. Create component in `frontend/src/components/`
 2. Use `<script setup lang="ts">` syntax
 3. Define props with `defineProps<{ ... }>()`
-4. Use existing Base* components when possible (BaseDialog, BaseButton, etc.)
+4. Use existing Element Plus components when possible (`<el-button>`, `<el-dialog>`, etc.) — auto-imported, no manual import needed
 5. Import types from `frontend/src/types/models.ts`
 
 ### Run Tests

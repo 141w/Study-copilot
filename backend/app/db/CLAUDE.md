@@ -16,19 +16,19 @@ The database layer manages **PostgreSQL connections, ORM models, and migrations*
 
 | Model | Table | Key Fields |
 |-------|-------|------------|
-| `User` | `users` | id, username, email, hashed_password, created_at |
-| `Document` | `documents` | id, user_id (FK), filename, file_path, file_type, chunk_count, created_at |
-| `ChatSession` | `chat_sessions` | id, user_id (FK), document_id (FK), title, created_at |
-| `Message` | `messages` | id, session_id (FK), role, content, citations (JSON), created_at |
-| `Quiz` | `quizzes` | id, user_id (FK), document_id (FK), questions (JSON), created_at |
-| `QuizResult` | `quiz_results` | id, quiz_id (FK), user_id (FK), answers (JSON), score, created_at |
-| `WrongQuestion` | `wrong_questions` | id, user_id (FK), question, correct_answer, user_answer, review_count, created_at |
-| `UserLLMConfig` | `user_llm_configs` | id, user_id (FK), provider, model, base_url, api_key (encrypted), created_at |
-| `CourseSpace` | `course_spaces` | id, user_id (FK), name, description, created_at |
-| `Note` | `notes` | id, user_id (FK), course_id (FK nullable), title, content, note_type, embedding_id, created_at, updated_at |
-| `Tag` | `tags` | id, name, user_id (FK) |
-| `AsyncTask` | `async_tasks` | id, user_id (FK), task_type, status, result (JSON), error, created_at, completed_at |
-| `note_tags` | `note_tags` | note_id (FK), tag_id (FK) — association table |
+| `User` | `users` | id, username, email, password_hash, is_active, created_at |
+| `Document` | `documents` | id, user_id, course_space_id, filename, file_path, status, chunk_count, file_size, deleted_at (soft delete) |
+| `ChatSession` | `chat_sessions` | id, user_id, title, created_at |
+| `Message` | `messages` | id, session_id, role, content, sources, created_at |
+| `Quiz` | `quizzes` | id, document_id, question_type, question, options, answer, explanation, created_at |
+| `QuizResult` | `quiz_results` | id, quiz_id, user_id, user_answer, is_correct, submitted_at |
+| `UserLLMConfig` | `user_llm_configs` | id, user_id, provider, api_key, base_url, model_name, temperature, max_tokens, embedding_model, embedding_dimension, created_at, updated_at |
+| `CourseSpace` | `course_spaces` | id, user_id, name, description, color, created_at, updated_at |
+| `Tag` | `tags` | id, user_id, name, created_at |
+| `Note` | `notes` | id, user_id, course_space_id, title, content, note_type, is_pinned, deleted_at (soft delete), created_at, updated_at |
+| `DocumentChunk` | `document_chunks` | id, document_id, content, **embedding (vector)**, chunk_metadata (JSON), chunk_index, created_at |
+| `AsyncTask` | `async_tasks` | id, user_id, task_type, status, progress, result, error, created_at, completed_at |
+| `note_tags` | `note_tags` | note_id, tag_id — association table |
 
 ## Session Management
 

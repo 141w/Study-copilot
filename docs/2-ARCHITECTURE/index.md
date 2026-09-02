@@ -65,7 +65,7 @@
 │  └────────────────────────────────────────────────────────────┘  │
 │                            │                                      │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
-│  │  PostgreSQL  │ │ File Storage │ │ Vector Index │             │
+│  │  PostgreSQL  │ │ File Storage │ │ AsyncTasks   │             │
 │  └──────────────┘ └──────────────┘ └──────────────┘             │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -81,9 +81,8 @@ User uploads PDF/DOCX/PPTX
     → URL Import (trafilatura) for web content
     → Chunker (Fixed 512-token or Semantic chunks)
     → Embedder (sentence-transformers → vector)
-    → FAISS Vector Store (per-user index)
-    → BM25VectorStore (jieba tokenizer, per-user index)
-    → Hybrid Fusion (RRF) when querying
+    → DocumentChunk via pgvector (production)
+    → Legacy: BM25VectorStore for backward compat
     → PostgreSQL metadata saved
     → Async Task Queue (background processing, status tracking)
 ```
@@ -96,7 +95,7 @@ User asks question
     → If RAG:
         → Query Rewriter (resolves pronouns/context from chat history)
         → Embedder (query → vector)
-        → Hybrid Search: FAISS + BM25 + RRF fusion
+        → pgvector Search (IVFFlat / HNSW cosine similarity)
         → Adaptive Retriever (iterative refinement)
         → Retrieval Grader (quality check)
         → If not quality:
@@ -124,7 +123,7 @@ User requests quiz for document
 ```
 User searches notes
     → Embed query (SBERT)
-    → FAISS search on notes_{user.id} vector store
+    → pgvector search on document_chunks table
     → Retrieve note_ids + scores
     → PostgreSQL query by note_ids
     → Return NoteBrief with relevance scores
@@ -159,14 +158,15 @@ User uploads document / generates quiz
 ### Backend
 - **FastAPI** — Async web framework
 - **SQLAlchemy 2.0** — Async ORM with PostgreSQL
-- **FAISS** — Vector similarity search
-- **BM25** — Lexical search (rank_bm25 + jieba tokenizer)
+- **pgvector** — Production vector search (IVFFlat / HNSW via embeddings table)
+- **PostgreSQL FTS** — Full-text keyword search (GIN tsvector index)
+- **FAISS + BM25** — Legacy fallback (file-based, backward compat)
 - **sentence-transformers** — Text embedding
 - **Docling** — AI document parsing (IBM)
 - **PyMuPDF** — PDF text extraction
 - **python-docx / python-pptx** — DOCX/PPTX parsing
 - **trafilatura** — Web URL content extraction
-- **jieba** — Chinese text segmentation for BM25
+- **CrossEncoder** — Retrieval reranking
 - **jinja2** — Template engine for prompts
 - **Edge TTS** — Text-to-speech synthesis
 - **OpenAI SDK** — LLM provider abstraction
@@ -190,16 +190,16 @@ User uploads document / generates quiz
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Vector DB | FAISS (file-based) | Simple, no extra service dependency |
-| Lexical Search | BM25 + jieba | Chinese-aware keyword search, hybrid fusion |
-| Hybrid Retrieval | RRF (Reciprocal Rank Fusion) | Combine FAISS + BM25 results without score normalization |
+| Vector DB | PostgreSQL+pgvector (production); FAISS+BM25+RRF (legacy) | pgvector: SQL-native, no extra service; legacy kept for migration path |
+| Lexical Search | PostgreSQL FTS + optional BM25 | Chinese-aware via FTS/GIN; hybrid fusion available |
+| Hybrid Retrieval | pgvector IVFFlat (production); RRF (legacy) | Production: SQL-native cosine sim; legacy: FAISS+BM25 RRF |
 | Database | PostgreSQL | Robust, async support via asyncpg |
 | Embedding | Local models (SBERT) | Privacy, no API cost for embedding |
 | LLM | OpenAI-compatible API | Multi-provider flexibility |
 | Streaming | SSE (Server-Sent Events) | Simple, works over HTTP, no WebSocket complexity |
 | Auth | JWT tokens | Stateless, standard |
 | Async Tasks | In-process asyncio queue | Simple deployment, no Redis dependency |
-| Templates | Jinja2 | Maintainable prompt management, 14 migrated modules |
+| Templates | Jinja2 | 27 prompt files across 7 subdirectories (rag/quiz/reflector/retriever/router/decomposer/transformations) |
 | Frontend TS | TypeScript + vue-tsc | Type safety, better IDE support |
 
 ## Project Structure
@@ -208,7 +208,7 @@ User uploads document / generates quiz
 study-copilot/
 ├── backend/
 │   ├── app/
-│   │   ├── api/          # Route handlers (11 routers)
+│   │   ├── api/          # Route handlers (13 routers)
 │   │   ├── core/         # Business logic (RAG, chunker, embedder, worker)
 │   │   ├── db/           # Database models & config
 │   │   ├── services/     # Business services (notes, courses, tasks, quiz)

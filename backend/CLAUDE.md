@@ -146,11 +146,14 @@ Factory pattern in `document_parser.py`:
 - PPTX → python-pptx
 
 ### Vector Store (Hybrid Retrieval)
-Three implementations in `vector_store.py`:
-- `FAISSVectorStore` — cosine similarity via IndexFlatIP (normalized vectors)
-- `BM25VectorStore` — Okapi BM25 keyword retrieval via rank_bm25
-- `HybridVectorStore` — RRF (Reciprocal Rank Fusion) combining FAISS + BM25
-- `DocumentVectorStore` — per-document wrapper, auto-detects format on load
+
+Two implementations coexist:
+- **Production**: `pgvector_store.py` — PostgreSQL+pgvector async vector search (embedding + DB-backed)
+- **Legacy**: `vector_store.py` — file-based FAISS + BM25 + RRF (per-document, backward compat)
+  - `FAISSVectorStore` — cosine similarity via IndexFlatIP (normalized vectors)
+  - `BM25VectorStore` — Okapi BM25 keyword retrieval via rank_bm25
+  - `HybridVectorStore` — RRF (Reciprocal Rank Fusion) combining FAISS + BM25
+  - `DocumentVectorStore` — per-document wrapper, auto-detects format on load
 
 ### Chunking
 Three chunker types in `chunker.py`:
@@ -160,6 +163,38 @@ Three chunker types in `chunker.py`:
 
 ### Error Handling
 Custom exceptions in `exceptions.py`. FastAPI exception handlers registered in `exception_handlers.py`.
+
+### Logging
+Structured logging via `logger.py`:
+- `setup_logging(debug=bool)` — configures log level + format
+- Trace-id propagation via `X-Trace-ID` header + ContextVar (ASGI middleware in `trace.py`)
+- All log lines include `[trace_id]` prefix for distributed tracing
+
+### Templates
+27 Jinja2 prompt templates in `app/templates/`, rendered via `template_manager.py`:
+- Subdirectories: `rag/` (2), `quiz/` (3), `reflector/` (2), `retriever/` (1), `router/` (1), `decomposer/` (2), `transformations/` (14)
+
+### ORM Models (`app/db/database.py`)
+
+No separate `app/models/` directory; all ORM models are defined in `app/db/database.py`.
+
+| Model | Table | Key Fields |
+|-------|-------|-----------|
+| `User` | `users` | id, username, email, password_hash, is_active, created_at |
+| `Document` | `documents` | id, user_id, course_space_id, filename, file_path, status, chunk_count, file_size, vectorstore_path, deleted_at (soft delete) |
+| `ChatSession` | `chat_sessions` | id, user_id, title, created_at |
+| `Message` | `messages` | id, session_id, role, content, sources, created_at |
+| `Quiz` | `quizzes` | id, document_id, question_type, question, options, answer, explanation, created_at |
+| `QuizResult` | `quiz_results` | id, quiz_id, user_id, user_answer, is_correct, submitted_at |
+| `UserLLMConfig` | `user_llm_configs` | id, user_id, provider, api_key, base_url, model_name, temperature, max_tokens, embedding_model, embedding_dimension, created_at, updated_at |
+| `CourseSpace` | `course_spaces` | id, user_id, name, description, color, created_at, updated_at |
+| `Tag` | `tags` | id, user_id, name, created_at |
+| `Note` | `notes` | id, user_id, course_space_id, title, content, note_type, is_pinned, deleted_at (soft delete), created_at, updated_at |
+| `AsyncTask` | `async_tasks` | id, user_id, task_type, status, progress, result, error, created_at, completed_at |
+| `DocumentChunk` | `document_chunks` | id, document_id, content, embedding (vector), chunk_metadata (JSON), chunk_index, created_at |
+| `note_tags` | association table | note_id, tag_id |
+
+Also: no `app/schemas/` directory; Pydantic schemas are defined inline in each router.
 
 ### Services Layer
 Each service orchestrates core modules for a single domain:
@@ -276,3 +311,4 @@ pytest tests/ -v           # Run tests
 | PUT | `/api/config/llm` | Update user's LLM config |
 | GET | `/` | App info |
 | GET | `/health` | Health check |
+| GET | `/api/metrics` | Operational metrics (task counts by status) |

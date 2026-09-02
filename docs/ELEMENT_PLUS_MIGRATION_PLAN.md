@@ -496,6 +496,32 @@ Phase 5: ✓ 已完成（20 个 Icon*.vue → Element Plus 图标，19 个文件
 Phase 6: ✓ 已完成（所有 views 中 Base* 组件替换为 el-*，按钮/输入框/卡片已迁移）
 Phase 7: ✓ 已完成（CSS 变量主题已配置，暗色模式通过 CSS 变量自动适配）
 Phase 8: ✓ 已完成（已删除 Base* 组件 10 个、图标 19 个、Toast 组件、tailwind.config.js、postcss.config.js；global.css 中 @tailwind 指令已清理）
+
+### Phase 8 后修复（Post-migration fixes）
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 页面样式全丢 | `class="el-card"` 在 20+ 处残留为 CSS class，但 `.card`/`.el-card` 样式已删 | `global.css` 添加 `.el-card` 别名 |
+| Tailwind 工具类全部失效 | `postcss.config.js` 和 `@tailwind utilities` 被误删 | 恢复 `postcss.config.js`（仅 tailwindcss 插件）+ `@tailwind utilities` |
+| Tailwind class 不生成 | `tailwind.config.js` 被删，Tailwind 不知道扫描哪些文件 | 恢复 `tailwind.config.js`（content 配置） |
+| Element Plus 图标空白 | HomeView/AnalysisView/NoteCard 模板用图标但 script 没 import | 补全 import 语句 |
+| 侧边栏菜单点击无反应 | `el-menu` 缺少 `:router="true"` 且 `handleSelect` 无导航逻辑 | 添加 `:router="true"` + `useRouter` |
+| AnalysisView 按钮无样式 | `class="el-button-primary"` 是已删除的自定义类 | 改为 `<el-button type="primary">` |
+| LoginView/RegisterView 表单失效 | 缺少 `<form @submit.prevent>` 包裹 | 添加 form 标签 |
+| AnalysisView 偶现不加载 | `loadHistory` 读 `quizStore.quizResults` 与 `fetchQuizHistory` 并行 → 读到空数组 | `loadHistory` 直接调 `/quiz/result-history` API，消除竞态 |
+
+### 设计系统调整
+
+| 维度 | 调整前 | 调整后 |
+|------|--------|--------|
+| 背景 | 纯白 `#ffffff` | 暖灰 `#fafaf9` |
+| 文字 | 纯黑 `#111827` | 柔黑 `#1d1d1f` |
+| 边框 | 硬灰 `#e5e7eb` | 淡化 `#eceef1` |
+| 阴影 | 锐利高对比 | 弥散低透明度 |
+| 圆角 | 4/8/12/16px | 6/10/14/18/24/32px |
+| 暗色背景 | `#111827` | `#161618`（更深更柔） |
+| 输入框聚焦 | `box-shadow: 0 0 0 4px light-9`（扩散环） | `inset 0 0 0 1px var(--el-color-primary)`（1px inset） |
+| Element Plus 圆角 | 8px | 14px（`--el-border-radius-base`） |
 ```
 
 ---

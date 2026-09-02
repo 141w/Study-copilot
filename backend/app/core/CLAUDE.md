@@ -35,7 +35,7 @@ Core modules contain **pure business logic** with no HTTP or framework dependenc
 User Question
     → Query Rewriting (llm.py)
     → Embedding (embedder.py)
-    → FAISS Search (vector_store.py)
+    → pgvector Search (pgvector_store.py, production)
     → CrossEncoder Reranking (rag_engine.py)
     → Context Assembly
     → LLM Generation with Citations (llm.py)

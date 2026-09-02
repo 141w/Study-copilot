@@ -29,7 +29,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Tests**: 后端 420 passed / 前端 87 passed / 覆盖率 71.76% / vue-tsc exit 0
 - **Ports**: 前端 3000，后端 8000
 - **Frontend**: Vue3 + Vite + TypeScript + Pinia + TailwindCSS + GSAP
-- **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL 16+ + FAISS + sentence-transformers
+- **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL 16+ + pgvector + sentence-transformers
 - **打包**: backend/pyproject.toml（hatchling）+ uv.lock（~484 TOML 条目）；requirements.txt 为兼容层
 - **CI**: uv 安装依赖 + ruff lint + mypy 类型门禁（渐进式棘轮配置）+ 覆盖率门禁 65% + 前端 vitest/vue-tsc 全链路
 - **可观测性**: 结构化 JSON 日志（生产）/ 文本（开发）+ X-Trace-ID 纯 ASGI 追踪中间件 + /health DB 探测
@@ -100,7 +100,7 @@ This file provides architectural guidance for contributors working on Study Copi
 │          Data Layer                          │
 ├──────────────────────────────────────────────┤
 │ - PostgreSQL (async via asyncpg + SQLAlchemy)│
-│ - FAISS vector indices (per-user files)      │
+│ - pgvector (PostgreSQL extension, vector search)│
 │ - File storage (uploads/)                    │
 └──────────────────────────────────────────────┘
 ```

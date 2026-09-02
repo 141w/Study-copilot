@@ -60,8 +60,8 @@
 | 异步任务 | 批量操作，持久化任务队列（重启不丢任务，看门狗超时保护） | ✅ v2 |
 | 凭证加密 | Fernet 加密存储 API Key | ✅ v2 |
 | TypeScript | 前端渐进式 TypeScript 支持，类型安全 | ✅ v3 |
-| 组件复用 | BaseDialog、BaseButton 等通用组件 | ✅ v3 |
-| Prompt 模板化 | Jinja2 模板管理 LLM prompt | ✅ v3 |
+| 组件复用 | Element Plus 通用组件（el-button 等）| ✅ v3 |
+| Prompt 模板化 | Jinja2 模板管理 27 个 LLM prompt | ✅ v3 |
 | 设计系统 | CSS 变量系统（间距、字体、颜色、样式） | ✅ v3 |
 
 ### 应用场景
@@ -327,18 +327,8 @@ study-copilot/
 │   │   │   ├── UrlImportDialog.vue # URL 导入对话框
 │   │   │   ├── common/            # 通用组件
 │   │   │   │   ├── AppHeader.vue  # 全局头部导航
-│   │   │   │   ├── AppSidebar.vue # 侧边栏导航
-│   │   │   │   ├── BaseButton.vue # 通用按钮
-│   │   │   │   ├── BaseDialog.vue # 通用对话框
-│   │   │   │   ├── BaseInput.vue  # 输入框
-│   │   │   │   ├── BaseSelect.vue # 下拉选择
-│   │   │   │   ├── BaseTextarea.vue # 文本域
-│   │   │   │   ├── BaseTable.vue  # 表格
-│   │   │   │   ├── BaseList.vue   # 列表
-│   │   │   │   ├── LoadingSpinner.vue # 加载动画
-│   │   │   │   ├── IconButton.vue # 图标按钮
-│   │   │   │   ├── Toast.vue      # 通知提示
-│   │   │   │   └── icons/         # 内联 SVG 图标组件（22 个）
+│   │   │   │   └── AppSidebar.vue # 侧边栏导航
+│   │   │   │（通用基础组件改用 Element Plus 直接实现）
 │   │   │   └── chat/              # 聊天组件
 │   │   │       ├── ChatInput.vue  # 消息输入
 │   │   │       └── ChatHistoryPanel.vue # 聊天历史面板
@@ -358,7 +348,6 @@ study-copilot/
 │   │   ├── composables/            # 可复用组合函数
 │   │   │   ├── useApi.ts          # 统一 API 请求处理
 │   │   │   ├── useMarkdown.ts     # Markdown 渲染
-│   │   │   └── useChatExport.ts   # 对话导出
 │   │   │   └── useChatExport.ts   # 对话导出
 │   │   │
 │   │   ├── types/                  # TypeScript 类型定义
@@ -1079,26 +1068,28 @@ ruff format .
 
 #### 核心升级
 - **TypeScript 迁移**：前端渐进式 TypeScript 支持，类型安全，IDE 提示增强
-- **组件复用**：提取 BaseDialog、BaseButton、LoadingSpinner、IconButton 等通用组件
-- **Prompt 模板化**：30+ 个 LLM prompt 迁移为 Jinja2 模板，易于维护和迭代
+- **组件复用**：采用 Element Plus UI 组件库（el-button、el-dialog、el-input 等），通过 unplugin-vue-components 自动导入
+- **Prompt 模板化**：27 个 LLM prompt 迁移为 Jinja2 模板，7 个子目录，易于维护和迭代
 - **设计系统**：完整的 CSS 变量系统（间距、字体、颜色、组件样式）
 - **Composables**：useApi、useMarkdown 等可复用逻辑封装
 
 #### 新增文件
-- `frontend/src/components/common/BaseDialog.vue` — 通用对话框
-- `frontend/src/components/common/BaseButton.vue` — 通用按钮
-- `frontend/src/components/common/LoadingSpinner.vue` — 加载动画
-- `frontend/src/components/common/IconButton.vue` — 图标按钮
+- `frontend/src/components/common/AppHeader.vue` — 全局头部导航（主题切换 + 用户菜单）
+- `frontend/src/components/common/AppSidebar.vue` — 侧边栏导航（响应式 + 文档列表）
 - `frontend/src/composables/useApi.ts` — 统一 API 请求处理
 - `frontend/src/composables/useMarkdown.ts` — Markdown 渲染
+- `frontend/src/composables/useChatExport.ts` — 对话导出 Markdown 构建
 - `frontend/src/types/api.ts` — API 响应类型
 - `frontend/src/types/models.ts` — 核心数据模型
 - `frontend/tsconfig.json` — TypeScript 配置
 - `backend/app/core/template_manager.py` — Jinja2 模板管理器
-- `backend/app/templates/` — 30 个 Prompt 模板文件
+- `backend/app/core/pgvector_store.py` — PostgreSQL+pgvector 向量搜索
+- `backend/app/core/task_worker.py` — 异步任务队列 worker
+- `backend/app/core/logger.py` — 结构化日志 + trace-id 传播
+- `backend/app/templates/` — 27 个 Jinja2 Prompt 模板
 
 #### 改进
-- TransformDialog、UrlImportDialog 使用 BaseDialog 组件
+- TransformDialog、UrlImportDialog 使用 el-dialog 组件
 - NoteCard、CourseCard、ChatMessage 添加 TypeScript 类型
 - LoginView 使用 TypeScript
 - variables.css 完善设计系统

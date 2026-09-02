@@ -1,0 +1,896 @@
+<title>前端设计审查与优化方案</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg-body: #faf9f7;
+    --bg-card: #ffffff;
+    --bg-secondary: #f4f2ee;
+    --bg-tertiary: #ebe8e2;
+    --text-primary: #1a1a1a;
+    --text-secondary: #5a5752;
+    --text-muted: #8a8580;
+    --accent-start: #ef2cc1;
+    --accent-end: #fc4c02;
+    --accent-hero: #7c3aed;
+    --border: #e5e2dc;
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+    --info: #2563eb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04);
+    --radius: 16px;
+    --radius-sm: 10px;
+    --space-xs: 0.5rem;
+    --space-sm: 0.75rem;
+    --space-md: 1.25rem;
+    --space-lg: 2rem;
+    --space-xl: 3rem;
+    --space-2xl: 4.5rem;
+    --font-display: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg-body: #121110;
+      --bg-card: #1c1b19;
+      --bg-secondary: #252421;
+      --bg-tertiary: #2e2c28;
+      --text-primary: #f2f0ec;
+      --text-secondary: #b8b3ab;
+      --text-muted: #7f7a72;
+      --border: #35322e;
+      --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg-body: #121110;
+    --bg-card: #1c1b19;
+    --bg-secondary: #252421;
+    --bg-tertiary: #2e2c28;
+    --text-primary: #f2f0ec;
+    --text-secondary: #b8b3ab;
+    --text-muted: #7f7a72;
+    --border: #35322e;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: var(--font-display);
+    background: var(--bg-body);
+    color: var(--text-primary);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  .container {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: var(--space-xl) var(--space-lg);
+  }
+
+  header {
+    margin-bottom: var(--space-2xl);
+    padding-bottom: var(--space-xl);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-end);
+    margin-bottom: var(--space-sm);
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 2.8rem);
+    font-weight: 900;
+    line-height: 1.15;
+    margin: 0 0 var(--space-md);
+    letter-spacing: -0.02em;
+  }
+
+  .lead {
+    font-size: 1.15rem;
+    color: var(--text-secondary);
+    max-width: 680px;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  h2 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin: var(--space-2xl) 0 var(--space-md);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--border);
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: var(--space-lg) 0 var(--space-sm);
+    color: var(--text-primary);
+  }
+
+  h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: var(--space-md) 0 var(--space-xs);
+    color: var(--text-secondary);
+  }
+
+  p { margin: 0 0 var(--space-md); }
+
+  a {
+    color: var(--accent-hero);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s ease;
+  }
+
+  a:hover { border-bottom-color: currentColor; }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-md);
+    margin: var(--space-lg) 0;
+  }
+
+  .meta-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-md);
+    box-shadow: var(--shadow);
+  }
+
+  .meta-card dt {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: var(--space-xs);
+  }
+
+  .meta-card dd {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+  }
+
+  .severity {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+  }
+
+  .severity.critical { color: var(--danger); background: rgba(220,38,38,0.08); }
+  .severity.high { color: var(--warning); background: rgba(217,119,6,0.08); }
+  .severity.medium { color: var(--info); background: rgba(37,99,235,0.08); }
+  .severity.low { color: var(--success); background: rgba(22,163,74,0.08); }
+
+  .finding {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-lg);
+    box-shadow: var(--shadow);
+  }
+
+  .finding-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-bottom: var(--space-sm);
+  }
+
+  .finding-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .finding p:last-child { margin-bottom: 0; }
+
+  code, .code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--bg-secondary);
+    padding: 0.15em 0.35em;
+    border-radius: 4px;
+    color: var(--text-primary);
+  }
+
+  pre {
+    font-family: var(--font-mono);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-md);
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    margin: var(--space-md) 0;
+  }
+
+  pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  ul, ol {
+    padding-left: 1.4rem;
+    margin: 0 0 var(--space-md);
+  }
+
+  li { margin-bottom: 0.35rem; }
+
+  .checklist {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .checklist li {
+    position: relative;
+    padding-left: 1.6rem;
+  }
+
+  .checklist li::before {
+    content: '☐';
+    position: absolute;
+    left: 0;
+    color: var(--text-muted);
+    font-weight: 700;
+  }
+
+  .phase {
+    background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+    color: #fff;
+    border-radius: var(--radius);
+    padding: var(--space-lg);
+    margin: var(--space-lg) 0;
+  }
+
+  .phase h3 {
+    color: #fff;
+    margin-top: 0;
+  }
+
+  .phase p { color: rgba(255,255,255,0.92); }
+
+  .phase code {
+    background: rgba(0,0,0,0.25);
+    color: #fff;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--space-md);
+    margin: var(--space-lg) 0;
+  }
+
+  .stat {
+    text-align: center;
+    padding: var(--space-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .stat-number {
+    font-size: 2rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: var(--space-xs);
+    font-weight: 600;
+  }
+
+  .file-list {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-md);
+    columns: 2;
+    column-gap: var(--space-lg);
+  }
+
+  .file-list div { break-inside: avoid; margin-bottom: 0.2rem; }
+
+  @media (max-width: 640px) {
+    .container { padding: var(--space-lg) var(--space-md); }
+    .file-list { columns: 1; }
+    .finding-header { flex-direction: column; gap: var(--space-sm); }
+  }
+</style>
+
+<div class="container">
+  <header>
+    <div class="eyebrow">Study Copilot · Frontend Design Audit</div>
+    <h1>前端设计审查与优化方案</h1>
+    <p class="lead">基于对 <code>frontend/</code> 目录的全量代码审查，从设计系统、架构工程、组件结构、页面实现四个维度梳理问题，并给出可落地的分阶段优化方案。</p>
+
+    <dl class="meta-grid">
+      <div class="meta-card">
+        <dt>审查范围</dt>
+        <dd>13 个视图 · 12+ 组件</dd>
+      </div>
+      <div class="meta-card">
+        <dt>关键技术栈</dt>
+        <dd>Vue 3 · Pinia · Tailwind · Element Plus</dd>
+      </div>
+      <div class="meta-card">
+        <dt>TS 迁移进度</dt>
+        <dd>stores 完成 · 13 个 views 仅 1 个 TS</dd>
+      </div>
+      <div class="meta-card">
+        <dt>整体评级</dt>
+        <dd style="color: var(--warning);">中等 · 设计系统漂移严重</dd>
+      </div>
+    </dl>
+  </header>
+
+  <section>
+    <h2>一、执行摘要</h2>
+    <p>项目已完成 Element Plus 组件迁移与 CSS 变量设计系统的初步搭建，但<strong>“定义了系统，却未在组件中使用”</strong>是当前最大矛盾。大量视图仍使用硬编码色值、Tailwind 任意值、重复布局模式；暗色模式存在真实 Bug；部分视图存在功能级缺陷（如课程删除确认按钮绑定错误）。</p>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-number">14</div><div class="stat-label">设计系统问题</div></div>
+      <div class="stat"><div class="stat-number">8</div><div class="stat-label">架构/工程问题</div></div>
+      <div class="stat"><div class="stat-number">10</div><div class="stat-label">组件级缺陷</div></div>
+      <div class="stat"><div class="stat-number">8</div><div class="stat-label">视图级 Bug</div></div>
+    </div>
+
+    <h3>最高优先级修复清单</h3>
+    <ol>
+      <li>修复 Tailwind 暗色模式配置缺失，使应用内主题切换真正生效。</li>
+      <li>修复 <code>CourseListView.vue:119</code> 删除确认按钮误绑定 <code>confirmDelete</code> 而非 <code>doDelete</code>。</li>
+      <li>修复 <code>NoteEditor.vue</code> 工具栏/Tab 因错误 textarea 引用导致的完全失效。</li>
+      <li>修复 <code>NoteEditor.vue</code> 预览区未转义 HTML 导致的 XSS 风险，统一使用 <code>useMarkdown</code>。</li>
+      <li>修复 <code>ChatInput.vue</code> placeholder 未声明、中文 IME Enter 误发送问题。</li>
+      <li>统一品牌渐变、卡片、文本色 token，消除 <code>#010120</code>、<code>#ef2cc1</code> 等硬编码色值。</li>
+      <li>拆分超过 400 行的视图（ChatView、CourseDetailView、QuizView）。</li>
+      <li>推动剩余 JS 视图/组件迁移至 TypeScript，补齐 props/emit 类型。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>二、设计系统审查</h2>
+    <p>设计 token 集中在 <code>frontend/src/styles/variables.css</code>、<code>element-plus-theme.css</code>、<code>tailwind.config.js</code> 三处，但组件层并未消费这些 token，导致系统与实际 UI 脱节。</p>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">暗色模式在 Tailwind 层未启用 class 策略</h3>
+        <span class="severity critical">Critical</span>
+      </div>
+      <p><code>tailwind.config.js</code> 未设置 <code>darkMode: 'class'</code>，默认使用 <code>prefers-color-scheme</code> 媒体查询。而主题 store 通过 <code>document.documentElement.classList.add('dark')</code> 切换类名。</p>
+      <p>后果：用户在 OS 浅色模式下强制开启应用暗色模式，<code>HomeView</code> 等使用 <code>dark:bg-[...]</code> 的位置仍会显示浅色背景。</p>
+      <pre><code>// tailwind.config.js 当前
+export default {
+  content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
+  theme: { extend: { borderRadius: { ... } } },
+}
+
+// 应改为
+export default {
+  darkMode: 'class',
+  content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
+  theme: { extend: { borderRadius: { ... } } },
+}</code></pre>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">设计 token 定义了但未被消费</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p>grep 全量 Vue 文件显示以下 token 零引用：</p>
+      <ul>
+        <li><code>var(--spacing-*)</code>：组件全部使用 <code>mb-4</code>、<code>px-2</code> 等 Tailwind 间距</li>
+        <li><code>var(--radius-*)</code>：组件使用 <code>rounded-xl</code>，而 scoped CSS 写死 <code>8px</code>、<code>4px</code></li>
+        <li><code>var(--shadow-*)</code>、<code>var(--transition-*)</code>、<code>var(--font-size-*)</code>、<code>var(--gradient-*)</code></li>
+      </ul>
+      <p>结果：设计系统成了“文档式系统”，任何全局调整需要逐个文件修改。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">品牌渐变与关键色值硬编码</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p>品牌渐变 <code>#ef2cc1 → #fc4c02</code> 已在 <code>variables.css:45</code> 声明为 <code>--gradient-brand</code>，但 6 处以上直接写死 hex：</p>
+      <div class="file-list">
+        <div>AppHeader.vue:15</div>
+        <div>LoginView.vue:5</div>
+        <div>RegisterView.vue:5</div>
+        <div>ChatView.vue:79 / :103 / :441</div>
+        <div>AnalysisView.vue:116</div>
+      </div>
+      <p>此外，近黑色 <code>#010120</code> 在 <code>AnalysisView</code>、<code>DocumentView</code>、<code>UploadView</code>、<code>TransformDialog</code>、<code>ChatView</code> 等 10 余处用于 active/hover/ring，暗色模式下几乎不可见。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">Element Plus 主题与 variables.css 重复且可能漂移</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p><code>variables.css</code> 与 <code>element-plus-theme.css</code> 维护了两份相同语义的颜色值（primary/success/warning/danger/info/text/border）。例如：</p>
+      <pre><code>/* variables.css */
+--color-info: #3b82f6;
+
+/* element-plus-theme.css */
+--el-color-info: #3b82f6;</code></pre>
+      <p>建议：在 <code>element-plus-theme.css</code> 中全部使用 <code>var(--color-primary)</code> 等应用 token，实现单一数据源。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">卡片实现存在两套机制</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p>22 处使用 <code>class="el-card ..."</code>（div + CSS 别名），3 处使用真正的 <code>&lt;el-card&gt;</code> 组件。CSS 别名在 <code>global.css</code> 中强制 <code>padding: var(--spacing-lg)</code>，导致 <code>DocumentView.vue:40</code> 不得不使用全项目唯一的 <code>!p-0</code> 覆盖。</p>
+      <p>建议：移除 <code>.el-card</code> 别名，全部改用 <code>&lt;el-card&gt;</code>，通过 Element Plus 的 CSS 变量统一控制。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">Tailwind 默认色板泄漏</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p><code>bg-blue-50</code>、<code>divide-gray-100</code>、<code>text-blue-600</code>、<code>text-indigo-500</code> 等 Tailwind 默认色在暗色模式下无对应变体，会出现浅色条带/分隔线。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">半径、过渡、布局数字多处重复定义</h3>
+        <span class="severity low">Low</span>
+      </div>
+      <ul>
+        <li><code>tailwind.config.js</code> 与 <code>variables.css</code> 同时定义半径 scale（6/10/14/18/24/32px）</li>
+        <li>Header 高度 64px、侧边栏宽度 256px 在 <code>App.vue</code>、<code>AppHeader.vue</code>、<code>AppSidebar.vue</code> 中硬编码耦合</li>
+        <li>页面过渡 <code>0.2s ease</code>、侧边栏 <code>duration-300</code> 未使用 <code>--transition-*</code> token</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>三、架构与工程审查</h2>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">TypeScript 迁移进度严重滞后</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p>stores、types、services、composables、router 已全面 TS 化；但 13 个视图中<strong>仅 <code>LoginView.vue</code> 使用 <code>lang="ts"</code></strong>，其余 12 个视图均为纯 JS，与 CLAUDE.md 中“views 渐进覆盖 TypeScript”的表述直接矛盾。这导致：</p>
+      <ul>
+        <li>props 使用对象写法而非 <code>defineProps&lt;{...}&gt;()</code></li>
+        <li>API 响应数据无类型，<code>error.response?.data?.detail</code> 等访问不一致</li>
+        <li>模板中无法获得类型提示与重构支持</li>
+      </ul>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">配置文件名与 tsconfig.node.json 不匹配</h3>
+        <span class="severity low">Low</span>
+      </div>
+      <p>实际文件为 <code>vite.config.js</code> / <code>vitest.config.js</code>，而 <code>tsconfig.node.json</code> 仍引用 <code>vite.config.ts</code> / <code>vitest.config.ts</code>，属陈旧引用，建议同步更新。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">Element Plus 重复全局导入</h3>
+        <span class="severity low">Low</span>
+      </div>
+      <p><code>main.ts</code> 已全局注册 <code>ElementPlus</code>，同时 <code>unplugin-vue-components</code> 也自动导入组件。全局注册会引入完整 bundle，建议仅保留自动导入以减少体积。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">store 间存在循环/横向耦合</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p><code>config.ts</code> 导入 <code>useChatStore</code> 同步 LLM 设置；<code>auth.ts</code> 直接导入 <code>router</code>。建议通过组件层或事件总线解耦，避免 store 之间形成隐式依赖网。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">工具函数重复定义</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p><code>formatDate</code> 在 <code>HomeView.vue</code>、<code>ChatHistoryPanel.vue</code>、<code>NoteCard.vue</code> 中重复实现；空状态图标容器、页面标题布局、删除确认弹窗等模式在多个视图中复制粘贴。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>四、组件审查</h2>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">NoteEditor 工具栏/Tab 快捷键全部失效</h3>
+        <span class="severity critical">Critical</span>
+      </div>
+      <p><code>NoteEditor.vue:178</code> 访问 <code>textareaEl.value?.textareaEl</code>，但 Element Plus <code>el-input</code>（textarea 模式）暴露的原生元素属性是 <code>.textarea</code>，不是 <code>.textareaEl</code>。导致 Bold/Italic/Heading/List/Quote/Code 按钮和 Tab 缩进全部在 guard 处提前返回，功能完全失效。</p>
+      <pre><code>// 当前（错误）
+const textarea = textareaEl.value?.textareaEl
+
+// 应改为
+const textarea = textareaEl.value?.textarea</code></pre>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">ChatInput 未声明 placeholder，传入属性被丢弃</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p><code>ChatView.vue</code> 向 <code>ChatInput</code> 传入了 <code>placeholder="输入问题，按 Enter 发送..."</code>，但 <code>ChatInput.vue</code> 只声明了 <code>loading</code> 与 <code>disabled</code> props。该属性 fallthrough 到根 <code>&lt;div&gt;</code> 上并被丢弃，输入框始终显示硬编码的 <code>输入您的问题...</code>。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">NoteEditor 预览区存在 XSS 风险</h3>
+        <span class="severity critical">Critical</span>
+      </div>
+      <p><code>NoteEditor.vue</code> 使用手写的正则渲染 <code>renderedContent</code>，并通过 <code>v-html</code> 输出到 DOM。内容未做 HTML 转义，恶意笔记（如 <code>&lt;img src=x onerror=...&gt;</code>）会原样执行。项目已有 <code>composables/useMarkdown.ts</code> 提供安全的 Markdown 渲染，应直接复用。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">中文 IME 输入法未做组合保护</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p><code>ChatInput.vue</code> 的 <code>@keydown.enter="sendMessage"</code> 与 <code>NoteEditor.vue</code> 的 <code>@keydown.enter.prevent="addTag"</code> 未检查 <code>event.isComposing</code>。在中文输入过程中按 Enter 选词会直接触发发送/添加标签，严重干扰中文用户。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">TaskPanel 状态处理与类型模型不一致</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p><code>TaskPanel.vue</code> 将 <code>'cancelled'</code> 作为一等状态处理，但 <code>types/models.ts</code> 中 <code>Task.status</code> 仅允许 <code>'pending' | 'running' | 'completed' | 'failed'</code>。UI 与类型契约已漂移，需统一。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">Markdown 渲染逻辑三处重复实现</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p>项目已有 <code>useMarkdown.ts</code>，但 <code>NoteCard.vue</code> 手写摘要剥离、<code>NoteEditor.vue</code> 手写预览渲染，与 composable 并存。应统一使用 <code>useMarkdown</code>，既消除 XSS 风险，也减少维护成本。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">组件可访问性存在系统性缺陷</h3>
+        <span class="severity high">High</span>
+      </div>
+      <ul>
+        <li>大量可点击元素使用 <code>&lt;div @click&gt;</code>（NoteCard、CourseCard、AppSidebar 文档行、ChatHistoryPanel 会话行），无 <code>role</code>、<code>tabindex</code>、键盘事件与焦点样式</li>
+        <li>仅图标按钮缺少 <code>aria-label</code>（AppHeader 汉堡菜单、主题切换、NoteCard/CourseCard 编辑删除）</li>
+        <li>悬停才显示的操作（<code>opacity-0 group-hover:opacity-100</code>）在触屏设备上无法使用</li>
+        <li><code>ChatHistoryPanel</code> 手写的删除弹窗无 <code>role="dialog"</code>、焦点陷阱、Esc 关闭，与 <code>el-dialog</code> 模式不一致</li>
+      </ul>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">组件未完整 TypeScript 化</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p>已完成 TS 的组件：<code>CourseCard.vue</code>、<code>NoteCard.vue</code>、<code>ChatHistoryPanel.vue</code>。其余如 <code>NoteEditor.vue</code>（332 行）、<code>TaskPanel.vue</code>（203 行）、<code>TransformDialog.vue</code>、<code>UrlImportDialog.vue</code> 仍为 JS，props 缺少类型与默认值约束。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">NoteEditor 组件过大且深度覆盖 Element Plus 样式</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p>332 行中 200+ 行为 scoped CSS，通过 <code>:deep()</code> 大量覆盖 <code>el-input</code>、<code>el-textarea</code> 内部样式。预览区还自行实现了 Markdown 渲染样式，与 <code>useMarkdown.ts</code> 的输出样式不统一。建议拆分为 <code>NoteEditorToolbar</code>、<code>NoteEditorPreview</code> 子组件。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">TaskPanel 自行管理 API 与轮询</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p><code>TaskPanel.vue</code> 直接调用 <code>api.get('/tasks')</code> 并维护 <code>refreshTimer</code>，而非使用已有的 <code>taskStore</code>。此外：</p>
+      <ul>
+        <li><code>setInterval</code> 在组件挂载后始终运行，即使无运行中任务也会每 3 秒触发一次空检查</li>
+        <li><code>el-progress</code> 的 <code>:status</code> success/exception 分支为死代码：它仅在 <code>running || pending</code> 时渲染，不可能到达 <code>completed</code>/<code>failed</code></li>
+        <li>任务类型映射、状态文案、状态颜色三个 switch 可合并为一个 <code>Record</code></li>
+      </ul>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">TransformDialog 存在可访问性与状态问题</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <ul>
+        <li>转换类型按钮使用原生 <code>&lt;button&gt;</code>，未使用 <code>el-button</code> 或 <code>aria-pressed</code></li>
+        <li>复制成功提示仅依赖 <code>copied</code> 状态 2 秒重置，无错误处理</li>
+        <li><code>visible</code> prop 与 <code>localVisible</code> 的同步模式可简化为 <code>computed</code> + <code>emit('update:visible')</code></li>
+      </ul>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">line-clamp 重复自定义</h3>
+        <span class="severity low">Low</span>
+      </div>
+      <p>Tailwind 3.4 已内置 <code>line-clamp-*</code>，但 <code>CourseCard.vue</code>、<code>NoteCard.vue</code> 仍自定义 scoped CSS 实现，应移除重复代码。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>五、视图/页面审查</h2>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">CourseListView 删除确认按钮绑定错误</h3>
+        <span class="severity critical">Critical</span>
+      </div>
+      <p>确认删除弹窗中的“删除”按钮绑定的是 <code>confirmDelete</code> 而非 <code>doDelete</code>，导致点击后仅重复打开弹窗，课程永远不会被删除。</p>
+      <pre><code>&lt;!-- frontend/src/views/CourseListView.vue:119 --&gt;
+&lt;el-button type="danger" @click="confirmDelete"&gt;删除&lt;/el-button&gt;
+
+// 应改为
+&lt;el-button type="danger" @click="doDelete"&gt;删除&lt;/el-button&gt;</code></pre>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">视图体积过大，职责混杂</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p>以下视图行数过高，建议拆分：</p>
+      <ul>
+        <li><code>ChatView.vue</code> ~450 行：消息气泡、来源卡片、文档选择器、输入区可拆为独立组件</li>
+        <li><code>CourseDetailView.vue</code> ~450 行：文档标签、笔记标签、笔记 CRUD 与 <code>NotesView</code> 重复</li>
+        <li><code>QuizView.vue</code> ~410 行：题目卡片、结果统计、错题回顾可拆分</li>
+        <li><code>NotesView.vue</code> ~376 行：筛选、创建/编辑、草稿逻辑可拆</li>
+        <li><code>DocumentView.vue</code> ~365 行：列表、阅读器、分页、转换弹窗可拆分</li>
+      </ul>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">DocumentView 重复实现 Toast</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p>项目已有 <code>useToastStore</code>，但 <code>DocumentView.vue</code> 使用本地 <code>const toast = ref({ show: false, message: '' })</code> 自行实现弹窗，造成模式不一致。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">ModelConfigView 使用原生表单且错误提示简陋</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p>该视图使用原生 <code>&lt;select&gt;</code>、<code>&lt;input&gt;</code> 而非 Element Plus 表单组件，样式类字符串大量重复。<code>saveConfig</code> 使用 <code>alert()</code> 提示成功/失败，未接入 toast store。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">UploadView 重复校验与缺失错误处理</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <ul>
+        <li><code>handleDrop</code> 与 <code>handleFileSelect</code> 均重复 50MB 大小校验</li>
+        <li><code>deleteDoc</code> 未处理错误也未 toast</li>
+        <li>模板中直接调用 <code>$refs.fileInput.click()</code>，不符合 Vue 3 组合式风格</li>
+      </ul>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">QuizView 模式切换按钮视觉失效</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p>练习/考试模式切换使用 <code>:class="!examMode ? 'primary' : 'default'"</code>，但 Element Plus 的按钮类型由 <code>type</code> prop 控制，而非 Tailwind 类名字符串。结果两个按钮始终显示默认样式，用户无法识别当前模式。</p>
+      <pre><code>&lt;!-- QuizView.vue 应改为 --&gt;
+&lt;el-button :type="!examMode ? 'primary' : 'default'" @click="examMode = false"&gt;练习模式&lt;/el-button&gt;
+&lt;el-button :type="examMode ? 'primary' : 'default'" @click="examMode = true"&gt;考试模式&lt;/el-button&gt;</code></pre>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">QuizView GSAP 动画目标选择器不匹配</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p>代码通过 <code>quizListRef.value?.querySelectorAll('.card')</code> 查找题目卡片做入场动画，但模板实际使用 <code>class="el-card p-6"</code>，不存在 <code>.card</code> 元素，导致 stagger 动画从未执行。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">Chat Store SSE answer_refined 分支引用未定义变量</h3>
+        <span class="severity high">High</span>
+      </div>
+      <p><code>stores/chat.ts</code> 处理 <code>answer_refined</code> 事件时，使用了一个未定义的 <code>tempMsgId</code>（该分支外未声明同名变量），导致 <code>messages.value.findIndex(m =&gt; m.id === tempMsgId)</code> 永远返回 -1，优化后的答案无法替换原流式内容。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">AnalysisView 存在未使用变量与死代码</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <ul>
+        <li>声明了 <code>const error = ref('')</code> 但模板中从未渲染</li>
+        <li>导入了 <code>useQuizStore</code> 但从未使用</li>
+        <li>加载失败时仅 <code>console.error</code>，用户看到空状态却不知原因</li>
+      </ul>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">ChatView.scrollToReference 未接入模板</h3>
+        <span class="severity low">Low</span>
+      </div>
+      <p><code>ChatView.vue:291</code> 定义了 <code>scrollToReference(sourceIndex)</code>，但模板中来源 badge 的点击事件未绑定该函数，引用跳转功能半实现。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">NotesView 草稿 localStorage key 不一致</h3>
+        <span class="severity medium">Medium</span>
+      </div>
+      <p>自动保存与恢复笔记草稿使用的 localStorage key 存在大小写/命名不一致风险，且 <code>CourseDetailView</code> 也独立实现了类似的 <code>note_draft_${courseId}</code> 草稿逻辑，应抽取为共享 composable。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">QuizView 动画选择器脆弱</h3>
+        <span class="severity low">Low</span>
+      </div>
+      <p>使用 <code>selector('.mt-4.ml-9.p-4.rounded-xl')</code> 进行 GSAP 动画定位，极度依赖 Tailwind 类名顺序，重构时极易失效。</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <h3 class="finding-title">路由 keep-alive 与 defineOptions 不一致</h3>
+        <span class="severity low">Low</span>
+      </div>
+      <p><code>App.vue</code> 仅对 <code>QuizView</code>、<code>ChatView</code>、<code>AnalysisView</code> 启用 keep-alive，但只有这三者显式声明 <code>defineOptions({ name })</code>。若需扩展 keep-alive，需同步添加 name。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>六、分阶段优化方案</h2>
+
+    <div class="phase">
+      <h3>Phase 1 · 止血（1 周）</h3>
+      <p>先修复真实影响体验的 Bug 与明显的设计系统断裂。</p>
+      <ul class="checklist">
+        <li>在 <code>tailwind.config.js</code> 添加 <code>darkMode: 'class'</code></li>
+        <li>修复 <code>CourseListView.vue:119</code> <code>@click="doDelete"</code></li>
+        <li>修复 <code>NoteEditor.vue</code> 工具栏/Tab 的 <code>textareaEl</code> 属性访问（<code>.textareaEl</code> → <code>.textarea</code>）</li>
+        <li>修复 <code>NoteEditor.vue</code> 预览区 XSS 风险，改用 <code>useMarkdown().renderMarkdown</code></li>
+        <li>修复 <code>ChatInput.vue</code> 声明并转发 <code>placeholder</code> prop</li>
+        <li>为 <code>ChatInput</code>、<code>NoteEditor</code> 的 Enter 事件添加 <code>event.isComposing</code> 保护</li>
+        <li>修复 <code>QuizView</code> 模式切换按钮使用 <code>:type</code> 而非 <code>:class</code></li>
+        <li>修复 <code>QuizView</code> GSAP 动画目标选择器（<code>.card</code> → <code>.el-card</code> 或 ref 数组）</li>
+        <li>修复 <code>stores/chat.ts</code> <code>answer_refined</code> 分支的 <code>tempMsgId</code> 未定义问题</li>
+        <li>定义 <code>--color-accent-light</code> 暗色值，修复 <code>#010120</code>、<code>bg-blue-50</code>、<code>divide-gray-100</code> 的暗色表现</li>
+        <li>将品牌渐变统一为 <code>var(--gradient-brand)</code>，并暴露暗色渐变</li>
+        <li>运行 <code>npx vue-tsc --noEmit</code> 与 <code>npx vitest run</code> 确保基线通过</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <h3>Phase 2 · 设计系统归一（2 周）</h3>
+      <p>让 token 成为唯一事实来源，减少硬编码与重复。</p>
+      <ul class="checklist">
+        <li><code>element-plus-theme.css</code> 全部使用 <code>var(--color-*)</code> 等应用 token</li>
+        <li>移除 <code>global.css</code> 中 <code>.el-card</code> 别名，22 处 <code>class="el-card"</code> 改为 <code>&lt;el-card&gt;</code></li>
+        <li>Header/Sidebar 布局尺寸使用 CSS 变量 <code>--header-height</code>、<code>--sidebar-width</code></li>
+        <li>将 <code>text-[var(--text-muted)]</code> 高频用法沉淀为 <code>.text-muted</code> 等 utility class</li>
+        <li>统一页面容器、空状态、删除确认等重复布局模式为 Base 组件</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <h3>Phase 3 · TypeScript 全面覆盖（2 周）</h3>
+      <p>完成剩余视图与组件的类型化，建立组件契约。</p>
+      <ul class="checklist">
+        <li>所有 <code>.vue</code> 文件迁移至 <code>&lt;script setup lang="ts"&gt;</code></li>
+        <li>props 统一使用 <code>defineProps&lt;{...}&gt;()</code> 与 <code>withDefaults</code></li>
+        <li>API 错误处理统一使用 <code>AxiosError&lt;ApiError&gt;</code></li>
+        <li>补充 <code>types/models.ts</code> 中缺失的视图级类型（如任务、转换）</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <h3>Phase 4 · 组件与视图拆分（2–3 周）</h3>
+      <p>降低单文件复杂度，提升复用性。</p>
+      <ul class="checklist">
+        <li>ChatView 拆出 <code>ChatMessage.vue</code>、<code>SourceCard.vue</code>、<code>ChatInputBar.vue</code></li>
+        <li>CourseDetailView 拆出 <code>CourseDocumentList.vue</code>、<code>CourseNoteList.vue</code></li>
+        <li>QuizView 拆出 <code>QuizQuestion.vue</code>、<code>QuizResult.vue</code>、<code>QuizHistory.vue</code></li>
+        <li>NotesView 拆出 <code>NoteFilterBar.vue</code>、<code>NoteFormDialog.vue</code></li>
+        <li>NoteEditor 拆出工具栏与预览区</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <h3>Phase 5 · 可访问性与性能收尾（1 周）</h3>
+      <p>提升长期可维护性与用户体验。</p>
+      <ul class="checklist">
+        <li>所有图标按钮补充 <code>aria-label</code></li>
+        <li>表单字段补充 <code>&lt;label for&gt;</code> 关联</li>
+        <li>移除 <code>main.ts</code> 中全局 ElementPlus 注册，仅保留自动导入</li>
+        <li>修正 tsconfig.node.json 中 vite/vitest 配置文件名</li>
+        <li>为 GSAP 动画添加 <code>prefers-reduced-motion</code> 保护</li>
+        <li>建立组件 Storybook/文档或至少 README 说明通用模式</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>七、关键文件变更速查</h2>
+    <div class="file-list">
+      <div>tailwind.config.js</div>
+      <div>src/styles/variables.css</div>
+      <div>src/styles/element-plus-theme.css</div>
+      <div>src/styles/global.css</div>
+      <div>src/main.ts</div>
+      <div>src/views/CourseListView.vue</div>
+      <div>src/views/HomeView.vue</div>
+      <div>src/views/ChatView.vue</div>
+      <div>src/views/DocumentView.vue</div>
+      <div>src/views/ModelConfigView.vue</div>
+      <div>src/views/UploadView.vue</div>
+      <div>src/views/QuizView.vue</div>
+      <div>src/views/CourseDetailView.vue</div>
+      <div>src/views/NotesView.vue</div>
+      <div>src/components/TaskPanel.vue</div>
+      <div>src/components/TransformDialog.vue</div>
+      <div>src/components/NoteEditor.vue</div>
+      <div>src/components/common/AppHeader.vue</div>
+      <div>src/components/common/AppSidebar.vue</div>
+      <div>tsconfig.node.json</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>八、验收标准</h2>
+    <ul>
+      <li><code>npm run typecheck</code> 与 <code>npm run test</code> 全部通过</li>
+      <li>在 OS 浅色/深色两种环境下，应用内主题切换均正确渲染</li>
+      <li>品牌色、渐变、卡片圆角等视觉元素只来自 token，grep 无新增硬编码色值</li>
+      <li>所有视图单文件行数控制在 250 行以内（复杂视图通过子组件拆分）</li>
+      <li>删除、保存等关键操作在弹窗中绑定正确的处理函数</li>
+      <li>Lighthouse 可访问性评分 ≥ 90</li>
+    </ul>
+  </section>
+</div>

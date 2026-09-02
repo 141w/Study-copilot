@@ -132,7 +132,6 @@ npx vitest run tests/stores/note.test.js
 
 | File | Tests |
 |------|-------|
-| `tests/components/BaseDialog.test.js` | Dialog rendering, slots, events |
 | `tests/components/UploadView.test.js` | Upload component rendering |
 | `tests/composables/chatExport.test.js` | Chat markdown export |
 | `tests/services/api.test.js` | Axios interceptor retry logic |
@@ -265,7 +264,7 @@ jobs:
 | API endpoints | 80%+ |
 | Core business logic | 90%+ |
 | Frontend stores | 80%+ |
-| Frontend components | 60%+ |
+| Frontend components | — (minimal, Element Plus provides UI) |
 
 ---
 

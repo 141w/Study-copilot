@@ -102,3 +102,6 @@ frontend/dist/
 
 # Backups（scripts/backup.sh 产物，含全量数据勿入库）
 backups/
+
+# Ruff linter cache
+.ruff_cache/
