@@ -2,61 +2,79 @@
 /* Element Plus 2.3+ 支持 CSS 变量主题定制，无需 SCSS */
 
 :root {
-  --el-color-primary: #3b82f6;
-  --el-color-primary-light-3: #93c5fd;
-  --el-color-primary-light-5: #bfdbfe;
-  --el-color-primary-light-7: #dbeafe;
-  --el-color-primary-light-9: #eff6ff;
-  --el-color-primary-dark-2: #2563eb;
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: var(--color-primary-light);
+  --el-color-primary-light-5: color-mix(in srgb, var(--color-primary) 40%, white);
+  --el-color-primary-light-7: color-mix(in srgb, var(--color-primary) 25%, white);
+  --el-color-primary-light-9: var(--color-primary-light);
+  --el-color-primary-dark-2: var(--color-primary-hover);
 
-  --el-color-success: #10b981;
-  --el-color-warning: #f59e0b;
-  --el-color-danger: #ef4444;
-  --el-color-info: #3b82f6;
+  --el-color-success: var(--color-success);
+  --el-color-warning: var(--color-warning);
+  --el-color-danger: var(--color-error);
+  --el-color-info: var(--color-info);
 
-  --el-text-color-primary: #111827;
-  --el-text-color-regular: #6b7280;
-  --el-text-color-secondary: #9ca3af;
-  --el-text-color-placeholder: #9ca3af;
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-secondary);
+  --el-text-color-secondary: var(--text-muted);
+  --el-text-color-placeholder: var(--text-muted);
 
-  --el-border-color: #e5e7eb;
-  --el-border-color-light: #e5e7eb;
-  --el-border-color-lighter: #f3f4f6;
+  --el-border-color: var(--border-default);
+  --el-border-color-light: var(--border-default);
+  --el-border-color-lighter: var(--bg-tertiary);
+  --el-border-color-hover: var(--border-hover);
 
-  --el-bg-color: #ffffff;
-  --el-bg-color-page: #f9fafb;
-  --el-bg-color-overlay: #ffffff;
+  --el-bg-color: var(--bg-primary);
+  --el-bg-color-page: var(--bg-secondary);
+  --el-bg-color-overlay: var(--surface-card);
 
-  --el-border-radius-base: 8px;
-  --el-border-radius-small: 4px;
+  --el-border-radius-base: var(--radius-md);
+  --el-border-radius-small: var(--radius-xs);
+  /* 精修（批次1d）：弹窗与卡片同级（20px），修复"弹窗比卡片还不圆"的层级倒挂 */
+  --el-dialog-border-radius: var(--radius-xl);
 
-  --el-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --el-box-shadow-light: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --el-box-shadow-dark: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --el-box-shadow: var(--shadow-card);
+  --el-box-shadow-light: var(--shadow-sm);
+  --el-box-shadow-dark: var(--shadow-md);
+
+  /* Input 阴影减弱 */
+  --el-input-shadow: inset 0 0 0 1px var(--el-border-color);
+  --el-input-shadow-focus: inset 0 0 0 1px var(--el-color-primary);
+  --el-input-shadow-hover: inset 0 0 0 1px var(--el-border-color-hover);
+  --el-textarea-shadow: inset 0 0 0 1px var(--el-border-color);
+  --el-textarea-shadow-focus: inset 0 0 0 1px var(--el-color-primary);
 }
 
 /* 暗色模式覆盖 */
 .dark {
-  --el-color-primary: #60a5fa;
-  --el-color-primary-light-3: #7db9f5;
-  --el-color-primary-light-5: #9fcdf8;
-  --el-color-primary-light-7: #c2e1fa;
-  --el-color-primary-light-9: #e5f0fd;
-  --el-color-primary-dark-2: #3b82f6;
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: color-mix(in srgb, var(--color-primary) 70%, black);
+  --el-color-primary-light-5: color-mix(in srgb, var(--color-primary) 50%, black);
+  --el-color-primary-light-7: color-mix(in srgb, var(--color-primary) 30%, black);
+  --el-color-primary-light-9: var(--color-primary-light);
+  --el-color-primary-dark-2: var(--color-primary-hover);
 
-  --el-text-color-primary: #f9fafb;
-  --el-text-color-regular: #d1d5db;
-  --el-text-color-secondary: #9ca3af;
-  --el-text-color-placeholder: #6b7280;
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-secondary);
+  --el-text-color-secondary: var(--text-muted);
+  --el-text-color-placeholder: var(--text-muted);
 
-  --el-bg-color: #1f2937;
-  --el-bg-color-page: #111827;
-  --el-bg-color-overlay: #374151;
+  --el-bg-color: var(--bg-secondary);
+  --el-bg-color-page: var(--bg-primary);
+  --el-bg-color-overlay: var(--surface-card);
 
-  --el-border-color: #374151;
-  --el-border-color-light: #374151;
-  --el-border-color-lighter: #4b5563;
+  --el-border-color: var(--border-default);
+  --el-border-color-light: var(--border-default);
+  --el-border-color-lighter: var(--bg-tertiary);
+  --el-border-color-hover: var(--border-hover);
 
-  --el-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --el-box-shadow-dark: 0 4px 6px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --el-box-shadow: var(--shadow-card);
+  --el-box-shadow-dark: var(--shadow-md);
+
+  /* Input 阴影减弱 */
+  --el-input-shadow: inset 0 0 0 1px var(--el-border-color);
+  --el-input-shadow-focus: inset 0 0 0 1px var(--el-color-primary);
+  --el-input-shadow-hover: inset 0 0 0 1px var(--el-border-color-hover);
+  --el-textarea-shadow: inset 0 0 0 1px var(--el-border-color);
+  --el-textarea-shadow-focus: inset 0 0 0 1px var(--el-color-primary);
 }

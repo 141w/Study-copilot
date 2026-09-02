@@ -1,1 +1,53 @@
 @import './variables.css';
+@tailwind utilities;
+
+/* ==================== 微观质感（样式精修批次2，纯增量） ==================== */
+
+/* 滚动条：令牌驱动，双主题自动适配（原浏览器默认在暗色下是刺眼白条） */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-active) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-active);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+  background-clip: content-box;
+}
+
+/* 文本选中色：品牌色系，替代浏览器默认蓝 */
+::selection {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+/* 统一键盘焦点环（触屏不受影响） */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 侧栏导航 active 胶囊：背景指示 + 加粗（原仅文字变色，导航迷失感） */
+.el-menu-item.is-active {
+  background-color: var(--color-primary-light);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+}
+.el-menu-item:hover {
+  border-radius: var(--radius-md);
+}
+
+/* el-tabs active 加粗：tab 层级更明确（配合批次3 的 el-tabs 替换） */
+.el-tabs__item.is-active {
+  font-weight: 600;
+}

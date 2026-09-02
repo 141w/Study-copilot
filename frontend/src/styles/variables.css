@@ -1,27 +1,27 @@
 /* ==================== Light Theme (Default) ==================== */
 :root {
-  /* Background Colors */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f9fafb;
-  --bg-tertiary: #f3f4f6;
-  --bg-hover: #f3f4f6;
-  --bg-active: #e5e7eb;
+  /* Background Colors — 柔和的暖灰底色 */
+  --bg-primary: #fafaf9;
+  --bg-secondary: #f5f5f4;
+  --bg-tertiary: #f0f0ef;
+  --bg-hover: #ececeb;
+  --bg-active: #e4e4e3;
 
   /* Surface Colors */
   --surface-card: #ffffff;
-  --surface-overlay: rgba(0, 0, 0, 0.5);
-  --surface-glass: rgba(255, 255, 255, 0.8);
+  --surface-overlay: rgba(0, 0, 0, 0.4);
+  --surface-glass: rgba(255, 255, 255, 0.75);
 
-  /* Text Colors */
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
+  /* Text Colors — 降低纯黑对比度 */
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-muted: #9e9ea4;
   --text-inverse: #ffffff;
   --text-link: #3b82f6;
 
-  /* Border Colors */
-  --border-default: #e5e7eb;
-  --border-hover: #d1d5db;
+  /* Border Colors — 淡化分界线 */
+  --border-default: #eceef1;
+  --border-hover: #d4d7dc;
   --border-focus: #3b82f6;
 
   /* Brand Colors */
@@ -30,6 +30,7 @@
   --color-primary-light: #eff6ff;
   --color-secondary: #6b7280;
   --color-accent: #8b5cf6;
+  --color-accent-light: #f3f0ff;
 
   /* Status Colors */
   --color-success: #10b981;
@@ -41,15 +42,20 @@
   --color-info: #3b82f6;
   --color-info-light: #eff6ff;
 
-  /* Gradient Colors */
-  --gradient-brand: linear-gradient(135deg, #ef2cc1 0%, #fc4c02 100%);
-  --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+  /* Gradient Colors —— 精修（批次1a）：品牌渐变改由主色→强调色派生，
+     与主按钮/强调色同族（蓝→紫），双主题自动一致；
+     原洋红→橙（#ef2cc1→#fc4c02）与界面冷灰蓝色系冲突 */
+  --color-brand-from: var(--color-primary);
+  --color-brand-to: var(--color-accent);
+  --color-navy: #010120;
+  --gradient-brand: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  --gradient-surface: linear-gradient(180deg, #ffffff 0%, #fafaf9 100%);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  --shadow-card: 0 4px 10px rgba(1, 1, 32, 0.08);
+  /* Shadows — 柔和弥散阴影 */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
 
   /* ==================== Spacing ==================== */
   --spacing-xs: 4px;
@@ -60,8 +66,17 @@
   --spacing-2xl: 48px;
 
   /* ==================== Typography ==================== */
-  --font-primary: 'Inter', system-ui, -apple-system, sans-serif;
+  /* 精修（批次1c）：中文优先字体栈——显式声明 PingFang SC / 雅黑 / Noto Sans SC。
+     移除从未加载的 'Inter'（无 @font-face，声明未兑现）；
+     自托管定位下系统字体栈即中文渲染最优解（零网络成本、零布局抖动） */
+  --font-primary: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Noto Sans SC', system-ui, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+
+  /* 行高令牌：中文正文舒适区 1.7+，标题紧凑 */
+  --leading-body: 1.7;
+  --leading-heading: 1.35;
 
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
@@ -72,70 +87,82 @@
   --font-size-3xl: 1.875rem;
 
   /* ==================== Border Radius ==================== */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  /* 精修（批次1d）：两级秩序——控件 10px / 容器 20px。
+     原控件 14px 与容器 24px 拉不开层级，且弹窗(14px)比卡片(24px)还不圆 */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 32px;
   --radius-full: 9999px;
 
   /* ==================== Transitions ==================== */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
   --transition-slow: 350ms ease;
+
+  /* ==================== Layout ==================== */
+  --layout-header-height: 4rem;
+  --layout-sidebar-width: 16rem;
 }
 
 /* ==================== Dark Theme ==================== */
 .dark {
-  /* Background Colors */
-  --bg-primary: #111827;
-  --bg-secondary: #1f2937;
-  --bg-tertiary: #374151;
-  --bg-hover: #374151;
-  --bg-active: #4b5563;
+  /* Background Colors — 柔和的深灰 */
+  --bg-primary: #161618;
+  --bg-secondary: #1c1c1e;
+  --bg-tertiary: #242426;
+  --bg-hover: #2a2a2d;
+  --bg-active: #323235;
 
-  /* Surface Colors */
-  --surface-card: #1f2937;
-  --surface-overlay: rgba(0, 0, 0, 0.7);
-  --surface-glass: rgba(17, 24, 39, 0.8);
+  /* Surface Colors —— 精修（批次1e）：卡片与 bg-secondary 分离出层次
+     （原同为 #1c1c1e，暗色下卡片只靠不可见边框区分，层次塌陷） */
+  --surface-card: #202023;
+  --surface-overlay: rgba(0, 0, 0, 0.6);
+  --surface-glass: rgba(22, 22, 24, 0.8);
 
   /* Text Colors */
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-muted: #9ca3af;
-  --text-inverse: #111827;
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-muted: #7a7a80;
+  --text-inverse: #1d1d1f;
   --text-link: #60a5fa;
 
-  /* Border Colors */
-  --border-default: #374151;
-  --border-hover: #4b5563;
+  /* Border Colors —— 精修（批次1e）：提一档可感知度 */
+  --border-default: #313134;
+  --border-hover: #3e3e42;
   --border-focus: #60a5fa;
 
   /* Brand Colors */
   --color-primary: #60a5fa;
   --color-primary-hover: #3b82f6;
-  --color-primary-light: rgba(96, 165, 250, 0.1);
+  --color-primary-light: rgba(96, 165, 250, 0.12);
   --color-secondary: #9ca3af;
   --color-accent: #a78bfa;
+  --color-accent-light: rgba(167, 139, 250, 0.12);
 
   /* Status Colors */
   --color-success: #34d399;
-  --color-success-light: rgba(52, 211, 153, 0.1);
+  --color-success-light: rgba(52, 211, 153, 0.12);
   --color-warning: #fbbf24;
-  --color-warning-light: rgba(251, 191, 36, 0.1);
+  --color-warning-light: rgba(251, 191, 36, 0.12);
   --color-error: #f87171;
-  --color-error-light: rgba(248, 113, 113, 0.1);
+  --color-error-light: rgba(248, 113, 113, 0.12);
   --color-info: #60a5fa;
-  --color-info-light: rgba(96, 165, 250, 0.1);
+  --color-info-light: rgba(96, 165, 250, 0.12);
 
-  /* Gradient Colors */
-  --gradient-brand: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
-  --gradient-surface: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+  /* Gradient Colors —— 精修（批次1a）：brand-from/to 已在 :root 派生自
+     primary/accent，暗色令牌切换时自动跟随，无需在此覆盖 */
+  --color-navy: #010120;
+  --gradient-surface: linear-gradient(180deg, #1c1c1e 0%, #161618 100%);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-  --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.3);
+  /* Shadows —— 精修（批次1e）：暗色阴影收敛（边框为主、阴影为辅，
+     原 0.35 透明度黑在深底上发脏） */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.14);
 }
 
 /* ==================== Global Styles ==================== */
@@ -341,9 +368,12 @@ textarea.input {
 }
 
 .pastel-gradient {
-  background: linear-gradient(135deg, #ffe5f0 0%, #e8e5ff 50%, #e5f0ff 100%);
-}
-
-.dark .pastel-gradient {
-  background: linear-gradient(135deg, #4a1942 0%, #2d2b55 50%, #1a3a5c 100%);
+  /* 精修（批次1b）：粉彩横幅 → 品牌色氛围微光（6% 透明度）。
+     学习工具需长时间注视，hero 底色应安静；由令牌派生，双主题自动适配，
+     原暗色专属覆盖已删除 */
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 6%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent) 6%, transparent) 100%
+  );
 }
