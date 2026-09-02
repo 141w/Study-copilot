@@ -72,3 +72,24 @@
 - TS 覆盖：src 下 .vue 组件 script 全部 TS（views 13/13、components 11/11、App）
 - Lint：eslint 0 errors；scripts：lint / lint:fix / format / format:check
 - 零行为变更（模板/逻辑/样式均未动，仅类型标注与死代码清理）
+
+## Session 4 — 2026-09-02（验收与落库）
+- [x] 清尾巴：vite.config.js.bak 删除；eslint-plugin-prettier 卸载（未使用）；
+  规划文件移入 archive_docs/planning-2026-09-01/
+- [x] 过程产物归档：design-preview/、frontend-design-review.html、docs/ 下
+  三份计划文件、docs/archive/ 与 archive_docs/ 合并去重（12 项）；
+  仓库根与 docs/ 仅保留正式内容
+- [x] package-lock.json：确认已被 git 跟踪（项目惯例 lock 入库，CI 可复现），随批①提交
+- [x] 全量验证四连 ×2（提交前后各一次）：lint 0 errors / tsc 0 错 /
+  107 测试 / build 1.1MB
+- [x] 真机验收：后端 /health healthy+db ok；注册→登录→token→/auth/me→
+  401 边界→refresh 换新→documents/chat/history/courses 全通；
+  12 条 SPA 路由全 200；dev 模块解析链（main.ts 编译 + 重构 SFC 加载）正常
+- [x] 验收清单落盘：docs/4-DEVELOPMENT/acceptance-checklist.md
+  （机器验证记录 + 人工目视清单）
+- [x] 分批提交 ×4：
+  1e33dd7 build: EP 按需子路径加载（945KB→319KB）
+  a2a3378 feat: P0~P3 优化批次落地
+  e0ba5d2 style: 设计令牌精修
+  8f3d83e chore: ESLint/Prettier + TS 收官 + 归档
+- [x] 工作区最终状态：clean（0 未提交变更）
