@@ -32,8 +32,13 @@ class Settings(BaseSettings):
     # 应用配置
     app_name: str = "Study Copilot"
     app_version: str = "1.0.0"
-    debug: bool = False  # 安全默认：生产漏配 .env 时不得回显 SQL/内部信息
+    debug: bool = False
     encryption_key: str = ""
+
+    # OpenMAIC 联动配置
+    openmaic_base_url: str = ""            # OpenMAIC 实例地址（空 = 禁用）
+    openmaic_webhook_secret: str = ""      # webhook HMAC 签名密钥
+    openmaic_enabled: bool = False         # 联动总开关
 
     # CORS：逗号分隔的允许来源；部署到域名后必须在 .env 覆盖
     cors_origins: str = (

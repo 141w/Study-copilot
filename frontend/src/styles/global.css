@@ -51,3 +51,26 @@
 .el-tabs__item.is-active {
   font-weight: 600;
 }
+
+/* ==================== Reicon 图标迁移（批次：reicon-migrate） ==================== */
+
+/* Loading 旋转动画：reicon refresh 图标替换 EP Loading 后保持原旋转语义 */
+.reicon-spin {
+  animation: reicon-spin 1s linear infinite;
+  transform-origin: center;
+}
+@keyframes reicon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* P1-1（§6.B）：减少动态偏好下停用无限旋转（前庭触发源），保留静态图标 */
+@media (prefers-reduced-motion: reduce) {
+  .reicon-spin {
+    animation: none;
+  }
+}

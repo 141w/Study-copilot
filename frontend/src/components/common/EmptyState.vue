@@ -6,9 +6,6 @@
       :class="iconWrapClass"
     >
       <el-icon v-if="icon" :class="iconClass"><component :is="icon" /></el-icon>
-      <svg v-else-if="svgPath" class="text-[var(--text-secondary)]" :class="svgClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="svgPath" />
-      </svg>
     </div>
     <p class="text-[var(--text-secondary)] mb-1">{{ message }}</p>
     <p v-if="hint" class="text-sm text-[var(--text-muted)] mb-4">{{ hint }}</p>
@@ -22,16 +19,15 @@
  * EmptyState（P2-2）：统一空状态展示。
  *
  * 替代 8 个视图中 5 种手写变体（圆形图标 + 文案 + CTA）。
- * icon 传 Element Plus 图标组件；无 EP 图标时可用 svgPath 传路径。
+ * icon 传图标组件（批次：reicon-migrate，全站图标统一单一来源
+ * @/components/icons，即 Reicon 图标库）。
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
 
 const props = withDefaults(defineProps<{
-  /** Element Plus 图标组件（如 Tickets） */
+  /** 图标组件（如 Tickets，来自 @/components/icons） */
   icon?: Component
-  /** 手写 SVG path（无 EP 图标时用） */
-  svgPath?: string
   message: string
   /** 次级提示文案（可选；主文案下方的浅色说明行） */
   hint?: string
@@ -56,11 +52,5 @@ const iconClass = computed(() => ({
   sm: 'w-6 h-6 text-[var(--text-secondary)]',
   md: 'w-8 h-8 text-[var(--text-secondary)]',
   lg: 'w-10 h-10 text-[var(--text-secondary)]'
-}[props.size]))
-
-const svgClass = computed(() => ({
-  sm: 'w-6 h-6',
-  md: 'w-8 h-8',
-  lg: 'w-10 h-10'
 }[props.size]))
 </script>

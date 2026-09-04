@@ -5,13 +5,28 @@
     <!-- Document List -->
     <div class="mb-8">
       <h2 class="text-lg font-medium text-[var(--text-secondary)] mb-4">选择要阅读的文档</h2>
-      <div v-if="documentStore.loading" class="text-center py-8 text-[var(--text-muted)]">
-        加载中...
-      </div>
+      <!-- 批次6：文字加载态 → 骨架屏（匹配 2/3 列瓦片网格） -->
+      <SkeletonList v-if="documentStore.loading" variant="cards" :count="6" />
       <div v-else-if="documentStore.documents.length === 0" class="text-center py-8 text-[var(--text-muted)]">
         暂无已上传的文档
       </div>
-      <div v-else class="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div class="mb-4">
+        <div class="flex items-center justify-between">
+          <p class="text-sm text-[var(--text-muted)]">点击选择文档阅读</p>
+          <div class="flex gap-2">
+            <el-button
+              size="small"
+              type="default"
+              @click="showClassroomBridge = true"
+              :disabled="documentStore.documents.length === 0"
+            >
+              <el-icon class="w-4 h-4 mr-1"><VideoPlay /></el-icon>
+              生成课堂
+            </el-button>
+          </div>
+        </div>
+      </div>
+      <div v-if="documentStore.documents.length > 0" class="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div
           v-for="doc in documentStore.documents"
           :key="doc.id"
@@ -20,14 +35,11 @@
           role="button"
           tabindex="0"
           :aria-label="`阅读文档 ${doc.filename}`"
-          class="p-4 border rounded-xl cursor-pointer transition-all bg-[var(--surface-card)] shadow-sm hover:shadow-md"
+          class="p-4 border rounded-lg cursor-pointer transition-all bg-[var(--surface-card)] shadow-sm hover:shadow-md"
           :class="selectedDoc?.id === doc.id ? 'border-l-4 border-l-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)] hover:border-[var(--border-hover)]'"
         >
           <div class="flex items-center gap-2 mb-2">
-            <svg class="w-5 h-5 text-[var(--color-error)]" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/>
-              <path d="M14 2v6h6"/>
-            </svg>
+            <el-icon class="w-5 h-5 text-[var(--text-secondary)]"><Document /></el-icon>
             <span class="text-xs px-2 py-0.5 rounded"
               :class="doc.status === 'ready' ? 'bg-[var(--color-success-light)] text-[var(--color-success)]' : 'bg-[var(--color-warning-light)] text-[var(--color-warning)]'"
             >
@@ -55,9 +67,7 @@
             title="内容转换"
             aria-label="内容转换"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-            </svg>
+            <el-icon class="w-5 h-5"><Switch /></el-icon>
           </button>
           <button
             @click="copyAllText"
@@ -65,9 +75,7 @@
             title="复制全文"
             aria-label="复制全文"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
+            <el-icon class="w-5 h-5"><CopyDocument /></el-icon>
           </button>
         </div>
       </div>
@@ -78,14 +86,20 @@
           v-model="searchQuery"
           type="text"
           placeholder="搜索文档内容..."
-          class="w-full px-4 py-2.5 border border-[var(--border-default)] rounded-xl bg-[var(--bg-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] text-base"
+          class="w-full px-4 py-2.5 border border-[var(--border-default)] rounded-md bg-[var(--bg-primary)] focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--color-primary)] text-base"
         />
       </div>
 
       <!-- Content -->
-      <div ref="contentRef" class="p-6 max-h-[70vh] overflow-y-auto bg-[var(--bg-secondary)]">
-        <div v-if="filteredChunks.length === 0" class="text-center py-12 text-[var(--text-muted)]">
-          文档内容加载中...
+      <div ref="contentRef" class="p-6 max-h-[70dvh] overflow-y-auto bg-[var(--bg-secondary)]">
+        <!-- P3-5：加载 / 搜索无结果 / 无内容 三态区分；
+             批次6：加载态由文字改为阅读段落骨架（text 变体） -->
+        <SkeletonList v-if="isLoadingContent" variant="text" :count="10" />
+        <div v-else-if="filteredChunks.length === 0 && searchQuery.trim()" class="text-center py-12 text-[var(--text-muted)]">
+          没有匹配「{{ searchQuery }}」的段落
+        </div>
+        <div v-else-if="filteredChunks.length === 0" class="text-center py-12 text-[var(--text-muted)]">
+          文档内容为空
         </div>
         <div v-else class="space-y-4">
           <div
@@ -96,8 +110,8 @@
             <!-- Chunk Header -->
             <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)] bg-[var(--bg-secondary)]/50 rounded-t-xl">
               <div class="flex items-center gap-3">
-                <span class="text-xs font-medium tracking-wider text-[var(--text-muted)] uppercase">
-                  {{ chunk.page ? `PAGE ${chunk.page}` : `CHUNK ${filteredChunks.findIndex(c => c.idx === chunk.idx) + 1}` }}
+                <span class="text-xs font-medium text-[var(--text-muted)]">
+                  {{ chunk.page ? `第 ${chunk.page} 页` : `段落 ${filteredChunks.findIndex(c => c.idx === chunk.idx) + 1}` }}
                 </span>
               </div>
               <!-- Hover Actions（P3-3：md 常显 / 触屏点按可见）-->
@@ -108,19 +122,15 @@
                   title="解释此段"
                   aria-label="解释此段"
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
+                  <el-icon class="w-4 h-4"><ChatLineRound /></el-icon>
                 </button>
                 <button
                   @click="generateQuiz(chunk)"
-                  class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-success)] hover:bg-[var(--color-success-light)] rounded transition-colors"
+                  class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] rounded transition-colors"
                   title="基于此段出题"
                   aria-label="基于此段出题"
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
+                  <el-icon class="w-4 h-4"><EditPen /></el-icon>
                 </button>
                 <button
                   @click="copyText(chunk.text)"
@@ -128,9 +138,7 @@
                   title="复制文本"
                   aria-label="复制文本"
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
+                  <el-icon class="w-4 h-4"><CopyDocument /></el-icon>
                 </button>
               </div>
             </div>
@@ -156,16 +164,17 @@
       </div>
     </div>
 
+    <!-- Scroll sentinel（P0-4：IntersectionObserver 替代 window scroll listener） -->
+    <div ref="sentinelRef" class="absolute top-[300px] left-0 h-px w-px -z-10" aria-hidden="true"></div>
+
     <!-- Back to Top Button -->
     <button
       v-if="showBackToTop"
       @click="scrollToTop"
-      class="fixed bottom-8 right-8 w-12 h-12 bg-[var(--color-primary)] text-white rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-all"
+      class="fixed bottom-8 right-8 w-12 h-12 bg-[var(--color-primary)] text-[var(--text-inverse)] rounded-full shadow-lg flex items-center justify-center hover:opacity-90 transition-all"
       aria-label="回到顶部"
     >
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-      </svg>
+      <el-icon class="w-6 h-6"><Top /></el-icon>
     </button>
 
     <!-- Transform Dialog -->
@@ -175,10 +184,18 @@
       :source-title="transformDocTitle"
       :document-id="selectedDoc?.id"
     />
+
+    <!-- OpenMAIC 课堂生成 -->
+    <ClassroomBridgeDialog
+      v-model="showClassroomBridge"
+      :documents="documentStore.documents"
+      @generated="onClassroomGenerated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { Document, Switch, CopyDocument, ChatLineRound, EditPen, Top, VideoPlay } from '@/components/icons'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuizStore } from '../stores/quiz'
@@ -187,6 +204,8 @@ import { useToastStore } from '../stores/toast'
 import { formatSize, cleanPdfText } from '../composables/useFormat'
 import type { Document as DocumentModel } from '../types/models'
 import TransformDialog from '../components/TransformDialog.vue'
+import ClassroomBridgeDialog from '../components/integrations/ClassroomBridgeDialog.vue'
+import SkeletonList from '../components/common/SkeletonList.vue'
 import api from '../services/api'
 
 /** 文档 chunk（GET /documents/:id 响应展平 + 视图序号） */
@@ -206,15 +225,22 @@ const toast = useToastStore()
 const selectedDoc = ref<DocumentModel | null>(null)
 const chunks = ref<DocChunk[]>([])
 const searchQuery = ref('')
+// P3-5：文档内容加载态（区分"加载中"与"搜索无结果"）
+const isLoadingContent = ref(false)
 const currentPage = ref(1)
 const pageSize = 15
 const contentRef = ref<HTMLElement | null>(null)
 const showBackToTop = ref(false)
+const sentinelRef = ref<HTMLElement | null>(null)
+let scrollObserver: IntersectionObserver | null = null
 
 // Transform dialog state
 const showTransformDialog = ref(false)
 const transformDocText = ref('')
 const transformDocTitle = ref('')
+
+// OpenMAIC bridge dialog
+const showClassroomBridge = ref(false)
 
 const filteredChunks = computed<DocChunk[]>(() => {
   if (!searchQuery.value.trim()) {
@@ -242,6 +268,7 @@ async function selectDocument(doc: DocumentModel): Promise<void> {
   // 同步选中态到 store（供侧栏等处联动）
   documentStore.selectDocument(doc)
 
+  isLoadingContent.value = true
   try {
     const response = await api.get<{ chunks: DocChunk[] }>(`/documents/${doc.id}`)
     if (response.data.chunks) {
@@ -250,6 +277,8 @@ async function selectDocument(doc: DocumentModel): Promise<void> {
   } catch (error) {
     console.error('Failed to load document:', error)
     toast.error('文档内容加载失败')
+  } finally {
+    isLoadingContent.value = false
   }
 }
 
@@ -263,8 +292,15 @@ function scrollToTop(): void {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-function handleScroll(): void {
-  showBackToTop.value = window.scrollY > 300
+/** P0-4：IntersectionObserver 替代 window scroll listener（规范禁令）。
+ *  sentinel 位于 top:300px，滚过它（不可见）即显示回到顶部按钮 */
+function initScrollObserver(): void {
+  if (!sentinelRef.value) return
+  scrollObserver = new IntersectionObserver(
+    ([entry]) => { showBackToTop.value = !entry.isIntersecting },
+    { rootMargin: '0px 0px -100% 0px' }
+  )
+  scrollObserver.observe(sentinelRef.value)
 }
 
 function copyText(text: string): void {
@@ -309,12 +345,18 @@ function openTransform(): void {
   showTransformDialog.value = true
 }
 
+// OpenMAIC 联动：课堂生成完成回调
+function onClassroomGenerated(_result: { jobId: string; courseId?: string }): void {
+  toast.success('课堂生成任务已提交！')
+}
+
 onMounted(() => {
   documentStore.fetchDocuments()
-  window.addEventListener('scroll', handleScroll)
+  initScrollObserver()
 })
 
 onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll)
+  scrollObserver?.disconnect()
+  scrollObserver = null
 })
 </script>

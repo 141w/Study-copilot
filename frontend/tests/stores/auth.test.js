@@ -91,4 +91,35 @@ describe('Auth Store', () => {
     expect(localStorage.removeItem).toHaveBeenCalledWith('refreshToken')
     expect(router.push).toHaveBeenCalledWith('/login')
   })
+
+  it('updateProfile calls PUT /auth/me and syncs user state', async () => {
+    const response = { data: { id: 1, username: 'renamed', email: 'new@example.com' } }
+    api.put.mockResolvedValue(response)
+
+    const updated = await store.updateProfile({ username: 'renamed', email: 'new@example.com' })
+
+    expect(api.put).toHaveBeenCalledWith('/auth/me', {
+      username: 'renamed',
+      email: 'new@example.com',
+    })
+    expect(updated).toEqual(response.data)
+    expect(store.user).toEqual(response.data)
+  })
+
+  it('updateProfile propagates errors for the view to render', async () => {
+    api.put.mockRejectedValue(new Error('conflict'))
+
+    await expect(store.updateProfile({ username: 'taken' })).rejects.toThrow('conflict')
+  })
+
+  it('changePassword calls PUT /auth/password with mapped field names', async () => {
+    api.put.mockResolvedValue({ data: { detail: '密码已更新' } })
+
+    await store.changePassword('old12345', 'new67890')
+
+    expect(api.put).toHaveBeenCalledWith('/auth/password', {
+      old_password: 'old12345',
+      new_password: 'new67890',
+    })
+  })
 })

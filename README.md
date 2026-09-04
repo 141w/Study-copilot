@@ -63,6 +63,10 @@
 | 组件复用 | Element Plus 通用组件（el-button 等）| ✅ v3 |
 | Prompt 模板化 | Jinja2 模板管理 27 个 LLM prompt | ✅ v3 |
 | 设计系统 | CSS 变量系统（间距、字体、颜色、样式） | ✅ v3 |
+| 对话历史语义搜索 | 基于 pgvector 的消息 embedding，支持跨对话语义检索 | ✅ 新增 |
+| OpenMAIC 联动 | 一键生成 AI 课堂（接入清华 OpenMAIC 平台）+ 多智能体讨论模式 | ✅ v3.2 |
+| AI 课程生成 | 基于文档自动生成课程大纲 + 测验题（本地引擎） | ✅ v3.2 |
+| 多文档问答 | 多文档 CJK 布包，跨文档 RAG 检索 | ✅ v3.2 |
 
 ### 应用场景
 
@@ -78,10 +82,11 @@
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                         前端 (Vue3 + Vite)                        │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
-│  │ 登录/注册 │ │ 文档管理 │ │ 智能问答 │ │ 在线做题 │ │ 学习分析 │   │
-│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘   │
-│       └───────────┴───────────┴───────────┴───────────┘         │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐ │
+│  │ 登录/注册  │ │ 文档管理  │ │ 智能问答  │ │ 在线做题  │ │ 学习  │ │
+│  │          │ │ (OpenMAIC│ │ (讨论模式)│ │ (AI生成) │ │ 分析  │ │
+│  │          │ │  课堂生成)│ │          │ │          │ │(课堂) │ │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └───────┘ │
 │                              │                                    │
 │                         Pinia 状态管理                            │
 └──────────────────────────────┼───────────────────────────────────┘
@@ -92,10 +97,11 @@
                                │ localhost:8000
 ┌──────────────────────────────┼───────────────────────────────────┐
 │                         后端 (FastAPI)                            │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
-│  │ 认证系统 │ │ 文档API │ │ 问答API │ │ 出题API │ │ 分析API │   │
-│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘   │
-│       └───────────┴───────────┴───────────┴───────────┘         │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐ │
+│  │ 认证系统   │ │ 文档API  │ │ 问答API  │ │ 出题API  │ │OpenMAIC│ │
+│  │          │ │          │ │(讨论模式)│ │(课程生成)│ │ Bridge │ │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └───┬───┘ │
+│       └───────────┴────────────┴────────────┴─────────────┘     │
 │                              │                                    │
 │  ┌──────────────────────────┴───────────────────────────────┐    │
 │  │                        核心引擎                            │    │
@@ -104,20 +110,26 @@
 │  │  │ (Docling)   │  │ (pgvector)  │  │ (OpenRouter)│       │    │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘       │    │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │    │
-│  │  │ 文本分块器  │  │ 出题生成器   │  │ Embedder    │       │    │
-│  │  │ (Chunker)   │  │ (Quiz Gen)  │  │ (SBERT)     │       │    │
+│  │  │ 多文档布包  │  │ 讨论引擎    │  │ 课程生成器   │       │    │
+│  │  │(DocBundle)  │  │(Persona)   │  │(Course Gen) │       │    │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘       │    │
-│  │  ┌─────────────┐  ┌─────────────┐                         │    │
-│  │  │ 查询重写器  │  │ Reranker    │                         │    │
-│  │  │ (Query Rew) │  │ (CrossEnc)  │                         │    │
-│  │  └─────────────┘  └─────────────┘                         │    │
 │  └────────────────────────────────────────────────────────────┘   │
 │                              │                                    │
 │  ┌──────────────┐  ┌─────────────────┐  ┌─────────────────┐       │
-│  │PostgreSQL+pgvector│  │ 文件存储        │  │ 任务队列        │       │
-│  │  数据库       │  │ (uploads/)      │  │ (AsyncTask)    │       │
+│  │PostgreSQL+   │  │ 文件存储        │  │ 任务队列        │       │
+│  │  pgvector    │  │ (uploads/)      │  │ (AsyncTask)    │       │
+│  │  数据库       │  │                 │  │                │       │
 │  └──────────────┘  └─────────────────┘  └─────────────────┘       │
 └──────────────────────────────────────────────────────────────────┘
+        │                                         │
+        │  REST API + Webhook                     │  optional
+        ▼                                         ▼
+┌─────────────────────┐               ┌──────────────────────────┐
+│   OpenMAIC 平台      │               │  AI 课堂（多智能体编排）  │
+│  (THU OpenMAIC)     │               │  教师 / 同学 / 助教角色  │
+│  LangGraph 编排      │               │  交互实验 + 测验 + TTS   │
+│  generate-classroom  │               └──────────────────────────┘
+└─────────────────────┘
 ```
 
 ---
@@ -180,7 +192,8 @@
 study-copilot/
 ├── backend/                         # 后端服务
 │   ├── app/
-│   │   ├── api/                    # API 路由层（12 routers）
+│   │   ├── api/                    # API 路由层（14 routers）
+│   │   │   ├── __init__.py
 │   │   │   ├── auth.py            # 用户认证（注册/登录/JWT 刷新）
 │   │   │   ├── document.py        # 文档上传/解析/删除/级联清理
 │   │   │   ├── chat.py            # RAG 问答接口（含流式 SSE）
@@ -192,7 +205,8 @@ study-copilot/
 │   │   │   ├── tts.py             # 文本转语音接口
 │   │   │   ├── tasks.py           # 异步任务管理接口
 │   │   │   ├── config.py          # LLM 配置存储
-│   │   │   └── metrics.py         # 运营指标端点
+│   │   │   ├── metrics.py         # 运营指标端点
+│   │   │   └── openmaic_bridge.py # OpenMAIC 课堂联动（清华平台集成）
 │   │   │
 │   │   ├── core/                   # 核心业务逻辑
 │   │   │   ├── document_parser.py # 统一文档解析（PDF/DOCX/PPTX/TXT）
@@ -214,6 +228,10 @@ study-copilot/
 │   │   │   ├── transformations.py # 内容转换引擎（8 种类型）
 │   │   │   ├── task_worker.py     # 异步任务 worker
 │   │   │   ├── template_manager.py # Jinja2 Prompt 模板管理
+│   │   │   ├── course_generator.py # AI 课程大纲生成（本地引擎）
+│   │   │   ├── document_bundle.py  # 多文档 CJK 布包（跨文档 RAG）
+│   │   │   ├── persona_discussion.py # 多智能体讨论模式（教师/同学/助教）
+│   │   │   ├── logger.py           # 结构化日志 + trace-id
 │   │   │   └── rate_limit.py      # 接口限流
 │   │   │
 │   │   ├── services/               # 业务服务层
@@ -225,7 +243,8 @@ study-copilot/
 │   │   │   ├── course_service.py   # 课程空间服务
 │   │   │   ├── transform_service.py # 内容转换服务
 │   │   │   ├── task_service.py     # 异步任务服务
-│   │   │   └── config_service.py   # 配置服务
+│   │   │   ├── config_service.py   # 配置服务
+│   │   │   └── openmaic_service.py # OpenMAIC 联动服务
 │   │   │
 │   │   ├── db/                     # 数据库层
 │   │   │   ├── database.py        # SQLAlchemy 异步配置 + ORM 模型
@@ -255,56 +274,30 @@ study-copilot/
 │   ├── alembic/
 │   │   ├── alembic.ini             # Alembic 配置
 │   │   ├── env.py                  # Alembic 环境配置
-│   │   └── versions/               # 6 个迁移脚本
+│   │   └── versions/               # 迁移脚本
 │   │
-│   ├── tests/                      # 后端测试（pytest, 420+ 用例）
+│   ├── tests/                      # 后端测试（420+ 用例）
 │   │   ├── conftest.py
 │   │   ├── test_api.py
-│   │   ├── test_analysis_service.py
 │   │   ├── test_auth.py
 │   │   ├── test_chunker.py
-│   │   ├── test_config_service.py
-│   │   ├── test_course_service.py
-│   │   ├── test_document_parser.py
-│   │   ├── test_document_service.py
-│   │   ├── test_exceptions.py
-│   │   ├── test_hybrid_retrieval_contract.py
-│   │   ├── test_list_pagination.py
-│   │   ├── test_logging_config.py
-│   │   ├── test_metrics.py
-│   │   ├── test_note_indexing.py
+│   │   ├── test_rag_engine.py
 │   │   ├── test_quiz.py
-│   │   ├── test_quiz_generator.py
-│   │   ├── test_quiz_service.py
-│   │   ├── test_quiz_task_e2e.py
-│   │   ├── test_rag_engine.py
-│   │   ├── test_rate_limit.py
-│   │   ├── test_rag_engine.py
-│   │   ├── test_soft_delete.py
-│   │   ├── test_security_headers.py
-│   │   ├── test_task_persistence.py
-│   │   ├── test_task_service.py
-│   │   ├── test_tasks.py
-│   │   ├── test_trace_middleware.py
-│   │   ├── test_transform_service.py
-│   │   ├── test_tts.py
-│   │   ├── test_type_safety_regressions.py
-│   │   └── test_vector_store.py
+│   │   ├── test_vector_store.py
+│   │   └── ...                     # 30+ 测试文件
 │   │
 │   ├── uploads/                    # 用户上传文件（gitignored）
-│   ├── vectorstore/                # 遗留索引目录（gitignored，已迁移至 pgvector）
-│   ├── .env                        # 环境变量（gitignored）
+│   ├── vectorstore/                # 遗留索引目录（gitignored）
 │   ├── .env.example                # 环境变量模板
-│   ├── requirements.txt            # Python 依赖（兼容层）
-│   ├── pyproject.toml               # 项目配置（hatchling + ruff + pytest）
-│   ├── run.py                      # 启动脚本
-│   └── Dockerfile                  # 合并镜像（前端+后端+nginx，单容器部署）
+│   ├── requirements.txt            # Python 依赖
+│   ├── run.py                      # 启动脚本（uvicorn app.main:app）
+│   └── pytest.ini                  # 测试配置
 │
 ├── frontend/                        # 前端应用
 │   ├── src/
-│   │   ├── views/                  # 13 个页面组件
+│   │   ├── views/                  # 14 个页面组件
 │   │   │   ├── HomeView.vue       # 首页
-│   │   │   ├── LoginView.vue      # 登录页（TypeScript）
+│   │   │   ├── LoginView.vue      # 登录页
 │   │   │   ├── RegisterView.vue   # 注册页
 │   │   │   ├── UploadView.vue     # 文档上传
 │   │   │   ├── DocumentView.vue   # 文档管理
@@ -315,40 +308,53 @@ study-copilot/
 │   │   │   ├── CourseListView.vue  # 课程空间列表
 │   │   │   ├── CourseDetailView.vue # 课程空间详情
 │   │   │   ├── NotesView.vue      # 笔记管理
-│   │   │   └── TasksView.vue      # 异步任务管理
+│   │   │   ├── TasksView.vue      # 异步任务管理
+│   │   │   └── ProfileView.vue    # 个人资料
 │   │   │
 │   │   ├── components/             # 功能组件
 │   │   │   ├── NoteEditor.vue     # Markdown 笔记编辑器 + AI 辅助
-│   │   │   ├── NoteCard.vue       # 笔记卡片（TypeScript）
-│   │   │   ├── CourseCard.vue     # 课程空间卡片（TypeScript）
+│   │   │   ├── NoteCard.vue       # 笔记卡片
+│   │   │   ├── CourseCard.vue     # 课程空间卡片
 │   │   │   ├── TTSPlayer.vue      # 语音播放器
 │   │   │   ├── TaskPanel.vue      # 任务状态面板
 │   │   │   ├── TransformDialog.vue # 内容转换对话框
 │   │   │   ├── UrlImportDialog.vue # URL 导入对话框
+│   │   │   ├── CopilotBotAvatar.vue # Bot 形象引擎
 │   │   │   ├── common/            # 通用组件
 │   │   │   │   ├── AppHeader.vue  # 全局头部导航
-│   │   │   │   └── AppSidebar.vue # 侧边栏导航
-│   │   │   │（通用基础组件改用 Element Plus 直接实现）
+│   │   │   │   ├── AppSidebar.vue # 侧边栏导航
+│   │   │   │   ├── ConfirmDialog.vue     # 确认对话框
+│   │   │   │   ├── DocumentPicker.vue    # 文档选择器
+│   │   │   │   ├── EmptyState.vue        # 空状态占位
+│   │   │   │   ├── PageHeader.vue        # 页面头部+面包屑
+│   │   │   │   └── SkeletonList.vue      # 骨架屏加载
+│   │   │   ├── integrations/      # 集成组件
+│   │   │   │   ├── ClassroomBridgeDialog.vue # 课堂平台集成
+│   │   │   │   └── OpenMAICLinkCard.vue       # OpenMAIC 内容卡片
 │   │   │   └── chat/              # 聊天组件
 │   │   │       ├── ChatInput.vue  # 消息输入
 │   │   │       └── ChatHistoryPanel.vue # 聊天历史面板
 │   │   │
-│   │   ├── stores/                 # 10 个 Pinia store（全部 TypeScript）
+│   │   ├── stores/                 # 11 个 Pinia store（全部 TypeScript）
 │   │   │   ├── auth.ts            # 认证状态
-│   │   │   ├── chat.ts            # 问答状态（含流式 + abort cleanup）
+│   │   │   ├── chat.ts            # 问答状态（SSE 流式 + abort）
 │   │   │   ├── config.ts          # LLM 配置状态
-│   │   │   ├── course.ts          # 课程空间状态（SWR 缓存）
-│   │   │   ├── document.ts        # 文档状态（SWR 缓存 + 请求去重）
-│   │   │   ├── note.ts            # 笔记状态（SWR 缓存）
-│   │   │   ├── quiz.ts            # 做题状态（SWR 缓存）
+│   │   │   ├── course.ts          # 课程空间状态（30s 缓存）
+│   │   │   ├── document.ts        # 文档状态（30s 缓存 + 去重）
+│   │   │   ├── note.ts            # 笔记状态（30s 缓存）
+│   │   │   ├── quiz.ts            # 做题状态（30s 缓存）
+│   │   │   ├── openmaic.ts        # OpenMAIC 联动状态
 │   │   │   ├── sidebar.ts         # 侧边栏状态
 │   │   │   ├── theme.ts           # 主题状态
 │   │   │   └── toast.ts           # 提示状态
 │   │   │
 │   │   ├── composables/            # 可复用组合函数
 │   │   │   ├── useApi.ts          # 统一 API 请求处理
-│   │   │   ├── useMarkdown.ts     # Markdown 渲染
-│   │   │   └── useChatExport.ts   # 对话导出
+│   │   │   ├── useMarkdown.ts     # Markdown 渲染（markdown-it 封装）
+│   │   │   ├── useChatExport.ts   # 对话导出 Markdown
+│   │   │   ├── useFormat.ts       # 日期/数字格式化
+│   │   │   ├── useNoteDraft.ts    # 笔记草稿自动保存（localStorage）
+│   │   │   └── useReducedMotion.ts # 减少动态偏好检测
 │   │   │
 │   │   ├── types/                  # TypeScript 类型定义
 │   │   │   ├── api.ts             # API 响应类型
@@ -356,16 +362,18 @@ study-copilot/
 │   │   │   └── markdown-it.d.ts   # markdown-it 类型声明
 │   │   │
 │   │   ├── services/               # API 服务
-│   │   │   └── api.ts             # Axios 封装（JWT 拦截器/重试）
+│   │   │   ├── api.ts             # Axios 封装（JWT 拦截器/重试）
+│   │   │   └── authRefresh.ts     # Token 自动刷新拦截器
 │   │   │
 │   │   ├── router/                 # 路由配置
-│   │   │   └── index.ts           # 懒加载路由 + 认证守卫
+│   │   │   └── index.ts           # 懒加载路由 + 认证守卫（14 条路由）
 │   │   │
 │   │   ├── styles/                 # 全局样式
 │   │   │   ├── variables.css      # CSS 变量设计系统
-│   │   │   └── global.css         # 全局样式
+│   │   │   ├── element-plus-theme.css # Element Plus 主题覆盖
+│   │   │   └── global.css         # 全局样式 + 重置
 │   │   │
-│   │   ├── App.vue                # 根组件（布局壳）
+│   │   ├── App.vue                # 根组件（布局壳 + 页面过渡动画）
 │   │   └── main.ts                # 入口文件
 │   │
 │   ├── index.html
@@ -376,6 +384,7 @@ study-copilot/
 │   ├── tsconfig.json
 │   ├── package.json
 │   └── .dockerignore
+```
 
 ---
 
@@ -539,7 +548,7 @@ cd frontend && npm run dev
 **4. RAG 智能问答**
 - 访问 `/chat` 选择一个已解析的文档
 - 输入问题，系统会基于文档内容检索相关片段并生成回答
-- 回答中的引用序号支持点击跳转到底部来源卡片
+- 回答中的引用序号支持点击跳转到底部来源卡
 - 支持多轮连续对话，系统会自动重写指代性问题
 
 **5. AI 出题练习**
@@ -588,6 +597,7 @@ cd frontend && npm run dev
 | `/api/chat/history/{id}` | GET | 获取对话详情 | JWT |
 | `/api/chat/history/{id}` | PUT | 更新对话标题 | JWT |
 | `/api/chat/history/{id}` | DELETE | 删除对话 | JWT |
+| `/api/chat/search` | POST | 语义搜索历史对话消息 | JWT |
 
 ### 做题接口
 
@@ -663,6 +673,14 @@ cd frontend && npm run dev
 | `/api/tasks` | GET | 获取任务列表 | JWT |
 | `/api/tasks/{id}` | GET | 获取任务状态和结果 | JWT |
 | `/api/tasks/{id}` | DELETE | 取消任务 | JWT |
+
+### OpenMAIC 联动接口
+
+| 接口 | 方法 | 功能 | 认证 |
+|------|------|------|------|
+| `/api/integrations/openmaic/classroom` | POST | 发起课堂生成（接入清华 OpenMAIC） | JWT |
+| `/api/integrations/openmaic/classrooms` | GET | 列出已生成课堂 | JWT |
+| `/api/integrations/openmaic/webhook` | POST | OpenMAIC 回调端点 | 否 |
 
 ---
 
@@ -902,7 +920,7 @@ pytest tests/ --cov=app --cov-report=html  # 生成覆盖率报告
 
 ```bash
 cd frontend
-npx vitest run                       # 运行全部测试（87 用例）
+npx vitest run                       # 运行全部测试
 npx vitest                            # 监听模式
 npx vitest run --coverage             # 生成覆盖率报告
 ```
@@ -967,7 +985,7 @@ ruff format .
 2. **核心逻辑**：在 `backend/app/core/` 下实现业务逻辑
 3. **数据模型**：在 `backend/app/db/database.py` 中添加 SQLAlchemy 模型
 4. **前端页面**：在 `frontend/src/views/` 下创建 Vue 组件
-5. **前端路由**：在 `frontend/src/router/index.ts` 中注册路由
+5. **前端路由**：在 `frontend/src/router/` 中注册路由
 6. **状态管理**：在 `frontend/src/stores/` 中添加 Pinia store
 
 ### 数据库模型
@@ -979,7 +997,7 @@ ruff format .
 | `User` | `users` | 用户账号 |
 | `Document` | `documents` | 上传文档 |
 | `ChatSession` | `chat_sessions` | 对话会话 |
-| `Message` | `messages` | 对话消息 |
+| `Message` | `messages` | 对话消息（含 embedding 向量列，支持语义搜索） |
 | `Quiz` | `quizzes` | 生成的题目 |
 | `QuizResult` | `quiz_results` | 答题结果 |
 | `UserLLMConfig` | `user_llm_configs` | 用户 LLM 配置 |
@@ -987,6 +1005,7 @@ ruff format .
 | `Note` | `notes` | 笔记 |
 | `Tag` | `tags` | 标签 |
 | `AsyncTask` | `async_tasks` | 异步任务 |
+| `DocumentChunk` | `document_chunks` | 文档分块向量 |
 | `note_tags` | `note_tags` | 笔记-标签关联表 |
 
 ---
@@ -1059,95 +1078,6 @@ ruff format .
 - 确认后端 `/api/chat/ask` (stream: true) 可用
 - 检查控制台有无 CORS 错误
 - 尝试使用普通模式（非流式）
-
----
-
-## 更新日志
-
-### v3.0.0 (2026-07) — TypeScript & 代码质量升级
-
-#### 核心升级
-- **TypeScript 迁移**：前端渐进式 TypeScript 支持，类型安全，IDE 提示增强
-- **组件复用**：采用 Element Plus UI 组件库（el-button、el-dialog、el-input 等），通过 unplugin-vue-components 自动导入
-- **Prompt 模板化**：27 个 LLM prompt 迁移为 Jinja2 模板，7 个子目录，易于维护和迭代
-- **设计系统**：完整的 CSS 变量系统（间距、字体、颜色、组件样式）
-- **Composables**：useApi、useMarkdown 等可复用逻辑封装
-
-#### 新增文件
-- `frontend/src/components/common/AppHeader.vue` — 全局头部导航（主题切换 + 用户菜单）
-- `frontend/src/components/common/AppSidebar.vue` — 侧边栏导航（响应式 + 文档列表）
-- `frontend/src/composables/useApi.ts` — 统一 API 请求处理
-- `frontend/src/composables/useMarkdown.ts` — Markdown 渲染
-- `frontend/src/composables/useChatExport.ts` — 对话导出 Markdown 构建
-- `frontend/src/types/api.ts` — API 响应类型
-- `frontend/src/types/models.ts` — 核心数据模型
-- `frontend/tsconfig.json` — TypeScript 配置
-- `backend/app/core/template_manager.py` — Jinja2 模板管理器
-- `backend/app/core/pgvector_store.py` — PostgreSQL+pgvector 向量搜索
-- `backend/app/core/task_worker.py` — 异步任务队列 worker
-- `backend/app/core/logger.py` — 结构化日志 + trace-id 传播
-- `backend/app/templates/` — 27 个 Jinja2 Prompt 模板
-
-#### 改进
-- TransformDialog、UrlImportDialog 使用 el-dialog 组件
-- NoteCard、CourseCard、ChatMessage 添加 TypeScript 类型
-- LoginView 使用 TypeScript
-- variables.css 完善设计系统
-
-### v2.1.0 (2026-06) — Agentic RAG
-
-#### 核心升级
-- **Agentic RAG 架构**：基于论文实现四层智能问答（查询路由 → 自适应检索 → 会话摘要 → 答案反思）
-- **查询路由**：规则优先 + LLM 兜底，自动识别问题类型
-- **上下文感知改写**：一次 LLM 调用同时完成意图分类和隐式引用改写
-- **自适应检索**：4 种策略（SINGLE/STANDARD/MULTI_HOP/COMPARE），根据问题复杂度自动选择
-- **纠错检索**：检索质量评估，不合格时自动改写查询重试
-- **会话摘要**：长对话自动生成早期摘要，保持上下文连贯
-- **答案反思**：生成后自我评估，不合格则自动修正
-- **LLM 实例复用**：减少 3-4 次冗余调用
-
-#### 新增文件
-- `query_router.py` — 查询路由（意图分类 + 上下文改写）
-- `retrieval_grader.py` — 检索质量评估
-- `adaptive_retriever.py` — 自适应检索器
-- `query_decomposer.py` — 查询分解 + 实体提取
-- `answer_reflector.py` — 答案自我反思
-
-### v2.0.0 (2025-06)
-
-#### 新增功能
-- **笔记系统**：手动/AI 笔记，标签管理，语义搜索
-- **课程空间**：按课程组织文档和笔记
-- **内容转换**：8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释）
-- **URL 导入**：从网页链接提取内容
-- **TTS 语音**：Edge TTS 朗读答案和笔记
-- **异步任务**：批量操作，后台任务队列
-- **凭证加密**：Fernet 加密存储 API Key
-- **数据库迁移**：Alembic 迁移管理
-- **CI/CD**：GitHub Actions 自动测试
-- **代码质量**：Ruff linter 集成
-
-#### v1.0.0 初始功能
-
-#### 初始完成的功能
-- 基于 FastAPI + Vue3 的完整架构
-- PDF / DOCX / PPTX 文档上传与解析
-- RAG 智能问答（pgvector + LLM）
-- AI 自动出题与答题判分
-- 学习分析与错题管理
-- JWT 用户认证系统
-- 多 LLM 提供商支持
-
-#### 后续增强（已全部完成）
-- **流式输出**：前后端 SSE 流式问答
-- **查询重写**：多轮对话指代消解
-- **检索重排序**：CrossEncoder 提高准确率
-- **引用溯源优化**：修复引用过滤逻辑，实现双向锚点联动
-- **错题本功能**：错题列表与智能分析
-- **判分优化**：模糊匹配提高准确率
-- **向量缓存持久化**：重启无需重新加载
-- **LLM 重试机制**：指数退避自动重试
-- **文档级联删除**：清理文件 + 索引 + 数据
 
 ---
 
@@ -1290,10 +1220,131 @@ docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn
 
 ---
 
+## 更新日志
+
+### v3.2.0 — OpenMAIC 联动 & 本地课程生成 & 讨论模式
+
+#### 新增功能
+- **OpenMAIC 课堂生成**：接入清华 OpenMAIC 平台，一键创建 AI 课堂，含瑞格 pg肚子里根节点生成逻辑
+- **多智能体讨论模式**：基于 `persona_discussion.py` 引擎，支持教师/同学/助教角色，自动交互讨论
+- **AI 课程生成**：基于 `course_generator.py` 本地引擎，从文档自动生成课程大纲 + 测验题
+- **多文档 CJK 布包**：`document_bundle.py` 实现跨文档 CJK token 预算打包，优化多文档 RAG 检索
+- **OpenMAIC 联动 UI**：`ClassroomBridgeDialog.vue` + `OpenMAICLinkCard.vue` 组件，`openmaic.ts` store 管理状态
+- **Bot 形象引擎**：`CopilotBotAvatar.vue` 组件 + 运行时主题模板系统
+- **用户资料页**：`ProfileView.vue`（`/profile`）支持查看和编辑个人资料
+- **通用基础组件**：`ConfirmDialog`、`DocumentPicker`、`EmptyState`、`PageHeader`、`SkeletonList`
+
+#### 技术细节
+- `openmaic_bridge.py`：REST 端点 + OpenMAIC 回调 webhook
+- `CLAUDE.md`：前端、后端、核心模块三份独立架构文档
+- Markdown-it 类型声明：`markdown-it.d.ts`
+
+### v3.1.0 (2026-09) — 对话存储修复 & 语义搜索
+
+#### Bug 修复
+- **流式对话消息持久化**：修复 `ask_question_stream` 中 `yield ...; return` 快速路径跳过后端 commit 的 bug，现在所有路径（含 OUT_OF_SCOPE / DIRECT_ANSWER / SUMMARY）均保证消息写入数据库
+- **消息 embedding 存储**：`_Vector` TypeDecorator 修复 `dimension` 参数丢失问题，消息 embedding 正确存储为 `vector(768)`
+
+#### 新增功能
+- **对话历史语义搜索**：`messages` 表新增 `embedding` 列，用户消息和 AI 回复自动计算 embedding 并存储
+- **`POST /api/chat/search`**：支持按会话内或跨会话语义搜索历史对话，返回相似度排序的结果列表
+- **搜索 UI**：历史侧边栏顶部搜索框（300ms debounce），结果展示相似度百分比，点击跳转对应会话
+
+#### 技术细节
+- 写入使用 raw SQL + `CAST(:embedding AS vector(768))` 避免 TypeDecorator binding 类型问题
+- Embedding 计算失败时不阻塞写入（降级为 `NULL`），搜索自动跳过无 embedding 的消息
+- 前端 `ChatHistoryPanel.vue` 新增搜索状态（`searchResults`/`searchQuery`/`isSearching`）
+
+### v3.0.0 (2026-07) — TypeScript & 代码质量升级
+
+#### 核心升级
+- **TypeScript 迁移**：前端渐进式 TypeScript 支持，类型安全，IDE 提示增强
+- **组件复用**：采用 Element Plus UI 组件库（el-button、el-dialog、el-input 等），通过 unplugin-vue-components 自动导入
+- **Prompt 模板化**：27 个 LLM prompt 迁移为 Jinja2 模板，7 个子目录，易于维护和迭代
+- **设计系统**：完整的 CSS 变量系统（间距、字体、颜色、组件样式）
+- **Composables**：useApi、useMarkdown 等可复用逻辑封装
+
+#### 新增文件
+- `frontend/src/components/common/AppHeader.vue` — 全局头部导航（主题切换 + 用户菜单）
+- `frontend/src/components/common/AppSidebar.vue` — 侧边栏导航（响应式 + 文档列表）
+- `frontend/src/composables/useApi.ts` — 统一 API 请求处理
+- `frontend/src/composables/useMarkdown.ts` — Markdown 渲染
+- `frontend/src/composables/useChatExport.ts` — 对话导出 Markdown 构建
+- `frontend/src/types/api.ts` — API 响应类型
+- `frontend/src/types/models.ts` — 核心数据模型
+- `frontend/tsconfig.json` — TypeScript 配置
+- `backend/app/core/template_manager.py` — Jinja2 模板管理器
+- `backend/app/core/pgvector_store.py` — PostgreSQL+pgvector 向量搜索
+- `backend/app/core/task_worker.py` — 异步任务队列 worker
+- `backend/app/core/logger.py` — 结构化日志 + trace-id 传播
+- `backend/app/templates/` — 27 个 Jinja2 Prompt 模板
+
+#### 改进
+- TransformDialog、UrlImportDialog 使用 el-dialog 组件
+- NoteCard、CourseCard、ChatMessage 添加 TypeScript 类型
+- LoginView 使用 TypeScript
+- variables.css 完善设计系统
+
+### v2.1.0 (2026-06) — Agentic RAG
+
+#### 核心升级
+- **Agentic RAG 架构**：基于论文实现四层智能问答（查询路由 → 自适应检索 → 会话摘要 → 答案反思）
+- **查询路由**：规则优先 + LLM 兜底，自动识别问题类型
+- **上下文感知改写**：一次 LLM 调用同时完成意图分类和隐式引用改写
+- **自适应检索**：4 种策略（SINGLE/STANDARD/MULTI_HOP/COMPARE），根据问题复杂度自动选择
+- **纠错检索**：检索质量评估，不合格时自动改写查询重试
+- **会话摘要**：长对话自动生成早期摘要，保持上下文连贯
+- **答案反思**：生成后自我评估，不合格则自动修正
+- **LLM 实例复用**：减少 3-4 次冗余调用
+
+#### 新增文件
+- `query_router.py` — 查询路由（意图分类 + 上下文改写）
+- `retrieval_grader.py` — 检索质量评估
+- `adaptive_retriever.py` — 自适应检索器
+- `query_decomposer.py` — 查询分解 + 实体提取
+- `answer_reflector.py` — 答案自我反思
+
+### v2.0.0 (2025-06)
+
+#### 新增功能
+- **笔记系统**：手动/AI 笔记，标签管理，语义搜索
+- **课程空间**：按课程组织文档和笔记
+- **内容转换**：8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释）
+- **URL 导入**：从网页链接提取内容
+- **TTS 语音**：Edge TTS 朗读答案和笔记
+- **异步任务**：批量操作，后台任务队列
+- **凭证加密**：Fernet 加密存储 API Key
+- **数据库迁移**：Alembic 迁移管理
+- **CI/CD**：GitHub Actions 自动测试
+- **代码质量**：Ruff linter 集成
+
+### v1.0.0 初始功能
+
+#### 初始完成的功能
+- 基于 FastAPI + Vue3 的完整架构
+- PDF / DOCX / PPTX 文档上传与解析
+- RAG 智能问答（pgvector + LLM）
+- AI 自动出题与答题判分
+- 学习分析与错题管理
+- JWT 用户认证系统
+- 多 LLM 提供商支持
+
+#### 后续增强（已全部完成）
+- **流式输出**：前后端 SSE 流式问答
+- **查询重写**：多轮对话指代消解
+- **检索重排序**：CrossEncoder 提高准确率
+- **引用溯源优化**：修复引用过滤逻辑，实现双向锚点联动
+- **错题本功能**：错题列表与智能分析
+- **判分优化**：模糊匹配提高准确率
+- **向量缓存持久化**：重启无需重新加载
+- **LLM 重试机制**：指数退避自动重试
+- **文档级联删除**：清理文件 + 索引 + 数据
+
+---
+
 ## 许可证
 
 MIT License - 欢迎开源贡献！
-
 
 ---
 
@@ -1305,3 +1356,17 @@ MIT License - 欢迎开源贡献！
 - [pgvector](https://github.com/pgvector/pgvector) - PostgreSQL 向量扩展
 - [sentence-transformers](https://sbert.net/) - 文本向量化模型
 - [TailwindCSS](https://tailwindcss.com/) - 原子化 CSS 框架
+
+## 文档
+
+- [快速开始](docs/0-START-HERE/index.md) — 项目概览与快速上手
+- [安装指南](docs/1-INSTALLATION/index.md) — 详细安装步骤
+- [系统架构](docs/2-ARCHITECTURE/index.md) — 架构设计与数据流
+- [API 参考](docs/3-API-REFERENCE/index.md) — 完整 API 接口文档
+- [开发指南](docs/4-DEVELOPMENT/index.md) — 开发规范与工作流
+- [测试指南](docs/4-DEVELOPMENT/testing.md) — 测试策略与用例
+- [设计系统](docs/5-DESIGN-SYSTEM/index.md) — CSS 变量与主题规范
+- [集成指南](docs/5-INTEGRATION/index.md) — 外部系统集成
+- [Agentic RAG 方案](docs/AGENTIC_RAG_PLAN.md) — RAG 架构演进计划
+- [上下文优化计划](docs/CONTEXT_OPTIMIZATION_PLAN.md) — 上下文窗口优化
+- [OpenMAIC 对比](docs/comparison-with-open-notebook.md) — 平台特性对比

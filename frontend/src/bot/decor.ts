@@ -270,8 +270,10 @@ export const COMET_DOT = 0.129
 
 /* --------------------------------------------------- pastille notification */
 
-/** Bleu releve au pixel. */
-export const NOTIF_BLUE = '#2496e8'
+/** Couleur de la pastille, relevee au pixel a l'origine (#2496e8).
+ *  Repassee en neutre (DESIGN.md monochrome) : gris moyen visible
+ *  sur les deux themes, l'identite noir-et-blanc du produit prime. */
+export const NOTIF_BLUE = '#8a8a92'
 /** La pastille est posee exactement sur la circonference, a -42deg. */
 export const NOTIF_ANGLE = -42
 export const NOTIF_DIST = 1.003

@@ -1,7 +1,7 @@
 <template>
   <div
     ref="cardEl"
-    class="card p-5 hover:border-[var(--color-primary)] border-2 border-transparent transition-all cursor-pointer group"
+    class="card p-5 hover:shadow-md hover:outline hover:outline-2 hover:outline-[var(--color-primary)]/40 transition-all cursor-pointer group"
     tabindex="0"
     role="button"
     :aria-label="course.name ? `打开课程: ${course.name}` : '打开课程'"
@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { Reading, Edit, Delete, Tickets } from '@element-plus/icons-vue'
+import { Reading, Edit, Delete, Tickets } from '@/components/icons'
 import type { Course } from '../types/models'
 
 defineProps<{

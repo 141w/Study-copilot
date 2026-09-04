@@ -6,6 +6,8 @@ export interface User {
   id: string
   username: string
   email: string
+  /** 注册时间（GET/PUT /auth/me 返回，ProfileView 展示用） */
+  created_at?: string
 }
 
 export interface AuthTokens {
@@ -123,6 +125,7 @@ export interface LLMConfig {
   max_tokens?: number
   embedding_model?: string
   embedding_dimension?: number
+  message_format?: string
   /** GET /config/llm 返回：是否已保存 Key + 掩码展示值 */
   has_api_key?: boolean
   api_key_masked?: string

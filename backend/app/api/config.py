@@ -21,6 +21,7 @@ class LLMConfigReq(BaseModel):
     max_tokens: int = 2048
     embedding_model: str = "shibing624/text2vec-base-chinese"
     embedding_dimension: int = 768
+    message_format: str = "openai"
 
 
 class LLMConfigResp(BaseModel):
@@ -32,6 +33,7 @@ class LLMConfigResp(BaseModel):
     max_tokens: int
     embedding_model: str
     embedding_dimension: int
+    message_format: str = "openai"
     has_api_key: bool = False
     api_key_masked: str | None = None
     created_at: str
@@ -67,6 +69,7 @@ async def create_llm_config(
         req.max_tokens,
         req.embedding_model,
         req.embedding_dimension,
+        message_format=req.message_format,
     )
     return LLMConfigResp(**data)
 
@@ -88,6 +91,7 @@ async def update_llm_config(
         req.max_tokens,
         req.embedding_model,
         req.embedding_dimension,
+        message_format=req.message_format,
     )
     return LLMConfigResp(**data)
 

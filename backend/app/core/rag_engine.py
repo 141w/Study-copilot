@@ -165,9 +165,9 @@ class RAGEngine:
     async def _direct_answer(self, query, user_config=None) -> str:
         """不依赖文档，直接用 LLM 回答通用问题。"""
         llm = LLM.from_config(user_config)
-
+        system_prompt = render_template("rag/general_chat_system.jinja2")
         messages = [
-            {"role": "system", "content": "你是一个学习助手。请直接回答用户的问题。"},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": query},
         ]
         return await llm.chat(messages, temperature=0.7, max_tokens=1024)
@@ -569,8 +569,9 @@ class RAGEngine:
 
         if route == QueryType.DIRECT_ANSWER:
             # 流式直接回答（不走检索）
+            system_prompt = render_template("rag/general_chat_system.jinja2")
             messages = [
-                {"role": "system", "content": "你是一个学习助手。请直接回答用户的问题。"},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": final_query},
             ]
             async for token in llm.chat_stream(messages):

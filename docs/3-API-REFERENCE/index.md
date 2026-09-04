@@ -1,13 +1,36 @@
 # API Reference
 
 All endpoints are prefixed with `/api`. Authentication uses JWT Bearer tokens unless noted.
+Unauthenticated endpoints: `/`, `/health`, `/api/metrics`, `/api/integrations/openmaic/webhook`.
+
+---
+
+## Table of Contents
+
+- [Authentication](#authentication)
+- [Documents](#documents)
+- [Chat (RAG Q&A)](#chat-rag-qa)
+- [Quiz](#quiz)
+- [Analysis](#analysis)
+- [Configuration](#configuration)
+- [Notes](#notes)
+- [Courses](#courses)
+- [Transform](#transform)
+- [TTS](#tts)
+- [Tasks](#tasks)
+- [Metrics](#metrics)
+- [OpenMAIC Integration](#openmaic-integration)
+- [Error Responses](#error-responses)
+
+---
 
 ## Authentication
 
 ### Register
 ```
 POST /api/auth/register
-```Create a new user account.
+```
+Create a new user account.
 
 **Request Body:**
 ```json
@@ -22,7 +45,8 @@ POST /api/auth/register
 {
   "id": "uuid",
   "username": "string",
-  "email": "user@example.com"
+  "email": "user@example.com",
+  "created_at": "2025-01-01T00:00:00"
 }
 ```
 
@@ -31,13 +55,13 @@ POST /api/auth/register
 ### Login
 ```
 POST /api/auth/login
-```Authenticate and receive JWT tokens.
+```
+Authenticate and receive JWT tokens. Uses `application/x-www-form-urlencoded` per OAuth2 password flow.
 
-**Request Body:** `application/x-www-form-urlencoded`
+**Request Body:**
 ```
 username=string&password=string
 ```
-
 **Response:** `200 OK`
 ```json
 {
@@ -49,24 +73,67 @@ username=string&password=string
 
 ---
 
+### Refresh Token
+```
+POST /api/auth/refresh
+```
+Refresh the access token using a valid refresh token.
+
+**Headers:** `Authorization: Bearer <refresh_token>`
+**Response:** `200 OK` — New access + refresh token pair.
+
+---
+
 ### Get Current User
 ```
 GET /api/auth/me
-Authorization: Bearer *** `...ponse:** `200 OK`
+```
+**Headers:** `Authorization: Bearer <access_token>`
+**Response:** `200 OK`
 ```json
 {
   "id": "uuid",
   "username": "string",
-  "email": "user@example.com"
+  "email": "user@example.com",
+  "created_at": "2025-01-01T00:00:00"
 }
 ```
 
 ---
 
-### Refresh Token
+### Update Profile
 ```
-POST /api/auth/refresh
-Authorization: Bearer *** `...esponse:** `200 OK` — New access token pair.
+PUT /api/auth/me
+```
+Update current user profile. Unprovided fields remain unchanged.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "username": "new-name",
+  "email": "new@example.com"
+}
+```
+**Response:** `200 OK` — Updated user object.
+
+---
+
+### Change Password
+```
+PUT /api/auth/password
+```
+Change password after verifying the old one.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "old_password": "current-pw",
+  "new_password": "new-pw"
+}
+```
+**Response:** `200 OK` — `{"detail": "密码已更新"}`
 
 ---
 
@@ -76,10 +143,9 @@ Authorization: Bearer *** `...esponse:** `200 OK` — New access token pair.
 ```
 POST /api/documents/upload
 Content-Type: multipart/form-data
-Authorization: Bearer *** Body:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `file` | File | PDF, DOCX, or PPTX (max 50MB) |
+```
+**Headers:** `Authorization: Bearer ***`
+**Body:** `file` field — PDF, DOCX, or PPTX (max 50MB). Rate limited to 10 req/min per IP.
 
 **Response:** `200 OK`
 ```json
@@ -91,8 +157,24 @@ Authorization: Bearer *** Body:**
   "chunk_count": 0
 }
 ```
+**Note:** Processing is asynchronous. Track progress via `GET /api/tasks/{task_id}`.
 
-**Note:** Upload is now asynchronous. The response includes a `task_id` for tracking processing progress via `GET /api/tasks/{task_id}`.
+---
+
+### Import from URL
+```
+POST /api/documents/from-url
+```
+Import a web page's text content as a new document.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "url": "https://example.com/article"
+}
+```
+**Response:** `200 OK` — Same shape as upload response, with a `task_id` for processing.
 
 ---
 
@@ -105,91 +187,185 @@ GET /api/documents?limit=50&offset=0
 |-------|------|-------------|
 | `limit` | int | 分页大小（1-200）；缺省返回全部 |
 | `offset` | int | 分页偏移，默认 0 |
-Authorization: Bearer *** `...esponse:** `200 OK` — Array of document objects.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of document objects.
 
 ---
 
 ### Get Document
 ```
 GET /api/documents/{document_id}
-Authorization: Bearer *** `...esponse:** `200 OK` — Document detail with metadata.
-
----
-
-### Restore Document
 ```
-POST /api/documents/{document_id}/restore
-Authorization: Bearer ***
-```
-**Response:** `200 OK` — 从回收站恢复软删除的文档。
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Document detail with metadata.
 
 ---
 
 ### Delete Document
 ```
 DELETE /api/documents/{document_id}
-Authorization: Bearer *** `...ascading delete: removes file, vector index, and related quiz/chat data.
+```
+Soft-delete. Removes from listing; file and vector index are cleaned up.
 
-**Response:** `204 No Content`
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — `{"message": "删除成功"}`
+
+---
+
+### Restore Document
+```
+POST /api/documents/{document_id}/restore
+```
+Restore a soft-deleted document back to active.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — `{"message": "恢复成功"}`
 
 ---
 
 ## Chat (RAG Q&A)
 
+All chat endpoints are rate limited to 30 req/min per IP.
+
 ### Ask Question
 ```
 POST /api/chat/ask
-Authorization: Bearer *** `...quest Body:**
+```
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
 ```json
 {
-  "document_id": "uuid",
   "question": "What is the main topic of chapter 3?",
-  "conversation_id": "uuid-or-null"
+  "document_ids": ["uuid-1", "uuid-2"],
+  "session_id": "uuid-or-null",
+  "config": { "temperature": 0.7 }
 }
 ```
-
 **Response:** `200 OK`
 ```json
 {
   "answer": "Based on the document...",
-  "citations": [
+  "sources": [
     {
       "index": 1,
+      "document_id": "uuid",
       "text": "source excerpt...",
-      "page": 5
+      "page": "5",
+      "source": "...",
+      "relevance_score": 0.92
     }
   ],
-  "conversation_id": "uuid"
+  "used_source_indices": [1, 3],
+  "filtered_sources": [],
+  "session_id": "uuid"
 }
 ```
 
----
-
-### Ask Question (Streaming)
-```
-POST /api/chat/ask (stream: true)
-Authorization: Bearer *** `...ame request body as `/ask`. Returns `text/event-stream` (SSE):
-
+**Note:** Set `"stream": true` in the request body to receive SSE events:
 ```
 data: {"type": "token", "content": "Based"}
 data: {"type": "token", "content": " on"}
 data: {"type": "citation", "index": 1, "text": "..."}
+data: {"type": "answer_refined", "content": "..."}
 data: {"type": "done"}
 ```
 
 ---
 
-### Chat History
+### Chat History — List Sessions
 ```
 GET /api/chat/history
-Authorization: Bearer *** `...esponse:** `200 OK` — Array of conversation summaries.
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of conversation summaries.
 
 ---
 
-### Chat Detail
+### Chat History — Session Detail
 ```
-GET /api/chat/history/{conversation_id}
-Authorization: Bearer *** `...esponse:** `200 OK` — Full conversation with messages and citations.
+GET /api/chat/history/{session_id}
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Full conversation with messages and citations.
+
+---
+
+### Update Session Title
+```
+PUT /api/chat/history/{session_id}
+```
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "title": "New title"
+}
+```
+**Response:** `200 OK` — `{"message": "更新成功", "title": "New title"}`
+
+---
+
+### Delete Session
+```
+DELETE /api/chat/history/{session_id}
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — `{"message": "删除成功"}`
+
+---
+
+### Semantic Search Messages
+```
+POST /api/chat/search
+```
+Search across chat messages using vector similarity.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "query": "Python memory management",
+  "session_id": "uuid-or-null",
+  "top_k": 10
+}
+```
+**Response:** `200 OK` — Ranked list of matching messages with similarity scores.
+```json
+[
+  {
+    "message_id": "uuid",
+    "session_id": "uuid",
+    "role": "user",
+    "content": "Python garbage collection and memory management",
+    "similarity": 0.82,
+    "created_at": "2026-09-03T13:59:04"
+  }
+]
+```
+`session_id` is optional — omit for cross-session search, provide to limit to a single conversation.
+
+---
+
+### Multi-Persona Discussion
+```
+POST /api/chat/discuss
+```
+Stream a multi-persona discussion on a topic, optionally enriched with RAG context.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "question": "The topic to discuss",
+  "document_ids": ["uuid-1"],
+  "personas": [
+    { "name": "Expert", "system_message": "You are a domain expert..." }
+  ],
+  "max_turns": 2
+}
+```
+**Response:** `text/event-stream` (SSE). Events: `persona_speak` / `summary` / `error` / `done`.
 
 ---
 
@@ -198,23 +374,26 @@ Authorization: Bearer *** `...esponse:** `200 OK` — Full conversation with mes
 ### Generate Quiz
 ```
 POST /api/quiz/generate
-Authorization: Bearer *** `...quest Body:**
+```
+Generate quiz questions from documents.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
 ```json
 {
-  "document_id": "uuid",
-  "question_count": 10,
-  "question_types": ["multiple_choice", "short_answer"]
+  "document_ids": ["uuid-1", "uuid-2"],
+  "choice_count": 3,
+  "short_answer_count": 2,
+  "config": {}
 }
 ```
-
-**Response:** `201 Created`
+**Response:** `200 OK`
 ```json
 {
-  "quiz_id": "uuid",
-  "questions": [
+  "quizzes": [
     {
       "id": "uuid",
-      "type": "multiple_choice",
+      "question_type": "choice",
       "question": "What is ...?",
       "options": ["A", "B", "C", "D"],
       "answer": "A",
@@ -226,36 +405,48 @@ Authorization: Bearer *** `...quest Body:**
 
 ---
 
-**Note:** The current quiz API returns questions directly on generation and does not expose a standalone `/api/quiz/{quiz_id}` detail endpoint.
-
-### Submit Answers
+### Submit Answer
 ```
 POST /api/quiz/submit
-Authorization: Bearer *** `...quest Body:**
+```
+Submit and grade a single quiz answer.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
 ```json
 {
   "quiz_id": "uuid",
-  "answers": [
-    {"question_id": "uuid", "answer": "A"}
-  ]
+  "user_answer": "A"
 }
 ```
-
-**Response:** `200 OK` — Grading results with score and per-question feedback.
+**Response:** `200 OK`
+```json
+{
+  "quiz_id": "uuid",
+  "user_answer": "A",
+  "correct_answer": "A",
+  "is_correct": true,
+  "explanation": "Because..."
+}
+```
 
 ---
 
 ### Result History
 ```
 GET /api/quiz/result-history
-Authorization: Bearer *** `...esponse:** `200 OK` — Array of past quiz results.
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of past quiz submission results.
 
 ---
 
 ### Wrong Questions (Error Book)
 ```
 GET /api/quiz/wrong-questions
-Authorization: Bearer *** `...esponse:** `200 OK` — Array of incorrectly answered questions.
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of incorrectly answered questions with answers and explanations.
 
 ---
 
@@ -264,22 +455,40 @@ Authorization: Bearer *** `...esponse:** `200 OK` — Array of incorrectly answe
 ### Wrong Answer Analysis
 ```
 GET /api/analysis/wrong
-Authorization: Bearer *** `...
-**Response:** `200 OK` — AI-generated analysis of weak areas.
+```
+AI-generated analysis of weak areas from wrong answers.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Analysis object identifying weak topics and suggestions.
 
 ---
 
 ### Knowledge Mastery
 ```
 GET /api/analysis/knowledge
-Authorization: Bearer *** `...esponse:** `200 OK` — Knowledge mastery breakdown by topic.
+```
+Knowledge mastery breakdown by topic.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK`
+```json
+{
+  "total_quizzes": 20,
+  "correct_count": 16,
+  "accuracy_rate": 0.8
+}
+```
 
 ---
 
 ### Learning Progress
 ```
 GET /api/analysis/progress
-Authorization: Bearer *** `...esponse:** `200 OK` — Study progress statistics and trends.
+```
+Study progress statistics and trends.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Progress data object.
 
 ---
 
@@ -288,19 +497,43 @@ Authorization: Bearer *** `...esponse:** `200 OK` — Study progress statistics 
 ### Get LLM Config
 ```
 GET /api/config/llm
-Authorization: Bearer *** `...
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Config object with masked API key.
+
+---
+
 ### Save LLM Config
 ```
 POST /api/config/llm
-Authorization: Bearer *** `...quest Body:**
+```
+Create or replace the user's LLM configuration.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
 ```json
 {
   "provider": "openrouter",
   "api_key": "sk-or-...",
+  "base_url": "https://openrouter.ai/api/v1",
   "model_name": "openai/gpt-4o-mini",
-  "base_url": "https://openrouter.ai/api/v1"
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "embedding_model": "shibing624/text2vec-base-chinese",
+  "embedding_dimension": 768,
+  "message_format": "openai"
 }
 ```
+
+---
+
+### Update LLM Config
+```
+PUT /api/config/llm
+```
+Same schema as `POST`. Updates existing config.
+
+**Headers:** `Authorization: Bearer ***`
 
 ---
 
@@ -308,242 +541,514 @@ Authorization: Bearer *** `...quest Body:**
 
 ### List Notes
 ```
-GET /api/notes
-Authorization: Bearer *** `...uery Parameters:**
+GET /api/notes?course_space_id=uuid&tag=tag-name&limit=50&offset=0
+```
+**Query Parameters:**
 | Param | Type | Description |
 |-------|------|-------------|
-| `tag` | string | Filter by tag name |
 | `course_space_id` | uuid | Filter by course space |
+| `tag` | string | Filter by tag name |
 | `limit` | int | 分页大小（1-200）；缺省返回全部 |
 | `offset` | int | 分页偏移，默认 0 |
 
-> 语义搜索使用独立端点 `POST /api/notes/search`。
-
-**Response:** `200 OK` — Array of note objects.
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of brief note objects.
 
 ---
 
 ### Create Note
 ```
 POST /api/notes
-Authorization: Bearer *** `...quest Body:**
+```
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
 ```json
 {
-  "title": "string",
-  "content": "markdown string",
-  "note_type": "manual|ai",
-  "course_id": "uuid-or-null",
-  "tags": ["tag1", "tag2"]
+  "title": "My Note",
+  "content": "# Markdown content",
+  "note_type": "markdown",
+  "course_space_id": "uuid",
+  "tag_names": ["tag1", "tag2"]
 }
 ```
-
-**Response:** `201 Created` — Note object with id.
+**Response:** `201 Created` — Full note object with tags.
 
 ---
 
 ### Get Note
 ```
 GET /api/notes/{note_id}
-Authorization: Bearer *** `...
+```
+**Response:** `200 OK` — Full note object with tags and course association.
+
+---
+
 ### Update Note
 ```
 PUT /api/notes/{note_id}
-Authorization: Bearer *** `...
-### Restore Note
 ```
-POST /api/notes/{note_id}/restore
-Authorization: Bearer ***
-```
-**Response:** `200 OK` — 恢复后的笔记对象。
+**Headers:** `Authorization: Bearer ***`
+**Request Body:** Same fields as create, all optional (partial update).
+
+**Response:** `200 OK` — Updated note object.
 
 ---
 
 ### Delete Note
 ```
 DELETE /api/notes/{note_id}
-Authorization: Bearer *** `...
+```
+Soft-delete note.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — `{"message": "删除成功"}`
+
+---
+
+### Restore Note
+```
+POST /api/notes/{note_id}/restore
+```
+Restore a soft-deleted note.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Restored note object.
+
+---
+
 ### Search Notes
 ```
 POST /api/notes/search
-Authorization: Bearer *** `...ntic search across user's notes using FAISS vector index.
+```
+Semantic search across the user's notes using vector similarity.
 
+**Headers:** `Authorization: Bearer ***`
 **Request Body:**
 ```json
 {
   "query": "search text",
-  "limit": 10
+  "top_k": 10
 }
 ```
-
-**Response:** `200 OK` — Array of note objects with relevance scores.
-```json
-[
-  {
-    "id": "uuid",
-    "title": "string",
-    "content": "string",
-    "note_type": "manual|ai",
-    "tags": ["tag1", "tag2"],
-    "score": 0.85,
-    "created_at": "2025-01-01T00:00:00Z"
-  }
-]
-```
-
-**Note:** Notes are automatically indexed on create/update. The backend lazily loads `DocumentVectorStore(f"notes_{user.id}")` per query.
+**Response:** `200 OK` — Results are plain objects (format from note_service.search_notes).
 
 ---
 
 ### List Tags
 ```
 GET /api/notes/tags/all
-Authorization: Bearer *** `...
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of tag objects.
+```json
+[
+  { "id": "uuid", "name": "tag1", "created_at": "2025-01-01T00:00:00" }
+]
+```
+
+---
+
+### Delete Tag
+```
+DELETE /api/notes/tags/{tag_id}
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — `{"message": "标签删除成功"}`
+
+---
+
 ## Courses
 
 ### List Course Spaces
 ```
 GET /api/courses
-Authorization: Bearer *** `... Create Course Space
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of course space objects.
+
+---
+
+### Create Course Space
 ```
 POST /api/courses
-Authorization: Bearer *** `...quest Body:**
+```
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
 ```json
 {
-  "name": "string",
-  "description": "string"
+  "name": "Machine Learning 101",
+  "description": "Intro to ML",
+  "color": "#409EFF"
 }
 ```
+**Response:** `201 Created` — Course space object.
+
+---
 
 ### Get Course Space
 ```
 GET /api/courses/{course_id}
-Authorization: Bearer *** `...eturns course with associated documents and notes.
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Course space object.
+
+---
 
 ### Update Course Space
 ```
 PUT /api/courses/{course_id}
-Authorization: Bearer *** `...
+```
+**Headers:** `Authorization: Bearer ***`
+**Request Body:** (all fields optional)
+```json
+{
+  "name": "Updated Name",
+  "description": "Updated description",
+  "color": "#67C23A"
+}
+```
+**Response:** `200 OK` — Updated course space object.
+
+---
+
 ### Delete Course Space
 ```
 DELETE /api/courses/{course_id}
-Authorization: Bearer *** List Course Documents
+```
+**Response:** `200 OK` — `{"message": "删除成功"}`
+
+---
+
+### List Course Documents
 ```
 GET /api/courses/{course_id}/documents
-Authorization: Bearer *** `...e:** `200 OK` — Array of documents associated with the course.
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of document metadata associated with the course.
 
 ---
 
 ### Add Document to Course
 ```
 POST /api/courses/{course_id}/documents
-Authorization: Bearer *** Body:**
+```
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
 ```json
 {
   "document_id": "uuid"
 }
 ```
-
-**Response:** `201 Created` — Association record.
+**Response:** `201 Created` — `{"message": "Document added"}`
 
 ---
 
 ### Remove Document from Course
 ```
 DELETE /api/courses/{course_id}/documents/{doc_id}
-Authorization: Bearer *** `... Sets `course_space_id = NULL` on the document.
+```
+Sets `course_space_id = NULL` on the document.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — `{"message": "Document removed"}`
+
+---
+
+### Generate Course from Documents
+```
+POST /api/courses/generate
+```
+Generate a course outline + quizzes from source documents using LLM.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "doc_ids": ["uuid-1", "uuid-2"],
+  "requirement": "Focus on neural networks"
+}
+```
+**Response:** `201 Created`
+```json
+{
+  "course_id": "uuid",
+  "title": "Generated Course Title",
+  "description": "Generated description...",
+  "section_count": 8,
+  "quiz_count": 15
+}
+```
 
 ---
 
 ## Transform
 
+### List Transformation Types
+```
+GET /api/transform/transformations
+```
+List all available content transformation types.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Array of transformation descriptors.
+
+---
+
 ### Transform Content
 ```
 POST /api/transform
-Authorization: Bearer *** `...quest Body:**
+```
+Perform content transformation. Provide exactly one of `source_text`, `note_id`, or `document_id`.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
 ```json
 {
-  "source_type": "document|note|text",
-  "source_id": "uuid-or-null",
-  "content": "string (if source_type=text)",
   "transform_type": "summary|key_points|outline|flashcards|mindmap|qa|translate|explain",
-  "target_language": "string (for translate type)"
+  "source_text": "string (optional)",
+  "source_title": "string",
+  "note_id": "uuid (optional)",
+  "document_id": "uuid (optional)"
 }
 ```
-
-**Response:** `200 OK` — Transformed content.
-
-### List Transform Types
-```
-GET /api/transform/transformations
-Authorization: Bearer *** `...
-## TTS
-
-### Synthesize Speech
-```
-POST /api/tts/generate
-Authorization: Bearer *** `...quest Body:**
+**Response:** `200 OK`
 ```json
 {
-  "text": "string",
-  "voice": "string (optional, default: zh-CN-XiaoxiaoNeural)"
-}
-```
-
-**Response:** `200 OK` — Audio stream (audio/mpeg).
-
-### List Voices
-```
-GET /api/tts/voices
-Authorization: Bearer *** `...
-## Tasks
-
-### Create Task
-```
-POST /api/tasks
-Authorization: Bearer *** `...quest Body:**
-```json
-{
-  "task_type": "document_process|quiz_generate",
-  "payload": {}
-}
-```
-
-**Response:** `201 Created` — Task record.
-```json
-{
-  "id": "uuid",
-  "task_type": "document_process",
-  "status": "pending",
-  "created_at": "2025-01-01T00:00:00Z"
+  "transform_type": "summary",
+  "transform_name": "摘要",
+  "result": "...",
+  "source_title": "..."
 }
 ```
 
 ---
 
-### List Tasks
+## TTS (Text-to-Speech)
+
+### Synthesize Speech
 ```
-GET /api/tasks
-Authorization: Bearer *** `...
-### Get Task Status
+POST /api/tts/generate
 ```
-GET /api/tasks/{task_id}
-Authorization: Bearer *** `...esponse:**
+Generate an audio file from text.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "text": "string",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "speed": 1.0
+}
+```
+**Response:** `200 OK` — `audio/mpeg` file stream.
+
+---
+
+### List Voices
+```
+GET /api/tts/voices
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Available TTS voices grouped by language.
+
+---
+
+## Tasks
+
+### Create Task
+```
+POST /api/tasks
+```
+Enqueue a background task for long-running operations (document processing, quiz generation, etc.).
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```
+task_type=document_process&payload={"document_id":"uuid"}
+```
+Or as JSON:
+```json
+{
+  "task_type": "document_process",
+  "payload": {}
+}
+```
+**Response:** `201 Created`
 ```json
 {
   "id": "uuid",
-  "task_type": "string",
-  "status": "pending|running|completed|failed",
-  "result": {},
-  "error": "string-or-null",
-  "created_at": "timestamp",
-  "completed_at": "timestamp-or-null"
+  "user_id": "uuid",
+  "task_type": "document_process",
+  "status": "pending",
+  "progress": 0,
+  "result": null,
+  "error": null,
+  "created_at": "2025-01-01T00:00:00",
+  "completed_at": null
 }
 ```
+Common `task_type` values: `document_process`, `quiz_generate`.
+
+---
+
+### List Tasks
+```
+GET /api/tasks?status=running&limit=50&offset=0
+```
+**Query Parameters:**
+| Param | Type | Description |
+|-------|------|-------------|
+| `status` | string | Filter by status (`pending`, `running`, `completed`, `failed`, `cancelled`) |
+| `limit` | int | Max results (default 50) |
+| `offset` | int | Pagination offset |
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK`
+```json
+{
+  "tasks": [...],
+  "total": 5
+}
+```
+
+---
+
+### Get Task Status
+```
+GET /api/tasks/{task_id}
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — Full task object.
+
+---
 
 ### Cancel Task
 ```
 DELETE /api/tasks/{task_id}
-Authorization: Bearer *** `...
+```
+Cancel a pending or running task.
+
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK` — `{"message": "任务已取消", "task": {...}}`
+
+---
+
+## Metrics
+
+### Operational Metrics
+```
+GET /api/metrics
+```
+Unrestricted endpoint. Prometheus-style JSON snapshot.
+
+**Response:** `200 OK`
+```json
+{
+  "app": {
+    "name": "Study Copilot",
+    "uptime_seconds": 3600.5,
+    "started_at": "2025-01-01T00:00:00"
+  },
+  "tasks": {
+    "total": 42,
+    "by_status": { "pending": 2, "running": 1, "completed": 38, "failed": 1, "cancelled": 0 }
+  }
+}
+```
+
+---
+
+## OpenMAIC Integration
+
+### Create Classroom
+```
+POST /api/integrations/openmaic/classroom
+```
+Trigger OpenMAIC classroom generation from selected documents. Requires OpenMAIC to be enabled on the server.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "doc_ids": ["uuid-1", "uuid-2"],
+  "requirement": "string (max 500 chars)",
+  "enable_web_search": false,
+  "enable_tts": true,
+  "agent_mode": "default"
+}
+```
+**Response:** `200 OK`
+```json
+{
+  "class_id": "string",
+  "job_id": "string",
+  "status": "queued",
+  "poll_url": "https://openmaic.example.com/poll/...",
+  "course_id": "uuid",
+  "message": "课堂生成已排队"
+}
+```
+
+---
+
+### List Classrooms
+```
+GET /api/integrations/openmaic/classrooms
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK`
+```json
+{
+  "classrooms": [
+    {
+      "course_id": "uuid",
+      "title": "Classroom Name",
+      "url": "https://openmaic.example.com/classroom/...",
+      "created_at": "2025-01-01T00:00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### Import Quiz Results
+```
+POST /api/integrations/openmaic/quiz/import
+```
+Sync OpenMAIC quiz results into Study Copilot's quiz system.
+
+**Headers:** `Authorization: Bearer ***`
+**Request Body:**
+```json
+{
+  "course_id": "uuid (optional)",
+  "quiz_results": [
+    { "question_id": "uuid", "user_answer": "A", "is_correct": true }
+  ]
+}
+```
+**Response:** `200 OK`
+```json
+{
+  "synced": 5,
+  "skipped": 2
+}
+```
+
+---
+
+### Webhook (no auth)
+```
+POST /api/integrations/openmaic/webhook
+```
+OpenMAIC callback endpoint. Validates HMAC signature (`X-OpenMAIC-Signature` header). No JWT required.
+
+**Request Body:** JSON payload sent by OpenMAIC.
+
+---
+
 ## Error Responses
 
 All error responses follow this format:

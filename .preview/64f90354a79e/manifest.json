@@ -1,0 +1,33 @@
+{
+  "schema_version": "1",
+  "source_path": "/Users/wweiqi/Desktop/update plan/Study-copilot/icon-style-compare.html",
+  "source_filename": "icon-style-compare.html",
+  "source_hash": "64f90354a79e",
+  "source_size_bytes": 194908,
+  "kind": "html",
+  "rendered_at_utc": "2026-09-04T05:09:27+00:00",
+  "output_dir": "/Users/wweiqi/Desktop/update plan/Study-copilot/.preview/64f90354a79e",
+  "page_count": 1,
+  "rendered_page_count": 0,
+  "collage_count": 0,
+  "extracted_text_chars": 194341,
+  "text_relpath": "text.md",
+  "thumbnail_relpath": null,
+  "pages": [],
+  "collages": [],
+  "warnings": [
+    "html render: chromium render timed out after 90s"
+  ],
+  "options": {
+    "max_pages": 12,
+    "collage": true,
+    "page_range": null,
+    "thumbnail": true,
+    "text_only": false,
+    "jpeg_quality": 85,
+    "out_max_dim": 2048
+  },
+  "summary": {
+    "bytes": 194908
+  }
+}

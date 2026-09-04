@@ -58,6 +58,26 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
+  /**
+   * 更新当前用户资料（用户名/邮箱）。后端未提供的字段（undefined）保持不变；
+   * 成功后同步本地 user 状态。
+   */
+  async function updateProfile(payload: { username?: string; email?: string }): Promise<User> {
+    const response = await api.put<User>('/auth/me', payload)
+    user.value = response.data
+    return response.data
+  }
+
+  /**
+   * 修改密码：需提供原密码，新密码 ≥ 6 位（后端校验）。
+   */
+  async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    await api.put('/auth/password', {
+      old_password: oldPassword,
+      new_password: newPassword
+    })
+  }
+
   if (token.value) {
     fetchUser()
   }
@@ -70,6 +90,8 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     fetchUser,
+    updateProfile,
+    changePassword,
     logout
   }
 })

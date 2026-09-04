@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-[var(--bg-primary)] transition-colors duration-200">
-    <AppHeader />
-    <div class="flex pt-[var(--layout-header-height)]">
+    <AppHeader v-if="showHeader" />
+    <div class="flex" :class="showHeader ? 'pt-[var(--layout-header-height)]' : ''">
       <AppSidebar v-if="showSidebar" />
       <main class="flex-1 min-w-0" :class="showSidebar ? 'md:ml-[var(--layout-sidebar-width)]' : ''">
         <router-view v-slot="{ Component }">
@@ -26,9 +26,10 @@ import AppSidebar from './components/common/AppSidebar.vue'
 const route = useRoute()
 const sidebarStore = useSidebarStore()
 
-const showSidebar = computed(() => {
-  return route.path !== '/login' && route.path !== '/register'
-})
+// 登录/注册页沉浸式布局：隐藏顶部 header 与侧栏
+const isAuthPage = computed(() => route.path === '/login' || route.path === '/register')
+const showHeader = computed(() => !isAuthPage.value)
+const showSidebar = computed(() => !isAuthPage.value)
 
 // Close sidebar on route change (mobile UX)
 watch(
@@ -53,5 +54,18 @@ watch(
 .page-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+/* P1-1（§6.B）：减少动态偏好下页面切换降级为瞬时 */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active,
+  .page-leave-active {
+    transition: none;
+  }
+  .page-enter-from,
+  .page-leave-to {
+    opacity: 1;
+    transform: none;
+  }
 }
 </style>

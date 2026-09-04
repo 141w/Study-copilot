@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
@@ -184,3 +184,59 @@ async def remove_document_from_course(
         db, current_user, course_id, doc_id
     )
     return {"message": "Document removed"}
+
+
+# ── Course Generation ────────────────────────────────────────────────────────
+
+
+class CourseGenRequest(BaseModel):
+    doc_ids: list[str] = Field(..., max_length=5, description="源文档 ID 列表")
+    requirement: str = Field(default="", max_length=500, description="课程主题/要求")
+
+
+class CourseGenResponse(BaseModel):
+    course_id: str
+    title: str
+    description: str
+    section_count: int
+    quiz_count: int
+
+
+@router.post("/generate", response_model=CourseGenResponse)
+async def generate_course(
+    req: CourseGenRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """基于文档自动生成课程大纲 + 测验，创建 CourseSpace。"""
+    from app.core.course_generator import generate_course as _gen
+    from app.services.config_service import get_llm_config_with_secret
+
+    llm_config = await get_llm_config_with_secret(db, current_user)
+    result = await _gen(db, current_user, req.doc_ids, req.requirement, llm_config)
+
+    outline = result["outline"]
+    course = await course_service.create_course_space(
+        db, current_user,
+        name=outline.get("title", "未命名课程"),
+        description=outline.get("description", req.requirement),
+        color="#409EFF",
+    )
+
+    # 将大纲和测验存入 description（轻量实现：JSON）
+    import json as _json
+    course.description = _json.dumps({
+        "outline": outline,
+        "quizzes": result["quizzes"][:50],
+        "source_doc_ids": result["source_doc_ids"],
+        "generated": True,
+    })
+    await db.commit()
+
+    return CourseGenResponse(
+        course_id=course.id,
+        title=course.name,
+        description=course.description[:200],
+        section_count=len(outline.get("sections", [])),
+        quiz_count=len(result["quizzes"]),
+    )

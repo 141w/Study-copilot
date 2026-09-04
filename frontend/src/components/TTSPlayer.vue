@@ -40,7 +40,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { VideoPlay, VideoPause, Loading } from '@element-plus/icons-vue'
+import { VideoPlay, VideoPause, Loading } from '@/components/icons'
 import api from '../services/api'
 import { useToastStore } from '../stores/toast'
 

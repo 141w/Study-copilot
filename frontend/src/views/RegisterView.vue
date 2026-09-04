@@ -2,21 +2,20 @@
   <div class="min-h-screen flex items-center justify-center bg-[var(--bg-secondary)]">
     <div class="w-full max-w-md">
       <div class="text-center mb-8">
-        <div class="w-12 h-12 bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-          </svg>
+        <div class="w-12 h-12 bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] rounded-xl flex items-center justify-center mx-auto mb-4">
+          <el-icon class="w-8 h-8 text-[var(--text-inverse)]"><Reading /></el-icon>
         </div>
         <h1 class="text-2xl font-semibold text-[var(--text-primary)]">注册 Study Copilot</h1>
         <p class="text-[var(--text-muted)] mt-2">创建您的账户</p>
       </div>
 
       <form @submit.prevent="handleRegister">
-      <el-card class="p-8">
+      <el-card :body-style="{ padding: '32px' }">
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">用户名</label>
+            <label for="register-username" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">用户名</label>
             <el-input
+              id="register-username"
               v-model="form.username"
               placeholder="请输入用户名"
               required
@@ -24,8 +23,9 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">邮箱</label>
+            <label for="register-email" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">邮箱</label>
             <el-input
+              id="register-email"
               v-model="form.email"
               type="email"
               placeholder="请输入邮箱"
@@ -34,8 +34,9 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">密码</label>
+            <label for="register-password" class="block text-sm font-medium text-[var(--text-secondary)] mb-1">密码</label>
             <el-input
+              id="register-password"
               v-model="form.password"
               type="password"
               placeholder="请输入密码"
@@ -69,6 +70,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Reading } from '@/components/icons'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'

@@ -211,6 +211,7 @@ async def _do_process_document(
         return len(chunks), method
 
     except Exception as e:
+        await db.rollback()
         # Mark the document as failed
         doc.status = "error"
         await db.commit()
@@ -271,7 +272,7 @@ async def get_document(
     chunks = [
         {
             "text": c.content,
-            "metadata": c.metadata or {},
+            "chunk_metadata": c.chunk_metadata or {},
         }
         for c in chunks_result.scalars().all()
     ]
@@ -341,7 +342,8 @@ async def purge_deleted_documents(
     """
     from datetime import UTC, datetime, timedelta
 
-    from sqlalchemy import delete as sa_delete, select as sa_select
+    from sqlalchemy import delete as sa_delete
+    from sqlalchemy import select as sa_select
 
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=older_than_days)
     result = await db.execute(

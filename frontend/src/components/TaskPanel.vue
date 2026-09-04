@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
       <h3 class="text-sm font-medium text-[var(--text-secondary)] flex items-center gap-2">
-        <el-icon class="w-4 h-4 text-indigo-500"><Document /></el-icon>
+        <el-icon class="w-4 h-4 text-[var(--color-info)]"><Document /></el-icon>
         后台任务
         <el-tag v-if="runningCount > 0" type="primary" size="small" effect="plain">
           {{ runningCount }} 运行中
@@ -16,20 +16,20 @@
       <div
         v-for="task in tasks"
         :key="task.id"
-        class="border rounded-xl p-3 text-sm transition-colors"
+        class="border rounded-lg p-3 text-sm transition-colors"
         :class="taskBorderClass(task)"
       >
         <!-- Task header -->
         <div class="flex items-center justify-between mb-1.5">
           <div class="flex items-center gap-2">
             <!-- Status icon -->
-            <el-icon v-if="task.status === 'running'" class="w-4 h-4 text-indigo-500 is-loading">
+            <el-icon v-if="task.status === 'running'" class="w-4 h-4 text-[var(--color-info)] is-loading">
               <Loading />
             </el-icon>
-            <el-icon v-else-if="task.status === 'completed'" class="w-4 h-4 text-green-500">
+            <el-icon v-else-if="task.status === 'completed'" class="w-4 h-4 text-[var(--color-success)]">
               <CircleCheckFilled />
             </el-icon>
-            <el-icon v-else-if="task.status === 'failed'" class="w-4 h-4 text-red-500">
+            <el-icon v-else-if="task.status === 'failed'" class="w-4 h-4 text-[var(--color-error)]">
               <CircleCloseFilled />
             </el-icon>
             <el-icon v-else class="w-4 h-4 text-[var(--text-muted)]">
@@ -85,7 +85,7 @@ import type { Task } from '../types/models'
 import {
   Document, CircleCheckFilled, CircleCloseFilled,
   Clock, Loading, Close
-} from '@element-plus/icons-vue'
+} from '@/components/icons'
 
 const toast = useToastStore()
 const tasks = ref<Task[]>([])

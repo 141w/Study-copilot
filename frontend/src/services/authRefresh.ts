@@ -15,6 +15,9 @@ export interface RefreshOutcome {
   accessToken?: string
 }
 
+// 防抖：并发多个 401 时只弹一次"登录已过期"提示
+let sessionExpiredToastShown = false
+
 export async function refreshAccessToken(): Promise<RefreshOutcome> {
   const refreshToken = localStorage.getItem('refreshToken')
   if (!refreshToken) return { ok: false }
@@ -36,6 +39,14 @@ export async function refreshAccessToken(): Promise<RefreshOutcome> {
   } catch {
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
+    if (!sessionExpiredToastShown) {
+      sessionExpiredToastShown = true
+      // 指令式 ElMessage，不依赖 Pinia 上下文（SSE 与 axios 两路径共用）
+      import('element-plus/es/components/message/index.mjs').then(({ ElMessage }) => {
+        ElMessage.error('登录已过期，请重新登录')
+      })
+      setTimeout(() => { sessionExpiredToastShown = false }, 4000)
+    }
     return { ok: false }
   }
 }

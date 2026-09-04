@@ -3,15 +3,19 @@
     <!-- Header（P2-2：PageHeader） -->
     <PageHeader title="课程空间" subtitle="按课程组织你的文档和笔记">
       <template #actions>
-        <el-button
-          @click="openCreateModal"
-          type="primary"
-        >
-          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          新建课程
-        </el-button>
+        <el-dropdown @command="onCreateAction">
+          <el-button type="primary">
+            <el-icon class="mr-1"><Plus /></el-icon>
+            创建
+            <el-icon class="ml-0.5"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="manual">手动创建课程</el-dropdown-item>
+              <el-dropdown-item command="generate">AI 生成课程</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </template>
     </PageHeader>
 
@@ -25,23 +29,79 @@
       />
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="text-center py-16 text-[var(--text-muted)]">
-      加载中...
-    </div>
+    <!-- Loading（批次6：文字加载态 → 骨架屏，匹配三列卡片网格布局） -->
+    <SkeletonList v-if="loading" variant="cards" :count="6" />
 
     <!-- Empty State（P2-2：EmptyState） -->
     <EmptyState
       v-else-if="filteredCourses.length === 0"
       size="lg"
-      svg-path="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+      :icon="Reading"
       :message="searchQuery ? '未找到匹配的课程' : '还没有课程，创建你的第一个课程吧'"
     >
       <el-button @click="openCreateModal">新建课程</el-button>
     </EmptyState>
 
+    <!-- AI 课程生成弹窗 -->
+    <el-dialog
+      v-model="showGenDialog"
+      title="AI 生成课程"
+      width="480px"
+      :close-on-click-modal="false"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">课程主题/要求</label>
+          <el-input
+            v-model="genRequirement"
+            type="textarea"
+            :rows="2"
+            placeholder="e.g. 线性代数第一章：向量空间基础"
+            maxlength="500"
+            show-word-limit
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">选择参考文档（最多 5 篇）</label>
+          <div class="border border-[var(--border-default)] rounded-lg p-2 max-h-40 overflow-y-auto">
+            <label
+              v-for="doc in readyDocs"
+              :key="doc.id"
+              class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-colors text-sm"
+              :class="genDocIds.includes(doc.id)
+                ? 'bg-[var(--color-primary)] text-[var(--text-inverse)]'
+                : 'bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
+            >
+              <input
+                type="checkbox"
+                :value="doc.id"
+                :checked="genDocIds.includes(doc.id)"
+                class="hidden"
+                @change="toggleGenDoc(doc.id)"
+              />
+              <span class="truncate">{{ doc.filename }}</span>
+            </label>
+            <p v-if="readyDocs.length === 0" class="text-sm text-[var(--text-muted)] text-center py-3">暂无文档</p>
+          </div>
+        </div>
+        <div v-if="genLoading" class="text-sm text-[var(--color-primary)]">正在生成课程，请稍候…</div>
+        <div v-if="genError" class="p-3 rounded-lg text-sm bg-[var(--color-error-light)] text-[var(--color-error)]">{{ genError }}</div>
+      </div>
+      <template #footer>
+        <el-button @click="showGenDialog = false">取消</el-button>
+        <el-button
+          type="primary"
+          :disabled="!genRequirement.trim() || genDocIds.length === 0 || genLoading"
+          :loading="genLoading"
+          @click="generateCourse"
+        >
+          {{ genLoading ? '生成中…' : '生成课程' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- Course Grid -->
-    <div v-else ref="courseGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div v-if="filteredCourses.length > 0" ref="courseGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <CourseCard
         v-for="course in filteredCourses"
         :key="course.id"
@@ -58,6 +118,7 @@
       :title="editingCourse ? '编辑课程' : '新建课程'"
       width="500px"
       :close-on-click-modal="false"
+      @open="animateModalIn"
     >
       <div class="space-y-4">
         <div>
@@ -113,27 +174,38 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { Plus, Reading } from '@/components/icons'
 import { useCourseStore } from '../stores/course'
+import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
+import api from '../services/api'
 import type { Course } from '../types/models'
 import CourseCard from '../components/CourseCard.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import EmptyState from '../components/common/EmptyState.vue'
+import SkeletonList from '../components/common/SkeletonList.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
+import { useReducedMotion } from '../composables/useReducedMotion'
 import gsap from 'gsap'
 
 const router = useRouter()
 const courseStore = useCourseStore()
 const toast = useToastStore()
+// P1-1：GSAP 动画降级（prefers-reduced-motion）
+const { prefersReduced } = useReducedMotion()
 
 const pageContainer = ref<HTMLElement | null>(null)
-const modalEl = ref<HTMLElement | null>(null)
 const searchQuery = ref('')
 const showModal = ref(false)
 const showDeleteConfirm = ref(false)
 const editingCourse = ref<Course | null>(null)
 const deletingCourse = ref<Course | null>(null)
 const saving = ref(false)
+const showGenDialog = ref(false)
+const genRequirement = ref('')
+const genDocIds = ref<string[]>([])
+const genLoading = ref(false)
+const genError = ref('')
 
 interface CourseForm {
   name: string
@@ -144,17 +216,24 @@ interface CourseForm {
 const form = ref<CourseForm>({
   name: '',
   description: '',
-  color: '#8b5cf6'
+  // 默认色对齐 DESIGN.md 单色系：ink 纯黑
+  color: '#000000'
 })
 
 const colorOptions = [
-  '#ef4444', '#f97316', '#eab308', '#22c55e',
-  '#3b82f6', '#8b5cf6', '#ec4899', '#010120'
+  // 黑白单色系（DESIGN.md）：纯灰阶 8 档，课程区分靠灰度差异。
+  // 彩色选项全部移除——品牌即黑白
+  '#000000', '#26262b', '#3f3f44', '#5a5a5f',
+  '#8a8a92', '#a6a6ad', '#c9c9d4', '#e0e0e8'
 ]
 
 let ctx: gsap.Context | null = null
 
+const documentStore = useDocumentStore()
+
 const loading = computed(() => courseStore.loading)
+
+const readyDocs = computed(() => documentStore.readyDocuments || [])
 
 const filteredCourses = computed<Course[]>(() => {
   if (!searchQuery.value.trim()) return courseStore.courses
@@ -167,9 +246,45 @@ const filteredCourses = computed<Course[]>(() => {
 
 function openCreateModal(): void {
   editingCourse.value = null
-  form.value = { name: '', description: '', color: '#8b5cf6' }
+  form.value = { name: '', description: '', color: '#000000' }
   showModal.value = true
-  nextTick(() => animateModalIn())
+}
+
+function onCreateAction(cmd: string): void {
+  if (cmd === 'manual') openCreateModal()
+  else if (cmd === 'generate') {
+    genRequirement.value = ''
+    genDocIds.value = []
+    genError.value = ''
+    showGenDialog.value = true
+  }
+}
+
+function toggleGenDoc(docId: string): void {
+  const idx = genDocIds.value.indexOf(docId)
+  if (idx >= 0) genDocIds.value.splice(idx, 1)
+  else if (genDocIds.value.length < 5) genDocIds.value.push(docId)
+}
+
+async function generateCourse(): Promise<void> {
+  genLoading.value = true
+  genError.value = ''
+  try {
+    const { data } = await api.post('/courses/generate', {
+      doc_ids: genDocIds.value,
+      requirement: genRequirement.value.trim(),
+    })
+    toast.success(`课程「${data.title}」生成完成！`)
+    showGenDialog.value = false
+    courseStore.fetchCourses()
+    router.push(`/courses/${data.course_id}`)
+  }
+  catch (e: any) {
+    genError.value = e?.response?.data?.detail || e?.message || '生成失败'
+  }
+  finally {
+    genLoading.value = false
+  }
 }
 
 function openEditModal(course: Course): void {
@@ -177,10 +292,9 @@ function openEditModal(course: Course): void {
   form.value = {
     name: course.name,
     description: course.description || '',
-    color: course.color || '#8b5cf6'
+    color: course.color || '#000000'
   }
   showModal.value = true
-  nextTick(() => animateModalIn())
 }
 
 function closeModal(): void {
@@ -228,20 +342,23 @@ function goToCourse(course: Course): void {
   router.push(`/courses/${course.id}`)
 }
 
+/** P4-1：modal 入场微上浮（替代旧死代码；reduced-motion 守卫 §6.B）。
+ *  @open 时 el-dialog 已挂载于 body，取最上层实例做一次 gsap.from。 */
 function animateModalIn(): void {
-  if (modalEl.value) {
-    gsap.from(modalEl.value, {
-      y: 20,
-      opacity: 0,
-      duration: 0.25,
-      ease: 'power2.out'
-    })
-  }
+  if (prefersReduced.value) return
+  nextTick(() => {
+    const dialog = document.querySelector('.el-overlay-dialog .el-dialog')
+    if (dialog) {
+      gsap.from(dialog, { y: 16, opacity: 0, duration: 0.25, ease: 'power2.out' })
+    }
+  })
 }
 
 onMounted(() => {
   courseStore.fetchCourses()
 
+  // P1-1：减少动态偏好下跳过入场动画
+  if (prefersReduced.value) return
   ctx = gsap.context(() => {
     // P2-2：PageHeader 内化标题后按结构选择（h1 + 其后副标题）
     const header = pageContainer.value?.querySelector('h1')

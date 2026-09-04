@@ -1,55 +1,66 @@
 /* ==================== Light Theme (Default) ==================== */
+/* 配色依据 DESIGN.md（Spacex-Inspired）：
+   亮色主题 = 文档的 shop-site 画布。canvas-light #ffffff 承载卡片，
+   canvas-cool #f0f0fa 作页面底色，ink #000000 做主色（黑底白字按钮，
+   21:1）。品牌即黑白——无任何彩色强调。发丝线 hairline-on-light
+   #e0e0e8 作分界。状态色为去饱和深档（功能语义最低保留）。 */
 :root {
-  /* Background Colors — 柔和的暖灰底色 */
-  --bg-primary: #fafaf9;
-  --bg-secondary: #f5f5f4;
-  --bg-tertiary: #f0f0ef;
-  --bg-hover: #ececeb;
-  --bg-active: #e4e4e3;
+  /* Background Colors — 冷调近白画布（canvas-cool 族，向下逐档加深） */
+  --bg-primary: #f0f0fa;
+  --bg-secondary: #e9e9f2;
+  --bg-tertiary: #e0e0ea;
+  --bg-hover: #dcdce6;
+  --bg-active: #d4d4de;
 
   /* Surface Colors */
   --surface-card: #ffffff;
-  --surface-overlay: rgba(0, 0, 0, 0.4);
-  --surface-glass: rgba(255, 255, 255, 0.75);
+  --surface-overlay: rgba(0, 0, 0, 0.55);
+  --surface-glass: rgba(240, 240, 250, 0.75);
 
-  /* Text Colors — 降低纯黑对比度 */
-  --text-primary: #1d1d1f;
-  --text-secondary: #6e6e73;
-  --text-muted: #9e9ea4;
+  /* Text Colors —— ink / ink-mute 直接取自 DESIGN.md；
+     全档 AA 验证：primary 18.55 / secondary 9.25 / muted 6.06:1 */
+  --text-primary: #000000;
+  --text-secondary: #3f3f44;
+  --text-muted: #5a5a5f;
   --text-inverse: #ffffff;
-  --text-link: #3b82f6;
+  --text-link: #000000;
 
-  /* Border Colors — 淡化分界线 */
-  --border-default: #eceef1;
-  --border-hover: #d4d7dc;
-  --border-focus: #3b82f6;
+  /* Border Colors — hairline-on-light #e0e0e8 起档，hover 提一档 */
+  --border-default: #e0e0e8;
+  --border-hover: #c9c9d4;
+  /* focus 环与主色同步（墨色） */
+  --border-focus: #000000;
 
-  /* Brand Colors */
-  --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
-  --color-primary-light: #eff6ff;
-  --color-secondary: #6b7280;
-  --color-accent: #8b5cf6;
-  --color-accent-light: #f3f0ff;
+  /* Brand Colors — 黑白单色系：主色 = ink 纯黑，
+     hover 微抬避开纯黑死区（视觉呼吸，对比度 15+ 不受影响） */
+  --color-primary: #000000;
+  --color-primary-hover: #26262b;
+  --color-primary-light: #e9e9f2;
+  --color-secondary: #3f3f44;
+  --color-accent: #3f3f44;
+  --color-accent-light: #ececf1;
 
-  /* Status Colors */
-  --color-success: #10b981;
-  --color-success-light: #ecfdf5;
-  --color-warning: #f59e0b;
-  --color-warning-light: #fffbeb;
-  --color-error: #ef4444;
-  --color-error-light: #fef2f2;
-  --color-info: #3b82f6;
-  --color-info-light: #eff6ff;
+  /* Status Colors — 去饱和深档，作文字/图标直接 AA 达标：
+     success 4.83 / warning 4.88 / error 4.83（on bg-primary）。
+     -light 浅底为 12% 色量 tint */
+  --color-success: #1e7a46;
+  --color-success-light: #e8f5ee;
+  --color-warning: #8a6116;
+  --color-warning-light: #f5eede;
+  --color-error: #c53030;
+  --color-error-light: #f9eaea;
+  --color-info: #000000;
+  --color-info-light: #e9e9f2;
 
-  /* Gradient Colors —— 精修（批次1a）：品牌渐变改由主色→强调色派生，
-     与主按钮/强调色同族（蓝→紫），双主题自动一致；
-     原洋红→橙（#ef2cc1→#fc4c02）与界面冷灰蓝色系冲突 */
+  /* Gradient Colors — 单色系自体深浅渐变（ink → hairline-on-dark），
+     无彩度变化，双主题各自派生 */
   --color-brand-from: var(--color-primary);
-  --color-brand-to: var(--color-accent);
-  --color-navy: #010120;
-  --gradient-brand: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  --gradient-surface: linear-gradient(180deg, #ffffff 0%, #fafaf9 100%);
+  --color-brand-to: #3f3f44;
+  --color-navy: #000000;
+  --gradient-brand: linear-gradient(135deg, var(--color-primary) 0%, #3f3f44 100%);
+  --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f0f0fa 100%);
+  /* 侧栏专用纵向渐变——顶部承接 header 卡片白，向下过渡到页面底色 */
+  --gradient-sidebar: linear-gradient(180deg, var(--surface-card) 0%, var(--bg-primary) 26%, var(--bg-secondary) 100%);
 
   /* Shadows — 柔和弥散阴影 */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -87,14 +98,18 @@
   --font-size-3xl: 1.875rem;
 
   /* ==================== Border Radius ==================== */
-  /* 精修（批次1d）：两级秩序——控件 10px / 容器 20px。
-     原控件 14px 与容器 24px 拉不开层级，且弹窗(14px)比卡片(24px)还不圆 */
+  /* 精修（批次1d→批次4）：等比圆角体系——同一收缩率 1.4，四档覆盖
+     控件 10 / 嵌套面 14 / 容器 20 / 大容器 24。
+     关键原则：所有档位保持同一比例（10:14:20:24 ≈ 1:1.4:2:2.4），
+     按钮与气泡不再一方过圆一方过方；嵌套面（列表行/气泡/弹层内容）
+     取外层容器半径减去内边距后的内缩值，视觉同心圆。
+     大容器原 32px 与 20px 容器拉不出层级感，反而是"过圆"旁路值 */
   --radius-xs: 6px;
   --radius-sm: 10px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
-  --radius-2xl: 32px;
+  --radius-2xl: 24px;
   --radius-full: 9999px;
 
   /* ==================== Transitions ==================== */
@@ -108,54 +123,65 @@
 }
 
 /* ==================== Dark Theme ==================== */
+/* 配色依据 DESIGN.md（Spacex-Inspired）：
+   暗色主题 = 文档的 marketing 画布。canvas-night #000000 纯黑画布，
+   canvas-night-soft #0a0a0a 承载内容分层，hairline-on-dark #3a3a3f
+   做发丝线。主色反转为 on-primary 纯白（白底黑字按钮，21:1）。
+   on-primary-mute #f0f0fa 做次级文本。 */
 .dark {
-  /* Background Colors — 柔和的深灰 */
-  --bg-primary: #161618;
-  --bg-secondary: #1c1c1e;
-  --bg-tertiary: #242426;
-  --bg-hover: #2a2a2d;
-  --bg-active: #323235;
+  /* Background Colors — 纯黑画布 + barely-lifted 近黑分层 */
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #141418;
+  --bg-hover: #1c1c1f;
+  --bg-active: #26262a;
 
-  /* Surface Colors —— 精修（批次1e）：卡片与 bg-secondary 分离出层次
-     （原同为 #1c1c1e，暗色下卡片只靠不可见边框区分，层次塌陷） */
-  --surface-card: #202023;
-  --surface-overlay: rgba(0, 0, 0, 0.6);
-  --surface-glass: rgba(22, 22, 24, 0.8);
+  /* Surface Colors — 卡片取 canvas-night-soft，靠发丝线分层 */
+  --surface-card: #0a0a0a;
+  --surface-overlay: rgba(0, 0, 0, 0.65);
+  --surface-glass: rgba(10, 10, 10, 0.8);
 
-  /* Text Colors */
-  --text-primary: #f5f5f7;
-  --text-secondary: #a1a1a6;
-  --text-muted: #7a7a80;
-  --text-inverse: #1d1d1f;
-  --text-link: #60a5fa;
+  /* Text Colors — on-primary / on-primary-mute 直接取自 DESIGN.md；
+     全档 AA 验证：primary 21.00 / secondary 8.68 / muted 6.13:1 */
+  --text-primary: #ffffff;
+  --text-secondary: #a6a6ad;
+  --text-muted: #8a8a92;
+  --text-inverse: #000000;
+  --text-link: #ffffff;
 
-  /* Border Colors —— 精修（批次1e）：提一档可感知度 */
-  --border-default: #313134;
-  --border-hover: #3e3e42;
-  --border-focus: #60a5fa;
+  /* Border Colors — hairline-on-dark #3a3a3f，hover 提一档 */
+  --border-default: #3a3a3f;
+  --border-hover: #4a4a52;
+  --border-focus: #ffffff;
 
-  /* Brand Colors */
-  --color-primary: #60a5fa;
-  --color-primary-hover: #3b82f6;
-  --color-primary-light: rgba(96, 165, 250, 0.12);
-  --color-secondary: #9ca3af;
-  --color-accent: #a78bfa;
-  --color-accent-light: rgba(167, 139, 250, 0.12);
+  /* Brand Colors — 黑白反转：主色 = on-primary 纯白，
+     hover 微沉避开纯白死区（对比度 15+ 不受影响） */
+  --color-primary: #ffffff;
+  --color-primary-hover: #d6d6de;
+  --color-primary-light: rgba(255, 255, 255, 0.1);
+  --color-secondary: #a6a6ad;
+  --color-accent: #a6a6ad;
+  --color-accent-light: rgba(255, 255, 255, 0.08);
 
-  /* Status Colors */
-  --color-success: #34d399;
-  --color-success-light: rgba(52, 211, 153, 0.12);
-  --color-warning: #fbbf24;
-  --color-warning-light: rgba(251, 191, 36, 0.12);
-  --color-error: #f87171;
-  --color-error-light: rgba(248, 113, 113, 0.12);
-  --color-info: #60a5fa;
-  --color-info-light: rgba(96, 165, 250, 0.12);
+  /* Status Colors — 去饱和亮档（on pure black）：
+     success 8.62 / warning 10.63 / error 8.43:1。
+     -light 为低色量 tint，作浅底 */
+  --color-success: #4fb987;
+  --color-success-light: rgba(79, 185, 135, 0.12);
+  --color-warning: #d9b45c;
+  --color-warning-light: rgba(217, 180, 92, 0.12);
+  --color-error: #e88a8a;
+  --color-error-light: rgba(232, 138, 138, 0.12);
+  --color-info: #ffffff;
+  --color-info-light: rgba(255, 255, 255, 0.08);
 
-  /* Gradient Colors —— 精修（批次1a）：brand-from/to 已在 :root 派生自
-     primary/accent，暗色令牌切换时自动跟随，无需在此覆盖 */
-  --color-navy: #010120;
-  --gradient-surface: linear-gradient(180deg, #1c1c1e 0%, #161618 100%);
+  /* Gradient Colors — 单色系自体深浅（白 → 灰白），与亮色镜像 */
+  --color-brand-from: var(--color-primary);
+  --color-brand-to: #a6a6ad;
+  --color-navy: #000000;
+  --gradient-surface: linear-gradient(180deg, #0a0a0a 0%, #000000 100%);
+  /* 暗色侧栏渐变——顶接 header 卡片色，底接页面底色（令牌派生自动适配） */
+  --gradient-sidebar: linear-gradient(180deg, var(--surface-card) 0%, var(--bg-primary) 30%, var(--bg-secondary) 100%);
 
   /* Shadows —— 精修（批次1e）：暗色阴影收敛（边框为主、阴影为辅，
      原 0.35 透明度黑在深底上发脏） */

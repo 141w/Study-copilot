@@ -3,8 +3,8 @@
     <!-- Header（与其他设置页统一：标题 + 副标题，替换原 hero 大横幅） -->
     <div class="flex items-center justify-between mb-8">
       <div>
-        <h1 class="text-2xl font-semibold text-[var(--text-primary)]">模型配置</h1>
-        <p class="text-sm text-[var(--text-muted)] mt-1">配置 LLM 模型参数，优化 AI 问答体验</p>
+        <h1 class="text-2xl font-semibold text-[var(--text-primary)]">消息格式</h1>
+        <p class="text-sm text-[var(--text-muted)] mt-1">选择 LLM 消息格式，适配不同的 API 提供商</p>
       </div>
       <router-link to="/chat">
         <el-button>返回问答</el-button>
@@ -14,26 +14,21 @@
     <div class="card p-6">
       <el-form ref="formRef" :model="config" :rules="formRules" label-position="top">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <el-form-item label="LLM 模型提供商" prop="provider">
-            <el-select v-model="config.provider" @change="onProviderChange">
-              <el-option value="openrouter" label="OpenRouter" />
-              <el-option value="openai" label="OpenAI" />
-              <el-option value="anthropic" label="Anthropic" />
-              <el-option value="google" label="Google Gemini" />
-              <el-option value="custom" label="自定义兼容" />
+          <el-form-item label="消息格式" prop="messageFormat">
+            <el-select v-model="config.messageFormat" @change="onFormatChange">
+              <el-option value="openai" label="OpenAI 格式" />
+              <el-option value="anthropic" label="Anthropic 格式" />
+              <el-option value="gemini" label="Gemini 格式" />
+              <el-option value="ollama" label="Ollama 格式" />
             </el-select>
           </el-form-item>
 
           <el-form-item label="模型名称" prop="modelName">
-            <el-input v-model="config.modelName" :placeholder="modelPlaceholder" />
+            <el-input v-model="config.modelName" placeholder="例如：gpt-4o-mini" />
           </el-form-item>
 
           <el-form-item label="Base URL" prop="baseUrl">
-            <el-input
-              v-model="config.baseUrl"
-              :placeholder="baseUrlPlaceholder"
-              :disabled="!isCustomProvider"
-            />
+            <el-input v-model="config.baseUrl" placeholder="https://api.openai.com/v1" />
           </el-form-item>
 
           <el-form-item label="API Key">
@@ -44,7 +39,7 @@
               :placeholder="apiKeyPlaceholder"
             />
             <p v-if="savedKeyMasked" class="mt-1.5 text-xs text-[var(--text-muted)]">
-              已保存：{{ savedKeyMasked }}（留空保存 = 保留原 Key，输入新值 = 覆盖）
+              已保存：{{ savedKeyMasked }}（留空保存则保留原 Key；输入新值则覆盖）
             </p>
           </el-form-item>
 
@@ -58,9 +53,9 @@
                 show-stops
               />
               <div class="flex justify-between text-xs text-[var(--text-muted)] mt-1">
-                <span>0.0 (确定性)</span>
+                <span>0.0 偏确定</span>
                 <span>{{ config.temperature }}</span>
-                <span>1.0 (随机性)</span>
+                <span>1.0 偏随机</span>
               </div>
             </div>
           </el-form-item>
@@ -97,17 +92,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useConfigStore } from '../stores/config'
 import { useToastStore } from '../stores/toast'
 
-type ProviderKey = 'openrouter' | 'openai' | 'anthropic' | 'google' | 'custom'
+type MessageFormat = 'openai' | 'anthropic' | 'gemini' | 'ollama'
 
 interface ModelConfigForm {
   apiKey: string
   baseUrl: string
-  provider: ProviderKey
+  messageFormat: MessageFormat
   modelName: string
   temperature: number
   maxTokens: number
@@ -124,7 +119,7 @@ const saving = ref(false)
 const config = ref<ModelConfigForm>({
   apiKey: '',
   baseUrl: 'https://api.openai.com/v1',
-  provider: 'openrouter',
+  messageFormat: 'openai',
   modelName: 'gpt-4o-mini',
   temperature: 0.7,
   maxTokens: 2048,
@@ -132,9 +127,9 @@ const config = ref<ModelConfigForm>({
   embeddingDimension: 768
 })
 
-// P0-6：表单校验（原版仅 HTML 属性，可手动越界）
+// P0-6：表单校验
 const formRules: FormRules = {
-  provider: [{ required: true, message: '请选择提供商', trigger: 'change' }],
+  messageFormat: [{ required: true, message: '请选择消息格式', trigger: 'change' }],
   modelName: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
   baseUrl: [{ required: true, message: '请输入 Base URL', trigger: 'blur' }],
   maxTokens: [
@@ -142,26 +137,27 @@ const formRules: FormRules = {
   ]
 }
 
-// 已保存 Key 的掩码展示值（如 sk-***xyz）；输入框留空保存 = 保留原 Key
+// 已保存 Key 的掩码展示值
 const savedKeyMasked = ref('')
 
-const providerDefaults: Record<ProviderKey, { baseUrl: string; model: string; apiKey: string }> = {
-  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', apiKey: 'sk-or-...' },
-  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKey: 'sk-...' },
-  anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-3-haiku-20240307', apiKey: 'sk-ant-...' },
-  google: { baseUrl: 'https://generativelanguage.googleapis.com/v1', model: 'gemini-1.5-flash-latest', apiKey: 'AIza...' },
-  custom: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKey: 'sk-...' }
+const apiKeyPlaceholder = ref('sk-...')
+const savedKeyOverwritten = ref(false)
+
+// 消息格式 → 推荐 Base URL / 模型 / API Key 占位
+const formatDefaults: Record<MessageFormat, { baseUrl: string; model: string; apiKey: string }> = {
+  openai:    { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o-mini',         apiKey: 'sk-...' },
+  anthropic: { baseUrl: 'https://api.anthropic.com',              model: 'claude-3-haiku-20240307', apiKey: 'sk-ant-...' },
+  gemini:    { baseUrl: 'https://generativelanguage.googleapis.com/v1', model: 'gemini-1.5-flash-latest', apiKey: 'AIza...' },
+  ollama:    { baseUrl: 'http://localhost:11434/v1',              model: 'llama3.1',            apiKey: 'ollama' },
 }
 
-const isCustomProvider = computed(() => config.value.provider === 'custom')
-const baseUrlPlaceholder = computed(() => providerDefaults[config.value.provider]?.baseUrl || '')
-const apiKeyPlaceholder = computed(() => providerDefaults[config.value.provider]?.apiKey || '')
-const modelPlaceholder = computed(() => providerDefaults[config.value.provider]?.model || '')
-
-function onProviderChange(): void {
-  const defaults = providerDefaults[config.value.provider]
-  config.value.baseUrl = defaults.baseUrl
-  config.value.modelName = defaults.model
+function onFormatChange(): void {
+  const defaults = formatDefaults[config.value.messageFormat]
+  if (defaults && !savedKeyOverwritten.value) {
+    config.value.baseUrl = defaults.baseUrl
+    config.value.modelName = defaults.model
+  }
+  apiKeyPlaceholder.value = defaults?.apiKey || 'sk-...'
 }
 
 const embeddingDimensionMap: Record<string, number> = {
@@ -174,24 +170,25 @@ function onEmbeddingModelChange(): void {
 }
 
 async function saveConfig(): Promise<void> {
-  // P0-6：alert() → toast；先校验表单
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
   saving.value = true
   try {
     await configStore.saveLLMConfig({
-      provider: config.value.provider,
+      provider: config.value.messageFormat,
       api_key: config.value.apiKey,
       base_url: config.value.baseUrl,
       model_name: config.value.modelName,
       temperature: config.value.temperature,
       max_tokens: config.value.maxTokens,
       embedding_model: config.value.embeddingModel,
-      embedding_dimension: config.value.embeddingDimension
+      embedding_dimension: config.value.embeddingDimension,
+      message_format: config.value.messageFormat,
     })
     savedKeyMasked.value = (await configStore.fetchLLMConfig())?.api_key_masked || ''
     config.value.apiKey = ''
+    savedKeyOverwritten.value = false
     toast.success('配置保存成功')
   } catch (error) {
     toast.error('保存失败：' + ((error as Error).message || '未知错误'))
@@ -201,17 +198,18 @@ async function saveConfig(): Promise<void> {
 }
 
 function resetConfig(): void {
-  const defaults = providerDefaults[config.value.provider] || providerDefaults.openrouter
+  const defaults = formatDefaults[config.value.messageFormat]
   config.value = {
     apiKey: '',
     baseUrl: defaults.baseUrl,
-    provider: config.value.provider,
+    messageFormat: config.value.messageFormat,
     modelName: defaults.model,
     temperature: 0.7,
-    maxTokens: 2048,
+    maxTokens: defaults.model === 'llama3.1' ? 4096 : 2048,
     embeddingModel: 'shibing624/text2vec-base-chinese',
     embeddingDimension: 768
   }
+  savedKeyOverwritten.value = false
   formRef.value?.clearValidate()
   toast.info('已重置为默认值（未保存）')
 }
@@ -222,10 +220,13 @@ onMounted(async () => {
   const dbConfig = await configStore.fetchLLMConfig()
   if (dbConfig && dbConfig.id) {
     savedKeyMasked.value = dbConfig.api_key_masked || ''
+    savedKeyOverwritten.value = !!dbConfig.api_key_masked
+    const fmt: MessageFormat = (dbConfig.message_format as MessageFormat) || 'openai'
+    const defaults = formatDefaults[fmt]
     config.value = {
       apiKey: '',
-      baseUrl: dbConfig.base_url || '',
-      provider: dbConfig.provider as ProviderKey,
+      baseUrl: dbConfig.base_url || defaults.baseUrl,
+      messageFormat: fmt,
       modelName: dbConfig.model_name,
       temperature: dbConfig.temperature ?? 0.7,
       maxTokens: dbConfig.max_tokens ?? 2048,
@@ -233,11 +234,11 @@ onMounted(async () => {
       embeddingDimension: dbConfig.embedding_dimension || 768
     }
   } else {
-    const defaults = providerDefaults.openrouter
+    const defaults = formatDefaults.openai
     config.value = {
       apiKey: '',
       baseUrl: defaults.baseUrl,
-      provider: 'openrouter',
+      messageFormat: 'openai',
       modelName: defaults.model,
       temperature: 0.7,
       maxTokens: 2048,

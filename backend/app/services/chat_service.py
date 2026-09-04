@@ -1,21 +1,76 @@
 """
-Chat service — ask questions (streaming & non-streaming), session CRUD.
+Chat service — ask questions (streaming & non-streaming), session CRUD, semantic search.
 """
 
+import asyncio
 import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.embedder import embedder
 from app.core.rag_engine import rag_engine
 from app.db import ChatSession, Message, User
 from app.exceptions import NotFoundError, ValidationError
 from app.services.config_service import get_llm_config_with_secret
 
 logger = logging.getLogger(__name__)
+
+_Msg_INSERT = text("""
+    INSERT INTO messages (id, session_id, role, content, sources, embedding, created_at)
+    VALUES (
+        :id, :session_id, :role, :content, :sources,
+        CAST(:embedding AS vector(768)), :created_at
+    )
+""")
+
+
+async def _embed_text(text_str: str) -> list[float] | None:
+    """Compute embedding for a single text. Returns None on failure (non-blocking)."""
+    if not text_str or not text_str.strip():
+        return None
+    try:
+        vec = await embedder.embed_query(text_str)
+        return vec.tolist() if hasattr(vec, "tolist") else list(vec)
+    except Exception as exc:
+        logger.warning("Message embedding failed: %s", exc)
+        return None
+
+
+def _vec_str(embedding: list[float] | None) -> str | None:
+    """Convert embedding list to pgvector string format '[0.1,0.2,...]'."""
+    if embedding is None:
+        return None
+    return "[" + ",".join(str(v) for v in embedding) + "]"
+
+
+async def _insert_message(
+    db: AsyncSession,
+    msg_id: str,
+    session_id: str,
+    role: str,
+    content: str,
+    sources_json: str | None,
+    embedding: list[float] | None,
+) -> None:
+    """Raw-SQL insert so CAST(:embedding AS vector(768)) is explicit."""
+    await db.execute(
+        _Msg_INSERT,
+        {
+            "id": msg_id,
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "sources": sources_json,
+            "embedding": _vec_str(embedding),
+            "created_at": datetime.now(UTC).replace(tzinfo=None),
+        },
+    )
+    await db.commit()
 
 
 async def ask_question(
@@ -27,9 +82,6 @@ async def ask_question(
     config: dict | None = None,
 ) -> dict:
     """Non-streaming RAG ask. Returns {answer, sources, used_source_indices, filtered_sources, session_id}."""
-    if not document_ids:
-        raise ValidationError("请选择文档")
-
     user_config = await get_llm_config_with_secret(db, user)
     llm_config = config if config else user_config
 
@@ -38,9 +90,12 @@ async def ask_question(
 
     result = await rag_engine.ask(document_ids, question, history, llm_config)
 
-    # Persist messages
+    # Persist messages with embeddings (non-blocking: embedding failure doesn't break the flow)
     sources_json = json.dumps(result.get("sources", []), ensure_ascii=False)
-    await _save_messages(db, session_id, question, result["answer"], sources_json)
+    q_emb = await _embed_text(question)
+    a_emb = await _embed_text(result["answer"])
+    await _insert_message(db, str(uuid.uuid4()), session_id, "user", question, None, q_emb)
+    await _insert_message(db, str(uuid.uuid4()), session_id, "assistant", result["answer"], sources_json, a_emb)
 
     return {
         "answer": result["answer"],
@@ -60,49 +115,54 @@ async def ask_question_stream(
     config: dict | None = None,
 ) -> AsyncIterator[dict]:
     """Streaming RAG ask. Yields dicts with 'type' key: sources / token / answer / done."""
-    if not document_ids:
-        raise ValidationError("请选择文档")
-
     user_config = await get_llm_config_with_secret(db, user)
     llm_config = config if config else user_config
 
     session_id, _ = await _ensure_session(db, user.id, session_id, question)
     history = await _get_history(db, session_id)
 
-    # 第一时间下发 session_id，保证前端在所有路径（含无 sources 的快速路径）
-    # 都能拿到会话 ID，从而支持多轮追问
     yield {"type": "session", "session_id": session_id}
 
+    # Compute user message embedding (non-blocking)
+    q_emb = await _embed_text(question)
+    user_msg_id = str(uuid.uuid4())
+    await _insert_message(db, user_msg_id, session_id, "user", question, None, q_emb)
+
     answer_parts: list[str] = []
+    done_yielded = False
 
-    async for chunk in rag_engine.ask_stream(document_ids, question, history, llm_config):
-        if chunk["type"] == "sources":
-            yield {
-                "type": "sources",
-                "sources": chunk["sources"],
-                "filtered_sources": chunk["filtered_sources"],
-                "session_id": session_id,
-            }
-        elif chunk["type"] == "thinking":
-            # 转发思考过程事件（Agentic RAG）
-            yield {"type": "thinking", "step": chunk.get("step", ""), "detail": chunk.get("detail", "")}
-        elif chunk["type"] == "token":
-            answer_parts.append(chunk["content"])
-            yield {"type": "token", "content": chunk["content"]}
-        elif chunk["type"] == "answer":
-            answer_parts.clear()
-            answer_parts.append(chunk["content"])
-            yield {"type": "answer", "content": chunk["content"]}
-        elif chunk["type"] == "answer_refined":
-            # 答案反思后修正：替换已流式传输的内容
-            answer_parts.clear()
-            answer_parts.append(chunk["content"])
-            yield {"type": "answer_refined", "content": chunk["content"]}
-
-    # Persist after stream completes
-    full_answer = "".join(answer_parts)
-    await _save_messages(db, session_id, question, full_answer, json.dumps([], ensure_ascii=False))
-    yield {"type": "done"}
+    try:
+        async for chunk in rag_engine.ask_stream(document_ids, question, history, llm_config):
+            if chunk["type"] == "sources":
+                yield {
+                    "type": "sources",
+                    "sources": chunk["sources"],
+                    "filtered_sources": chunk["filtered_sources"],
+                    "session_id": session_id,
+                }
+            elif chunk["type"] == "thinking":
+                yield {"type": "thinking", "step": chunk.get("step", ""), "detail": chunk.get("detail", "")}
+            elif chunk["type"] == "token":
+                answer_parts.append(chunk["content"])
+                yield {"type": "token", "content": chunk["content"]}
+            elif chunk["type"] == "answer":
+                answer_parts.clear()
+                answer_parts.append(chunk["content"])
+                yield {"type": "answer", "content": chunk["content"]}
+            elif chunk["type"] == "answer_refined":
+                answer_parts.clear()
+                answer_parts.append(chunk["content"])
+                yield {"type": "answer_refined", "content": chunk["content"]}
+    finally:
+        if not done_yielded:
+            full_answer = "".join(answer_parts)
+            a_emb = await _embed_text(full_answer)
+            await _insert_message(
+                db, str(uuid.uuid4()), session_id, "assistant", full_answer,
+                json.dumps([], ensure_ascii=False), a_emb,
+            )
+            done_yielded = True
+            yield {"type": "done"}
 
 
 async def list_sessions(
@@ -136,6 +196,80 @@ async def get_session_history(
     )
     msgs = list(msg_result.scalars().all())
     return session, msgs
+
+
+async def search_messages(
+    db: AsyncSession,
+    user: User,
+    query: str,
+    session_id: str | None = None,
+    top_k: int = 10,
+) -> list[dict]:
+    """Semantic search across user's chat messages using pgvector cosine similarity.
+
+    Returns list of {message_id, session_id, role, content, similarity, created_at}.
+    Searches across all sessions (or a single session if session_id is given),
+    filtered to the current user's sessions via JOIN.
+    """
+    if not query or not query.strip():
+        return []
+
+    q_emb = await _embed_text(query)
+    if q_emb is None:
+        return []
+
+    q_emb_str = "[" + ",".join(str(v) for v in q_emb) + "]"
+    top_k = max(1, min(top_k, 50))
+
+    if session_id:
+        sql = text("""
+            SELECT m.id, m.session_id, m.role, m.content, m.created_at,
+                   1 - (m.embedding <=> CAST(:q_emb AS vector)) AS similarity
+            FROM messages m
+            JOIN chat_sessions s ON s.id = m.session_id
+            WHERE m.session_id = :session_id
+              AND m.embedding IS NOT NULL
+              AND s.user_id = :user_id
+            ORDER BY m.embedding <=> CAST(:q_emb AS vector)
+            LIMIT :top_k
+        """)
+        params = {
+            "q_emb": q_emb_str,
+            "session_id": session_id,
+            "user_id": user.id,
+            "top_k": top_k,
+        }
+    else:
+        sql = text("""
+            SELECT m.id, m.session_id, m.role, m.content, m.created_at,
+                   1 - (m.embedding <=> CAST(:q_emb AS vector)) AS similarity
+            FROM messages m
+            JOIN chat_sessions s ON s.id = m.session_id
+            WHERE m.embedding IS NOT NULL
+              AND s.user_id = :user_id
+            ORDER BY m.embedding <=> CAST(:q_emb AS vector)
+            LIMIT :top_k
+        """)
+        params = {
+            "q_emb": q_emb_str,
+            "user_id": user.id,
+            "top_k": top_k,
+        }
+
+    result = await db.execute(sql, params)
+    rows = result.fetchall()
+
+    return [
+        {
+            "message_id": row.id,
+            "session_id": row.session_id,
+            "role": row.role,
+            "content": row.content,
+            "similarity": round(float(row.similarity), 4),
+            "created_at": str(row.created_at),
+        }
+        for row in rows
+    ]
 
 
 async def delete_session(
@@ -201,24 +335,3 @@ async def _get_history(db: AsyncSession, session_id: str) -> list:
     )
     msgs = msg_result.scalars().all()
     return [{"role": m.role, "content": m.content} for m in msgs]
-
-
-async def _save_messages(
-    db: AsyncSession,
-    session_id: str,
-    question: str,
-    answer: str,
-    sources_json: str,
-) -> None:
-    """Persist user + assistant messages."""
-    user_msg = Message(id=str(uuid.uuid4()), session_id=session_id, role="user", content=question)
-    ai_msg = Message(
-        id=str(uuid.uuid4()),
-        session_id=session_id,
-        role="assistant",
-        content=answer,
-        sources=sources_json,
-    )
-    db.add(user_msg)
-    db.add(ai_msg)
-    await db.commit()

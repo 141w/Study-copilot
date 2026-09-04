@@ -8,16 +8,10 @@
           class="md:hidden p-2 -ml-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
           @click="sidebarStore.toggle()"
         >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          <el-icon class="w-6 h-6"><Fold /></el-icon>
         </button>
         <router-link to="/" class="flex items-center gap-2">
-          <div class="w-8 h-8 bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)] rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          </div>
+          <CopilotBotAvatar :size="48" mood="idle" />
           <span class="text-lg font-semibold text-[var(--text-primary)] hidden sm:inline">Study Copilot</span>
         </router-link>
       </div>
@@ -38,13 +32,23 @@
 
         <template v-if="authStore.isAuthenticated">
           <el-dropdown trigger="click" @command="handleCommand">
-            <span class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-              <el-icon class="w-5 h-5"><User /></el-icon>
+            <span
+              class="flex items-center gap-2 cursor-pointer rounded-md px-1.5 py-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+              aria-label="用户菜单"
+            >
+              <!-- 批次4：真实头像——用户名首字 + 品牌渐变，替代裸图标 -->
+              <span
+                class="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)]
+                       flex items-center justify-center text-xs font-semibold text-[var(--text-inverse)] flex-shrink-0"
+                aria-hidden="true"
+              >{{ avatarLetter }}</span>
               <span class="text-sm hidden md:inline">{{ authStore.user?.username }}</span>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="profile">{{ authStore.user?.username }}</el-dropdown-item>
+                <el-dropdown-item command="profile">
+                  <el-icon class="mr-1"><User /></el-icon>个人设置
+                </el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -69,19 +73,28 @@ import { useAuthStore } from '../../stores/auth'
 import { useSidebarStore } from '../../stores/sidebar'
 import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
-import { User, Sunny, Moon } from '@element-plus/icons-vue'
+import { User, Sunny, Moon, Fold } from '@/components/icons'
+import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
 
 const authStore = useAuthStore()
 const sidebarStore = useSidebarStore()
 const themeStore = useThemeStore()
 const router = useRouter()
 
+/** 批次4：头像首字符（用户名首字大写，兜底 "?"） */
+const avatarLetter = computed(() => {
+  const name = authStore.user?.username || ''
+  return name.trim().charAt(0).toUpperCase() || '?'
+})
+
 const showSidebar = computed(() => {
   return router.currentRoute.value.path !== '/login' && router.currentRoute.value.path !== '/register'
 })
 
 function handleCommand(command: string | number | object): void {
-  if (command === 'logout') {
+  if (command === 'profile') {
+    router.push('/profile')
+  } else if (command === 'logout') {
     authStore.logout()
     router.push('/login')
   }

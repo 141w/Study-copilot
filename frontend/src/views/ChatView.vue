@@ -1,7 +1,7 @@
 <template>
-  <div class="flex h-[calc(100vh-4rem)]">
+  <div class="flex h-[calc(100dvh-4rem)]">
     <!-- Chat Area -->
-    <div class="flex-1 flex flex-col">
+    <div class="flex-1 flex flex-col" @mouseenter="mouseInChat = true" @mouseleave="mouseInChat = false">
       <!-- Top Bar -->
       <div class="border-b border-[var(--border-default)] px-6 py-3 bg-[var(--surface-card)] flex items-center justify-between">
         <div class="flex items-center gap-4">
@@ -15,6 +15,23 @@
           <el-button :icon="Download" :disabled="chatStore.messages.length === 0" @click="exportChat">
             导出对话
           </el-button>
+          <div class="flex items-center gap-1 text-sm border-l pl-3 ml-1">
+            <span class="text-[var(--text-muted)]">模式:</span>
+            <el-radio-group v-model="chatMode" size="small">
+              <el-radio-button label="qa">问答</el-radio-button>
+              <el-radio-button label="discuss">讨论</el-radio-button>
+            </el-radio-group>
+          </div>
+          <!-- 批次10：讨论上下文模式（仅讨论态显示）——全文 vs 检索片段 -->
+          <div v-if="chatMode === 'discuss'" class="flex items-center gap-1 text-sm border-l pl-3 ml-1">
+            <el-tooltip content="检索模式：按问题检索相关片段；全文模式：携带所选文档完整内容（长文档自动截断）" placement="bottom">
+              <span class="text-[var(--text-muted)] cursor-help">上下文:</span>
+            </el-tooltip>
+            <el-radio-group v-model="discussContextMode" size="small">
+              <el-radio-button label="rag_snippets">检索片段</el-radio-button>
+              <el-radio-button label="full_docs">全文</el-radio-button>
+            </el-radio-group>
+          </div>
           <el-button :type="showHistory ? 'primary' : 'default'" :icon="Clock" @click="showHistory = !showHistory">
             {{ showHistory ? '隐藏记录' : '历史记录' }}
           </el-button>
@@ -30,140 +47,169 @@
       </div>
 
       <!-- Messages Area -->
-      <div ref="messagesRef" class="flex-1 overflow-y-auto p-6 bg-[var(--bg-secondary)]">
+      <div ref="messagesRef" class="flex-1 overflow-y-auto">
         <div v-if="chatStore.messages.length === 0" class="max-w-2xl mx-auto text-center py-16">
-          <CopilotBotAvatar :size="120" mood="idle" />
+          <CopilotBotAvatar class="bot-avatar-flip" :size="120" :mood="avatarMood" :expression="avatarExpr" />
           <h2 class="text-2xl font-semibold text-[var(--text-primary)] mb-2">你好，我是 Study Copilot</h2>
           <p class="text-[var(--text-muted)] mb-6">基于你的文档知识库，我可以回答你的问题</p>
-          <div class="flex flex-wrap justify-center gap-2 text-sm text-[var(--text-muted)]">
-            <span class="px-3 py-1 bg-[var(--surface-card)] rounded-full">上传文档</span>
-            <span class="px-3 py-1 bg-[var(--surface-card)] rounded-full">开始问答</span>
-            <span class="px-3 py-1 bg-[var(--surface-card)] rounded-full">生成练习题</span>
+          <!-- P5-3：快捷入口可点（原为纯文字胶囊），每项带图标 + 动词-名词 -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-xl mx-auto text-left">
+            <router-link
+              v-for="q in quickStarts"
+              :key="q.to"
+              :to="q.to"
+              class="flex items-center gap-2.5 px-3.5 py-3 bg-[var(--surface-card)] border border-[var(--border-default)] rounded-lg hover:border-[var(--color-primary)] hover:shadow-sm transition-all group"
+            >
+              <el-icon class="w-[18px] h-[18px] flex-shrink-0" :class="q.iconClass"><component :is="q.icon" /></el-icon>
+              <span class="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{{ q.label }}</span>
+            </router-link>
           </div>
         </div>
 
-        <div v-else class="max-w-3xl mx-auto space-y-5">
+        <div v-else class="max-w-3xl mx-auto px-4 py-6 space-y-6">
+          <!-- P7：assistant 尚未响应时（仅 user 消息），球暂驻顶部（FLIP 落点） -->
+          <div v-if="lastAssistantIdx === -1" class="flex items-center gap-2.5">
+            <CopilotBotAvatar class="bot-avatar-flip" :size="48" :mood="avatarMood" :expression="avatarExpr" />
+          </div>
           <div
             v-for="(msg, idx) in chatStore.messages"
             :key="idx"
-            class="flex gap-3"
-            :class="msg.role === 'user' ? 'flex-row-reverse' : ''"
+            class="group"
           >
-            <!-- Avatar -->
-            <div class="flex-shrink-0 mt-0.5">
-              <CopilotBotAvatar
-                v-if="msg.role === 'assistant'"
-                :is-streaming="msg.isStreaming"
-                :size="40"
-                :mood="msg === chatStore.messages[chatStore.messages.length - 1] ? botMood : 'idle'"
-              />
-              <div
-                v-else
-                class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--color-primary)] text-white"
-              >
-                <el-icon class="w-5 h-5"><User /></el-icon>
+            <!-- Assistant message（P5-1 网页式：作者行 + 全宽正文，无气泡） -->
+            <div v-if="msg.role === 'assistant'" class="msg-enter">
+              <!-- 作者行（P7：全页唯一动画球挂在最新一条，历史消息仅名字） -->
+              <div class="flex items-center gap-2.5 mb-1.5">
+                <CopilotBotAvatar
+                  v-if="idx === lastAssistantIdx"
+                  class="bot-avatar-flip"
+                  :is-streaming="msg.isStreaming"
+                  :size="48"
+                  :mood="msg === chatStore.messages[chatStore.messages.length - 1] ? avatarMood : 'idle'"
+                  :expression="msg === chatStore.messages[chatStore.messages.length - 1] ? avatarExpr : 'neutre'"
+                />
+                <span class="text-sm font-medium text-[var(--text-primary)]">Study Copilot</span>
+              </div>
+
+              <div class="pl-0 min-w-0">
+                <!-- Thinking indicator -->
+                <!-- P5-2：思考中改三点脉冲（与打字机光标同语言，替代 spinner） -->
+                <div v-if="msg.isStreaming && !msg.content" class="flex items-center gap-1.5 py-1.5" aria-label="思考中">
+                  <span class="thinking-dot"></span>
+                  <span class="thinking-dot" style="animation-delay: 0.15s"></span>
+                  <span class="thinking-dot" style="animation-delay: 0.3s"></span>
+                </div>
+
+                <!-- Thinking steps -->
+                <details
+                  v-else-if="Array.isArray(msg.thinking) && msg.thinking.length > 0"
+                  class="thinking-section mb-3"
+                >
+                  <summary class="thinking-summary text-xs text-[var(--text-muted)] cursor-pointer select-none flex items-center gap-1.5 list-none py-1 hover:text-[var(--text-secondary)]">
+                    <el-icon class="w-3.5 h-3.5 transition-transform duration-200">
+                      <ArrowRight />
+                    </el-icon>
+                    思考过程 ({{ msg.thinking.length }} 步)
+                  </summary>
+                  <div v-for="(t, ti) in msg.thinking" :key="ti"
+                       class="flex items-start gap-2 py-1 text-xs text-[var(--text-muted)]">
+                    <span class="font-medium text-[var(--text-secondary)] flex-shrink-0">{{ String(t.step) }}.</span>
+                    <span class="leading-relaxed">{{ t.detail }}</span>
+                  </div>
+                </details>
+
+                <!-- Answer body（流式时尾部带打字机光标） -->
+                <div v-if="msg.isStreaming || msg.content"
+                     class="text-[0.9rem] leading-[1.75] text-[var(--text-primary)] prose prose-sm max-w-none"
+                     v-html="renderMarkdown(msg.content, msg.isStreaming)">
+                </div>
+                <span v-if="msg.isStreaming && msg.content" class="stream-caret" aria-hidden="true"></span>
+
+                <!-- Actions（触屏常显 / md hover 显示） -->
+                <div v-if="!msg.isStreaming && msg.content"
+                     class="flex items-center gap-2 mt-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                  <TTSPlayer :text="msg.content" />
+                  <el-button size="small" text bg @click="copyMessage(msg)" title="复制回答">
+                    <el-icon class="w-3.5 h-3.5 mr-1"><DocumentCopy /></el-icon>
+                    {{ copiedMsgId === msg.id ? '已复制' : '复制' }}
+                  </el-button>
+                </div>
+
+                <!-- Sources（P5-1 网页式引用区：分隔线下行式引用条目） -->
+                <div v-if="msg.sources && msg.sources.length > 0 && (!msg.isStreaming || msg.content)"
+                     class="mt-4 pt-3 border-t border-[var(--border-default)]">
+                  <div class="text-xs text-[var(--text-muted)] mb-2">
+                    参考来源
+                    <span v-if="msg.used_source_indices && msg.used_source_indices.length > 0">
+                      共 {{ msg.used_source_indices.length }} 个
+                    </span>
+                  </div>
+                  <div class="space-y-0.5 source-stagger">
+                    <button
+                      v-for="(source, sidx) in (msg.filtered_sources && msg.filtered_sources.length > 0 ? msg.filtered_sources : msg.sources)"
+                      :key="sidx"
+                      @click="scrollToSource(source.index)"
+                      class="source-card-btn source-row w-full text-left text-xs px-2 py-1.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-2"
+                    >
+                      <span class="w-4 h-4 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[10px] flex items-center justify-center font-medium flex-shrink-0">{{
+                        source.index }}</span>
+                      <span v-if="source.source" class="truncate flex-shrink min-w-0">{{ source.source }}</span>
+                      <span v-if="source.page" class="text-[var(--text-muted)] flex-shrink-0">P{{ source.page }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Source Cards -->
+                <div v-if="msg.expandedSources" class="mt-3 grid grid-cols-1 gap-2">
+                  <div
+                    v-for="(source, sidx) in msg.sources"
+                    :key="sidx"
+                    :id="`source-card-${source.index}`"
+                    class="source-card p-3 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] text-sm"
+                  >
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="w-4 h-4 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[10px] flex items-center justify-center">{{ source.index }}</span>
+                      <span v-if="source.source" class="font-medium text-[var(--text-primary)]">{{ source.source }}</span>
+                      <span v-if="source.page" class="text-xs text-[var(--text-muted)]">P{{ source.page }}</span>
+                    </div>
+                    <div class="text-xs text-[var(--text-secondary)] line-clamp-2">{{ source.text }}</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <!-- Message Content -->
-            <div class="flex-1 max-w-[82%] min-w-0">
-
-              <!-- User bubble -->
-              <div
-                v-if="msg.role === 'user'"
-                class="px-4 py-2.5 rounded-2xl rounded-tr-sm bg-[var(--color-primary)] text-white text-[0.9rem] leading-relaxed inline-block max-w-full break-words"
-                v-html="renderMarkdown(msg.content, false)"
-              ></div>
-
-              <!-- Assistant card -->
-              <div
-                v-else
-                class="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-2xl rounded-tl-sm shadow-sm overflow-hidden"
-              >
-                <!-- Thinking indicator -->
-                <div v-if="msg.isStreaming && !msg.content"
-                     class="px-4 py-2.5 flex items-center gap-2 text-[var(--text-muted)] text-sm">
-                  <el-icon class="w-4 h-4 is-loading"><RefreshRight /></el-icon>
-                  <span>思考中...</span>
-                </div>
-
-                <template v-else>
-                  <!-- Thinking steps -->
-                  <details
-                    v-if="Array.isArray(msg.thinking) && msg.thinking.length > 0"
-                    class="thinking-section"
-                  >
-                    <summary class="thinking-summary text-xs text-[var(--text-muted)] cursor-pointer select-none flex items-center gap-1.5 list-none py-2 px-4 hover:text-[var(--text-secondary)]">
-                      <el-icon class="w-3.5 h-3.5 transition-transform duration-200">
-                        <ArrowRight />
-                      </el-icon>
-                      思考过程 ({{ msg.thinking.length }} 步)
-                    </summary>
-                    <div v-for="(t, ti) in msg.thinking" :key="ti"
-                         class="flex items-start gap-2 px-4 pb-2 text-xs text-[var(--text-muted)]">
-                      <span class="font-medium text-[var(--color-accent)] flex-shrink-0">{{ String(t.step) }}.</span>
-                      <span class="leading-relaxed">{{ t.detail }}</span>
-                    </div>
-                  </details>
-
-                  <!-- Answer -->
-                  <div class="px-4 py-3 text-[0.9rem] leading-[1.7] text-[var(--text-primary)] prose prose-sm max-w-none">
-                    <div v-html="renderMarkdown(msg.content, msg.isStreaming)"></div>
-                  </div>
-
-                  <!-- Actions -->
-                  <div
-                    v-if="!msg.isStreaming && msg.content"
-                    class="flex items-center gap-1 px-4 py-1.5 border-t border-[var(--border-default)]"
-                  >
-                    <TTSPlayer :text="msg.content" />
-                    <el-button size="small" text bg @click="copyMessage(msg)" title="复制回答">
-                      <el-icon class="w-3.5 h-3.5 mr-1"><DocumentCopy /></el-icon>
-                      {{ copiedMsgId === msg.id ? '已复制' : '复制' }}
-                    </el-button>
-                  </div>
-
-                  <!-- Sources -->
-                  <div v-if="msg.sources && msg.sources.length > 0 && (!msg.isStreaming || msg.content)"
-                       class="px-4 py-3 border-t border-[var(--border-default)]">
-                    <div class="text-xs text-[var(--text-muted)] mb-2">
-                      参考来源
-                      <span v-if="msg.used_source_indices && msg.used_source_indices.length > 0">
-                        · 引用了 {{ msg.used_source_indices.length }} 个
-                      </span>
-                    </div>
-                    <div class="flex flex-wrap gap-1.5">
-                      <button
-                        v-for="(source, sidx) in (msg.filtered_sources && msg.filtered_sources.length > 0 ? msg.filtered_sources : msg.sources)"
-                        :key="sidx"
-                        @click="scrollToSource(source.index)"
-                        class="source-card-btn text-xs px-2.5 py-1.5 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--color-primary)] hover:text-white hover:border-[var(--color-primary)] transition-all flex items-center gap-1.5"
-                      >
-                        <span class="w-4 h-4 rounded-full bg-[var(--color-primary)] text-white text-[10px] flex items-center justify-center font-medium">{{
-                          source.index }}</span>
-                        <span v-if="source.source" class="max-w-[90px] truncate">{{ source.source }}</span>
-                        <span v-if="source.page" class="text-[var(--text-muted)]">P{{ source.page }}</span>
-                      </button>
-                    </div>
-                  </div>
-                </template>
+            <!-- Discussion mode（多 persona 讨论） -->
+            <div v-else-if="msg.role === 'discussion'" class="msg-enter">
+              <div class="flex items-center gap-2.5 mb-3">
+                <span class="text-sm font-medium text-[var(--text-primary)]">💬 多角色讨论</span>
               </div>
-
-              <!-- Source Cards (outside bubble) -->
-              <div v-if="msg.expandedSources" class="mt-2.5 grid grid-cols-1 gap-2 pl-1">
+              <div class="space-y-4">
                 <div
-                  v-for="(source, sidx) in msg.sources"
-                  :key="sidx"
-                  :id="`source-card-${source.index}`"
-                  class="source-card p-3 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-default)] text-sm"
+                  v-for="(persona, pidx) in (msg.personas || [])"
+                  :key="pidx"
+                  class="flex gap-3"
                 >
-                  <div class="flex items-center gap-2 mb-1">
-                    <span class="w-4 h-4 rounded-full bg-[var(--color-primary)] text-white text-[10px] flex items-center justify-center">{{ source.index }}</span>
-                    <span v-if="source.source" class="font-medium text-[var(--text-primary)]">{{ source.source }}</span>
-                    <span v-if="source.page" class="text-xs text-[var(--text-muted)]">P{{ source.page }}</span>
+                  <div class="w-8 h-8 rounded-lg bg-[var(--bg-secondary)] flex items-center justify-center flex-shrink-0 text-sm">
+                    {{ persona.avatar }}
                   </div>
-                  <div class="text-xs text-[var(--text-secondary)] line-clamp-2">{{ source.text }}</div>
+                  <div class="flex-1 min-w-0 card p-3">
+                    <span class="text-sm font-medium text-[var(--text-primary)]">{{ persona.name }}</span>
+                    <div class="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed whitespace-pre-wrap" v-html="renderMarkdown(persona.content)"></div>
+                  </div>
                 </div>
+              </div>
+              <div v-if="msg.isStreaming" class="flex items-center gap-2 mt-3 text-sm text-[var(--text-muted)]">
+                <span class="thinking-dot"></span>
+                <span class="thinking-dot" style="animation-delay: 0.15s"></span>
+                <span class="thinking-dot" style="animation-delay: 0.3s"></span>
+                <span class="text-xs ml-1">讨论中…</span>
+              </div>
+            </div>
+
+            <!-- User message（P6-1：网页式浅底卡片 + 纯文本渲染，所见即所得） -->
+            <div v-else-if="msg.role === 'user'" class="flex justify-end msg-enter">
+              <div class="max-w-[85%] min-w-0">
+                <div class="text-[0.9rem] leading-[1.75] text-[var(--text-primary)] px-4 py-2.5 rounded-lg rounded-tr-sm bg-[var(--bg-hover)] border border-[var(--border-default)] inline-block max-w-full break-words whitespace-pre-wrap">{{ msg.content }}</div>
               </div>
             </div>
           </div>
@@ -171,18 +217,14 @@
       </div>
 
       <!-- Input Area -->
-      <div class="p-4 bg-[var(--surface-card)] border-t border-[var(--border-default)]">
-        <div class="max-w-3xl mx-auto">
+      <div class="bg-[var(--surface-card)]">
+        <div class="max-w-3xl mx-auto px-4 pb-4 pt-2">
           <ChatInput
             @send="handleSend"
             @stop="handleStop"
             :loading="chatStore.isStreaming"
-            :disabled="selectedDocs.length === 0"
             placeholder="输入问题，按 Enter 发送..."
           />
-          <div v-if="selectedDocs.length === 0" class="text-center mt-2 text-xs text-[var(--text-muted)]">
-            请先选择参考文档
-          </div>
         </div>
       </div>
     </div>
@@ -205,6 +247,7 @@ import { useRoute } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import type { ChatStreamMessage } from '../stores/chat'
 import type { BotMood } from '../components/CopilotBotAvatar.vue'
+import type { ExpressionId } from '../bot/expressions'
 import { useDocumentStore } from '../stores/document'
 import ChatInput from '../components/chat/ChatInput.vue'
 import ChatHistoryPanel from '../components/chat/ChatHistoryPanel.vue'
@@ -212,9 +255,10 @@ import DocumentPicker from '../components/common/DocumentPicker.vue'
 import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatExport'
 import TTSPlayer from '../components/TTSPlayer.vue'
 import { useMarkdown } from '../composables/useMarkdown'
+import { useReducedMotion } from '../composables/useReducedMotion'
 import gsap from 'gsap'
 import CopilotBotAvatar from '../components/CopilotBotAvatar.vue'
-import { Plus, Download, Clock, User, RefreshRight, DocumentCopy, ArrowRight } from '@element-plus/icons-vue'
+import { Plus, Download, Clock, DocumentCopy, ArrowRight, Upload, Document, DocumentChecked } from '@/components/icons'
 
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
@@ -224,9 +268,29 @@ const showHistory = ref(false)
 const botMood = ref<BotMood>('idle')
 const messagesRef = ref<HTMLElement | null>(null)
 const route = useRoute()
+const chatMode = ref<'qa' | 'discuss'>('qa')
+// 批次10：讨论上下文模式（rag_snippets=检索片段 / full_docs=全文打包）
+const discussContextMode = ref<'rag_snippets' | 'full_docs'>('rag_snippets')
+// P1-1：GSAP 动画降级（prefers-reduced-motion）
+const { prefersReduced } = useReducedMotion()
 
 const copiedMsgId = ref<string | number | null>(null)
 let copiedResetTimer: ReturnType<typeof setTimeout> | null = null
+
+/** P5-3：空态快捷入口（图标 + 动词-名词，与 HomeView 步骤条同语言） */
+const quickStarts = [
+  { to: '/upload', label: '上传文档', icon: Upload, iconClass: 'text-[var(--text-secondary)]' },
+  { to: '/documents', label: '阅读文档', icon: Document, iconClass: 'text-[var(--text-secondary)]' },
+  { to: '/quiz', label: '生成练习题', icon: DocumentChecked, iconClass: 'text-[var(--text-secondary)]' }
+]
+
+/** P7：最新一条 assistant 消息索引（动画球挂载点；-1 = 无） */
+const lastAssistantIdx = computed(() => {
+  for (let i = chatStore.messages.length - 1; i >= 0; i--) {
+    if (chatStore.messages[i].role === 'assistant') return i
+  }
+  return -1
+})
 
 async function copyMessage(msg: ChatStreamMessage): Promise<void> {
   try {
@@ -260,17 +324,52 @@ function _mdCacheSet(key: string, val: string): void {
   _mdCache.set(key, val)
 }
 
-function renderMarkdown(text: string, isStreaming = false): string {
-  if (!text) return ''
-  if (isStreaming) return text.replace(/</g, '&lt;').replace(/\n/g, '<br>')
-  const cached = _mdCacheGet(text)
-  if (cached) return cached
-  let rendered = renderMarkdownBase(text)
-  rendered = rendered.replace(/\[来源(\d+)\]/g, (_match, num: string) => {
+/** P6-2：来源标记 → 可点击角标（渲染后处理，稳定块缓存命中时同样适用） */
+function _applySourceBadges(html: string): string {
+  return html.replace(/\[来源(\d+)\]/g, (_match, num: string) => {
     return `<sup class="source-badge" data-index="${num}">[${num}]</sup>`
   })
-  _mdCacheSet(text, rendered)
+}
+
+/** P6-2：单块 markdown 渲染（带缓存键前缀区分流式尾块） */
+function _renderBlock(block: string, cachePrefix: string): string {
+  const key = cachePrefix + block
+  const cached = _mdCacheGet(key)
+  if (cached) return cached
+  const rendered = _applySourceBadges(renderMarkdownBase(block))
+  _mdCacheSet(key, rendered)
   return rendered
+}
+
+/**
+ * P6-2：分段流式渲染。
+ * 按空行（\n\n）把内容切成块：除尾块外的"稳定块"走缓存（流式期间不变，零重算），
+ * 尾块（正在生成的段落）每 token 实时 md 渲染（cachePrefix 不同避免污染稳定缓存）。
+ * 效果：流式全程都是真正的 markdown 呈现（无星号井号闪现、无结束瞬间的格式跳变），
+ * 每 token 只重渲染最后一个块，长回答性能 O(尾块) 而非 O(全文)。
+ */
+function renderMarkdown(text: string, isStreaming = false): string {
+  if (!text) return ''
+  if (!isStreaming) {
+    // 完成态：整文单键缓存（历史会话加载等场景命中率最高）
+    const key = 'full:' + text
+    const cached = _mdCacheGet(key)
+    if (cached) return cached
+    const rendered = _applySourceBadges(renderMarkdownBase(text))
+    _mdCacheSet(key, rendered)
+    return rendered
+  }
+  const blocks = text.split(/\n\n+/)
+  const parts: string[] = []
+  for (let i = 0; i < blocks.length - 1; i++) {
+    parts.push(_renderBlock(blocks[i], 'stable:'))
+  }
+  // 尾块单独渲染（可能是不完整 md：语法闭合由 markdown-it 容错，未闭合标记按原样呈现，
+  // 下个 token 到达即修正——这也是所见即所得的正确语义）
+  const tail = blocks[blocks.length - 1]
+  if (tail) parts.push(_renderBlock(tail, 'tail:'))
+  // 块级 HTML 直接拼接（md-it 输出已带块级结构）
+  return parts.join('')
 }
 
 function scrollToSource(index: number): void {
@@ -290,23 +389,143 @@ function scrollToSource(index: number): void {
 }
 
 async function handleSend(content: string): Promise<void> {
-  if (selectedDocs.value.length === 0) return
-  await chatStore.askQuestionStream(content, selectedDocs.value)
+  if (chatMode.value === 'discuss') {
+    await handleDiscuss(content)
+    return
+  }
+  try {
+    await chatStore.askQuestionStream(content, selectedDocs.value)
+  }
+  catch (_e) {
+    playScene('exclaim')
+    return
+  }
   await nextTick()
   scrollToBottom()
 }
 
+async function handleDiscuss(content: string): Promise<void> {
+  // 使用原生 fetch 调用 /chat/discuss SSE 端点
+  const controller = new AbortController()
+  const token = localStorage.getItem('token')
+
+  // 添加用户消息
+  chatStore.messages.push({
+    id: Date.now(), role: 'user', content,
+    created_at: new Date().toISOString(),
+  })
+
+  // 创建讨论容器消息
+  const discussionMsgId = crypto.randomUUID()
+  chatStore.messages.push({
+    id: discussionMsgId,
+    role: 'discussion',
+    content: '',
+    personas: [],
+    sources: [],
+    used_source_indices: [],
+    filtered_sources: [],
+    expandedSources: false,
+    created_at: new Date().toISOString(),
+    isStreaming: true,
+  })
+
+  try {
+    const res = await fetch('/api/chat/discuss', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        question: content,
+        document_ids: selectedDocs.value,
+        personas: null,
+        max_turns: 2,
+        context_mode: discussContextMode.value,
+      }),
+      signal: controller.signal,
+    })
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+    const reader = res.body?.getReader()
+    const decoder = new TextDecoder()
+    if (!reader) throw new Error('No response body')
+
+    const msg = chatStore.messages.find((m: any) => m.id === discussionMsgId)
+    const personaBlocks: Record<string, { avatar: string; lines: string[] }> = {}
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const text = decoder.decode(value, { stream: true })
+      const lines = text.split('\n')
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const payload = line.slice(6)
+        if (payload === '[DONE]') continue
+        try {
+          const event = JSON.parse(payload)
+          const _msg = msg!
+
+          if (event.type === 'persona_speak') {
+            const p = event.persona
+            if (!personaBlocks[p]) {
+              personaBlocks[p] = { avatar: event.avatar || '💬', lines: [] }
+            }
+            personaBlocks[p].lines.push(event.content)
+            // 更新消息展示
+            _msg.personas = Object.entries(personaBlocks).map(([name, block]) => ({
+              name, avatar: block.avatar,
+              content: block.lines.join('\n\n'),
+            }))
+            _msg.content = _msg.personas.map(p => p.content).join('\n\n')
+          }
+          else if (event.type === 'summary') {
+            _msg.content += '\n\n---\n\n**讨论总结**\n\n' + event.content
+          }
+          else if (event.type === 'done' || event.type === 'error') {
+            _msg.isStreaming = false
+          }
+        }
+        catch { /* skip malformed */ }
+      }
+      await nextTick()
+      scrollToBottom()
+    }
+  }
+  catch (e: any) {
+    if (e.name !== 'AbortError') {
+      const msg = chatStore.messages.find((m: any) => m.id === discussionMsgId)
+      if (msg) {
+        msg.content = `讨论失败：${e.message}`
+        msg.isStreaming = false
+      }
+    }
+  }
+}
+
 function handleStop(): void {
   chatStore.cancelStream()
+  // P8：用户中止 → 眨眼示意
+  playScene('cancelled')
 }
 
 function exportChat(): void {
   if (chatStore.messages.length === 0) return
   const md = buildChatMarkdown(chatStore.messages, chatStore.currentSessionTitle || '对话')
   downloadChatMarkdown(md)
+  // P8：导出完成 → 彗尾飘移
+  playScene('comet')
 }
 
 function newChat(): void {
+  // P8：清空有内容的会话 → burst 爆散
+  if (chatStore.messages.length > 0) {
+    playScene('burst')
+  }
   chatStore.clearMessages()
   chatStore.currentSession = null
   chatStore.currentSessionTitle = ''
@@ -316,6 +535,8 @@ function newChat(): void {
 function onSessionLoaded(_sessionId: string): void {
   nextTick(() => scrollToBottom())
   showHistory.value = false
+  // P8：载入历史会话 → orbit 入场
+  playScene('arrive')
 }
 
 function onSessionDeleted(sessionId: string): void {
@@ -336,13 +557,109 @@ function scrollToBottom(): void {
 
 let gsapCtx: gsap.Context | null = null
 
-// Bot mood: stream starts → acknowledge → thinking → answering → done
+/**
+ * P8：mood 从消息状态推导。egg = 流式已开始但无思考步骤也无内容
+ * （等首 token 的蛋形收紧）；thinking = 有 Agentic 步骤（真版三点）。
+ */
 function updateBotMood(msg: ChatStreamMessage, isLast: boolean): void {
   if (!isLast || msg.role !== 'assistant') { botMood.value = 'idle'; return }
   if (!msg.isStreaming) botMood.value = 'done'
   else if (msg.content) botMood.value = 'answering'
   else if (Array.isArray(msg.thinking) && msg.thinking.length > 0) botMood.value = 'thinking'
-  else botMood.value = 'acknowledge'
+  else botMood.value = 'egg'
+}
+
+/** P8：一次性场景 mood（orbit/burst/comet 等），到点回收优先权交还消息推导 */
+const sceneMood = ref<BotMood | null>(null)
+let sceneTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 各场景编排总时长（ms） */
+const SCENE_DURATION: Partial<Record<BotMood, number>> = {
+  arrive: 6000,
+  burst: 5000,
+  comet: 4800,
+  exclaim: 4200,
+  cancelled: 4200
+}
+
+function playScene(mood: BotMood): void {
+  sceneMood.value = mood
+  if (sceneTimer) clearTimeout(sceneTimer)
+  sceneTimer = setTimeout(() => { sceneMood.value = null }, SCENE_DURATION[mood] ?? 5000)
+}
+
+/** 渲染给球的 mood：一次性场景播放中优先，否则走消息推导 */
+const avatarMood = computed<BotMood>(() => sceneMood.value ?? botMood.value)
+
+/**
+ * P8-4：表情随 mood 换脸（引擎内 morph，不重置时钟）。
+ * answering=专注 / done=愉悦 / thinking=审慎 / egg=疑惑 / sleep=困倦。
+ * arrive/burst/comet 大戏保持 neutre——它们的表情就是状态本身
+ * （states.ts baseFace:false 契约：非 idle 态自带测量表情，不可替换）。
+ */
+const avatarExpr = computed<ExpressionId>(() => {
+  switch (avatarMood.value) {
+    case 'sleep': return 'somnolent'
+    case 'answering': return 'attentif'
+    case 'done': return 'heureux'
+    case 'thinking': return 'mefiant'
+    case 'egg': return 'confus'
+    case 'exclaim': return 'surpris'
+    case 'cancelled': return 'blase'
+    default: return 'neutre'
+  }
+})
+
+/* ---------------- P8-2：空闲打瞌睡 ---------------- */
+const IDLE_MS = 90_000   // 90s 无操作才打瞌睡（原 30s 太敏感，切个后台就触发）
+
+/** 鼠标是否悬停在对话区域内：
+ *  是 → 指针事件不复位 idle（注视跟踪已证明鼠标在线，不应同时驱动 idle）；
+ *  否 → 指针/键盘都算 activity。
+ */
+const mouseInChat = ref(false)
+
+/** 两种 idle 变体交替播放：弹跳 → 蛋形脉动 → 弹跳 → ... */
+const IDLE_VARIANTS: readonly BotMood[] = ['sleep', 'egg'] as const
+/** 每个变体播放约 5-6s（sleep mood blocks 5.0s / egg 2.8s，取 6s 覆盖最长） */
+const VARIANT_MS = 6_000
+
+let idleTimer: ReturnType<typeof setTimeout> | null = null
+let sleepPhaseTimer: ReturnType<typeof setTimeout> | null = null
+let sleepVariant = 0
+// 非 Reactivity 变量：事件处理器引用（用于 add/removeEventListener 成对）
+let _onPointer: ((e: Event) => void) | null = null
+let _onKey: ((e: Event) => void) | null = null
+
+/** 排入下一个变体切换（仅在球处于 idle 态时才切） */
+function scheduleVariant(): void {
+  sleepPhaseTimer = setTimeout(() => {
+    if (botMood.value !== 'sleep' && botMood.value !== 'egg') return
+    sleepVariant = (sleepVariant + 1) % IDLE_VARIANTS.length
+    botMood.value = IDLE_VARIANTS[sleepVariant]
+    scheduleVariant()
+  }, VARIANT_MS)
+}
+
+function enterSleep(): void {
+  // 流式中永不瞌睡（球有活干）
+  if (chatStore.isStreaming) return
+  sleepVariant = 0
+  botMood.value = IDLE_VARIANTS[0]
+  scheduleVariant()
+}
+
+function onActivity(e?: Event): void {
+  // 鼠标悬停在对话区时，pointer 事件不复位 idle（注视跟踪已证明人在用鼠标）
+  if (e instanceof PointerEvent && mouseInChat.value) return
+  if (idleTimer) clearTimeout(idleTimer)
+  if (sleepPhaseTimer) clearTimeout(sleepPhaseTimer)
+  sleepPhaseTimer = null
+  idleTimer = setTimeout(enterSleep, IDLE_MS)
+  // 从瞌睡中被唤醒 → acknowledge 点头示意
+  if (botMood.value === 'sleep' || botMood.value === 'egg') {
+    botMood.value = 'acknowledge'
+  }
 }
 
 watch(
@@ -351,34 +668,76 @@ watch(
     return last ? { last } : null
   },
   (v) => {
-    if (v) updateBotMood(v.last, true)
-    else botMood.value = 'idle'
+    if (v) {
+      updateBotMood(v.last, true)
+      // P6-3：流式内容增长时跟随滚动（scrollToBottom 内部有 nearBottom 判断，
+      // 用户手动上滚回看时不会被打扰）
+      if (v.last.isStreaming) nextTick(() => scrollToBottom())
+    } else {
+      botMood.value = 'idle'
+    }
   },
   { deep: true }
 )
 
-let prevMsgCount = 0
+/** P7-FLIP：首条消息发送时球从空态居中飞到最新消息作者行。
+ *  pre 时机（DOM 未更新）抓旧球 rect；nextTick 新 DOM 就位后反演动画。 */
+let flipPending = false
+let flipFromRect: DOMRect | null = null
 
-watch(() => chatStore.messages.length, (newLen) => {
-  nextTick(() => {
-    scrollToBottom()
-    if (newLen > prevMsgCount && prevMsgCount > 0) {
-      const container = messagesRef.value
-      if (container) {
-        const msgRows = container.querySelectorAll('.flex.gap-4')
-        const lastMsg = msgRows[msgRows.length - 1]
-        if (lastMsg) {
-          gsap.from(lastMsg, { y: 20, opacity: 0, duration: 0.4, ease: 'power2.out' })
-        }
-      }
+watch(() => chatStore.messages.length, (newLen, oldLen) => {
+  if (oldLen === 0 && newLen > 0) {
+    const first = chatStore.messages[0]
+    // 仅真实发送（首条是 user）才 FLIP；历史会话批量载入直接落位
+    const isLiveSend = first?.role === 'user'
+    const oldEl = document.querySelector('.bot-avatar-flip') as HTMLElement | null
+    if (oldEl && isLiveSend && !prefersReduced.value) {
+      flipPending = true
+      // 旧元素即将销毁，rect 存模块变量（dataset 会随元素销毁丢失）
+      flipFromRect = oldEl.getBoundingClientRect()
     }
+  }
+  nextTick(() => {
+    if (flipPending) {
+      flipPending = false
+      playFlip()
+    }
+    scrollToBottom()
     const last = chatStore.messages[newLen - 1]
     if (last) updateBotMood(last, true)
-    prevMsgCount = newLen
   })
 })
 
+/** P7-FLIP 播放：旧 rect（模块变量）→ 新 rect，反演位移+缩放（120px→48px） */
+function playFlip(): void {
+  const newEl = document.querySelector('.bot-avatar-flip') as HTMLElement | null
+  if (!newEl || !flipFromRect) return
+  try {
+    const from = flipFromRect
+    flipFromRect = null
+    const to = newEl.getBoundingClientRect()
+    const dx = from.left + from.width / 2 - (to.left + to.width / 2)
+    const dy = from.top + from.height / 2 - (to.top + to.height / 2)
+    const scale = from.width / to.width
+    gsap.from(newEl, {
+      x: dx, y: dy, scale,
+      duration: 0.55,
+      ease: 'power3.inOut',
+      clearProps: 'x,y,scale'
+    })
+  } catch {
+    /* rect 解析失败则跳过动画（球已在正确位置） */
+  }
+}
+
 onMounted(async () => {
+  // P8-2：空闲瞌睡——活动重置计时（瞌睡本身即低动效，不受动画偏好影响）
+  _onPointer = (e) => onActivity(e)
+  _onKey = (e) => onActivity(e)
+  window.addEventListener('pointerdown', _onPointer, { passive: true })
+  window.addEventListener('keydown', _onKey, { passive: true })
+  onActivity()
+
   await chatStore.fetchSessions()
   await documentStore.fetchDocuments()
 
@@ -400,6 +759,8 @@ onMounted(async () => {
     await handleSend(contextQuery as string)
   }
 
+  // P1-1：减少动态偏好下不执行入场动画
+  if (prefersReduced.value) return
   gsapCtx = gsap.context(() => {
     const emptyIcon = messagesRef.value?.querySelector('.w-20.h-20')
     if (emptyIcon) {
@@ -411,13 +772,21 @@ onMounted(async () => {
 onUnmounted(() => {
   gsapCtx?.revert()
   if (copiedResetTimer) clearTimeout(copiedResetTimer)
+  // P8：清理场景/空闲/变体计时器与全局监听
+  if (idleTimer) clearTimeout(idleTimer)
+  if (sleepPhaseTimer) clearTimeout(sleepPhaseTimer)
+  if (sceneTimer) clearTimeout(sceneTimer)
+  if (_onPointer) window.removeEventListener('pointerdown', _onPointer)
+  if (_onKey) window.removeEventListener('keydown', _onKey)
+  window.removeEventListener('pointermove', onActivity)
+  window.removeEventListener('pointerleave', onActivity)
 })
 </script>
 
 <style>
 /* 精修（批次3）：中文正文行高 1.7（舒适区），作用于 AI 回答正文 */
 .prose {
-  line-height: 1.7;
+  line-height: 1.75;
   font-size: 0.9rem;
 }
 .prose p {
@@ -475,7 +844,7 @@ onUnmounted(() => {
   margin-right: 0.125rem;
   font-size: 0.625rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-inverse);
   background: var(--gradient-brand);
   border-radius: 9999px;
   cursor: pointer;
@@ -493,5 +862,82 @@ onUnmounted(() => {
 }
 .thinking-section[open] .thinking-summary .el-icon {
   transform: rotate(90deg);
+}
+
+/* ===== P7 动画球 FLIP ===== */
+/* SVG transform 默认绕视口原点——FLIP 缩放前必须中心化 */
+.bot-avatar-flip {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ===== P5-2 动画层 ===== */
+/* 新消息入场：淡入 + 轻上移（0.25s，克制的网页式节奏） */
+.msg-enter {
+  animation: msg-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 来源条目逐个入场（首 8 条 stagger，超出即无延迟） */
+.source-stagger > button {
+  animation: msg-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.source-stagger > button:nth-child(1) { animation-delay: 0s; }
+.source-stagger > button:nth-child(2) { animation-delay: 0.05s; }
+.source-stagger > button:nth-child(3) { animation-delay: 0.1s; }
+.source-stagger > button:nth-child(4) { animation-delay: 0.15s; }
+.source-stagger > button:nth-child(5) { animation-delay: 0.2s; }
+.source-stagger > button:nth-child(6) { animation-delay: 0.25s; }
+.source-stagger > button:nth-child(7) { animation-delay: 0.3s; }
+.source-stagger > button:nth-child(8) { animation-delay: 0.35s; }
+
+/* 思考中三点脉冲 */
+.thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--text-muted);
+  animation: dot-pulse 1.2s ease-in-out infinite;
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* 流式打字机光标：品牌色竖条呼吸 */
+.stream-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--color-primary);
+  animation: caret-blink 0.9s steps(1) infinite;
+}
+@keyframes caret-blink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+
+/* §6.B：减少动态偏好下全部降级（光标改静态、入场瞬时、脉冲停） */
+@media (prefers-reduced-motion: reduce) {
+  .msg-enter,
+  .source-stagger > button,
+  .thinking-dot {
+    animation: none;
+  }
+  .stream-caret {
+    animation: none;
+    opacity: 1;
+  }
 }
 </style>

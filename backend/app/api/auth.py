@@ -32,6 +32,17 @@ class UserResponse(BaseModel):
     created_at: str
 
 
+class ProfileUpdate(BaseModel):
+    """部分更新：未提供的字段（None）保持不变。"""
+    username: str | None = None
+    email: EmailStr | None = None
+
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+
+
 # ── Dependency ─────────────────────────────────────────────────────────────
 
 
@@ -79,3 +90,36 @@ async def get_me(current_user: User = Depends(get_current_user)):
         email=current_user.email,
         created_at=str(current_user.created_at),
     )
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_me(
+    profile: ProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新当前用户资料（用户名/邮箱，未提交的字段不变）。"""
+    updated = await auth_service.update_profile(
+        db, current_user,
+        username=profile.username,
+        email=profile.email,
+    )
+    return UserResponse(
+        id=updated.id,
+        username=updated.username,
+        email=updated.email,
+        created_at=str(updated.created_at),
+    )
+
+
+@router.put("/password")
+async def change_my_password(
+    payload: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """校验原密码后修改密码。"""
+    await auth_service.change_password(
+        db, current_user, payload.old_password, payload.new_password
+    )
+    return {"detail": "密码已更新"}

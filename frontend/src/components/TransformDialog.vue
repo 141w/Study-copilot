@@ -14,7 +14,7 @@
           v-for="t in transformations"
           :key="t.key"
           @click="selectedType = t.key"
-          class="p-3 text-left border rounded-xl transition-all text-sm"
+          class="p-3 text-left border rounded-md transition-all text-sm"
           :class="selectedType === t.key
             ? 'border-[var(--color-primary)] bg-[var(--bg-secondary)] ring-1 ring-[var(--color-primary)]'
             : 'border-[var(--border-default)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-secondary)]'"
@@ -25,22 +25,33 @@
       </div>
     </div>
 
+      <!-- F3：转换中骨架占位（匹配结果框形状），替代正文区空白 -->
+    <div v-if="loading" class="mt-4">
+      <div class="flex items-center justify-between mb-2">
+        <label class="block text-sm font-medium text-[var(--text-secondary)]">转换结果</label>
+      </div>
+      <div class="p-4 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] space-y-3" aria-busy="true" role="status" aria-label="转换中">
+        <div class="skeleton-block h-3.5 rounded w-11/12"></div>
+        <div class="skeleton-block h-3.5 rounded w-full"></div>
+        <div class="skeleton-block h-3.5 rounded w-4/5"></div>
+        <div class="skeleton-block h-3.5 rounded w-3/5"></div>
+      </div>
+    </div>
+
     <!-- Result -->
-    <div v-if="result" class="mt-4">
+    <div v-else-if="result" class="mt-4">
       <div class="flex items-center justify-between mb-2">
         <label class="block text-sm font-medium text-[var(--text-secondary)]">转换结果</label>
         <button
           @click="copyResult"
           class="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1"
         >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
+          <el-icon class="w-3.5 h-3.5"><CopyDocument /></el-icon>
           复制
         </button>
       </div>
       <div
-        class="p-4 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-default)] max-h-60 overflow-y-auto text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed"
+        class="p-4 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] max-h-60 overflow-y-auto text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed"
       >{{ result }}</div>
     </div>
 
@@ -65,6 +76,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { CopyDocument } from '@/components/icons'
 import api from '../services/api'
 import type { Transformation } from '../types/models'
 
@@ -168,3 +180,26 @@ watch(() => localVisible.value, (val) => {
   }
 })
 </script>
+
+<style scoped>
+/* F3：转换中骨架条（token 底色 + shimmer；reduced-motion 下停用扫光） */
+.skeleton-block {
+  background-color: var(--bg-tertiary);
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-primary) 4%, transparent), transparent);
+  animation: transform-skeleton-shimmer 1.5s infinite;
+}
+@keyframes transform-skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block::after { animation: none; }
+}
+</style>

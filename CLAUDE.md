@@ -8,14 +8,14 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ### v3 Features (Current)
 - **TypeScript**: 渐进式 TypeScript 迁移，stores 全面 TS，views/composables 渐进覆盖
-- **组件复用**: Element Plus (el-button, el-card, el-input 等通用组件); Base 通用组件待实现
-- **Prompt 模板化**: Jinja2 模板管理 27 个 LLM prompt (7 个子目录)
+- **组件复用**: Element Plus (el-button, el-card, el-input 等通用组件)
+- **Prompt 模板化**: Jinja2 模板管理 28 个 LLM prompt (7 个子目录)
 - **设计系统**: 完整的 CSS 变量系统（间距、字体、颜色、组件样式）
-- **Composables**: useApi、useMarkdown 等可复用逻辑
+- **Composables**: useApi、useMarkdown、useChatExport、useFormat、useNoteDraft、useReducedMotion
 - **主题系统**: Light/Dark 主题切换，CSS 变量驱动
 - **响应式布局**: 移动端适配，自适应侧边栏，用户菜单
-- **表单组件**: BaseInput、BaseSelect、BaseTextarea 统一交互
-- **数据组件**: BaseTable（排序/分页）、BaseList（加载/空状态）
+- **通用组件**: AppHeader、AppSidebar、ConfirmDialog、PageHeader、SkeletonList、EmptyState、DocumentPicker
+- **功能组件**: CopilotBotAvatar、CourseCard、NoteCard、NoteEditor、TaskPanel、TransformDialog、TTSPlayer、UrlImportDialog、ChatHistoryPanel、ChatInput、ClassroomBridgeDialog、OpenMAICLinkCard、IconSet
 
 ### v2 Features
 - **Agentic RAG**: 查询路由、上下文感知改写、自适应检索（4种策略）、纠错检索、会话摘要、答案自我反思
@@ -27,6 +27,8 @@ This file provides architectural guidance for contributors working on Study Copi
 - **TTS 语音**: Edge TTS 朗读答案和笔记
 - **异步任务**: 批量操作，后台任务队列
 - **凭证加密**: Fernet 加密存储 API Key
+- **OpenMAIC 集成**: 课程文档自动生成（course_generator）, 人设讨论（persona_discussion）, 文档包（document_bundle）
+- **课堂桥接**: ClassroomBridge 对话框和 OpenMAICLinkCard 前端组件
 - **数据库迁移**: Alembic
 - **代码质量**: Ruff linter
 
@@ -41,9 +43,9 @@ This file provides architectural guidance for contributors working on Study Copi
 │          Frontend (Vue3 + Vite)              │
 │          frontend/ @ port 3000               │
 ├──────────────────────────────────────────────┤
-│ - 13 views (Home, Login, Register, Upload, Document, Chat, Quiz, Analysis, ModelConfig, CourseList, CourseDetail, Notes, Tasks) │
-│ - 10 Pinia stores                             │
-│ - 12 common components + 9 feature components │
+│ - 14 views (Home, Login, Register, Upload, Document, Chat, Quiz, Analysis, ModelConfig, CourseList, CourseDetail, Notes, Tasks, Profile) │
+│ - 11 Pinia stores                             │
+│ - 7 common components + 13 feature components │
 │ - TailwindCSS + GSAP styling                  │
 │ - Axios HTTP client with JWT interceptors    │
 └──────────────────┬───────────────────────────┘
@@ -52,21 +54,20 @@ This file provides architectural guidance for contributors working on Study Copi
 │          Backend (FastAPI)                   │
 │          backend/ @ port 8000                │
 ├──────────────────────────────────────────────┤
-│ - 13 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis)
-│ - Agentic RAG (Router + Adaptive + Corrective + Reflection) │
-│ - Vector search via PostgreSQL+pgvector (production)  │
-│ - Multi-provider LLM abstraction (OpenAI SDK)│
-│ - JWT authentication (access + refresh)      │
-│ - 10 service orchestration modules (analysis, auth, chat, config, course, document, note, quiz, task, transform)               │
-└──────────────────┬───────────────────────────┘
+│ - 13 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis/openmaic_bridge)
+│ - Agentic RAG (Router + Adaptive + Corrective + Reflection)
+│ - Vector search via PostgreSQL+pgvector (production)
+│ - Multi-provider LLM abstraction (OpenAI SDK)
+│ - JWT authentication (access + refresh)
+│ - 11 service orchestration modules (analysis, auth, chat, config, course, document, note, openmaic, quiz, task, transform) │
                    │
 ┌──────────────────▼───────────────────────────┐
 │          Data Layer                          │
 ├──────────────────────────────────────────────┤
-│ - PostgreSQL 16+ + pgvector extension (production vector search) │
-│ - Legacy: FAISS + BM25 + RRF file-based (backward compat) │
-│ - File storage (uploads/)                    │
-│ - Alembic migrations                         │
+│ - PostgreSQL 16+ + pgvector extension (production vector search)
+│ - Legacy: FAISS + BM25 + RRF file-based (backward compat)
+│ - File storage (uploads/)
+│ - Alembic migrations
 └──────────────────────────────────────────────┘
 ```
 
@@ -103,20 +104,9 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Testing**: Vitest 4.1 + Vue Test Utils 2.4 + Testing Library
 - **UI Library**: Element Plus 2.14 (auto-imported via unplugin-vue-components)
 
-### 通用组件 (`frontend/src/components/common/`)
-- `AppHeader.vue` — 全局头部导航（支持主题切换、移动端菜单、用户下拉）
-- `AppSidebar.vue` — 侧边栏导航（响应式，移动端遮罩，文档列表）
-
-> **Note**: Base 通用组件（BaseDialog、BaseButton、BaseInput、BaseSelect、BaseTable 等）在当前架构中改为使用 Element Plus 组件直接实现，无需重新实现。（v3 Feature 组件复用已迁移至 Element Plus。）
-
-### Composables (`frontend/src/composables/`)
-- `useApi.ts` — 统一 API 请求处理（错误处理、toast 通知）
-- `useMarkdown.ts` — Markdown 渲染（markdown-it 封装）
-- `useChatExport.ts` — 聊天导出 Markdown 构建（buildChatMarkdown, formatDate）
-
 ### Backend Internal Modules (`backend/app/`)
 
-#### Core (`app/core/` — 23 modules)
+#### Core (`app/core/` — 24 modules)
 | Module | Responsibility |
 |--------|---------------|
 | `llm.py` | OpenAI SDK wrapper with retry/backoff |
@@ -128,6 +118,9 @@ This file provides architectural guidance for contributors working on Study Copi
 | `query_decomposer.py` | Query decomposition + entity extraction |
 | `answer_reflector.py` | Answer quality self-reflection |
 | `document_parser.py` | Factory: Docling / PyMuPDF / python-docx / python-pptx |
+| `document_bundle.py` | Document bundle management for course generation |
+| `course_generator.py` | Auto-generate course structure from documents |
+| `persona_discussion.py` | AI persona-based discussion mode |
 | `chunker.py` | Fixed / Semantic / Hierarchical chunking |
 | `quiz_generator.py` | LLM-based question generation |
 | `transformations.py` | 8 transformation types (summary/keypoints/outline/flashcards/mindmap/qa/translate/explain) |
@@ -141,16 +134,17 @@ This file provides architectural guidance for contributors working on Study Copi
 | `pgvector_store.py` | **Production** vector search via PostgreSQL+pgvector |
 | `vector_store.py` | Legacy FAISS/BM25/Hybrid file-based (backward compat) |
 
-#### Services (`app/services/` — 10 modules)
+#### Services (`app/services/` — 11 modules)
 | Module | Responsibility |
 |--------|---------------|
 | `analysis_service.py` | Wrong answer analysis, knowledge stats, progress |
 | `auth_service.py` | Register, login, refresh_token |
-| `chat_service.py` | Ask question, stream answer, history management |
+| `chat_service.py` | Ask question, stream answer, history management, semantic message search |
 | `config_service.py` | Get/create/update LLM config |
-| `course_service.py` | Course CRUD, document associations |
-| `document_service.py` | Upload, delete, list, get documents |
+| `course_service.py` | Course CRUD, document associations, auto-generation |
+| `document_service.py` | Upload, delete, list, get documents, document bundling |
 | `note_service.py` | Notes CRUD, tagging, semantic search |
+| `openmaic_service.py` | OpenMAIC integration, course broadcasting |
 | `quiz_service.py` | Quiz generation, submission, history |
 | `task_service.py` | Async task CRUD, cancel, recover interrupted |
 | `transform_service.py` | Content transformation orchestration |
@@ -158,37 +152,45 @@ This file provides architectural guidance for contributors working on Study Copi
 #### Other
 - **Middleware**: `trace.py` — TraceIdMiddleware (X-Trace-ID propagation, structured logs via ContextVar)
 - **Utils**: `auth.py` — Password hashing (bcrypt), JWT create/decode, get_current_user
-- **Templates**: 27 .jinja2 prompt files across 7 directories (rag/, quiz/, reflector/, retriever/, router/, decomposer/, transformations/)
+- **Templates**: 28 .jinja2 prompt files across 7 directories (rag/, quiz/, reflector/, retriever/, router/, decomposer/, transformations/)
+- **Additional API**: `openmaic_bridge.py` — OpenMAIC/classroom integration endpoints
 - **No `schemas/` directory**: Pydantic schemas defined inline in each router
 - **No `models/` directory**: ORM models defined in `app/db/database.py`
+
+#### Frontend Composition
+| Composable | Responsibility |
+|------------|---------------|
+| `useApi.ts` | Unified API request handling (errors, toast) |
+| `useMarkdown.ts` | Markdown rendering (markdown-it wrapper) |
+| `useChatExport.ts` | Chat export Markdown builder |
+| `useFormat.ts` | Date/number/string formatting utilities |
+| `useNoteDraft.ts` | Note draft auto-save logic |
+| `useReducedMotion.ts` | Respect prefers-reduced-motion for animations |
+
+#### Frontend Components
+- **Common**: `AppHeader.vue` (theme toggle, mobile menu, user dropdown), `AppSidebar.vue` (responsive nav, doc list), `ConfirmDialog.vue`, `PageHeader.vue`, `SkeletonList.vue`, `EmptyState.vue`, `DocumentPicker.vue`
+- **Feature**: `CopilotBotAvatar.vue`, `CourseCard.vue`, `NoteCard.vue`, `NoteEditor.vue`, `TaskPanel.vue`, `TransformDialog.vue`, `TTSPlayer.vue`, `UrlImportDialog.vue`, `ChatHistoryPanel.vue`, `ChatInput.vue`, `ClassroomBridgeDialog.vue`, `OpenMAICLinkCard.vue`, `IconSet` (icon registry)
+- **Note**: Base 通用组件（BaseDialog, BaseButton, BaseInput 等）使用 Element Plus 直接实现，无需自建。
 
 ---
 ## Key Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Vector DB | PostgreSQL+pgvector (production); FAISS+BM25+RRF (legacy, backward compat) | pgvector: no extra service, SQL-native; legacy kept for migration path |
+| Vector DB | PostgreSQL+pgvector (production); FAISS+BM25+RRF (legacy) | pgvector: no extra service, SQL-native; legacy for migration path |
 | Keyword Search | BM25 (rank-bm25) | Complements semantic search with exact matching |
-| Hybrid Retrieval | RRF fusion (legacy file-based); pgvector IVFFlat (production) | Best of both worlds; no reranking needed for fusion |
+| Hybrid Retrieval | RRF fusion (legacy); pgvector IVFFlat (production) | Best of both worlds |
 | Embedding | Local SBERT models | Privacy, no API cost, Chinese support |
 | Streaming | SSE (fetch + ReadableStream) | Standard HTTP, no WebSocket complexity |
 | LLM abstraction | OpenAI-compatible API | Swap providers without code changes |
 | Auth | JWT (access + refresh) | Standard, works with SPA, auto-refresh |
 | Document parsing | Docling + PyMuPDF fallback | Best-in-class extraction with safe fallback |
-| Chunking | Markdown-aware + semantic + hierarchical | Preserves document structure, supports all use cases |
-| Prompt Management | Jinja2 templates | 易于维护、版本控制、A/B 测试 |
-| Frontend Types | TypeScript (渐进式) | 类型安全、IDE 提示、减少运行时错误 |
-| Component Design | Element Plus 通用组件 | UI 一致、维护成本低、无需自建基础组件 |
-| Theme System | CSS Variables + Dark mode | 用户体验、系统级适配、易于扩展 |
-| Responsive | Mobile-first + 断点适配 | 移动端体验、自适应布局 |
-| Form Components | Element Plus Input/Select/InputNumber | 统一交互、表单验证、可访问性 |
-
----
-
-## Component References
-
-- **[backend/CLAUDE.md](backend/CLAUDE.md)** — Backend architecture, API structure, core modules, RAG pipeline
-- **[frontend/CLAUDE.md](frontend/CLAUDE.md)** — Frontend architecture, components, stores, routing
+| Prompt Management | Jinja2 templates | Easy maintenance, versioning, A/B testing |
+| Frontend Types | TypeScript (渐进式) | Type safety, IDE hints, fewer runtime errors |
+| UI Library | Element Plus | Consistent UX, low maintenance, no custom base components |
+| Theme System | CSS Variables + Dark mode | UX, system adaptation, easy extension |
+| Responsive | Mobile-first + breakpoint adaptation | Mobile experience, adaptive layout |
+| OpenMAIC | REST bridge service | Classroom/course broadcasting integration |
 
 ---
 
@@ -207,7 +209,7 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ### Add a New API Endpoint
 1. Create router in `backend/app/api/`
-2. Add Pydantic models for request/response
+2. Add Pydantic models inline in the router
 3. Add service function in `backend/app/services/`
 4. Add core logic in `backend/app/core/` if needed
 5. Register router in `backend/app/main.py`
@@ -217,7 +219,7 @@ This file provides architectural guidance for contributors working on Study Copi
 1. Create view in `frontend/src/views/` (使用 `<script setup lang="ts">`)
 2. Add route in `frontend/src/router/` (lazy-loaded)
 3. Create Pinia store in `frontend/src/stores/` if needed (使用 TypeScript)
-4. Add API methods in `frontend/src/services/api.ts` or use store directly
+4. Add API methods in store or dedicated service file
 5. Define types in `frontend/src/types/models.ts` if needed
 6. Add tests in `frontend/tests/`
 
@@ -230,7 +232,7 @@ This file provides architectural guidance for contributors working on Study Copi
 1. Create component in `frontend/src/components/`
 2. Use `<script setup lang="ts">` syntax
 3. Define props with `defineProps<{ ... }>()`
-4. Use existing Element Plus components when possible (`<el-button>`, `<el-dialog>`, etc.) — auto-imported, no manual import needed
+4. Use existing Element Plus components when possible — auto-imported, no manual import needed
 5. Import types from `frontend/src/types/models.ts`
 
 ### Run Tests

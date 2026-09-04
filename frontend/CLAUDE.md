@@ -21,19 +21,30 @@ frontend/
 │   │   ├── CourseDetailView.vue # Course detail with docs & notes
 │   │   ├── NotesView.vue      # Note management (manual + AI)
 │   │   ├── TasksView.vue      # Async task management
+│   │   ├── ProfileView.vue    # User profile & password settings
 │   ├── components/
 │   │   ├── chat/
-│   │   │   ├── ChatInput.vue    # Message input with document selector
+│   │   │   ├── ChatHistoryPanel.vue  # Conversation history sidebar
+│   │   │   ├── ChatInput.vue         # Message input with document selector
 │   │   ├── common/
-│   │   │   ├── AppHeader.vue    # Top navigation bar (el-dropdown + theme toggle)
-│   │   │   ├── AppSidebar.vue   # Side navigation (el-menu with router)
-│   │   ├── CourseCard.vue       # Course space preview card (TypeScript)
-│   │   ├── NoteCard.vue         # Note preview card (TypeScript)
-│   │   ├── NoteEditor.vue       # Markdown editor with AI assist
-│   │   ├── TaskPanel.vue        # Task status display with progress
-│   │   ├── TransformDialog.vue  # Content transformation dialog
-│   │   ├── TTSPlayer.vue        # Audio playback controls
-│   │   ├── UrlImportDialog.vue  # URL import dialog
+│   │   │   ├── AppHeader.vue         # Top navigation bar (el-dropdown + theme toggle)
+│   │   │   ├── AppSidebar.vue        # Side navigation (el-menu with router)
+│   │   │   ├── ConfirmDialog.vue     # Reusable confirmation dialog
+│   │   │   ├── DocumentPicker.vue    # Document selection dropdown
+│   │   │   ├── EmptyState.vue        # Empty/placeholder state display
+│   │   │   ├── PageHeader.vue        # Page-level header with breadcrumb
+│   │   │   ├── SkeletonList.vue      # Skeleton loading for list views
+│   │   ├── integrations/
+│   │   │   ├── ClassroomBridgeDialog.vue  # Classroom platform integration
+│   │   │   ├── OpenMAICLinkCard.vue        # OpenMAIC content link card
+│   │   ├── CopilotBotAvatar.vue     # Bot persona/avatar engine
+│   │   ├── CourseCard.vue           # Course space preview card (TypeScript)
+│   │   ├── NoteCard.vue             # Note preview card (TypeScript)
+│   │   ├── NoteEditor.vue           # Markdown editor with AI assist
+│   │   ├── TaskPanel.vue            # Task status display with progress
+│   │   ├── TransformDialog.vue      # Content transformation dialog
+│   │   ├── TTSPlayer.vue            # Audio playback controls
+│   │   ├── UrlImportDialog.vue      # URL import dialog
 │   ├── stores/               # Pinia stores (TypeScript)
 │   │   ├── auth.ts           # Login state, tokens, user info
 │   │   ├── chat.ts           # Messages, streaming, conversations
@@ -41,39 +52,50 @@ frontend/
 │   │   ├── course.ts         # Course spaces, document associations
 │   │   ├── document.ts       # Document list, upload state
 │   │   ├── note.ts           # Notes list, tags, search, filters
+│   │   ├── openmaic.ts       # OpenMAIC integration state
 │   │   ├── quiz.ts           # Quiz state, answers, results
 │   │   ├── sidebar.ts        # Sidebar navigation state
 │   │   ├── theme.ts          # Light/dark theme state
 │   │   ├── toast.ts          # Toast notification queue
 │   ├── services/
-│   │   └── api.ts            # Axios instance with JWT interceptors
-│   ├── composables/          # ✨ Reusable composition functions
+│   │   ├── api.ts            # Axios instance with JWT interceptors
+│   │   ├── authRefresh.ts    # Token auto-refresh interceptor
+│   ├── composables/          # Reusable composition functions
 │   │   ├── useApi.ts         # Unified API request handling
-│   │   └── useMarkdown.ts    # Markdown rendering utilities
-│   ├── types/                # ✨ TypeScript type definitions
+│   │   ├── useChatExport.ts  # Chat export Markdown builder
+│   │   ├── useFormat.ts      # Date/number formatting utilities
+│   │   ├── useMarkdown.ts    # Markdown rendering utilities
+│   │   ├── useNoteDraft.ts   # Note draft auto-save
+│   │   ├── useReducedMotion.ts # Respect prefers-reduced-motion
+│   ├── types/                # TypeScript type definitions
 │   │   ├── api.ts            # API response types
+│   │   ├── markdown-it.d.ts  # Type declarations for markdown-it
 │   │   └── models.ts         # Core data models (User, Document, Note, etc.)
 │   ├── router/
 │   │   └── index.ts          # Vue Router config with auth guards
 │   ├── styles/
-│   │   └── variables.css     # ✨ Design system (CSS variables)
-│   ├── env.d.ts              # ✨ TypeScript environment declarations
+│   │   ├── variables.css     # Design system tokens (CSS variables)
+│   │   ├── element-plus-theme.css # Element Plus theme overrides
+│   │   └── global.css        # Global styles + reset
+│   ├── env.d.ts              # TypeScript environment declarations
 │   ├── App.vue               # Root component (layout shell)
 │   └── main.ts               # App bootstrap
 ├── tests/                    # Vitest test suite
+│   ├── setup.js
 │   ├── components/
-│   │   ├── UploadView.test.js
+│   │   └── UploadView.test.js
 │   ├── stores/
 │   │   ├── auth.test.js
 │   │   ├── chat.test.js
 │   │   ├── quiz.test.js
-│   ├── setup.js
-├── tsconfig.json             # ✨ TypeScript configuration
-├── tsconfig.node.json        # ✨ Node TypeScript config
+├── tsconfig.json             # TypeScript configuration
+├── tsconfig.node.json        # Node TypeScript config
 ├── vitest.config.js          # Test configuration
-├── tailwind.config.js
-├── postcss.config.js
-├── vite.config.js
+├── tailwind.config.js        # TailwindCSS utility layer config
+├── postcss.config.js         # PostCSS (tailwindcss + autoprefixer)
+├── eslint.config.js          # ESLint flat config
+├── .prettierrc.json          # Prettier config
+├── vite.config.js            # Vite dev/build config
 ├── package.json
 ```
 
@@ -112,23 +134,30 @@ export const useChatStore = defineStore('chat', () => {
 })
 ```
 
+Stores index (11 total): auth, chat, config, course, document, note, openmaic, quiz, sidebar, theme, toast.
+
 ### API Client
 `services/api.ts` exports an Axios instance with:
 - Base URL `/api` (proxied via Vite)
 - JWT token injection via request interceptor
-- Auto-refresh on 401 (refresh token flow)
+- Auto-refresh on 401 (`services/authRefresh.ts` — refresh token flow)
 - Toast notifications on error
 - Request retry for auth failures
 
 ### Composables
-Reusable composition functions in `src/composables/`:
+Reusable composition functions in `src/composables/` (6 total):
 - `useApi.ts` — Unified API request handling with error management
 - `useMarkdown.ts` — Markdown rendering utilities (markdown-it wrapper)
+- `useChatExport.ts` — Chat export Markdown builder (buildChatMarkdown, formatDate)
+- `useFormat.ts` — Date/number formatting utilities
+- `useNoteDraft.ts` — Note draft auto-save (localStorage)
+- `useReducedMotion.ts` — Respects user prefers-reduced-motion setting
 
 ### Type Definitions
-Core types defined in `src/types/`:
+Core types and declarations in `src/types/`:
 - `api.ts` — API response types (ApiResponse, ApiError, PaginatedResponse)
 - `models.ts` — Data models (User, Document, ChatMessage, Note, Course, Quiz, Task, etc.)
+- `markdown-it.d.ts` — Type declarations for markdown-it plugin extensions
 
 ### Streaming (SSE)
 Chat uses native `fetch` with `ReadableStream` for real-time token delivery from `/api/chat/ask` (stream: true). Supports:
@@ -141,18 +170,22 @@ Chat uses native `fetch` with `ReadableStream` for real-time token delivery from
 
 User can cancel streaming via `AbortController`.
 
+### Bot Persona Engine (CopilotBotAvatar)
+The `CopilotBotAvatar` component renders bot avatars across the app, driven by an engine that resolves persona identity (name/avatar/biography) — accepted as the bot-id "copilot" and backed by a runtime template system.
+
 ### Routing
-Vue Router with lazy-loaded routes and navigation guards:
-- Unauthenticated users redirect to `/login`
-- Auth-protected routes: `/upload`, `/chat`, `/quiz`, `/analysis`, `/model-config`, `/documents`, `/courses`, `/courses/:id`, `/notes`, `/tasks`
+Vue Router with lazy-loaded routes and navigation guards (15 routes):
+- Public: `/`, `/login`, `/register`
+- Auth-protected: `/upload`, `/chat`, `/quiz`, `/analysis`, `/model-config`, `/documents`, `/courses`, `/courses/:id`, `/notes`, `/tasks`, `/profile`
+- Navigation guard redirects unauthenticated users to `/login`
 
 ### Styling
-- TailwindCSS utility classes for layout primitives (grid, flex, spacing, typography)
-- Element Plus components for UI controls (buttons, inputs, cards, dialogs, menus, etc.)
-- CSS variables design system (`styles/variables.css` + `styles/element-plus-theme.css`)
-- GSAP for animations (page enter, scroll reveal, message slide-in)
-- Responsive: sidebar collapses on mobile
-- markdown-it + highlight.js for rendering
+- **Layout layer**: TailwindCSS utilities (grid, flex, spacing, typography)
+- **Components**: Element Plus 2.14 (`el-button`, `el-card`, `el-input`, etc.) — auto-imported via unplugin-vue-components
+- **Theme**: CSS variables design system (`styles/variables.css` + `styles/element-plus-theme.css`) — Light/Dark mode toggle
+- **Animations**: GSAP 3.15 (page enter, scroll reveal, message slide-in)
+- **Responsive**: Mobile-first, sidebar collapses on small screens
+- **Markdown**: markdown-it 14.1 + highlight.js 11.9 for rendered content
 
 ## Running
 
@@ -160,8 +193,11 @@ Vue Router with lazy-loaded routes and navigation guards:
 cd frontend
 npm install
 npm run dev        # Vite dev server on port 3000
-npx vitest run     # Run tests
-npx vitest         # Watch mode
+npm run test       # Run tests
+npm run test:watch # Watch mode
+npm run typecheck  # vue-tsc --noEmit
+npm run lint       # ESLint
+npm run format     # Prettier auto-format
 ```
 
 ## Build
@@ -180,14 +216,16 @@ npm run preview    # Preview production build
 | Build Tool | Vite 5.2 |
 | State | Pinia 2.1 |
 | Routing | Vue Router 4.3 (lazy-loaded, auth guards) |
-| UI Framework | Element Plus 2.x (auto-import via unplugin-vue-components) |
+| UI Framework | Element Plus 2.14 (auto-import via unplugin-vue-components) |
 | Icons | Element Plus Icons (`@element-plus/icons-vue`) |
-| Styling | TailwindCSS 3.4 (layout only) + CSS Variables 设计系统 |
+| Styling | TailwindCSS 3.4 (layout primitives) + CSS Variables 设计系统 |
 | HTTP | Axios 1.6 with JWT interceptors + auto-refresh |
 | Rendering | markdown-it 14.1 + highlight.js 11.9 |
 | Animations | GSAP 3.15 |
 | Testing | Vitest 4.1 + Vue Test Utils 2.4 + Testing Library |
 | Type Check | vue-tsc |
+| Lint | ESLint 10.x + eslint-plugin-vue 10.x |
+| Format | Prettier |
 
 ## Dependencies
 
@@ -198,8 +236,8 @@ npm run preview    # Preview production build
     "vue-router": "^4.3.0",
     "pinia": "^2.1.7",
     "axios": "^1.6.8",
-    "element-plus": "^2.3.0",
-    "@element-plus/icons-vue": "^2.3.0",
+    "element-plus": "^2.14.5",
+    "@element-plus/icons-vue": "^2.3.2",
     "gsap": "^3.15.0",
     "highlight.js": "^11.9.0",
     "markdown-it": "^14.1.0"
@@ -214,7 +252,16 @@ npm run preview    # Preview production build
     "@testing-library/vue": "^8.1.0",
     "tailwindcss": "^3.4.3",
     "postcss": "^8.4.38",
-    "jsdom": "^29.1.1"
+    "jsdom": "^29.1.1",
+    "eslint": "^10.9.1",
+    "eslint-plugin-vue": "^10.10.0",
+    "@eslint/js": "^10.0.1",
+    "@typescript-eslint/eslint-plugin": "^8.69.0",
+    "@typescript-eslint/parser": "^8.69.0",
+    "@vue/eslint-config-typescript": "^14.9.0",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.x"
   }
 }
 ```

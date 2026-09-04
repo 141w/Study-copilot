@@ -1,14 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
+import { ElMessage } from 'element-plus'
+import { Close, EditPen, Search } from '@/components/icons'
 import type { ChatSessionSummary } from '../../stores/chat'
-import { formatRelativeTime } from '../../composables/useFormat'
 
-/**
- * 对话历史侧边栏（含会话重命名、删除确认弹窗）。
- * 自包含：会话数据直接读 chat store；通过事件向父级通知
- * 「已加载某会话」与「已删除当前会话」，滚动/收起等副作用由父级处理。
- */
 const props = defineProps<{ visible: boolean }>()
 
 const emit = defineEmits<{
@@ -28,13 +24,41 @@ const deleteModal = ref({
   title: '',
 })
 
+const searchInput = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
 // P2-1：formatDate 由 useFormat.formatRelativeTime 替换（原为平行实现之一）
-const formatDate = formatRelativeTime
+const formatDate = (ts: string) => {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins}分钟前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}天前`
+  return d.toLocaleDateString('zh-CN')
+}
+
+function onSearchInput() {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    chatStore.searchMessages(searchInput.value || '')
+  }, 300)
+}
 
 async function loadSession(sessionId: string) {
+  chatStore.clearSearch()
   await chatStore.fetchHistory(sessionId)
   chatStore.currentSessionTitle =
     chatStore.sessions.find(s => s.session_id === sessionId)?.title || ''
+  emit('loaded', sessionId)
+}
+
+function goToSession(sessionId: string) {
   emit('loaded', sessionId)
 }
 
@@ -68,8 +92,8 @@ async function deleteSession() {
 
   try {
     await chatStore.deleteSession(deleteModal.value.sessionId)
-    const removedId = deleteModal.value.sessionId
-    emit('deleted', removedId)
+    ElMessage.success('对话已删除')
+    emit('deleted', deleteModal.value.sessionId)
   } catch (error) {
     console.error('Delete failed:', error)
   }
@@ -92,10 +116,62 @@ async function deleteSession() {
         class="text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
         @click="emit('close')"
       >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
+        <el-icon class="w-5 h-5"><Close /></el-icon>
       </button>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="p-3 border-b border-[var(--border-default)]">
+      <div class="relative">
+        <el-icon class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]">
+          <Search />
+        </el-icon>
+        <input
+          v-model="searchInput"
+          @input="onSearchInput"
+          @keydown.escape="chatStore.clearSearch(); searchInput = ''"
+          placeholder="语义搜索历史对话..."
+          class="w-full pl-9 pr-8 py-2 text-sm bg-[var(--bg-primary)] border border-[var(--border-default)] rounded-md
+                 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]
+                 focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+        />
+        <button
+          v-if="searchInput"
+          @click="chatStore.clearSearch(); searchInput = ''"
+          class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+        >
+          <el-icon class="w-3.5 h-3.5"><Close /></el-icon>
+        </button>
+      </div>
+      <!-- Search Results -->
+      <div v-if="chatStore.isSearching" class="mt-2 text-xs text-[var(--text-muted)] text-center py-2">
+        搜索中...
+      </div>
+      <div v-else-if="chatStore.searchResults.length > 0" class="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
+        <div
+          v-for="result in chatStore.searchResults"
+          :key="result.message_id"
+          @click="goToSession(result.session_id)"
+          class="p-2 rounded-md bg-[var(--bg-secondary)] border border-[var(--border-default)] cursor-pointer
+                 hover:border-[var(--color-primary)] transition-colors"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs text-[var(--text-muted)] truncate">
+              {{ result.session_id === chatStore.currentSession ? '当前会话' : result.session_id.slice(0, 8) }}
+            </span>
+            <span class="text-xs text-[var(--color-primary)] flex-shrink-0">
+              {{ (result.similarity * 100).toFixed(0) }}%
+            </span>
+          </div>
+          <div class="text-xs text-[var(--text-secondary)] mt-1 line-clamp-2">
+            {{ result.role === 'user' ? '我: ' : 'AI: ' }}{{ result.content }}
+          </div>
+        </div>
+      </div>
+      <div v-else-if="chatStore.searchQuery && !chatStore.isSearching && chatStore.searchResults.length === 0"
+           class="mt-2 text-xs text-[var(--text-muted)] text-center py-2">
+        未找到相关对话
+      </div>
     </div>
 
     <!-- Session List -->
@@ -137,15 +213,13 @@ async function deleteSession() {
                   class="text-[var(--text-muted)] hover:text-[var(--color-primary)] opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
                   @click.stop="startEditTitle(session)"
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 15.232l2.536 2.536m0-2.536l-2.536 2.536m2.536-2.536l-2.536 2.536m2.536-2.536l2.536 2.536M4 20h4l2-2-4-4-2 2z" />
-                  </svg>
+                  <el-icon class="w-4 h-4"><EditPen /></el-icon>
                 </button>
               </div>
             </div>
           </div>
           <div class="text-xs text-[var(--text-muted)] mt-1">
-            {{ formatDate(session.created_at) }}
+            {{ formatDate(session.created_at || '') }}
           </div>
         </div>
 
@@ -175,6 +249,7 @@ async function deleteSession() {
       @keydown.escape="deleteModal.show = false"
     >
       <div class="bg-[var(--bg-secondary)] rounded-xl p-6 max-w-sm w-full mx-4" @click.stop>
+
         <h3 class="text-lg font-medium text-[var(--text-primary)] mb-4">确认删除</h3>
         <p class="text-sm text-[var(--text-secondary)] mb-6">确定要删除「{{ deleteModal.title }}」吗？此操作无法撤销。</p>
         <div class="flex gap-3 justify-end">
@@ -185,7 +260,7 @@ async function deleteSession() {
             取消
           </button>
           <button
-            class="px-4 py-2 bg-[var(--color-error)] text-white rounded-xl hover:opacity-90"
+            class="px-4 py-2 bg-[var(--color-error)] text-[var(--text-inverse)] rounded-md hover:opacity-90"
             @click="deleteSession"
           >
             删除

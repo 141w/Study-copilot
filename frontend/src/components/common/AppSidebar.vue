@@ -9,10 +9,11 @@
   </Transition>
 
   <aside
-    class="fixed left-0 top-[var(--layout-header-height)] bottom-0 w-[var(--layout-sidebar-width)] bg-[var(--bg-secondary)] border-r border-[var(--border-default)] z-40
+    class="fixed left-0 top-[var(--layout-header-height)] bottom-0 w-[var(--layout-sidebar-width)] z-40
            transition-transform duration-300 ease-in-out
            md:translate-x-0"
     :class="sidebarStore.isOpen ? 'translate-x-0' : '-translate-x-full'"
+    style="background: var(--gradient-sidebar); box-shadow: 1px 0 0 var(--border-default);"
   >
     <el-menu
       :default-active="currentRoute"
@@ -37,7 +38,8 @@
       <h3 class="px-2 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">
         我的文档
       </h3>
-      <div class="space-y-0.5">
+      <!-- 批次7：文档多时列表溢出侧栏（原无上限渲染）——限高 + 内部滚动 -->
+      <div class="space-y-0.5 max-h-[30vh] overflow-y-auto overscroll-contain">
         <div
           v-for="doc in documentStore.documents"
           :key="doc.id"
@@ -68,7 +70,7 @@ import type { Document as DocumentModel } from '../../types/models'
 import {
   HomeFilled, Upload, Document, Reading, Edit,
   ChatDotSquare, DocumentChecked, TrendCharts, Setting, List
-} from '@element-plus/icons-vue'
+} from '@/components/icons'
 import type { Component } from 'vue'
 
 const route = useRoute()

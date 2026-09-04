@@ -12,6 +12,7 @@ from app.api.courses import router as courses_router
 from app.api.document import router as document_router
 from app.api.metrics import router as metrics_router
 from app.api.notes import router as notes_router
+from app.api.openmaic_bridge import router as openmaic_bridge_router
 from app.api.quiz import router as quiz_router
 from app.api.tasks import router as tasks_router
 from app.api.transform import router as transform_router
@@ -118,6 +119,7 @@ app.include_router(transform_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
 app.include_router(metrics_router, prefix="/api")
+app.include_router(openmaic_bridge_router, prefix="/api")
 
 
 @app.get("/")

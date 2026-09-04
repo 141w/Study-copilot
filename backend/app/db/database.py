@@ -13,13 +13,13 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
     Float,
     ForeignKey,
     Integer,
-    JSON,
     String,
     Table,
     Text,
@@ -50,12 +50,8 @@ def _utcnow_naive() -> datetime:
     """统一的时间默认值：UTC 当前时刻（去 tzinfo，与既有 NOT NULL 列语义一致）。"""
     return datetime.now(UTC).replace(tzinfo=None)
 
-
 class _Vector(TypeDecorator):
-    """pgvector 兼容类型：PostgreSQL 渲染为 vector(N)，SQLite 回退为 JSON 存储。
-
-    生产环境使用 ``vector_cosine_ops`` 索引；SQLite 上回退为 JSON 存储（测试兼容）。
-    """
+    """pgvector 兼容类型：PostgreSQL 渲染为 vector(N)，SQLite 回退为 JSON 存储。"""
 
     impl = String
     cache_ok = True
@@ -64,44 +60,31 @@ class _Vector(TypeDecorator):
         super().__init__()
         self.dimension = dimension
 
-    def load_dialect_impl(self, dialect):
-        if dialect.name == "postgresql":
-            # Return a lazy __visit_name__ that SQLAlchemy renders as VECTOR(N)
-            from sqlalchemy.dialects.postgresql.base import PGCompiler
-
-            _PG_VECTOR_N = self.dimension
-
-            class PgVector:
-                __visit_name__ = "vector"
-
-                def _compiler_dispatch(self, compiler: PGCompiler, **kw) -> str:
-                    return f"vector({_PG_VECTOR_N})"
-
-            return dialect.type_descriptor(PgVector())
-        # SQLite: store as JSON string
-        return dialect.type_descriptor(String())
+    def get_col_spec(self, **kw):
+        if kw.get("dialect") and kw["dialect"].name == "postgresql":
+            return f"vector({self.dimension})"
+        return "TEXT"
 
     def process_bind_param(self, value, dialect):
         """Convert Python list to the DB representation."""
         if value is None:
             return None
         if dialect.name == "postgresql":
-            return value  # asyncpg handles list → vector natively
-        # SQLite: serialize to JSON string
-        import json
-        return json.dumps(value)
+            # asyncpg/pgvector expects a string like "[0.1,0.2,...]"
+            if isinstance(value, list):
+                return "[" + ",".join(str(v) for v in value) + "]"
+            return value
+        import json as _json
+        return _json.dumps(value)
 
     def process_result_value(self, value, dialect):
         """Convert DB value back to Python list."""
         if value is None:
             return None
         if dialect.name == "postgresql":
-            return value  # asyncpg returns list natively
-        # SQLite: deserialize from JSON
-        import json
-        if isinstance(value, str):
-            return json.loads(value)
-        return value
+            return value
+        import json as _json
+        return _json.loads(value)
 
 
 class User(Base):
@@ -147,10 +130,12 @@ class Message(Base):
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    session_id: Mapped[str] = mapped_column(ForeignKey("chat_sessions.id"))
+    session_id: Mapped[str] = mapped_column(ForeignKey("chat_sessions.id", ondelete="CASCADE"))
     role: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text)
     sources: Mapped[str | None] = mapped_column(Text)
+    # 语义搜索索引：用户消息写入时计算 embedding，支持历史对话向量检索
+    embedding: Mapped[list[float] | None] = mapped_column(_Vector(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
 
 
@@ -158,7 +143,13 @@ class Quiz(Base):
     __tablename__ = "quizzes"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"))
+    # 批次9修复：课堂来源测验（OpenMAIC 导入）无关联文档，原 NOT NULL 会让
+    # sync_quiz_results 的 INSERT 直接 IntegrityError（测试 SQLite 不强制
+    # FK 掩盖了该缺陷，生产 PostgreSQL 必炸）。analysis_service 已按
+    # `r.document_id or ""` 防御空值，放开可空不影响既有查询
+    document_id: Mapped[str | None] = mapped_column(
+        ForeignKey("documents.id"), nullable=True
+    )
     question_type: Mapped[str] = mapped_column(String)
     question: Mapped[str] = mapped_column(Text)
     options: Mapped[str | None] = mapped_column(Text)
@@ -195,6 +186,9 @@ class UserLLMConfig(Base):
         String, default="shibing624/text2vec-base-chinese"
     )
     embedding_dimension: Mapped[int] = mapped_column(Integer, default=768)
+    message_format: Mapped[str] = mapped_column(
+        String, default="openai"
+    )  # openai | anthropic | gemini | ollama
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,

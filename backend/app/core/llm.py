@@ -12,6 +12,46 @@ from openai import AsyncOpenAI
 
 from app.config import settings
 
+SUPPORTED_MESSAGE_FORMATS = {"openai", "anthropic", "gemini", "ollama"}
+
+
+def normalize_message_format(
+    messages: list[dict[str, Any]],
+    fmt: str,
+) -> tuple[str, list[dict[str, Any]], str | None]:
+    """Normalize a list of role/content message dicts for the given API format.
+
+    Returns a 3-tuple of:
+        (format, transformed_messages, system_instruction | None)
+
+    For ``openai`` and ``ollama`` the messages pass through unchanged and no
+    system instruction is extracted. For ``anthropic`` and ``gemini`` any
+    message with role ``system`` is stripped from the messages list and
+    returned as a separate instruction string.
+    """
+    fmt = fmt if fmt in SUPPORTED_MESSAGE_FORMATS else "openai"
+
+    if fmt in ("openai", "ollama"):
+        return fmt, messages, None
+
+    # anthropic / gemini — separate system from message array
+    system_parts: list[str] = []
+    filtered: list[dict[str, Any]] = []
+    for msg in messages:
+        if msg.get("role") == "system":
+            content = msg.get("content", "")
+            if isinstance(content, str) and content:
+                system_parts.append(content)
+        else:
+            filtered.append(msg)
+
+    system_instr = "\n".join(system_parts) if system_parts else None
+    # Ensure at least one non-system message exists (API requirement)
+    if not filtered and messages:
+        filtered = [{"role": "user", "content": ""}]
+
+    return fmt, filtered, system_instr
+
 
 class LLM:
     def __init__(
@@ -136,6 +176,21 @@ class LLM:
             base_url=c.get("base_url"),
             model=c.get("model_name"),
         )
+
+    def format_messages(
+        self,
+        messages: list[dict[str, Any]],
+        message_format: str = "openai",
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """根据目标消息格式规范化消息列表。
+
+        对 ``openai`` / ``ollama``：直接透传。
+        对 ``anthropic`` / ``gemini``：把 role=system 的消息从数组中剥离并作为
+        独立 instruction/system 返回，符合对应 Provider 的 API 要求。
+
+        返回 (normalized_messages, system_instruction | None)。
+        """
+        return normalize_message_format(messages, message_format)
 
 
 llm = LLM()

@@ -14,9 +14,10 @@ usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -32,7 +33,6 @@ logger = logging.getLogger(__name__)
 _RRF_K = 60
 _VECTOR_WEIGHT = 0.5
 _TEXT_WEIGHT = 0.5
-
 
 class PgVectorStore:
     """PostgreSQL + pgvector 向量存储。
@@ -67,16 +67,7 @@ class PgVectorStore:
     # ------------------------------------------------------------------
 
     async def add_chunks(self, chunks: list[dict], doc_id: str, db: AsyncSession | None = None) -> bool:
-        """Embed text chunks and batch INSERT INTO document_chunks.
-
-        Args:
-            chunks: Text chunk dicts with at least a ``text`` field.
-            doc_id: Owner document ID.
-            db: Optional existing async DB session.  When supplied, the caller
-                is responsible for commit (the test suite passes the test
-                session this way).  When omitted, a fresh session is opened
-                and committed internally.
-        """
+        """Embed + insert using raw SQL with vector cast."""
         if not chunks:
             return False
 
@@ -87,73 +78,40 @@ class PgVectorStore:
             logger.error("Embedding failed for doc %s: %s", doc_id, exc)
             raise
 
+        import json as _json
+
         rows: list[dict] = []
         for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
-            meta = {
-                k: v
-                for k, v in chunk.items()
-                if k not in ("text", "id")
-            }
+            meta = {k: v for k, v in chunk.items() if k not in ("text", "id")}
+            emb_list = emb.tolist() if hasattr(emb, "tolist") else list(emb)
             rows.append(
                 {
                     "id": str(uuid.uuid4()),
                     "document_id": doc_id,
                     "content": chunk["text"],
-                    "embedding": emb.tolist() if hasattr(emb, "tolist") else list(emb),
+                    "embedding": _json.dumps(emb_list),
                     "chunk_index": i,
-                    "chunk_metadata": meta,
-                    "created_at": datetime.now(timezone.utc),
+                    "chunk_metadata": _json.dumps(meta),
+                    "created_at": datetime.now(UTC).replace(tzinfo=None),
                 }
             )
 
         if not rows:
             return False
 
-        # For SQLite tests: serialize complex types to strings
-        # (pgvector/JSON handle native types on PostgreSQL)
-        if db is not None and db.bind.dialect.name == "sqlite":
-            import json as _json
-            for row in rows:
-                if isinstance(row["embedding"], list):
-                    row["embedding"] = _json.dumps(row["embedding"])
-                if isinstance(row["chunk_metadata"], dict):
-                    row["chunk_metadata"] = _json.dumps(row["chunk_metadata"])
-        elif not db:
-            # Self-contained path: detect from AsyncSessionLocal
-            from app.db.database import AsyncSessionLocal as _ASL
-            _bind = _ASL.kw.get("bind")
-            if _bind and _bind.dialect.name == "sqlite":
-                import json as _json
-                for row in rows:
-                    if isinstance(row["embedding"], list):
-                        row["embedding"] = _json.dumps(row["embedding"])
-                    if isinstance(row["chunk_metadata"], dict):
-                        row["chunk_metadata"] = _json.dumps(row["chunk_metadata"])
+        sql = text(
+            "INSERT INTO document_chunks "
+            "(id, document_id, content, embedding, chunk_index, chunk_metadata, created_at) "
+            "VALUES (:id, :document_id, :content, CAST(:embedding AS vector(768)), :chunk_index, :chunk_metadata, :created_at)"
+        )
 
         if db is not None:
-            # Caller manages the session/transaction (e.g. test fixtures)
-            await db.execute(
-                text(
-                    "INSERT INTO document_chunks (id, document_id, content, embedding, chunk_index, chunk_metadata, created_at) "
-                    "VALUES (:id, :document_id, :content, :embedding, :chunk_index, :chunk_metadata, :created_at)"
-                ),
-                rows,
-            )
+            await db.execute(sql, rows)
             await db.commit()
         else:
-            # Self-contained: open + commit internally
-            session = await anext(get_db())
-            try:
-                await session.execute(
-                    text(
-                        "INSERT INTO document_chunks (id, document_id, content, embedding, chunk_index, chunk_metadata, created_at) "
-                        "VALUES (:id, :document_id, :content, :embedding, :chunk_index, :chunk_metadata, :created_at)"
-                    ),
-                    rows,
-                )
+            async with get_db() as session:
+                await session.execute(sql, rows)
                 await session.commit()
-            finally:
-                await session.close()
 
         self.chunks.extend(chunks)
         logger.debug("Inserted %d chunks for document %s", len(rows), doc_id)
@@ -182,16 +140,14 @@ class PgVectorStore:
         q_emb = await embedder.embed_query(query)
         q_emb_list = q_emb.tolist() if hasattr(q_emb, "tolist") else list(q_emb)
 
-        doc_id_array = "{" + ",".join(doc_ids) + "}"
-
         sql = f"""
         WITH vector_results AS (
             SELECT id, content, chunk_metadata,
-                   1.0 / ({_RRF_K} + ROW_NUMBER() OVER (ORDER BY embedding <=> :q_emb::vector)) AS v_score
+                   1.0 / ({_RRF_K} + ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:q_emb AS vector))) AS v_score
             FROM document_chunks
             WHERE document_id = ANY(:doc_ids)
               AND embedding IS NOT NULL
-            ORDER BY embedding <=> :q_emb::vector
+            ORDER BY embedding <=> CAST(:q_emb AS vector)
             LIMIT :overfetch
         ),
         text_results AS (

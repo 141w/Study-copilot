@@ -1,5 +1,6 @@
 """
-Authentication service — user registration, login, token refresh, user lookup.
+Authentication service — user registration, login, token refresh, user lookup,
+profile update and password change.
 """
 
 import uuid
@@ -8,7 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import User
-from app.exceptions import AuthenticationError, AuthorizationError, ConflictError, NotFoundError
+from app.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from app.utils.auth import (
     create_access_token,
     create_refresh_token,
@@ -109,3 +116,60 @@ async def get_user_from_token(
         raise AuthenticationError("无法验证凭据")
 
     return user
+
+
+async def update_profile(
+    db: AsyncSession,
+    user: User,
+    username: str | None = None,
+    email: str | None = None,
+) -> User:
+    """Update current user's profile fields (username/email).
+
+    None means "keep unchanged". Raises ConflictError on duplicates,
+    ValidationError on empty values.
+    """
+    if username is not None:
+        username = username.strip()
+        if not username:
+            raise ValidationError("用户名不能为空")
+        if username != user.username:
+            result = await db.execute(select(User).where(User.username == username))
+            if result.scalar_one_or_none():
+                raise ConflictError("用户名已存在")
+            user.username = username
+
+    if email is not None:
+        email = email.strip()
+        if not email:
+            raise ValidationError("邮箱不能为空")
+        if email != user.email:
+            result = await db.execute(select(User).where(User.email == email))
+            if result.scalar_one_or_none():
+                raise ConflictError("邮箱已存在")
+            user.email = email
+
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def change_password(
+    db: AsyncSession,
+    user: User,
+    old_password: str,
+    new_password: str,
+) -> None:
+    """Change current user's password after verifying the old one.
+
+    Raises AuthenticationError when the old password doesn't match,
+    ValidationError when the new password is too weak.
+    """
+    if not verify_password(old_password, user.password_hash):
+        raise AuthenticationError("原密码不正确")
+
+    if len(new_password) < 6:
+        raise ValidationError("新密码至少需要 6 位")
+
+    user.password_hash = get_password_hash(new_password)
+    await db.commit()

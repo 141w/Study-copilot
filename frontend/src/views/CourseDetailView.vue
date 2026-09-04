@@ -5,20 +5,19 @@
       @click="router.push('/courses')"
       class="flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mb-6"
     >
-      <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-      </svg>
+      <el-icon class="w-4 h-4 mr-1"><ArrowLeft /></el-icon>
       <span class="text-sm">返回课程列表</span>
     </el-button>
 
     <!-- Loading -->
-    <div v-if="loading" class="text-center py-16 text-[var(--text-muted)]">加载中...</div>
+    <!-- Loading（批次6：文字 → 骨架屏；块状变体近似"页头 + tab 列表"的内容量） -->
+    <SkeletonList v-if="loading" variant="blocks" :count="2" />
 
     <!-- Not Found -->
     <EmptyState
       v-else-if="!course"
       size="lg"
-      svg-path="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+      :icon="WarningFilled"
       message="课程不存在或已被删除"
     >
       <router-link to="/courses"><el-button>返回课程列表</el-button></router-link>
@@ -31,12 +30,10 @@
         <div class="flex items-start justify-between">
           <div class="flex items-center gap-4">
             <div
-              class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
-              :style="{ backgroundColor: (course.color || '#8b5cf6') + '20' }"
+              class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+              :style="{ backgroundColor: (course.color || '#000000') + '20' }"
             >
-              <svg class="w-7 h-7" :style="{ color: course.color || '#8b5cf6' }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+              <el-icon class="w-7 h-7" :style="{ color: course.color || '#000000' }"><Reading /></el-icon>
             </div>
             <div>
               <h1 class="text-2xl font-semibold text-[var(--text-primary)]">{{ course.name }}</h1>
@@ -44,10 +41,16 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
+            <el-button
+              type="default"
+              class="flex items-center gap-2 text-sm"
+              @click="showClassroomBridge = true"
+            >
+              <el-icon class="w-4 h-4"><VideoPlay /></el-icon>
+              生成课堂
+            </el-button>
             <el-button v-if="activeTab === 'notes'" @click="showNewNote = true" type="default" class="flex items-center gap-2 text-sm">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
+              <el-icon class="w-4 h-4"><EditPen /></el-icon>
               新建笔记
             </el-button>
             <router-link to="/upload">
@@ -72,7 +75,7 @@
 
         <EmptyState
           v-if="courseDocuments.length === 0"
-          svg-path="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+          :icon="DocumentAdd"
           message="此课程暂无文档"
         >
           <el-button @click="showAddDocDialog = true">添加第一个文档</el-button>
@@ -84,24 +87,20 @@
             :key="doc.id"
             class="p-4 flex items-center gap-4"
           >
-            <div class="w-10 h-10 bg-[var(--color-error-light)] rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg class="w-5 h-5 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+            <div class="w-10 h-10 bg-[var(--bg-tertiary)] rounded-lg flex items-center justify-center flex-shrink-0">
+              <el-icon class="w-5 h-5 text-[var(--text-secondary)]"><Document /></el-icon>
             </div>
             <div class="flex-1 min-w-0">
               <h3 class="font-medium text-[var(--text-primary)] truncate">{{ doc.filename }}</h3>
-              <p class="text-sm text-[var(--text-muted)]">{{ doc.chunk_count }} chunks · {{ doc.status }}</p>
+              <p class="text-sm text-[var(--text-muted)]">{{ doc.chunk_count }} chunks · {{ statusText(doc.status) }}</p>
             </div>
             <el-button
               @click="removeDoc(doc.id)"
-              class="text-[var(--text-muted)] hover:text-red-500 transition-colors"
+              class="text-[var(--text-muted)] hover:text-[var(--color-error)] transition-colors"
               title="从课程移除"
               aria-label="从课程移除"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
+              <el-icon class="w-5 h-5"><Delete /></el-icon>
             </el-button>
           </div>
         </div>
@@ -125,7 +124,7 @@
 
         <EmptyState
           v-if="courseNotes.length === 0 && !showNewNote"
-          svg-path="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+          :icon="EditPen"
           message="此课程暂无笔记"
         >
           <el-button @click="showNewNote = true">创建第一条笔记</el-button>
@@ -185,6 +184,13 @@
       message="确定要删除此笔记吗？此操作不可撤销。"
       @confirm="doDeleteNote"
     />
+
+    <!-- OpenMAIC 课堂生成桥接 -->
+    <ClassroomBridgeDialog
+      v-model="showClassroomBridge"
+      :documents="courseDocuments"
+      @generated="onClassroomGenerated"
+    />
   </div>
 </template>
 
@@ -202,8 +208,12 @@ import type { Document as DocumentModel } from '../types/models'
 import NoteCard from '../components/NoteCard.vue'
 import NoteEditor from '../components/NoteEditor.vue'
 import EmptyState from '../components/common/EmptyState.vue'
+import SkeletonList from '../components/common/SkeletonList.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
+import ClassroomBridgeDialog from '../components/integrations/ClassroomBridgeDialog.vue'
+import { useReducedMotion } from '../composables/useReducedMotion'
+import { Reading, EditPen, Document, Delete, WarningFilled, DocumentAdd, ArrowLeft, VideoPlay } from '@/components/icons'
 import gsap from 'gsap'
 
 interface NoteFormState {
@@ -218,6 +228,8 @@ const courseStore = useCourseStore()
 const noteStore = useNoteStore()
 const documentStore = useDocumentStore()
 const toast = useToastStore()
+// P1-1：GSAP 动画降级（prefers-reduced-motion）
+const { prefersReduced } = useReducedMotion()
 
 const pageContainer = ref<HTMLElement | null>(null)
 const courseHeader = ref<HTMLElement | null>(null)
@@ -229,6 +241,7 @@ const editingNoteId = ref<string | null>(null)
 const courseDocuments = ref<DocumentModel[]>([])
 const showAddDocDialog = ref(false)
 const selectedDocId = ref<string | null>(null)
+const showClassroomBridge = ref(false)
 
 // New note form
 const newNote = ref<NoteFormState>({ title: '', content: '', tags: [] })
@@ -283,6 +296,16 @@ async function addDoc(): Promise<void> {
     await loadCourseDocuments()
   } catch (_e) {
     toast.error('添加失败')
+  }
+}
+
+/** 文档状态中文映射（与其他文档列表页 statusText 对齐） */
+function statusText(status: string): string {
+  switch (status) {
+    case 'ready': return '已就绪'
+    case 'processing': return '处理中'
+    case 'error': return '错误'
+    default: return '待处理'
   }
 }
 
@@ -392,6 +415,13 @@ async function doDeleteNote(): Promise<void> {
   deletingNote.value = null
 }
 
+// OpenMAIC 联动：课堂生成完成回调
+function onClassroomGenerated(result: { jobId: string; courseId?: string }): void {
+  toast.success(`课堂生成已提交！Job: ${result.jobId.slice(0, 8)}…`)
+  // 刷新课程数据以同步可能的 course 更新
+  loadCourseData()
+}
+
 onMounted(async () => {
   await loadCourseData()
   await Promise.all([
@@ -411,6 +441,8 @@ onMounted(async () => {
     showNewNote.value = true
   }
 
+  // P1-1：减少动态偏好下跳过入场动画
+  if (prefersReduced.value) return
   ctx = gsap.context(() => {
     if (courseHeader.value) {
       gsap.from(courseHeader.value, {

@@ -41,7 +41,7 @@ export const useConfigStore = defineStore('config', () => {
       const existing = await fetchLLMConfig()
       let response
 
-      if (existing && existing.provider) {
+      if (existing && existing.id) {
         response = await api.put<LLMConfig>('/config/llm', payload)
       } else {
         response = await api.post<LLMConfig>('/config/llm', payload)
@@ -54,6 +54,7 @@ export const useConfigStore = defineStore('config', () => {
       chatStore.config.temperature = configData.temperature || 0.7
       chatStore.config.maxTokens = configData.max_tokens || 2048
       chatStore.config.baseUrl = configData.base_url || ''
+      chatStore.config.messageFormat = (configData as any).message_format || 'openai'
 
       return response.data
     } catch (error) {
@@ -74,6 +75,7 @@ export const useConfigStore = defineStore('config', () => {
       chatStore.config.modelName = config.model_name
       chatStore.config.temperature = config.temperature || 0.7
       chatStore.config.maxTokens = config.max_tokens || 2048
+      chatStore.config.messageFormat = config.message_format || 'openai'
     }
   }
 

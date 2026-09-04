@@ -7,86 +7,122 @@ Guidance for working on the Study Copilot backend.
 ```
 backend/
 ├── app/
-│   ├── api/                    # FastAPI route handlers
+│   ├── api/                          # FastAPI route handlers
 │   │   ├── __init__.py
-│   │   ├── auth.py             # POST /register, /login, GET /me, POST /refresh
-│   │   ├── document.py         # POST /upload, GET /, DELETE /{id}
-│   │   ├── chat.py             # POST /ask (stream:true), GET /history
-│   │   ├── quiz.py             # POST /generate, /submit, GET /wrong-questions
-│   │   ├── analysis.py         # GET /wrong, GET /knowledge, /progress
-│   │   ├── notes.py            # CRUD notes + tags + semantic search
-│   │   ├── courses.py          # CRUD course spaces, document associations
-│   │   ├── transform.py        # Content transformation endpoints (8 types)
-│   │   ├── tts.py              # Text-to-speech synthesis
-│   │   ├── tasks.py            # Async task management
-│   │   └── config.py           # GET/POST user LLM config
-│   ├── core/                   # Business logic (no HTTP concerns)
+│   │   ├── analysis.py               # GET /wrong, GET /knowledge, /progress
+│   │   ├── auth.py                    # POST /register, /login, GET/PUT /me, PUT /password, POST /refresh
+│   │   ├── chat.py                    # POST /ask (stream:true), GET /history
+│   │   ├── config.py                  # GET/POST user LLM config
+│   │   ├── courses.py                 # CRUD course spaces, document associations
+│   │   ├── document.py                # POST /upload, GET /, DELETE /{id}
+│   │   ├── metrics.py                 # Operational metrics (task counts)
+│   │   ├── notes.py                   # CRUD notes + tags + semantic search
+│   │   ├── openmaic_bridge.py         # OpenMAIC classroom platform REST bridge
+│   │   ├── quiz.py                    # POST /generate, /submit, GET /wrong-questions
+│   │   ├── tasks.py                   # Async task management
+│   │   ├── transform.py               # Content transformation endpoints (8 types)
+│   │   │   └── GET /transformations   # List available transformation types
+│   │   └── tts.py                     # Text-to-speech synthesis
+│   ├── core/                          # Business logic (no HTTP concerns)
 │   │   ├── __init__.py
-│   │   ├── llm.py              # OpenAI SDK wrapper with retry/backoff
-│   │   ├── embedder.py         # sentence-transformers wrapper with async + caching
-│   │   ├── vector_store.py     # FAISS/BM25/Hybrid vector indices (per-document)
-│   │   ├── rag_engine.py       # Agentic RAG orchestrator
-│   │   ├── query_router.py     # Query intent classification + context rewrite
-│   │   ├── adaptive_retriever.py # Adaptive retrieval strategies
-│   │   ├── retrieval_grader.py # Two-level retrieval quality assessment
-│   │   ├── query_decomposer.py # Query decomposition + entity extraction
-│   │   ├── answer_reflector.py # Answer quality self-reflection
-│   │   ├── document_parser.py  # Factory: Docling/PyMuPDF/python-docx/python-pptx
-│   │   ├── chunker.py          # FixedChunker, SemanticChunker, HierarchicalChunker
-│   │   ├── quiz_generator.py   # LLM-based question generation
-│   │   ├── transformations.py  # 8 transformation types (summary/keypoints/outline/flashcards/mindmap/qa/translate/explain)
-│   │   ├── encryption.py       # Fernet credential encryption for API keys
-│   │   ├── tts.py              # Edge TTS wrapper
-│   │   ├── url_extractor.py    # Web content extraction
-│   │   └── rate_limit.py       # 自研滑动窗口 IPRateLimiter
-│   ├── services/               # Business orchestration layer
-│   │   ├── __init__.py
-│   │   ├── auth_service.py     # register, login, refresh_token
-│   │   ├── document_service.py # upload_document, delete_document, list_documents
-│   │   ├── chat_service.py     # ask_question, stream_answer, get_history
-│   │   ├── quiz_service.py     # generate_quiz, submit_quiz, get_wrong_questions
-│   │   ├── analysis_service.py # analyze_wrong_questions, get_knowledge_stats, get_progress
-│   │   ├── config_service.py   # get_config, update_config
-│   │   ├── note_service.py     # Note CRUD + tagging + semantic search
-│   │   ├── course_service.py   # Course space management + document associations
-│   │   ├── transform_service.py # Content transformations orchestration
-│   │   ├── task_service.py     # Async task queue (create, get_status, list, cancel)
+│   │   ├── adaptive_retriever.py      # Adaptive retrieval strategies (4 strategies)
+│   │   ├── answer_reflector.py        # Answer quality self-reflection
+│   │   ├── chunker.py                 # FixedChunker, SemanticChunker, HierarchicalChunker
+│   │   ├── course_generator.py        # Auto-generate course outline + quizzes from docs
+│   │   ├── document_bundle.py         # Multi-document packing for LLM context
+│   │   ├── document_parser.py         # Factory: Docling/PyMuPDF/python-docx/python-pptx
+│   │   ├── embedder.py                # sentence-transformers wrapper with async + caching
+│   │   ├── encryption.py              # Fernet credential encryption for API keys
+│   │   ├── llm.py                     # OpenAI SDK wrapper with retry/backoff
+│   │   ├── logger.py                  # Structured logging with trace-id ContextVar
+│   │   ├── persona_discussion.py      # Multi-agent discussion mode (sequential persona chain)
+│   │   ├── pgvector_store.py          # Production vector search via PostgreSQL+pgvector
+│   │   ├── query_decomposer.py        # Query decomposition + entity extraction
+│   │   ├── query_router.py            # Query intent classification + context rewrite
+│   │   ├── quiz_generator.py          # LLM-based question generation
+│   │   ├── rag_engine.py              # Agentic RAG orchestrator
+│   │   ├── rate_limit.py              # 自研滑动窗口 IPRateLimiter
+│   │   ├── retrieval_grader.py        # Two-level retrieval quality assessment
+│   │   ├── task_worker.py             # Background task enqueue/dequeue/process
+│   │   ├── template_manager.py        # Jinja2 template renderer for LLM prompts
+│   │   ├── transformations.py         # 8 transformation types (summary/keypoints/outline/flashcards/mindmap/qa/translate/explain)
+│   │   ├── tts.py                     # Edge TTS wrapper
+│   │   ├── url_extractor.py           # Web content extraction
+│   │   └── vector_store.py            # Legacy FAISS/BM25/Hybrid vector indices (per-document)
 │   ├── db/
 │   │   ├── __init__.py
-│   │   ├── database.py         # SQLAlchemy async engine + all ORM models
-│   │   ├── migrations.py       # Schema migration helpers (Alembic)
+│   │   ├── database.py                # SQLAlchemy async engine + all ORM models
+│   │   ├── migrations.py              # Schema migration helpers (Alembic)
+│   ├── middleware/
+│   │   ├── __init__.py
+│   │   └── trace.py                   # TraceIdMiddleware (X-Trace-ID propagation, structured logs via ContextVar)
+│   ├── services/                      # Business orchestration layer
+│   │   ├── __init__.py
+│   │   ├── analysis_service.py        # analyze_wrong_questions, get_knowledge_stats, get_progress
+│   │   ├── auth_service.py            # register, login, refresh_token
+│   │   ├── chat_service.py            # ask_question, stream_answer, get_history
+│   │   ├── config_service.py          # get_config, update_config
+│   │   ├── course_service.py          # Course space management + document associations
+│   │   ├── document_service.py        # upload_document, delete_document, list_documents
+│   │   ├── note_service.py            # Note CRUD + tagging + semantic search
+│   │   ├── openmaic_service.py        # OpenMAIC classroom platform integration
+│   │   ├── quiz_service.py            # generate_quiz, submit_quiz, get_wrong_questions
+│   │   ├── task_service.py            # Async task queue (create, get_status, list, cancel)
+│   │   └── transform_service.py       # Content transformations orchestration
 │   ├── utils/
 │   │   ├── __init__.py
-│   │   ├── auth.py             # Password hashing, JWT creation/validation, get_current_user
-│   ├── config.py               # Pydantic Settings (env vars)
-│   ├── main.py                 # FastAPI app, middleware, router includes
-│   ├── exceptions.py           # Custom exception classes
-│   ├── exception_handlers.py   # FastAPI exception handlers
-│   ├── tests/                  # Pytest suite
-│   │   ├── conftest.py         # Shared fixtures
-│   │   ├── test_api.py
-│   │   ├── test_auth.py
-│   │   ├── test_chunker.py
-│   │   ├── test_document_parser.py
-│   │   ├── test_exceptions.py
-│   │   ├── test_quiz_generator.py
-│   │   ├── test_quiz.py
-│   │   ├── test_rag_engine.py
-│   │   ├── test_rate_limit.py
-│   │   ├── test_tasks.py
-│   │   ├── test_tts.py
-│   │   ├── test_vector_store.py
-├── uploads/                    # User-uploaded files (gitignored)
-├── vectorstore/                # FAISS index files (gitignored)
-├── alembic/                    # Database migrations
+│   │   └── auth.py                    # Password hashing, JWT creation/validation, get_current_user
+│   ├── config.py                      # Pydantic Settings (env vars)
+│   ├── exceptions.py                  # Custom exception classes
+│   ├── exception_handlers.py          # FastAPI exception handlers
+│   └── main.py                        # FastAPI app, middleware, router includes
+├── alembic/                           # Database migrations
 │   ├── versions/
-│   ├── env.py
-├── .embedding_cache/           # Embedding model cache (gitignored)
-├── .pytest_cache/              # Pytest cache (gitignored)
+│   └── env.py
+├── tests/                             # Pytest suite (32 test files)
+│   ├── conftest.py
+│   ├── conftest_async.py
+│   ├── conftest_fixtures.py
+│   ├── fixtures/
+│   ├── test_api.py
+│   ├── test_analysis_service.py
+│   ├── test_auth.py
+│   ├── test_chunker.py
+│   ├── test_config_service.py
+│   ├── test_course_service.py
+│   ├── test_document_parser.py
+│   ├── test_document_service.py
+│   ├── test_exceptions.py
+│   ├── test_hybrid_retrieval_contract.py
+│   ├── test_list_pagination.py
+│   ├── test_logging_config.py
+│   ├── test_metrics.py
+│   ├── test_note_indexing.py
+│   ├── test_profile.py
+│   ├── test_quiz.py
+│   ├── test_quiz_generator.py
+│   ├── test_quiz_task_e2e.py
+│   ├── test_rag_engine.py
+│   ├── test_rate_limit.py
+│   ├── test_security_headers.py
+│   ├── test_soft_delete.py
+│   ├── test_task_persistence.py
+│   ├── test_task_service.py
+│   ├── test_tasks.py
+│   ├── test_trace_middleware.py
+│   ├── test_transform_service.py
+│   ├── test_tts.py
+│   ├── test_type_safety_regressions.py
+│   └── test_vector_store.py
+├── uploads/                           # User-uploaded files (gitignored)
+├── vectorstore/                       # FAISS index files (gitignored)
+├── alembic.ini
 ├── requirements.txt
-├── run.py                      # Entry point: uvicorn app.main:app
+├── run.py                             # Entry point: uvicorn app.main:app
 ├── pytest.ini
-└── alembic.ini
+├── Dockerfile
+├── entrypoint.sh
+└── start.sh
 ```
 
 ## Key Patterns
@@ -167,12 +203,12 @@ Custom exceptions in `exceptions.py`. FastAPI exception handlers registered in `
 ### Logging
 Structured logging via `logger.py`:
 - `setup_logging(debug=bool)` — configures log level + format
-- Trace-id propagation via `X-Trace-ID` header + ContextVar (ASGI middleware in `trace.py`)
+- Trace-id propagation via `X-Trace-ID` header + ContextVar (ASGI middleware in `app/middleware/trace.py`)
 - All log lines include `[trace_id]` prefix for distributed tracing
 
 ### Templates
-27 Jinja2 prompt templates in `app/templates/`, rendered via `template_manager.py`:
-- Subdirectories: `rag/` (2), `quiz/` (3), `reflector/` (2), `retriever/` (1), `router/` (1), `decomposer/` (2), `transformations/` (14)
+28 Jinja2 prompt templates in `app/templates/`, rendered via `template_manager.py`:
+- Subdirectories: `rag/` (3), `quiz/` (3), `reflector/` (2), `retriever/` (1), `router/` (1), `decomposer/` (2), `transformations/` (16)
 
 ### ORM Models (`app/db/database.py`)
 
@@ -183,7 +219,7 @@ No separate `app/models/` directory; all ORM models are defined in `app/db/datab
 | `User` | `users` | id, username, email, password_hash, is_active, created_at |
 | `Document` | `documents` | id, user_id, course_space_id, filename, file_path, status, chunk_count, file_size, vectorstore_path, deleted_at (soft delete) |
 | `ChatSession` | `chat_sessions` | id, user_id, title, created_at |
-| `Message` | `messages` | id, session_id, role, content, sources, created_at |
+| `Message` | `messages` | id, session_id, role, content, sources, embedding (vector), created_at |
 | `Quiz` | `quizzes` | id, document_id, question_type, question, options, answer, explanation, created_at |
 | `QuizResult` | `quiz_results` | id, quiz_id, user_id, user_answer, is_correct, submitted_at |
 | `UserLLMConfig` | `user_llm_configs` | id, user_id, provider, api_key, base_url, model_name, temperature, max_tokens, embedding_model, embedding_dimension, created_at, updated_at |
@@ -262,6 +298,8 @@ pytest tests/ -v           # Run tests
 | POST | `/api/auth/login` | Login, returns access + refresh tokens |
 | POST | `/api/auth/refresh` | Refresh access token |
 | GET | `/api/auth/me` | Get current user info |
+| PUT | `/api/auth/me` | Update current user profile (username/email) |
+| PUT | `/api/auth/password` | Change password (requires old password) |
 | POST | `/api/documents/upload` | Upload document (PDF/DOCX/PPTX) |
 | POST | `/api/documents/from-url` | Import document from URL |
 | GET | `/api/documents` | List user's documents |
@@ -309,6 +347,9 @@ pytest tests/ -v           # Run tests
 | GET | `/api/config/llm` | Get user's LLM config |
 | POST | `/api/config/llm` | Update user's LLM config |
 | PUT | `/api/config/llm` | Update user's LLM config |
+| POST | `/api/integrations/openmaic/classroom` | Initiate OpenMAIC classroom generation |
+| GET | `/api/integrations/openmaic/classrooms` | List generated classrooms |
+| POST | `/api/integrations/openmaic/webhook` | OpenMAIC callback endpoint |
 | GET | `/` | App info |
 | GET | `/health` | Health check |
 | GET | `/api/metrics` | Operational metrics (task counts by status) |

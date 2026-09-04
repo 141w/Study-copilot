@@ -2,40 +2,32 @@
   <div ref="editorContainer" class="note-editor">
     <!-- Toolbar -->
     <div class="flex items-center justify-between px-4 py-2 border-b border-[var(--border-default)] bg-[var(--bg-secondary)] rounded-t-xl">
+      <!-- F2：编辑类工具在预览态禁用（textarea 未挂载，避免静默失败） -->
       <div class="flex items-center gap-1">
-        <el-button circle size="small" @click="insertMarkdown('**', '**')" title="粗体">
-          <el-icon class="font-bold text-xs">B</el-icon>
+        <el-button circle size="small" :disabled="showPreview" @click="insertMarkdown('**', '**')" title="粗体">
+          <span class="text-xs font-bold">B</span>
         </el-button>
-        <el-button circle size="small" @click="insertMarkdown('*', '*')" title="斜体">
-          <el-icon class="italic text-xs">I</el-icon>
+        <el-button circle size="small" :disabled="showPreview" @click="insertMarkdown('*', '*')" title="斜体">
+          <span class="text-xs italic">I</span>
         </el-button>
-        <el-button circle size="small" @click="insertLinePrefix('## ')" title="标题">
+        <el-button circle size="small" :disabled="showPreview" @click="insertLinePrefix('## ')" title="标题">
           <span class="text-xs font-bold">H</span>
         </el-button>
-        <el-button circle size="small" @click="insertLinePrefix('- ')" title="列表">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
+        <el-button circle size="small" :disabled="showPreview" @click="insertLinePrefix('- ')" title="列表">
+          <el-icon class="w-4 h-4"><List /></el-icon>
         </el-button>
-        <el-button circle size="small" @click="insertMarkdown('`', '`')" title="代码">
+        <el-button circle size="small" :disabled="showPreview" @click="insertMarkdown('`', '`')" title="代码">
           <span class="text-xs font-mono">&lt;/&gt;</span>
         </el-button>
-        <el-button circle size="small" @click="insertLinePrefix('> ')" title="引用">
-          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z" />
-          </svg>
+        <el-button circle size="small" :disabled="showPreview" @click="insertLinePrefix('> ')" title="引用">
+          <span class="text-xs font-serif font-bold">&quot;</span>
         </el-button>
         <div class="w-px h-5 bg-[var(--bg-active)] mx-1"></div>
         <el-button circle size="small" @click="togglePreview" :type="showPreview ? 'primary' : 'default'" title="预览">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
+          <el-icon class="w-4 h-4"><View /></el-icon>
         </el-button>
         <el-button circle size="small" @click="openTransform" title="AI 内容转换">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
+          <el-icon class="w-4 h-4"><Switch /></el-icon>
         </el-button>
       </div>
       <div class="flex items-center gap-2">
@@ -61,9 +53,7 @@
       >
         {{ tag }}
         <button @click="removeTag(tag)" class="text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <el-icon class="w-4 h-4"><Close /></el-icon>
         </button>
       </span>
       <input
@@ -101,6 +91,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import { List, View, Switch, Close } from '@/components/icons'
 import { useMarkdown } from '../composables/useMarkdown'
 import TransformDialog from './TransformDialog.vue'
 
@@ -195,6 +186,8 @@ function insertMarkdown(before: string, after: string): void {
   })
 
   emit('update:content', localContent.value)
+  // F1：工具栏修改也触发 save（否则不进草稿，关页即丢）
+  emit('save')
 }
 
 function insertLinePrefix(prefix: string): void {
@@ -215,6 +208,8 @@ function insertLinePrefix(prefix: string): void {
   })
 
   emit('update:content', localContent.value)
+  // F1：同上，工具栏触发的修改需入草稿
+  emit('save')
 }
 
 function handleTab(_e: Event): void {
@@ -235,6 +230,8 @@ function handleTab(_e: Event): void {
   })
 
   emit('update:content', localContent.value)
+  // F1：Tab 缩进也是内容修改
+  emit('save')
 }
 
 function openTransform(): void {
@@ -246,7 +243,8 @@ function openTransform(): void {
 .note-editor {
   background-color: var(--surface-card);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  /* F5：8px 硬编码 → 令牌（P2-1 圆角统一收尾） */
+  border-radius: var(--radius-lg);
 }
 
 .title-input :deep(.el-input__wrapper) {
@@ -271,7 +269,7 @@ function openTransform(): void {
   border-radius: 0;
   padding: 16px;
   min-height: 300px;
-  max-height: 60vh;
+  max-height: 60dvh;
   color: var(--text-primary);
   line-height: 1.6;
   resize: none;
@@ -286,7 +284,7 @@ function openTransform(): void {
 .preview-area {
   padding: 16px;
   min-height: 300px;
-  max-height: 60vh;
+  max-height: 60dvh;
   overflow-y: auto;
 }
 

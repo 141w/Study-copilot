@@ -7,7 +7,7 @@
       :key="doc.id"
       class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors"
       :class="selectedIds().includes(doc.id)
-        ? 'bg-[var(--color-primary)] text-white'
+        ? 'bg-[var(--color-primary)] text-[var(--text-inverse)]'
         : 'bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
     >
       <input
@@ -30,7 +30,7 @@
       role="button"
       tabindex="0"
       :aria-label="`选择文档 ${doc.filename}`"
-      class="p-3 border rounded-xl cursor-pointer transition-all"
+      class="p-3 border rounded-lg cursor-pointer transition-all"
       :class="selectedIds().includes(doc.id)
         ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]'
         : 'border-[var(--border-default)]'"
@@ -50,7 +50,7 @@
       <label
         v-for="doc in documents"
         :key="doc.id"
-        class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-default)] cursor-pointer hover:border-[var(--color-primary)] transition-colors"
+        class="flex items-center gap-3 p-3 rounded-lg border border-[var(--border-default)] cursor-pointer hover:border-[var(--color-primary)] transition-colors"
         :class="{ 'border-[var(--color-primary)] bg-[var(--color-primary-light)]': modelValue === doc.id }"
       >
         <input

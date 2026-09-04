@@ -4,9 +4,7 @@
     <PageHeader title="笔记" subtitle="记录和管理你的学习笔记">
       <template #actions>
         <el-button @click="openCreateNote" type="primary">
-          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
+          <el-icon class="mr-1"><Plus /></el-icon>
           新建笔记
         </el-button>
       </template>
@@ -84,14 +82,14 @@
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-if="noteStore.loading" class="text-center py-16 text-[var(--text-muted)]">加载中...</div>
+    <!-- Loading（P1-2：骨架屏匹配笔记卡片网格形状） -->
+    <SkeletonList v-if="noteStore.loading" variant="cards" :count="6" />
 
     <!-- Empty State（P2-2：EmptyState） -->
     <EmptyState
       v-else-if="noteStore.filteredNotes.length === 0"
       size="lg"
-      :svg-path="'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'"
+      :icon="EditPen"
       :message="hasActiveFilters ? '未找到匹配的笔记' : '还没有笔记，开始记录吧'"
     >
       <el-button v-if="!hasActiveFilters" @click="openCreateNote">新建笔记</el-button>
@@ -142,6 +140,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Plus, EditPen } from '@/components/icons'
 import { useNoteStore } from '../stores/note'
 import type { NoteDetail } from '../stores/note'
 import { useCourseStore } from '../stores/course'
@@ -153,6 +152,8 @@ import NoteEditor from '../components/NoteEditor.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import EmptyState from '../components/common/EmptyState.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
+import SkeletonList from '../components/common/SkeletonList.vue'
+import { useReducedMotion } from '../composables/useReducedMotion'
 import gsap from 'gsap'
 
 interface NoteFormState {
@@ -165,6 +166,8 @@ interface NoteFormState {
 const noteStore = useNoteStore()
 const courseStore = useCourseStore()
 const toast = useToastStore()
+// P1-1：GSAP 动画降级（prefers-reduced-motion）
+const { prefersReduced } = useReducedMotion()
 
 const pageContainer = ref<HTMLElement | null>(null)
 
@@ -357,6 +360,8 @@ onMounted(async () => {
     showCreateEditor.value = true
   }
 
+  // P1-1：减少动态偏好下跳过入场动画
+  if (prefersReduced.value) return
   ctx = gsap.context(() => {
     // PageHeader 内的标题/副标题（P2-2 组件化后无模板 ref，按结构选择）
     const header = pageContainer.value?.querySelector('h1')

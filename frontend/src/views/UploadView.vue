@@ -5,16 +5,14 @@
 <!-- Upload Area -->
     <div
       ref="uploadArea"
-      class="border-2 border-dashed border-[var(--border-default)] rounded-2xl p-12 text-center mb-8"
+      class="border-2 border-dashed border-[var(--border-hover)] rounded-2xl p-12 text-center mb-8"
       :class="{ 'border-[var(--color-primary)] bg-[var(--bg-secondary)]': isDragging }"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="handleDrop"
     >
       <div class="w-16 h-16 bg-[var(--bg-tertiary)] rounded-full flex items-center justify-center mx-auto mb-4">
-        <svg class="w-8 h-8 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
+        <el-icon class="w-8 h-8 text-[var(--text-muted)]"><Upload /></el-icon>
       </div>
       <p class="text-[var(--text-secondary)] mb-2">拖拽文档到此处，或点击上传</p>
       <input
@@ -32,18 +30,16 @@
       </el-button>
       <p class="text-sm text-[var(--text-muted)] mt-4">支持 PDF、DOCX、PPTX 格式，最大 50MB</p>
       <div class="flex justify-center gap-4 mt-3">
-        <span class="text-xs px-2 py-1 bg-[var(--color-error-light)] text-[var(--color-error)] rounded">PDF</span>
-        <span class="text-xs px-2 py-1 bg-[var(--color-info-light)] text-[var(--color-info)] rounded">Word</span>
-        <span class="text-xs px-2 py-1 bg-[var(--color-warning-light)] text-[var(--color-warning)] rounded">PowerPoint</span>
+        <span class="text-xs px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]">PDF</span>
+        <span class="text-xs px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]">Word</span>
+        <span class="text-xs px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]">PowerPoint</span>
       </div>
     </div>
 
     <!-- URL Import Button（按钮尺寸统一：42px 手写钮换 el-button 32px 基准） -->
     <div class="flex justify-center mb-8">
       <el-button @click="showUrlDialog = true">
-        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-        </svg>
+        <el-icon class="mr-1"><Link /></el-icon>
         从网页 URL 导入
       </el-button>
     </div>
@@ -60,12 +56,8 @@
         <h2 class="font-semibold text-[var(--text-primary)]">我的文档</h2>
       </div>
       
-      <div v-if="documentStore.loading" class="p-8 text-center">
-        <svg class="w-8 h-8 animate-spin mx-auto text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      </div>
+      <!-- P1-2：骨架屏匹配行式列表形状（§4.5） -->
+      <SkeletonList v-if="documentStore.loading" variant="rows" :count="3" />
       
       <div v-else-if="documentStore.documents.length === 0" class="p-8 text-center text-[var(--text-muted)]">
         暂无文档，请先上传
@@ -77,10 +69,8 @@
           :key="doc.id"
           class="p-4 flex items-center gap-4"
         >
-          <div class="w-10 h-10 bg-[var(--color-error-light)] rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+          <div class="w-10 h-10 bg-[var(--bg-tertiary)] rounded-lg flex items-center justify-center">
+            <el-icon class="w-5 h-5 text-[var(--text-secondary)]"><Document /></el-icon>
           </div>
           
           <div class="flex-1">
@@ -93,12 +83,10 @@
           
           <button
             @click="confirmDeleteDoc(doc)"
-            class="text-[var(--text-muted)] hover:text-red-500 transition-colors"
+            class="text-[var(--text-muted)] hover:text-[var(--color-error)] transition-colors"
             :aria-label="`删除文档 ${doc.filename}`"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <el-icon class="w-5 h-5"><Delete /></el-icon>
           </button>
         </div>
       </div>
@@ -118,14 +106,19 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import gsap from 'gsap'
+import { Upload, Link, Document, Delete } from '@/components/icons'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
 import type { Document as DocumentModel } from '../types/models'
 import UrlImportDialog from '../components/UrlImportDialog.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
+import SkeletonList from '../components/common/SkeletonList.vue'
+import { useReducedMotion } from '../composables/useReducedMotion'
 
 const documentStore = useDocumentStore()
 const toastStore = useToastStore()
+// P1-1：GSAP 动画降级（prefers-reduced-motion）
+const { prefersReduced } = useReducedMotion()
 const isDragging = ref(false)
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -236,6 +229,8 @@ function statusText(status: string): string {
 onMounted(() => {
   documentStore.fetchDocuments()
 
+  // P1-1：减少动态偏好下跳过入场动画
+  if (prefersReduced.value) return
   ctx = gsap.context(() => {
     gsap.from(uploadArea.value, {
       y: 20,

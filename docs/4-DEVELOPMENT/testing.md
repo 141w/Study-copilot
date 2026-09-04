@@ -3,8 +3,8 @@
 ## Overview
 
 Study Copilot uses:
-- **Backend**: `pytest` for unit and integration tests
-- **Frontend**: `vitest` for component and store tests
+- **Backend**: `pytest` + `pytest-asyncio` + `pytest-cov` for unit and integration tests
+- **Frontend**: `vitest` (dual-project: SPA jsdom + bot engine node) for component, store, and pure-function tests
 
 ## Backend Tests
 
@@ -18,7 +18,7 @@ pip install -e ".[dev]"
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (coverage enforced at ≥65% via pyproject.toml addopts)
 pytest tests/
 
 # Run with verbose output
@@ -30,9 +30,12 @@ pytest tests/test_document_parser.py
 # Run a specific test
 pytest tests/test_document_parser.py::test_parse_pdf
 
-# Run with coverage
-pytest tests/ --cov=app --cov-report=html
+# Run with HTML coverage report
+pytest tests/ --cov-report=html
+# → opens htmlcov/index.html
 ```
+
+**Note**: Coverage failure threshold (currently 65%) is set in `pyproject.toml` under `[tool.pytest.ini_options]` as `--cov-fail-under=65`. All invocations inherit it; use `--no-cov` to skip the check.
 
 ### Test Files
 
@@ -48,58 +51,70 @@ pytest tests/ --cov=app --cov-report=html
 | `tests/test_document_service.py` | Document upload, delete, soft-delete |
 | `tests/test_exceptions.py` | Custom exception hierarchy |
 | `tests/test_hybrid_retrieval_contract.py` | FAISS+BM25 RRF contract |
-| `tests/test_logging_config.py` | Logging setup |
-| `tests/test_metrics.py` | /api/metrics endpoint |
+| `tests/test_list_pagination.py` | Paginated list endpoints |
+| `tests/test_logging_config.py` | Structured logging setup |
+| `tests/test_metrics.py` | `/api/metrics` endpoint |
 | `tests/test_note_indexing.py` | Note-vector-store indexing |
+| `tests/test_profile.py` | User profile endpoint |
 | `tests/test_quiz.py` | Quiz API endpoints |
 | `tests/test_quiz_generator.py` | Quiz generation, question formatting |
-| `tests/test_quiz_service.py` | Quiz business logic |
 | `tests/test_quiz_task_e2e.py` | Quiz async task flow |
 | `tests/test_rag_engine.py` | RAG pipeline, retrieval, reranking |
 | `tests/test_rate_limit.py` | IP rate limiter |
-| `tests/test_security_headers.py` | Security middleware |
+| `tests/test_security_headers.py` | Security middleware headers |
 | `tests/test_soft_delete.py` | Document/note soft-delete |
-| `tests/test_task_persistence.py` | Async task persistence |
+| `tests/test_task_persistence.py` | Async task persistence and recovery |
 | `tests/test_task_service.py` | Task CRUD service |
 | `tests/test_tasks.py` | Task API endpoints |
-| `tests/test_trace_middleware.py` | Trace middleware |
+| `tests/test_trace_middleware.py` | Trace middleware (X-Trace-ID propagation) |
 | `tests/test_transform_service.py` | Content transformations |
 | `tests/test_tts.py` | Text-to-speech |
 | `tests/test_type_safety_regressions.py` | Type safety baseline |
 | `tests/test_vector_store.py` | FAISS/BM25/Hybrid vector stores |
 
+### How Backend Tests Work
+
+Tests use **SQLite in-memory** via `aiosqlite` — no PostgreSQL needed. The `conftest.py` creates tables at session start and wipes all tables between each test to prevent cross-test contamination.
+
+```python
+# conftest.py overview:
+# - session-scoped async engine (SQLite aiosqlite)
+# - autouse fixture: TRUNCATE all tables after every test
+# - db_session fixture: per-test async SQLAlchemy session
+# - client fixture: httpx AsyncClient with FastAPI dependency overrides
+```
+
 ### Writing Backend Tests
 
 ```python
 import pytest
-from app.core.chunker import FixedChunker
+from httpx import ASGITransport, AsyncClient
 
-def test_fixed_chunker_basic():
-    """Test that FixedChunker splits text correctly."""
+@pytest.mark.asyncio
+async def test_chunker_basic():
+    """Unit test — no client needed."""
+    from app.core.chunker import FixedChunker
     chunker = FixedChunker(chunk_size=100, overlap=20)
     text = "This is a test. " * 20
     chunks = chunker.chunk(text)
     assert len(chunks) > 1
-    assert all(len(c.text) <= 120 for c in chunks)
 
 @pytest.mark.asyncio
-async def test_document_upload(client, auth_headers):
-    """Test document upload endpoint."""
-    with open("tests/fixtures/sample.pdf", "rb") as f:
-        response = await client.post(
-            "/api/documents/upload",
-            files={"file": ("test.pdf", f, "application/pdf")},
-            headers=auth_headers,
-        )
+async def test_document_upload(client):
+    """Integration test — uses httpx client fixture."""
+    response = await client.post("/api/documents/upload", ...)
     assert response.status_code == 201
 ```
 
+> **Skip `@pytest.mark.asyncio`**: with `asyncio_mode = "auto"` in pyproject.toml, all async test functions are auto-marked.
+
 ### Test Fixtures
 
-Place test data in `backend/tests/fixtures/`:
-- `sample.pdf` — Small PDF for parsing tests
-- `sample.docx` — DOCX test file
-- `sample.pptx` — PPTX test file
+No fixture directory exists. Tests that need sample documents create them inline using `python-docx` / `PyMuPDF` generators. If you need to add binary fixture files, place them under:
+
+```
+backend/tests/fixtures/
+```
 
 ---
 
@@ -115,128 +130,172 @@ npm install
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests across both projects (spa + bot)
 npx vitest run
 
-# Watch mode
+# Watch mode (auto-reruns on file change)
 npx vitest
 
-# Run with coverage
-npx vitest run --coverage
+# Run only the spa project
+npx vitest run --project spa
 
-# Run specific test file
-npx vitest run tests/stores/note.test.js
+# Run only the bot engine tests
+npx vitest run --project bot
+
+# Run a specific test file
+npx vitest run tests/stores/chat.test.ts
+
+# Run a specific bot engine test
+npx vitest run --project bot src/bot/engine.test.ts
 ```
+
+### Test Structure
+
+`vitest.config.ts` defines **two projects**:
+
+| Project | Environment | Scope |
+|---------|-------------|-------|
+| `spa` | jsdom + Vue | `tests/**/*.{test,spec}.{js,ts}` — components, stores, composables, services |
+| `bot` | node | `src/bot/**/*.test.ts` — bot expression/shape/skin/gaze engine |
+
+Both share `tests/setup.js`, which auto-detects `window` availability:
+- **jsdom**: registers Element Plus (zh-CN), mocks `axios` and `localStorage`, resets Pinia per test
+- **node**: skips DOM mocks, only mocks `axios`
 
 ### Test Files
 
+#### SPA tests (`tests/`)
+
 | File | Tests |
 |------|-------|
-| `tests/components/UploadView.test.js` | Upload component rendering |
-| `tests/composables/chatExport.test.js` | Chat markdown export |
-| `tests/services/api.test.js` | Axios interceptor retry logic |
-| `tests/stores/auth.test.js` | Auth store: login, logout, token |
-| `tests/stores/chat.test.js` | Chat store: messages, streaming |
-| `tests/stores/chat.title.test.js` | Chat session title updates |
-| `tests/stores/config.test.js` | LLM config store |
-| `tests/stores/document.test.js` | Document store: CRUD, SWR cache |
-| `tests/stores/note.test.js` | Note store: filters, SWR cache |
-| `tests/stores/quiz.test.js` | Quiz store: generation, submission |
+| `components/ConfirmDialog.test.js` | ConfirmDialog component |
+| `components/UploadView.test.js` | Upload component rendering |
+| `composables/chatExport.test.js` | Chat markdown export |
+| `composables/useFormat.test.js` | Text formatting utility |
+| `services/api.test.js` | Axios interceptor retry logic |
+| `stores/auth.test.ts` | Auth store: login, logout, token |
+| `stores/chat.test.ts` | Chat store: messages, streaming |
+| `stores/chat.title.test.ts` | Chat session title updates |
+| `stores/config.test.ts` | LLM config store |
+| `stores/document.test.ts` | Document store: CRUD, SWR cache |
+| `stores/note.test.ts` | Note store: filters, SWR cache |
+| `stores/quiz.test.ts` | Quiz store: generation, submission |
+
+#### Bot engine tests (`src/bot/`)
+
+| File | Tests |
+|------|-------|
+| `expressions.test.ts` | Expression parsing and evaluation |
+| `shape.test.ts` | Avatar shape rendering |
+| `skins.test.ts` | Skin/appearance logic |
+| `engine.test.ts` | Bot engine orchestration |
+| `face.test.ts` | Face expression logic |
+| `gaze.test.ts` | Gaze/tracking calculations |
+| `cycles.test.ts` | Animation cycle timing |
 
 ### Writing Frontend Tests
 
-```javascript
-import { describe, it, expect, vi } from 'vitest';
-import { setActivePinia, createPinia } from 'pinia';
-import { useAuthStore } from '@/stores/auth';
+```typescript
+import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
+// Store test (spa project — Pinia auto-reset by setup.js)
 describe('Auth Store', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia());
-  });
-
   it('logs in user and stores token', async () => {
-    const store = useAuthStore();
-    vi.spyOn(store, 'login').mockResolvedValue({ token: 'abc' });
-    
-    await store.login({ username: 'test', password: 'pass' });
-    
-    expect(store.isAuthenticated).toBe(true);
-  });
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockResolvedValue({ token: 'abc' })
+    await store.login({ username: 'test', password: 'pass' })
+    expect(store.isAuthenticated).toBe(true)
+  })
 
   it('clears state on logout', () => {
-    const store = useAuthStore();
-    store.logout();
-    
-    expect(store.isAuthenticated).toBe(false);
-    expect(store.token).toBeNull();
-  });
-});
+    const store = useAuthStore()
+    store.logout()
+    expect(store.isAuthenticated).toBe(false)
+    expect(store.token).toBeNull()
+  })
+})
+
+// Component test (spa project)
+import { mount } from '@vue/test-utils'
+import UploadView from '@/components/UploadView.vue'
+
+it('renders upload button', () => {
+  const wrapper = mount(UploadView)
+  expect(wrapper.find('button').exists()).toBe(true)
+})
+
+// Bot engine test (bot project — pure functions, no DOM)
+import { evaluateExpression } from './expressions'
+
+describe('Expression Engine', () => {
+  it('parses simple expressions', () => {
+    expect(evaluateExpression('idle')).toMatchObject({ state: 'idle' })
+  })
+})
 ```
 
 ### Test Configuration
 
-Frontend tests use `vitest.config.js`:
+Frontend tests use `vitest.config.ts` (dual-project):
 
-```javascript
-import { defineConfig } from 'vitest/config';
-import vue from '@vitejs/plugin-vue';
-import { resolve } from 'path';
-
+```typescript
+// Two projects: spa (jsdom) and bot (node)
 export default defineConfig({
   plugins: [vue()],
+  resolve: { alias: { '@': path.resolve(__dirname, './src') } },
   test: {
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.js'],
+    projects: [
+      {
+        name: 'spa',
+        environment: 'jsdom',
+        globals: true,
+        include: ['tests/**/*.{test,spec}.{js,ts}'],
+        setupFiles: ['./tests/setup.js'],
+      },
+      {
+        name: 'bot',
+        environment: 'node',
+        globals: true,
+        include: ['src/bot/**/*.test.ts'],
+        setupFiles: ['./tests/setup.js'],
+      },
+    ],
   },
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
-    },
-  },
-});
+})
 ```
+
+`tests/setup.js` auto-detects environment and conditionally registers Element Plus, mocks `localStorage`, and resets Pinia.
 
 ---
 
 ## Integration Testing
 
-For full-stack integration tests:
+Backend tests already run as integration tests (FastAPI `httpx` client + SQLite in-memory DB via `conftest.py`). For manual full-stack testing against a real PostgreSQL:
 
 ```bash
-# Start test database
-psql postgres -c "CREATE DATABASE study_copilot_test;"
-psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE study_copilot_test TO study_user;"
+# Start PostgreSQL locally, then:
+export DATABASE_URL=postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot
 
-# Set test environment
-export DATABASE_URL=postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot_test
+# Start backend
+cd backend && uvicorn app.main:app --reload
 
-# Run backend tests against test DB
-cd backend && pytest tests/ -v
+# Start frontend (separate terminal)
+cd frontend && npm run dev
 ```
 
 ---
 
 ## CI/CD
 
-### GitHub Actions (Recommended)
+### GitHub Actions
 
 ```yaml
-# .github/workflows/test.yml
 name: Tests
 on: [push, pull_request]
 jobs:
   backend:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: study_copilot_test
-          POSTGRES_USER: study_user
-          POSTGRES_PASSWORD: study123
-        ports:
-          - 5432:5432
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -255,16 +314,27 @@ jobs:
       - run: cd frontend && npm ci && npx vitest run
 ```
 
+No PostgreSQL service needed — both backend and frontend tests run against SQLite in-memory.
+
+---
+
+## Type Check
+
+```bash
+cd frontend
+npx vue-tsc --noEmit
+```
+
 ---
 
 ## Test Coverage Goals
 
 | Area | Target |
 |------|--------|
-| API endpoints | 80%+ |
-| Core business logic | 90%+ |
+| Backend overall | ≥65% (enforced, `--cov-fail-under`) |
+| Core business logic (RAG, quiz, transform) | 90%+ |
 | Frontend stores | 80%+ |
-| Frontend components | — (minimal, Element Plus provides UI) |
+| Frontend components | Minimal (Element Plus provides UI) |
 
 ---
 
@@ -272,8 +342,9 @@ jobs:
 
 | Issue | Fix |
 |-------|-----|
-| `pytest` not found | Activate conda env or `pip install pytest` |
-| Database connection errors | Ensure PostgreSQL is running and test DB exists |
-| `vitest` command not found | `npm install` in frontend directory |
-| Snapshot failures | `npx vitest run --update` to update snapshots |
-| Async test hangs | Ensure `@pytest.mark.asyncio` decorator is present |
+| `pytest` not found | `pip install -e ".[dev]"` in `backend/` |
+| `event loop is already running` / `RuntimeError: attached to a different loop` | Use session-scoped fixtures (already in `conftest.py`); run with `pytest` not individual files if shared state issues persist |
+| Coverage below threshold | Add tests or temporarily pass `--no-cov` to skip the check |
+| `vitest` command not found | `npm install` in `frontend/` |
+| Bot test DOM errors | Bot project runs in `node` environment — no window; check `setup.js` guards |
+| Async store test fails | Ensure `setActivePinia(createPinia())` called (auto-handled by `setup.js` for spa tests) |

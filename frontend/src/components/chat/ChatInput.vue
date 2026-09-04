@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Close, Promotion } from '@element-plus/icons-vue'
+import { Close, Promotion } from '@/components/icons'
 
 const props = withDefaults(defineProps<{
   loading?: boolean

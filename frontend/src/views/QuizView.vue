@@ -34,8 +34,9 @@
 
       <div class="flex gap-4 items-end mb-4">
         <div class="flex-1">
-          <label class="block text-sm text-[var(--text-secondary)] mb-2">选择题数量</label>
+          <label for="quiz-choice-count" class="block text-sm text-[var(--text-secondary)] mb-2">选择题数量</label>
           <input
+            id="quiz-choice-count"
             v-model.number="config.choiceCount"
             type="number"
             min="1"
@@ -45,8 +46,9 @@
         </div>
 
         <div class="flex-1">
-          <label class="block text-sm text-[var(--text-secondary)] mb-2">简答题数量</label>
+          <label for="quiz-short-count" class="block text-sm text-[var(--text-secondary)] mb-2">简答题数量</label>
           <input
+            id="quiz-short-count"
             v-model.number="config.shortAnswerCount"
             type="number"
             min="1"
@@ -77,7 +79,7 @@
         class="card p-6"
       >
         <div class="flex items-start gap-3 mb-4">
-          <span class="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-sm flex items-center justify-center flex-shrink-0">
+          <span class="w-6 h-6 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-sm flex items-center justify-center flex-shrink-0">
             {{ index + 1 }}
           </span>
           <div class="flex-1">
@@ -93,7 +95,7 @@
           <label
             v-for="(option, idx) in quiz.options"
             :key="idx"
-            class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors"
+            class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all active:scale-[0.98]"
             :class="selectedAnswers[quiz.id] === optionLetter(idx)
               ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]'
               : 'border-[var(--border-default)] hover:border-[var(--border-hover)]'"
@@ -107,7 +109,7 @@
             />
             <span class="w-6 h-6 rounded-full border flex items-center justify-center text-sm"
               :class="selectedAnswers[quiz.id] === optionLetter(idx)
-                ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--text-inverse)]'
                 : 'border-[var(--border-default)]'"
             >
               {{ optionLetter(idx) }}
@@ -137,16 +139,13 @@
         </div>
 
         <!-- Result -->
-        <div v-if="quiz.result" class="mt-4 ml-9 p-4 rounded-xl"
-          :class="quiz.result.is_correct ? 'bg-[var(--color-success-light)] border border-[var(--color-success)]' : 'bg-[var(--color-error-light)] border border-[var(--color-error)]'"
+        <div v-if="quiz.result" class="mt-4 ml-9 p-4 rounded-lg"
+          :class="quiz.result.is_correct ? 'bg-[var(--color-success-light)] border-2 border-[var(--color-success)]' : 'bg-[var(--color-error-light)] border-2 border-[var(--color-error)]'"
         >
           <div class="flex items-center gap-2 mb-2">
-            <svg v-if="quiz.result.is_correct" class="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-            <svg v-else class="w-5 h-5 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <!-- 批次5：手写描边 SVG → EP 填充图标，与全站图标体系统一 -->
+            <el-icon v-if="quiz.result.is_correct" class="w-5 h-5 text-[var(--color-success)]"><CircleCheckFilled /></el-icon>
+            <el-icon v-else class="w-5 h-5 text-[var(--color-error)]"><CircleCloseFilled /></el-icon>
             <span :class="quiz.result.is_correct ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'" class="font-medium">
               {{ quiz.result.is_correct ? '回答正确' : '回答错误' }}
             </span>
@@ -171,9 +170,9 @@
         </el-button>
       </div>
 
-      <div v-if="examMode && examSummary" class="card p-6 mt-6 bg-[var(--color-info-light)] border border-[var(--color-info)]">
-        <h3 class="text-lg font-semibold text-[var(--color-info)] mb-2">考试结果</h3>
-        <p class="text-[var(--color-info)]">
+      <div v-if="examMode && examSummary" class="card p-6 mt-6 !bg-[var(--color-primary-light)] border border-[var(--border-default)]">
+        <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-2">考试结果</h3>
+        <p class="text-[var(--text-primary)]">
           正确 <span class="font-bold">{{ examSummary.correct }}</span> / {{ examSummary.total }} 题，
           正确率 <span class="font-bold">{{ examSummary.accuracy }}%</span>
         </p>
@@ -181,9 +180,7 @@
     </div>
 
     <div v-else class="text-center text-[var(--text-muted)] py-12">
-      <svg class="w-16 h-16 mx-auto mb-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-      </svg>
+      <el-icon class="w-16 h-16 mx-auto mb-4"><DocumentChecked /></el-icon>
       <p>点击"生成题目"开始练习</p>
     </div>
 
@@ -227,11 +224,13 @@ defineOptions({ name: 'QuizView' })
 
 import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import gsap from 'gsap'
+import { DocumentChecked, CircleCheckFilled, CircleCloseFilled } from '@/components/icons'
 import { useQuizStore } from '../stores/quiz'
 import type { RuntimeQuiz, QuizSubmitResult } from '../stores/quiz'
 import { useDocumentStore } from '../stores/document'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
 import api from '../services/api'
+import { useReducedMotion } from '../composables/useReducedMotion'
 
 /** 错题条目（/quiz/wrong-questions 响应） */
 interface WrongQuestion {
@@ -246,6 +245,8 @@ interface WrongQuestion {
 
 const quizStore = useQuizStore()
 const documentStore = useDocumentStore()
+// P1-1：GSAP 动画降级（prefers-reduced-motion）
+const { prefersReduced } = useReducedMotion()
 
 const config = ref({
   choiceCount: 3,
@@ -289,6 +290,8 @@ function optionLetter(idx: number): string {
 
 watch(() => quizStore.quizzes.length, (newLen, oldLen) => {
   if (newLen > 0 && oldLen === 0) {
+    // P1-1：减少动态偏好下跳过列表入场动画
+    if (prefersReduced.value) return
     nextTick(() => {
       const cards = quizListRef.value?.querySelectorAll('.card')
       if (cards?.length) {
@@ -307,13 +310,15 @@ watch(() => quizStore.quizzes.length, (newLen, oldLen) => {
 })
 
 watch(() => quizStore.quizzes.map(q => ({ id: q.id, result: q.result })), () => {
+  // P1-1：减少动态偏好下跳过结果入场动画
+  if (prefersReduced.value) return
   nextTick(() => {
     if (!quizListRef.value) return
     const cards = quizListRef.value.querySelectorAll('.card')
     quizStore.quizzes.forEach((quiz, i) => {
       if (quiz.result && !animatedResults.has(quiz.id)) {
         animatedResults.add(quiz.id)
-        const resultDiv = cards[i]?.querySelector('.mt-4.ml-9.p-4.rounded-xl')
+        const resultDiv = cards[i]?.querySelector('.mt-4.ml-9.p-4.rounded-lg')
         if (resultDiv) {
           ctx.add(() => {
             gsap.from(resultDiv, {

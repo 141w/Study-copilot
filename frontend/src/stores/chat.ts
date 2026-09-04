@@ -10,6 +10,13 @@ export interface ThinkingStep {
   detail: string
 }
 
+/** Persona block for discussion mode */
+export interface DiscussionPersona {
+  name: string
+  avatar: string
+  content: string
+}
+
 /**
  * 流式消息的运行时形态。
  * 与 models.ChatMessage 的差异：thinking 在流式期间是步骤数组
@@ -17,7 +24,7 @@ export interface ThinkingStep {
  */
 export interface ChatStreamMessage {
   id: number | string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'discussion'
   content: string
   sources?: Source[]
   used_source_indices?: number[]
@@ -26,6 +33,8 @@ export interface ChatStreamMessage {
   created_at?: string
   isStreaming?: boolean
   thinking?: string | ThinkingStep[]
+  /** Discussion mode: per-persona content */
+  personas?: DiscussionPersona[]
 }
 
 /** 会话列表条目（后端以 session_id 为键，区别于 models.ChatSession.id） */
@@ -48,6 +57,16 @@ interface SseEvent {
   [key: string]: unknown
 }
 
+/** 语义搜索结果条目 */
+export interface MessageSearchResult {
+  message_id: string
+  session_id: string
+  role: string
+  content: string
+  similarity: number
+  created_at: string
+}
+
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatStreamMessage[]>([])
   const sessions = ref<ChatSessionSummary[]>([])
@@ -57,6 +76,9 @@ export const useChatStore = defineStore('chat', () => {
   const isStreaming = ref(false) // 是否正在流式输出
   const abortController = ref<AbortController | null>(null) // 用于取消流式请求
   const lastFetched = ref(0)
+  const searchResults = ref<MessageSearchResult[]>([])
+  const searchQuery = ref('')
+  const isSearching = ref(false)
 
   function isCacheFresh(): boolean {
     return Date.now() - lastFetched.value < 30_000
@@ -111,7 +133,8 @@ export const useChatStore = defineStore('chat', () => {
     modelName: 'gpt-4o-mini',
     temperature: 0.7,
     maxTokens: 2048,
-    adapter: 'none'
+    adapter: 'none',
+    messageFormat: 'openai'
   })
 
   async function askQuestion(
@@ -371,6 +394,35 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
   }
 
+  async function searchMessages(query: string, sessionId: string | null = null): Promise<void> {
+    if (!query || !query.trim()) {
+      searchResults.value = []
+      searchQuery.value = ''
+      return
+    }
+    isSearching.value = true
+    searchQuery.value = query
+    try {
+      const response = await api.post<MessageSearchResult[]>('/chat/search', {
+        query: query.trim(),
+        session_id: sessionId,
+        top_k: 10,
+      })
+      searchResults.value = response.data
+    } catch (error) {
+      console.error('Error searching messages:', error)
+      searchResults.value = []
+      throw error
+    } finally {
+      isSearching.value = false
+    }
+  }
+
+  function clearSearch(): void {
+    searchResults.value = []
+    searchQuery.value = ''
+  }
+
   return {
     messages,
     sessions,
@@ -379,6 +431,9 @@ export const useChatStore = defineStore('chat', () => {
     loading,
     config,
     lastFetched,
+    searchResults,
+    searchQuery,
+    isSearching,
     fetchSessions,
     fetchHistory,
     askQuestion,
@@ -387,6 +442,8 @@ export const useChatStore = defineStore('chat', () => {
     deleteSession,
     updateSessionTitle,
     clearMessages,
+    clearSearch,
+    searchMessages,
     isStreaming
   }
 })

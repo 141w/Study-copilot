@@ -115,20 +115,21 @@ export interface BotColor {
   hex: string
 }
 
-/** Palette du personnalisateur d'origine. */
+/** Palette monochrome (DESIGN.md) : 12 nuances de gris gardant
+ *  les ids d'origine pour la compatibilite des types. */
 export const COLORS: BotColor[] = [
   { id: 'encre', hex: '#0a0a0c' },
-  { id: 'brun', hex: '#8b5e3c' },
-  { id: 'rouge', hex: '#e8483f' },
-  { id: 'orange', hex: '#f08a24' },
-  { id: 'ambre', hex: '#f0b429' },
-  { id: 'vert', hex: '#3ecf8e' },
-  { id: 'turquoise', hex: '#2fbfa0' },
-  { id: 'bleu', hex: '#3b93f0' },
-  { id: 'violet', hex: '#8b5cf6' },
-  { id: 'rose', hex: '#e152b0' },
-  { id: 'gris', hex: '#a3a3a3' },
-  { id: 'creme', hex: '#f1efe9' }
+  { id: 'brun', hex: '#1a1a1e' },
+  { id: 'rouge', hex: '#26262b' },
+  { id: 'orange', hex: '#333338' },
+  { id: 'ambre', hex: '#3f3f44' },
+  { id: 'vert', hex: '#5a5a5f' },
+  { id: 'turquoise', hex: '#6e6e74' },
+  { id: 'bleu', hex: '#8a8a92' },
+  { id: 'violet', hex: '#a6a6ad' },
+  { id: 'rose', hex: '#c9c9d4' },
+  { id: 'gris', hex: '#e0e0e8' },
+  { id: 'creme', hex: '#f0f0fa' }
 ]
 
 export const COLOR_BY_ID = new Map<string, BotColor>(COLORS.map((c) => [c.id, c]))

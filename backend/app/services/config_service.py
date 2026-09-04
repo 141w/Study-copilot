@@ -47,6 +47,7 @@ async def create_or_update_llm_config(
     max_tokens: int,
     embedding_model: str,
     embedding_dimension: int,
+    message_format: str | None = None,
 ) -> dict:
     """Create or upsert LLM config for user."""
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
@@ -62,6 +63,8 @@ async def create_or_update_llm_config(
     else:
         stored_key = existing.api_key if existing else None
 
+    fmt = message_format or "openai"
+
     if existing:
         existing.provider = provider
         existing.api_key = stored_key
@@ -71,6 +74,7 @@ async def create_or_update_llm_config(
         existing.max_tokens = max_tokens
         existing.embedding_model = embedding_model
         existing.embedding_dimension = embedding_dimension
+        existing.message_format = fmt
     else:
         new_config = UserLLMConfig(
             id=config_id,
@@ -83,6 +87,7 @@ async def create_or_update_llm_config(
             max_tokens=max_tokens,
             embedding_model=embedding_model,
             embedding_dimension=embedding_dimension,
+            message_format=fmt,
         )
         db.add(new_config)
 
@@ -96,6 +101,7 @@ async def create_or_update_llm_config(
         "max_tokens": max_tokens,
         "embedding_model": embedding_model,
         "embedding_dimension": embedding_dimension,
+        "message_format": fmt,
         "created_at": "",
         "updated_at": "",
     }
@@ -112,6 +118,7 @@ async def update_llm_config(
     max_tokens: int,
     embedding_model: str,
     embedding_dimension: int,
+    message_format: str = "openai",
 ) -> dict:
     """Update existing LLM config. Raises NotFoundError if none exists."""
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
@@ -129,6 +136,7 @@ async def update_llm_config(
     config.max_tokens = max_tokens
     config.embedding_model = embedding_model
     config.embedding_dimension = embedding_dimension
+    config.message_format = message_format
 
     await db.commit()
 
@@ -189,6 +197,7 @@ def _default_config() -> dict:
         "max_tokens": 2048,
         "embedding_model": "shibing624/text2vec-base-chinese",
         "embedding_dimension": 768,
+        "message_format": "openai",
         "base_url": None,
         "has_api_key": False,
         "api_key_masked": None,
@@ -206,6 +215,7 @@ def _config_to_dict(config: UserLLMConfig) -> dict:
         "max_tokens": config.max_tokens,
         "embedding_model": config.embedding_model,
         "embedding_dimension": config.embedding_dimension,
+        "message_format": config.message_format,
         "created_at": str(config.created_at),
         "updated_at": str(config.updated_at),
     }
