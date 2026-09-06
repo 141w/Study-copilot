@@ -105,3 +105,16 @@ backups/
 
 # Ruff linter cache
 .ruff_cache/
+
+# Agent process artifacts (not deployable)
+archive_docs/
+
+# External project references
+bloub/
+
+# Design comparison reports
+icon-*-report.html
+icon-style-compare.html
+
+# Claude skills lock
+skills-lock.json
