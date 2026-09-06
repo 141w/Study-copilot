@@ -3355,11 +3355,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fd/7b/122376b1fd3c62c1ed9dc80c931ace4844b3c55407b6fb2d199377c9736f/pydantic-2.13.4-py3-none-any.whl", hash = "sha256:45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba", size = 472262, upload-time = "2026-05-06T13:43:02.641Z" },
 ]
 
-[package.optional-dependencies]
-email = [
-    { name = "email-validator" },
-]
-
 [[package]]
 name = "pydantic-core"
 version = "2.46.4"
@@ -4553,6 +4548,7 @@ dependencies = [
     { name = "bcrypt" },
     { name = "docling" },
     { name = "edge-tts" },
+    { name = "email-validator" },
     { name = "faiss-cpu" },
     { name = "fastapi" },
     { name = "greenlet" },
@@ -4564,7 +4560,7 @@ dependencies = [
     { name = "openai" },
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pillow" },
-    { name = "pydantic", extra = ["email"] },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
     { name = "pytesseract" },
@@ -4597,6 +4593,7 @@ requires-dist = [
     { name = "bcrypt", specifier = ">=4.0.0" },
     { name = "docling", specifier = ">=2.0.0" },
     { name = "edge-tts", specifier = ">=6.0.0" },
+    { name = "email-validator", specifier = ">=2.0.0" },
     { name = "faiss-cpu", specifier = ">=1.7.4" },
     { name = "fastapi", specifier = ">=0.109.0" },
     { name = "greenlet", specifier = ">=3.0.0" },
@@ -4609,7 +4606,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.10.0" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pillow", specifier = ">=10.0.0" },
-    { name = "pydantic", extras = ["email"], specifier = ">=2.5.0" },
+    { name = "pydantic", specifier = ">=2.5.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "pymupdf", specifier = ">=1.23.0" },
     { name = "pytesseract", specifier = ">=0.3.10" },

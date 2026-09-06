@@ -547,7 +547,7 @@ async def discuss(
                 p_sys = match.system_message
                 p_role = p_role or match.role
                 p_avatar = p_avatar or match.avatar
-                p_color = p_color or match.color
+                p_color = p_color or match.color or "#6366f1"
 
         personas.append(
             {
