@@ -4,6 +4,7 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from app.core.quiz_generator import QuizGenerator
 
 
@@ -79,9 +80,10 @@ class TestQuizGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_choice_llm_error(self, generator):
+        """LLM 调用失败必须上抛（修复：此前吞错返回 []，静默成功 0 题）。"""
         generator.llm.generate = AsyncMock(side_effect=RuntimeError("API down"))
-        result = await generator.generate_choice("ctx", count=1)
-        assert result == []
+        with pytest.raises(RuntimeError, match="API down"):
+            await generator.generate_choice("ctx", count=1)
 
     @pytest.mark.asyncio
     async def test_generate_choice_limits_count(self, generator):
@@ -202,9 +204,10 @@ class TestQuizGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_short_answer_error(self, generator):
+        """LLM 调用失败必须上抛（修复：此前吞错返回 []）。"""
         generator.llm.generate = AsyncMock(side_effect=Exception("fail"))
-        result = await generator.generate_short_answer("ctx")
-        assert result == []
+        with pytest.raises(Exception, match="fail"):
+            await generator.generate_short_answer("ctx")
 
     @pytest.mark.asyncio
     async def test_generate_short_answer_limits_count(self, generator):
@@ -455,20 +458,16 @@ class TestQuizGeneratorExtended:
 
     @pytest.mark.asyncio
     async def test_generate_quizzes_partial_failure(self, generator):
-        """If one type fails, the other should still return."""
-        call_count = 0
-
+        """任一题型 LLM 调用失败必须整体上抛（修复：此前部分失败被吞，
+        只返回另一题型，用户无从知晓故障）。"""
         async def fake_generate(prompt, **kwargs):
-            nonlocal call_count
-            call_count += 1
             if "选择题" in prompt:
                 raise RuntimeError("API error")
             return json.dumps([{"question": "S1", "answer": "a"}])
 
         generator.llm.generate = fake_generate
-        result = await generator.generate_quizzes("ctx", choice_count=1, short_answer_count=1)
-        assert len(result) == 1
-        assert result[0]["question_type"] == "short_answer"
+        with pytest.raises(RuntimeError, match="API error"):
+            await generator.generate_quizzes("ctx", choice_count=1, short_answer_count=1)
 
     @pytest.mark.asyncio
     async def test_generate_choice_with_surrounding_text(self, generator):

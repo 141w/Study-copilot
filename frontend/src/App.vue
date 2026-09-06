@@ -5,11 +5,11 @@
       <AppSidebar v-if="showSidebar" />
       <main class="flex-1 min-w-0" :class="showSidebar ? 'md:ml-[var(--layout-sidebar-width)]' : ''">
         <router-view v-slot="{ Component }">
-          <keep-alive :include="['QuizView', 'ChatView', 'AnalysisView']">
-            <Transition name="page">
+          <Transition name="page" mode="out-in">
+            <keep-alive :include="['QuizView', 'ChatView', 'AnalysisView']">
               <component :is="Component" />
-            </Transition>
-          </keep-alive>
+            </keep-alive>
+          </Transition>
         </router-view>
       </main>
     </div>

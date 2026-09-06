@@ -170,7 +170,11 @@ class RAGEngine:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": query},
         ]
-        return await llm.chat(messages, temperature=0.7, max_tokens=1024)
+        try:
+            return await llm.chat(messages, temperature=0.7, max_tokens=1024)
+        except Exception as e:
+            # 未分类的供应商异常 → 友好的类型化错误（否则表现为裸 500）
+            raise classify_llm_error(e) from e
 
     async def _summarize_docs(self, doc_ids, user_config=None) -> dict:
         """检索全部文档内容并生成摘要。返回与 ask() 相同的格式。"""
@@ -185,7 +189,7 @@ class RAGEngine:
                 "context_used": False,
             }
 
-        ctx = self.build_context(all_results, max_context_tokens=12000)
+        ctx = self.build_context(all_results, max_context_tokens=60000)
 
         llm = LLM.from_config(user_config)
 
@@ -199,7 +203,11 @@ class RAGEngine:
                 "content": f"请总结以下文档内容：\n\n{ctx}",
             },
         ]
-        answer = await llm.chat(messages, temperature=0.3, max_tokens=2048)
+        try:
+            answer = await llm.chat(messages, temperature=0.3, max_tokens=2048)
+        except Exception as e:
+            # 未分类的供应商异常 → 友好的类型化错误（否则表现为裸 500）
+            raise classify_llm_error(e) from e
 
         sources_list = []
         for i, r in enumerate(all_results[:10]):
@@ -273,7 +281,7 @@ class RAGEngine:
             return []
 
         # Relevance filtering (batch-normalized scores from PgVectorStore)
-        all_results = [r for r in all_results if result_relevance(r) is not None and result_relevance(r) > 1e-6]
+        all_results = [r for r in all_results if (rel := result_relevance(r)) is not None and rel > 1e-6]
 
         # Sort by relevance descending before dedup (ensures stable ordering)
         all_results.sort(key=_relevance_sort_key)
@@ -283,6 +291,7 @@ class RAGEngine:
 
         # CrossEncoder reranking (kept unchanged — application-layer semantic rerank)
         reranker = self._ensure_reranker()
+        reranked = False
         if reranker and len(all_results) > 0:
             try:
                 texts = [r.get("chunk", {}).get("text", "") for r in all_results]
@@ -291,8 +300,12 @@ class RAGEngine:
                 for i, score in enumerate(scores):
                     all_results[i]["reranker_score"] = float(score)
                 all_results.sort(key=lambda x: x.get("reranker_score", float("-inf")), reverse=True)
+                reranked = True
             except Exception as e:
                 logger.warning(f"Reranking failed, using original order: {e}")
+
+        for r in all_results:
+            r["reranked"] = reranked
 
         return all_results[:top_k]
 
@@ -329,7 +342,7 @@ class RAGEngine:
                 self._reranker_loaded = True
         return self._reranker
 
-    def build_context(self, chunks, max_context_tokens: int = 3000):
+    def build_context(self, chunks, max_context_tokens: int = 64000):
         """Build context string from retrieved chunks with token-aware truncation.
 
         Estimates token count as len(text)/2 for Chinese text. If the total
@@ -341,6 +354,10 @@ class RAGEngine:
         for i, r in enumerate(chunks):
             chunk = r.get("chunk", {})
             txt = chunk.get("text", "")
+            meta = chunk.get("metadata", {})
+            # 层级分块感知：若包含父块全文 parent_text，传递完整父块语境给 LLM
+            if isinstance(meta, dict) and meta.get("parent_text"):
+                txt = meta["parent_text"]
             page = chunk.get("page", "")
             source = chunk.get("source", "")
             attrs = f'index="{i + 1}"'
@@ -384,7 +401,8 @@ class RAGEngine:
         return "\n".join(parts)
 
     async def generate_answer(self, query, context, sources_text="", history=None, llm_config=None):
-        system_prompt = render_template("rag/main_qa_system.jinja2")
+        ai_style = llm_config.get("ai_style") if llm_config else None
+        system_prompt = render_template("rag/main_qa_system.jinja2", ai_style=ai_style)
         user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
         messages = [
             {"role": "system", "content": system_prompt},
@@ -406,7 +424,8 @@ class RAGEngine:
     async def generate_answer_stream(
         self, query, context, sources_text="", history=None, llm_config=None
     ):
-        system_prompt = render_template("rag/main_qa_system.jinja2")
+        ai_style = llm_config.get("ai_style") if llm_config else None
+        system_prompt = render_template("rag/main_qa_system.jinja2", ai_style=ai_style)
         user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
         messages = [
             {"role": "system", "content": system_prompt},
@@ -489,7 +508,10 @@ class RAGEngine:
                 "context_used": False,
             }
 
-        ctx = self.build_context(retrieved)
+        ctx_budget = 64000
+        if user_config and user_config.get("context_window"):
+            ctx_budget = max(4000, min(120000, user_config["context_window"] // 2))
+        ctx = self.build_context(retrieved, max_context_tokens=ctx_budget)
         sources_text = self.build_sources_text(retrieved)
         history_context = await self._build_history_context(history, llm)
         answer = await self.generate_answer(
@@ -584,7 +606,7 @@ class RAGEngine:
             if not all_results:
                 yield {"type": "answer", "content": "未找到任何文档内容，请先上传文档。"}
                 return
-            ctx = self.build_context(all_results, max_context_tokens=12000)
+            ctx = self.build_context(all_results, max_context_tokens=60000)
             sources_text = self.build_sources_text(all_results)
             sources_list = []
             for i, r in enumerate(all_results[:10]):
@@ -644,7 +666,10 @@ class RAGEngine:
             }
             return
 
-        ctx = self.build_context(retrieved)
+        ctx_budget = 64000
+        if user_config and user_config.get("context_window"):
+            ctx_budget = max(4000, min(120000, user_config["context_window"] // 2))
+        ctx = self.build_context(retrieved, max_context_tokens=ctx_budget)
         sources_text = self.build_sources_text(retrieved)
 
         sources_list = []

@@ -4,9 +4,10 @@ DocumentVectorStore 被 monkeypatch 为内存 fake，避免真实 embedding。
 """
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db import User
 from app.services import note_service
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class FakeStore:

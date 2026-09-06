@@ -20,7 +20,7 @@ The database layer manages **PostgreSQL connections, ORM models, and migrations*
 | `Document` | `documents` | id, user_id, course_space_id, filename, file_path, status, chunk_count, file_size, deleted_at (soft delete) |
 | `ChatSession` | `chat_sessions` | id, user_id, title, created_at |
 | `Message` | `messages` | id, session_id, role, content, sources, created_at |
-| `Quiz` | `quizzes` | id, document_id, question_type, question, options, answer, explanation, created_at |
+| `Quiz` | `quizzes` | id, document_id (nullable, for course-wide quizzes), question_type, question, options, answer, explanation, created_at |
 | `QuizResult` | `quiz_results` | id, quiz_id, user_id, user_answer, is_correct, submitted_at |
 | `UserLLMConfig` | `user_llm_configs` | id, user_id, provider, api_key, base_url, model_name, temperature, max_tokens, embedding_model, embedding_dimension, created_at, updated_at |
 | `CourseSpace` | `course_spaces` | id, user_id, name, description, color, created_at, updated_at |
@@ -59,3 +59,4 @@ Migration files live in `backend/alembic/versions/`.
 - **Single file for models**: All models in `database.py` for simplicity (could split later)
 - **UUID primary keys**: All models use `uuid.uuid4` as default PK
 - **Soft deletes (2026-08-24)**: documents.deleted_at / notes.deleted_at 标记回收站；DELETE 端点软删可恢复，物理清除走 purge_deleted_* 服务函数（运维脚本用）
+- **Course-wide Quizzes (2026-09-05)**: `quizzes.document_id` nullable migration（`b9a8c7d6e5f4`），允许课程级大纲生成与 OpenMAIC 跨文档测验沉淀入库

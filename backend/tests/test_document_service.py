@@ -2,12 +2,15 @@
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db import Document, User
 from app.exceptions import NotFoundError
 from app.services import document_service
+
 
 @pytest.fixture
 async def user(db_session: AsyncSession) -> User:

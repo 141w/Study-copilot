@@ -10,6 +10,15 @@ vi.mock('@/services/api', () => ({
   },
 }))
 
+vi.mock('@/stores/toast', () => ({
+  useToastStore: vi.fn(() => ({
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  })),
+}))
+
 import { setActivePinia, createPinia } from 'pinia'
 import { useDocumentStore } from '@/stores/document'
 import api from '@/services/api'
@@ -21,6 +30,10 @@ describe('Document Store', () => {
     setActivePinia(createPinia())
     store = useDocumentStore()
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    store.stopPolling()
   })
 
   it('has correct initial state', () => {
@@ -185,6 +198,64 @@ describe('Document Store', () => {
 
       await store.fetchDocuments(true) // forceRefresh
       expect(api.get).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('auto-polling for processing documents', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      store.stopPolling()
+      vi.useRealTimers()
+    })
+
+    it('starts polling when upload returns processing document', async () => {
+      const mockDoc = {
+        id: '3',
+        filename: 'upload.pdf',
+        status: 'processing',
+        chunk_count: 0,
+      }
+      api.post.mockResolvedValue({ data: mockDoc })
+
+      const file = new File(['content'], 'upload.pdf', { type: 'application/pdf' })
+      await store.uploadDocument(file)
+
+      expect(store.isPolling).toBe(true)
+      expect(store.hasProcessingDocuments).toBe(true)
+    })
+
+    it('updates document to ready and stops polling on completion', async () => {
+      store.documents = [
+        { id: '3', filename: 'upload.pdf', status: 'processing', chunk_count: 0 },
+      ]
+      store.startPolling()
+      expect(store.isPolling).toBe(true)
+
+      const readyDocs = [
+        { id: '3', filename: 'upload.pdf', status: 'ready', chunk_count: 12 },
+      ]
+      api.get.mockResolvedValue({ data: readyDocs })
+
+      await vi.advanceTimersByTimeAsync(2600)
+
+      expect(store.documents[0].status).toBe('ready')
+      expect(store.documents[0].chunk_count).toBe(12)
+      expect(store.isPolling).toBe(false)
+      expect(store.hasProcessingDocuments).toBe(false)
+    })
+
+    it('stopPolling cancels timer and sets isPolling to false', () => {
+      store.documents = [
+        { id: '3', filename: 'upload.pdf', status: 'processing', chunk_count: 0 },
+      ]
+      store.startPolling()
+      expect(store.isPolling).toBe(true)
+
+      store.stopPolling()
+      expect(store.isPolling).toBe(false)
     })
   })
 })

@@ -109,6 +109,20 @@ async def restore_doc(
     return {"message": "恢复成功"}
 
 
+@router.post("/{doc_id}/reprocess", response_model=DocProcessResponse)
+async def reprocess_doc(
+    request: Request,
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """重新处理文档（清理旧切片并重新进入解析、切片与向量化流程）。"""
+    if not _upload_limiter.check(request):
+        raise RateLimitError("请求过于频繁，请稍后再试")
+    result = await document_service.reprocess_document(db, current_user, doc_id)
+    return DocProcessResponse(**result)
+
+
 @router.post("/from-url", response_model=DocProcessResponse)
 async def import_from_url(
     request: Request,

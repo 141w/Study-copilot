@@ -13,7 +13,6 @@ from app.main import app
 from app.services import analysis_service
 from app.utils.auth import get_password_hash
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -170,9 +169,12 @@ class TestAnalyzeWrongQuestions:
         await db_session.commit()
 
         # Verify all 6 docs exist with wrong results
-        from app.db import Document
-        from sqlalchemy import select as sa_select, func, case as sa_case
         from sqlalchemy import String as SA_String
+        from sqlalchemy import case as sa_case
+        from sqlalchemy import func
+        from sqlalchemy import select as sa_select
+
+        from app.db import Document
         wrong_stmt2 = (
             sa_select(Document.filename, func.count(QuizResult.id).label("n"))
             .select_from(QuizResult)

@@ -148,11 +148,27 @@ async def _execute_job(job):
                     "常见原因：Embedding 模型下载受网络/代理限制。"
                 ),
             )
+            if job.task_type == "document_process":
+                doc_id = job.payload.get("doc_id")
+                if doc_id:
+                    from app.db import Document
+                    doc = await db.get(Document, doc_id)
+                    if doc and doc.status in ("pending", "processing"):
+                        doc.status = "error"
+                        await db.commit()
         except Exception as e:
             await db.rollback()
             await update_task(
                 db, job.task_id, job.user_id, status="failed", progress=0.0, error=str(e)
             )
+            if job.task_type == "document_process":
+                doc_id = job.payload.get("doc_id")
+                if doc_id:
+                    from app.db import Document
+                    doc = await db.get(Document, doc_id)
+                    if doc and doc.status in ("pending", "processing"):
+                        doc.status = "error"
+                        await db.commit()
 
 
 async def _run_document_process(job, db):
@@ -168,7 +184,16 @@ async def _run_document_process(job, db):
     if not user:
         raise ValueError("User not found")
 
-    chunk_count, method = await _do_process_document(db, user, doc_id)
+    async def progress_cb(p: float, msg: str) -> None:
+        try:
+            await update_task(db, job.task_id, job.user_id, progress=p)
+            logger.debug("Task %s progress %.2f: %s", job.task_id, p, msg)
+        except Exception as exc:
+            logger.warning("Failed to update task progress for %s: %s", job.task_id, exc)
+
+    chunk_count, method = await _do_process_document(
+        db, user, doc_id, progress_callback=progress_cb
+    )
     return {"doc_id": doc_id, "chunk_count": chunk_count, "method": method}
 
 

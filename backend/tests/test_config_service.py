@@ -1,7 +1,11 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db import User
 from app.services import config_service
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.auth import create_access_token
 
 
 @pytest.mark.asyncio
@@ -74,3 +78,219 @@ async def test_get_llm_config_with_secret_returns_none_model_for_new_user(
     result = await config_service.get_llm_config_with_secret(db_session, user)
     assert result["model_name"] is None
     assert result["api_key"] is None
+
+
+@pytest.mark.asyncio
+async def test_test_llm_connection_success(client, db_session: AsyncSession):
+    user = User(
+        id="user-test-llm-1",
+        username="testllm1",
+        email="testllm1@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    token = create_access_token(data={"sub": user.id, "type": "access"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with patch("app.api.config.LLM.generate", new_callable=AsyncMock) as mock_gen:
+        mock_gen.return_value = "连接成功"
+        resp = await client.post(
+            "/api/config/test-llm",
+            json={
+                "provider": "openai",
+                "api_key": "sk-mock-key-12345",
+                "base_url": "https://api.openai.com/v1",
+                "model_name": "gpt-4o-mini",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "连接成功" in data["reply"]
+
+
+@pytest.mark.asyncio
+async def test_test_llm_connection_no_key(client, db_session: AsyncSession):
+    user = User(
+        id="user-test-llm-2",
+        username="testllm2",
+        email="testllm2@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    token = create_access_token(data={"sub": user.id, "type": "access"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.post(
+        "/api/config/test-llm",
+        json={
+            "provider": "openai",
+            "api_key": "",
+            "base_url": "https://api.openai.com/v1",
+            "model_name": "gpt-4o-mini",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is False
+    assert "API Key" in data["message"]
+
+
+@pytest.mark.asyncio
+async def test_test_llm_connection_failure(client, db_session: AsyncSession):
+    user = User(
+        id="user-test-llm-3",
+        username="testllm3",
+        email="testllm3@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    token = create_access_token(data={"sub": user.id, "type": "access"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with patch("app.api.config.LLM.generate", new_callable=AsyncMock) as mock_gen:
+        mock_gen.side_effect = RuntimeError("Quota exceeded: 429")
+        resp = await client.post(
+            "/api/config/test-llm",
+            json={
+                "provider": "openai",
+                "api_key": "sk-mock-key-12345",
+                "base_url": "https://api.openai.com/v1",
+                "model_name": "gpt-4o-mini",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "Quota exceeded" in data["message"]
+
+
+@pytest.mark.asyncio
+async def test_context_window_roundtrip_and_defaults(db_session: AsyncSession):
+    """Test context_window persistence and 256k default."""
+    user = User(
+        id="user-ctx-test",
+        username="ctx_user",
+        email="ctx@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    created = await config_service.create_or_update_llm_config(
+        db_session,
+        user,
+        provider="openai",
+        api_key="sk-test",
+        base_url="https://api.openai.com/v1",
+        model_name="deepseek-chat",
+        temperature=0.7,
+        max_tokens=4096,
+        context_window=262144,
+        embedding_model="shibing624/text2vec-base-chinese",
+        embedding_dimension=768,
+    )
+    assert created["context_window"] == 262144
+
+    updated = await config_service.update_llm_config(
+        db_session,
+        user,
+        provider="openai",
+        api_key=None,
+        base_url="https://api.openai.com/v1",
+        model_name="deepseek-chat",
+        temperature=0.7,
+        max_tokens=4096,
+        embedding_model="shibing624/text2vec-base-chinese",
+        embedding_dimension=768,
+        context_window=131072,
+    )
+    assert updated["context_window"] == 131072
+
+    fetched = await config_service.get_llm_config(db_session, user)
+    assert fetched["context_window"] == 131072
+
+
+@pytest.mark.asyncio
+async def test_system_status_endpoint(client, db_session: AsyncSession):
+    """Test GET /api/config/system-status returns real DB and vector engine stats."""
+    user = User(
+        id="user-sys-status",
+        username="sys_user",
+        email="sys@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    token = create_access_token(data={"sub": user.id, "type": "access"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.get("/api/config/system-status", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert "database" in data
+    assert "document_chunks" in data["database"]
+    assert data["database"]["pgvector_dimension"] == 768
+    assert "vector_engine" in data
+    assert data["vector_engine"]["dimension"] == 768
+    assert "device" in data["vector_engine"]
+
+
+@pytest.mark.asyncio
+async def test_detect_llm_specs_endpoint(client, db_session: AsyncSession):
+    """Test POST /api/config/detect-llm returns detected capabilities."""
+    user = User(
+        id="user-detect-llm",
+        username="detect_user",
+        email="detect@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    token = create_access_token(data={"sub": user.id, "type": "access"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Known vendor model (e.g. deepseek-chat -> 131072)
+    resp = await client.post(
+        "/api/config/detect-llm",
+        json={
+            "provider": "openai",
+            "model_name": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["context_window"] == 131072
+    assert data["source"] == "vendor_spec"
+
+    # 2. Unknown custom model fallback to 256k
+    resp2 = await client.post(
+        "/api/config/detect-llm",
+        json={
+            "provider": "openai",
+            "model_name": "custom-unknown-model-xyz",
+            "base_url": "https://api.custom.com/v1",
+        },
+        headers=headers,
+    )
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert data2["success"] is True
+    assert data2["context_window"] == 262144  # 256k default
+    assert data2["source"] == "default_256k"
+

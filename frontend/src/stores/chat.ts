@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import api, { cancelAll } from '../services/api'
 import { refreshAccessToken } from '../services/authRefresh'
+import { useUserPrefs } from '../composables/useUserPrefs'
 import type { Source } from '../types/models'
 
 /** 反思/思考步骤（后端 thinking 事件负载） */
@@ -15,6 +16,26 @@ export interface DiscussionPersona {
   name: string
   avatar: string
   content: string
+  color?: string
+}
+
+/** Chronological turn in a multi-agent discussion timeline */
+export interface DiscussionTurn {
+  id: string
+  persona: string
+  avatar: string
+  color?: string
+  content: string
+  turn: number
+  isStreaming?: boolean
+}
+
+/** Active speaker state */
+export interface CurrentSpeaker {
+  name: string
+  avatar: string
+  color?: string
+  action?: string
 }
 
 /**
@@ -33,8 +54,15 @@ export interface ChatStreamMessage {
   created_at?: string
   isStreaming?: boolean
   thinking?: string | ThinkingStep[]
-  /** Discussion mode: per-persona content */
+  /** Discussion mode: per-persona content (legacy compatibility) */
   personas?: DiscussionPersona[]
+  /** Discussion mode: chronological timeline turns */
+  discussionTurns?: DiscussionTurn[]
+  /** Current active speaking agent */
+  currentSpeaker?: CurrentSpeaker | null
+  summary?: string
+  summaryStreaming?: boolean
+  error?: string
 }
 
 /** 会话列表条目（后端以 session_id 为键，区别于 models.ChatSession.id） */
@@ -151,11 +179,13 @@ export const useChatStore = defineStore('chat', () => {
       created_at: new Date().toISOString()
     })
 
+    const { prefs } = useUserPrefs()
     try {
       const response = await api.post('/chat/ask', {
         question,
         document_ids: documentIds,
         session_id: sessionId || currentSession.value,
+        config: { ai_style: prefs.value.aiStyle },
         stream: false // 使用非流式接口
       })
 
@@ -215,6 +245,7 @@ export const useChatStore = defineStore('chat', () => {
       isStreaming: true // 标记为流式加载中
     })
 
+    const { prefs } = useUserPrefs()
     async function doFetch(token: string | null): Promise<Response> {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
@@ -225,6 +256,7 @@ export const useChatStore = defineStore('chat', () => {
           question,
           document_ids: documentIds,
           session_id: sessionId || currentSession.value,
+          config: { ai_style: prefs.value.aiStyle },
           stream: true
         }),
         signal: controller.signal
@@ -310,6 +342,20 @@ export const useChatStore = defineStore('chat', () => {
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
                 messages.value[msgIdx].content = data.content || messages.value[msgIdx].content
+              }
+            } else if (data.type === 'error') {
+              // 后端 LLM/检索失败 → 把友好错误写入气泡（此前被静默丢弃，
+              // 用户只看到空白回答停止加载）
+              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+              if (msgIdx !== -1) {
+                const m = messages.value[msgIdx] as { content: string; isStreaming?: boolean }
+                m.isStreaming = false
+                // 已有部分内容时追加（保留已流式输出），否则直接展示错误
+                const errText = typeof data.message === 'string' ? data.message : ''
+                const fallback = '回答生成失败，请稍后重试'
+                m.content = m.content
+                  ? m.content + '\n\n---\n\n' + (errText || fallback)
+                  : (errText || fallback)
               }
             } else if (data.type === 'done') {
               // 流式结束，更新最终状态

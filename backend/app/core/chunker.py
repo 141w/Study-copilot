@@ -719,6 +719,7 @@ class HierarchicalChunker(BaseChunker):
                 child_id = f"{source_name}_{child_global_idx}"
                 rc["id"] = child_id
                 rc["parent_id"] = parent_id
+                rc["parent_text"] = parent["text"]
                 rc["is_parent"] = False
                 rc["source"] = source_name
                 rc["page"] = parent.get("page", 1)
@@ -753,7 +754,13 @@ def deduplicate_chunks(
 
     deduped = [chunks[0]]
     for curr in chunks[1:]:
-        prev_text = deduped[-1].get("text", "")
+        prev = deduped[-1]
+        # 层级分块中，父块与子块绝不能相互合并
+        if prev.get("is_parent", False) != curr.get("is_parent", False):
+            deduped.append(curr)
+            continue
+
+        prev_text = prev.get("text", "")
         curr_text = curr.get("text", "")
         sim = _jaccard_similarity(_normalize_text(prev_text), _normalize_text(curr_text))
         if sim >= similarity_threshold:

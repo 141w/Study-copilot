@@ -1,9 +1,11 @@
 """Tests for course service: CRUD + document associations."""
 
 import uuid
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db import User, CourseSpace, Document
+
+from app.db import CourseSpace, Document, User
 from app.exceptions import NotFoundError
 from app.services import course_service
 

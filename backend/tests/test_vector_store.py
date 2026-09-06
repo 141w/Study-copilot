@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
+
 from app.core.vector_store import (
     BM25VectorStore,
     DocumentVectorStore,

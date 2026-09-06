@@ -38,7 +38,7 @@
 
 | 功能模块 | 功能描述 | 状态 |
 |---------|---------|------|
-| 智能文档解析 | 支持 PDF/DOCX/PPTX 上传，Docling/PyMuPDF 提取文本，自动处理复杂排版和表格 | ✅ 稳定 |
+| 智能文档解析 | 支持 PDF/DOCX/PPTX/TXT/MD 上传，Docling/PyMuPDF 提取文本，自动处理复杂排版和表格 | ✅ 稳定 |
 | RAG 智能问答 | Agentic RAG 架构：查询路由、上下文感知改写、自适应检索、纠错检索、会话摘要、答案自我反思，支持流式输出和引用溯源 | ✅ 稳定 |
 | AI 自动出题 | 根据文档内容自动生成选择题、简答题，带答案解析 | ✅ 稳定 |
 | 错题分析与学习报告 | 智能分析答题结果，识别知识薄弱点，提供个性化学习建议 | ✅ 稳定 |
@@ -54,17 +54,17 @@
 | GSAP 动画 | 页面入场动画、滚动渐现、消息滑入 | ✅ 新增 |
 | 笔记系统 | 手动/AI 笔记，标签管理，语义搜索 | ✅ v2 |
 | 课程空间 | 按课程组织文档和笔记 | ✅ v2 |
-| 内容转换 | 8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释） | ✅ v2 |
+| 内容转换 | 9 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/中英翻译/通俗解释） | ✅ v2 |
 | URL 导入 | 从网页链接提取内容并导入 | ✅ v2 |
 | TTS 语音 | Edge TTS 朗读答案和笔记 | ✅ v2 |
 | 异步任务 | 批量操作，持久化任务队列（重启不丢任务，看门狗超时保护） | ✅ v2 |
 | 凭证加密 | Fernet 加密存储 API Key | ✅ v2 |
 | TypeScript | 前端渐进式 TypeScript 支持，类型安全 | ✅ v3 |
 | 组件复用 | Element Plus 通用组件（el-button 等）| ✅ v3 |
-| Prompt 模板化 | Jinja2 模板管理 27 个 LLM prompt | ✅ v3 |
+| Prompt 模板化 | Jinja2 模板管理 28 个 LLM prompt | ✅ v3 |
 | 设计系统 | CSS 变量系统（间距、字体、颜色、样式） | ✅ v3 |
 | 对话历史语义搜索 | 基于 pgvector 的消息 embedding，支持跨对话语义检索 | ✅ 新增 |
-| OpenMAIC 联动 | 一键生成 AI 课堂（接入清华 OpenMAIC 平台）+ 多智能体讨论模式 | ✅ v3.2 |
+| OpenMAIC 联动 | 一键生成 AI 课堂（接入清华 OpenMAIC 平台，支持配图）+ 4人设多智能体讨论模式 + 双通道自愈轮询 | ✅ v3.2 |
 | AI 课程生成 | 基于文档自动生成课程大纲 + 测验题（本地引擎） | ✅ v3.2 |
 | 多文档问答 | 多文档 CJK 布包，跨文档 RAG 检索 | ✅ v3.2 |
 
@@ -276,7 +276,7 @@ study-copilot/
 │   │   ├── env.py                  # Alembic 环境配置
 │   │   └── versions/               # 迁移脚本
 │   │
-│   ├── tests/                      # 后端测试（420+ 用例）
+│   ├── tests/                      # 后端测试（452 用例）
 │   │   ├── conftest.py
 │   │   ├── test_api.py
 │   │   ├── test_auth.py
@@ -284,14 +284,14 @@ study-copilot/
 │   │   ├── test_rag_engine.py
 │   │   ├── test_quiz.py
 │   │   ├── test_vector_store.py
-│   │   └── ...                     # 30+ 测试文件
+│   │   └── ...                     # 39 个测试文件
 │   │
 │   ├── uploads/                    # 用户上传文件（gitignored）
 │   ├── vectorstore/                # 遗留索引目录（gitignored）
 │   ├── .env.example                # 环境变量模板
 │   ├── requirements.txt            # Python 依赖
 │   ├── run.py                      # 启动脚本（uvicorn app.main:app）
-│   └── pytest.ini                  # 测试配置
+│   └── pyproject.toml              # 项目打包与测试配置（hatchling + pytest）
 │
 ├── frontend/                        # 前端应用
 │   ├── src/
@@ -458,7 +458,8 @@ OPENAI_MODEL=openai/gpt-4o-mini
 
 # ==================== Embedding 配置 ====================
 # 支持 text2vec-base-chinese (768维) 或 BAAI/bge-m3 (1024维)
-# 切换模型后需重新上传文档以生成对应维度的向量索引
+# ⚠️ 当前数据库向量列固定为 768 维：非 768 维模型会在入库预检处被拦截并明确报错。
+# 完整支持需迁移 DB 列维度并重新处理全部文档。
 EMBEDDING_MODEL=shibing624/text2vec-base-chinese
 EMBEDDING_DIMENSION=768
 
@@ -587,12 +588,14 @@ cd frontend && npm run dev
 | `/api/documents/{id}/restore` | POST | 从回收站恢复文档 | JWT |
 | `/api/documents/from-url` | POST | 从网页 URL 导入内容 | JWT |
 
-### 问答接口（RAG）
+### 问答接口（RAG 与讨论）
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
 | `/api/chat/ask` | POST | 提问（普通响应） | JWT |
 | `/api/chat/ask` (stream: true) | POST | 提问（流式 SSE 响应） | JWT |
+| `/api/chat/personas` | GET | 获取多智能体讨论人设预设列表与上下文模式 | JWT |
+| `/api/chat/discuss` | POST | 多智能体人设讨论（SSE 流式，支持角色配置与 context_mode） | JWT |
 | `/api/chat/history` | GET | 获取对话历史列表 | JWT |
 | `/api/chat/history/{id}` | GET | 获取对话详情 | JWT |
 | `/api/chat/history/{id}` | PUT | 更新对话标题 | JWT |
@@ -644,6 +647,7 @@ cd frontend && npm run dev
 |------|------|------|------|
 | `/api/courses` | GET | 获取课程空间列表 | JWT |
 | `/api/courses` | POST | 创建课程空间 | JWT |
+| `/api/courses/generate` | POST | 依据文档包自动生成课程大纲与测验题（本地引擎） | JWT |
 | `/api/courses/{id}` | GET | 获取课程空间详情（含文档和笔记） | JWT |
 | `/api/courses/{id}` | PUT | 更新课程空间 | JWT |
 | `/api/courses/{id}` | DELETE | 删除课程空间 | JWT |
@@ -678,9 +682,11 @@ cd frontend && npm run dev
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
-| `/api/integrations/openmaic/classroom` | POST | 发起课堂生成（接入清华 OpenMAIC） | JWT |
+| `/api/integrations/openmaic/classroom` | POST | 发起课堂生成（接入清华 OpenMAIC，支持配图开关） | JWT |
+| `/api/integrations/openmaic/classroom/{job_id}/status` | GET | 查询课堂生成状态并自动双通道自愈同步课程与测验 | JWT |
 | `/api/integrations/openmaic/classrooms` | GET | 列出已生成课堂 | JWT |
 | `/api/integrations/openmaic/webhook` | POST | OpenMAIC 回调端点 | 否 |
+| `/api/integrations/openmaic/quiz/import` | POST | 导入 OpenMAIC 课堂测验结果到本地错题系统 | JWT |
 
 ---
 
@@ -700,6 +706,7 @@ cd frontend && npm run dev
 | PDF 扫描件 > 10 页 | 提示用户转换为可搜索 PDF | - |
 | DOCX | python-docx | 提取所有段落文本 |
 | PPTX | python-pptx | 提取所有幻灯片文本 |
+| TXT / MD | TextParser | 纯文本/Markdown 直接入库（URL 导入亦走此路径） |
 
 **输出格式：** Markdown 文本，保留文档结构
 
@@ -882,7 +889,7 @@ LLM 调用失败时自动重试：
 | `OPENAI_BASE_URL` | 是 | `https://api.openai.com/v1` | API 端点（OpenRouter 等可覆盖） |
 | `OPENAI_MODEL` | 是 | `gpt-3.5-turbo` | 模型名称 |
 | `EMBEDDING_MODEL` | 否 | `shibing624/text2vec-base-chinese` | Embedding 模型 |
-| `EMBEDDING_DIMENSION` | 否 | `768` | 向量维度（须与模型输出一致，切换模型后需重新上传文档） |
+| `EMBEDDING_DIMENSION` | 否 | `768` | 向量维度（须与模型输出**及数据库列维度**一致；当前列固定 768，非 768 维模型入库会被预检拒绝） |
 | `JWT_SECRET_KEY` | 是 | - | JWT 签名密钥 |
 | `DATABASE_URL` | 否 | `postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot` | 数据库连接 |
 | `UPLOAD_DIR` | 否 | `./uploads` | 上传文件目录 |
@@ -911,7 +918,7 @@ LLM 调用失败时自动重试：
 
 ```bash
 cd backend
-pytest tests/ -v                     # 运行全部测试（420+ 用例）
+pytest tests/ -v                     # 运行全部测试（490 用例，覆盖率 72.52%）
 pytest tests/test_auth.py -v         # 运行单个测试文件
 pytest tests/ --cov=app --cov-report=html  # 生成覆盖率报告
 ```
@@ -920,9 +927,10 @@ pytest tests/ --cov=app --cov-report=html  # 生成覆盖率报告
 
 ```bash
 cd frontend
-npx vitest run                       # 运行全部测试
+npx vitest run                       # 运行全部测试（227 用例，24 测试文件）
 npx vitest                            # 监听模式
 npx vitest run --coverage             # 生成覆盖率报告
+npx vue-tsc --noEmit                 # TypeScript 类型全量检查（0 错误）
 ```
 
 #### 一键测试

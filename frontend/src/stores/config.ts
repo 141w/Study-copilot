@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../services/api'
 import { useChatStore } from './chat'
-import type { LLMConfig } from '../types/models'
+import type { LLMConfig, SystemStatus, LLMCapabilities } from '../types/models'
 
 /**
  * LLM 配置 store（P3-1 收敛后）。
@@ -79,10 +79,69 @@ export const useConfigStore = defineStore('config', () => {
     }
   }
 
+  async function testLLMConfig(testData: {
+    provider: string
+    api_key?: string
+    base_url?: string
+    model_name: string
+    message_format?: string
+  }): Promise<{
+    success: boolean
+    message: string
+    reply?: string
+    latency_ms?: number
+    capabilities?: LLMCapabilities
+  }> {
+    try {
+      const response = await api.post<{
+        success: boolean
+        message: string
+        reply?: string
+        latency_ms?: number
+        capabilities?: LLMCapabilities
+      }>('/config/test-llm', testData)
+      return response.data
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || '网络连接异常'
+      }
+    }
+  }
+
+  async function getSystemStatus(): Promise<SystemStatus | null> {
+    try {
+      const response = await api.get<SystemStatus>('/config/system-status')
+      return response.data
+    } catch (error) {
+      console.error('Failed to get system status:', error)
+      return null
+    }
+  }
+
+  async function detectLLMCapabilities(payload: {
+    provider: string
+    api_key?: string
+    base_url?: string
+    model_name: string
+    message_format?: string
+  }): Promise<LLMCapabilities | null> {
+    try {
+      const response = await api.post<LLMCapabilities>('/config/detect-llm', payload)
+      return response.data
+    } catch (error) {
+      console.error('Failed to detect LLM capabilities:', error)
+      return null
+    }
+  }
+
   return {
     loading,
     fetchLLMConfig,
     saveLLMConfig,
-    syncToChatStore
+    syncToChatStore,
+    testLLMConfig,
+    getSystemStatus,
+    detectLLMCapabilities
   }
 })

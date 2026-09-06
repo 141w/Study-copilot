@@ -139,4 +139,73 @@ describe('Config Store', () => {
 
     expect(localStorage.setItem).not.toHaveBeenCalled()
   })
+
+  it('testLLMConfig posts to /config/test-llm and returns result', async () => {
+    api.post.mockResolvedValue({
+      data: { success: true, message: '连通性测试通过！', reply: '连接成功' }
+    })
+
+    const res = await store.testLLMConfig({
+      provider: 'openai',
+      model_name: 'gpt-4o-mini',
+      base_url: 'https://api.openai.com/v1',
+      api_key: 'sk-test'
+    })
+
+    expect(api.post).toHaveBeenCalledWith('/config/test-llm', expect.objectContaining({
+      provider: 'openai',
+      model_name: 'gpt-4o-mini'
+    }))
+    expect(res.success).toBe(true)
+    expect(res.reply).toBe('连接成功')
+  })
+
+  it('testLLMConfig returns failure object on error', async () => {
+    api.post.mockRejectedValue({
+      response: { data: { detail: 'API Key 无效' } }
+    })
+
+    const res = await store.testLLMConfig({
+      provider: 'openai',
+      model_name: 'gpt-4o-mini'
+    })
+
+    expect(res.success).toBe(false)
+    expect(res.message).toBe('API Key 无效')
+  })
+
+  it('getSystemStatus calls GET /config/system-status', async () => {
+    const mockStatus = {
+      database: { status: 'healthy', document_chunks: 42, pgvector_dimension: 768 },
+      vector_engine: { name: 'FAISS + text2vec-base-chinese', model_name: 'text2vec-base-chinese', dimension: 768, device: 'cpu', is_ready: true },
+      timestamp: '2026-09-06T12:00:00Z'
+    }
+    api.get.mockResolvedValue({ data: mockStatus })
+
+    const res = await store.getSystemStatus()
+    expect(api.get).toHaveBeenCalledWith('/config/system-status')
+    expect(res).toEqual(mockStatus)
+  })
+
+  it('detectLLMCapabilities calls POST /config/detect-llm', async () => {
+    const mockCaps = {
+      success: true,
+      context_window: 262144,
+      max_output_tokens: 8192,
+      source: 'vendor_api',
+      model_name: 'deepseek-chat',
+      latency_ms: 125.4
+    }
+    api.post.mockResolvedValue({ data: mockCaps })
+
+    const res = await store.detectLLMCapabilities({
+      provider: 'openai',
+      model_name: 'deepseek-chat'
+    })
+    expect(api.post).toHaveBeenCalledWith('/config/detect-llm', {
+      provider: 'openai',
+      model_name: 'deepseek-chat'
+    })
+    expect(res).toEqual(mockCaps)
+  })
 })

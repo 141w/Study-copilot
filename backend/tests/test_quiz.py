@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from app.core.quiz_generator import QuizGenerator
 from app.services.quiz_service import _judge_choice, _judge_short_answer
 

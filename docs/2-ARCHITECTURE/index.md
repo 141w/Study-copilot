@@ -27,46 +27,50 @@
 │  ├─────────┤ ├─────────┤ ├─────────┤ ├─────────┤ ├─────────┤   │
 │  │ Notes   │ │ Courses │ │Transform│ │  TTS    │ │ Tasks   │   │
 │  │  API    │ │  API    │ │  API    │ │  API    │ │  API    │   │
-│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘   │
-│       └───────────┴───────────┴───────────┴───────────┘         │
-│                            │                                      │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │                      Core Engine                            │  │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │  │
-│  │  │ Document   │ │  Vector    │ │    LLM     │              │  │
-│  │  │ Parser     │ │  Store     │ │  Caller    │              │  │
-│  │  │ (Docling)  │ │  (FAISS)   │ │(OpenRouter)│              │  │
-│  │  └────────────┘ └────────────┘ └────────────┘              │  │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │  │
-│  │  │  Chunker   │ │   Quiz     │ │  Embedder  │              │  │
-│  │  │            │ │ Generator  │ │  (SBERT)   │              │  │
-│  │  └────────────┘ └────────────┘ └────────────┘              │  │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │  │
-│  │  │ Query     │ │  Answer    │ │  Async     │              │  │
-│  │  │  Router   │ │ Reflector  │ │  Worker    │              │  │
-│  │  └────────────┘ └────────────┘ └────────────┘              │  │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │  │
-│  │  │ Adaptive  │ │Corrective  │ │ Reranker   │              │  │
-│  │  │ Retriever │ │ Retriever  │ │(CrossEnc)  │              │  │
-│  │  └────────────┘ └────────────┘ └────────────┘              │  │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │  │
-│  │  │  URL       │ │ Transform  │ │ Encryption │              │  │
-│  │  │ Extractor  │ │ (8 types)  │ │  (Fernet)  │              │  │
-│  │  │(trafilatura)│            │ │            │              │  │
-│  │  └────────────┘ └────────────┘ └────────────┘              │  │
-│  │  ┌────────────┐ ┌────────────┐                              │  │
-│  │  │ Notes      │ │  Course    │                              │  │
-│  │  │ Vector     │ │  Service   │                              │  │
-│  │  │ Index      │ │            │                              │  │
-│  │  └────────────┘ └────────────┘                              │  │
-│  │  ┌──────────────────────────────────────────┐               │  │
-│  │  │  BM25VectorStore (jieba + RRF fusion)   │               │  │
-│  │  └──────────────────────────────────────────┘               │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                            │                                      │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
-│  │  PostgreSQL  │ │ File Storage │ │ AsyncTasks   │             │
-│  └──────────────┘ └──────────────┘ └──────────────┘             │
+│  ├─────────┤ ├─────────┤ ├─────────┴─────────┴─────────┘   │
+│  │ Metrics │ │OpenMAIC │ │                                         │
+│  │  API    │ │ Bridge  │ │                                         │
+│  └────┬────┘ └────┬────┘ └─────────────────────────────────────────┘
+│       └───────────┴─────────────────────────────────────────────────┐
+│                            │                                        │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │                      Core Engine                            │    │
+│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │    │
+│  │  │ Document   │ │  Vector    │ │    LLM     │              │    │
+│  │  │ Parser     │ │  Store     │ │  Caller    │              │    │
+│  │  │ (Docling)  │ │ (pgvector) │ │(OpenRouter)│              │    │
+│  │  └────────────┘ └────────────┘ └────────────┘              │    │
+│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │    │
+│  │  │  Chunker   │ │   Quiz     │ │  Embedder  │              │    │
+│  │  │            │ │ Generator  │ │  (SBERT)   │              │    │
+│  │  └────────────┘ └────────────┘ └────────────┘              │    │
+│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │    │
+│  │  │ Query      │ │  Answer    │ │  Async     │              │    │
+│  │  │  Router    │ │ Reflector  │ │  Worker    │              │    │
+│  │  └────────────┘ └────────────┘ └────────────┘              │    │
+│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │    │
+│  │  │ Adaptive   │ │Corrective  │ │ Reranker   │              │    │
+│  │  │ Retriever  │ │ Retriever  │ │(CrossEnc)  │              │    │
+│  │  └────────────┘ └────────────┘ └────────────┘              │    │
+│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │    │
+│  │  │  URL       │ │ Transform  │ │ Encryption │              │    │
+│  │  │ Extractor  │ │ (9 types)  │ │  (Fernet)  │              │    │
+│  │  │(trafilatura)│            │ │            │              │    │
+│  │  └────────────┘ └────────────┘ └────────────┘              │    │
+│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐              │    │
+│  │  │ Document   │ │ Persona    │ │ Course     │              │    │
+│  │  │ Bundle     │ │ Discussion │ │ Generator  │              │    │
+│  │  │ (Budget)   │ │ (Multi-Ag) │ │ (Outlines) │              │    │
+│  │  └────────────┘ └────────────┘ └────────────┘              │    │
+│  │  ┌──────────────────────────────────────────┐               │    │
+│  │  │  Legacy VectorStore (FAISS + BM25 + RRF) │               │    │
+│  │  └──────────────────────────────────────────┘               │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                            │                                        │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐               │
+│  │  PostgreSQL  │ │ File Storage │ │ AsyncTasks   │               │
+│  │  + pgvector  │ │ (uploads/)   │ │ (Queue)      │               │
+│  └──────────────┘ └──────────────┘ └──────────────┘               │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -139,6 +143,40 @@ User adds document to course
     → Notes can also be tagged with course_id
 ```
 
+### Multi-Persona Discussion Flow
+
+```
+User selects topic, personas & context mode (ChatView)
+    → POST /api/chat/discuss
+    → If context_mode == "full_docs":
+        → DocumentBundle packs multi-doc context using proportional fair budget (1500 base + dynamic share)
+      Else:
+        → RAGEngine retrieves relevant snippets
+    → PersonaDiscussion runs sequential persona turn chain:
+        → Persona 1 (e.g. 苏老师 / Teacher) introduces and scaffolds
+        → Persona 2 (e.g. 学霸 / Thinker) critiques and deepens
+        → Persona 3 (e.g. 求知同学 / Curious) asks clarifying questions
+        → Persona 4 (e.g. 归纳助手 / Notetaker) summarizes key takeaways
+    → SSE streams `persona_speak` events with token output to frontend
+    → Summary synthesized and appended to conversation history
+```
+
+### OpenMAIC Classroom Integration & Self-Healing Flow
+
+```
+User triggers classroom generation (DocumentView / CourseDetailView)
+    → ClassroomBridgeDialog (select requirement, TTS, Web search, AI Image Generation)
+    → POST /api/integrations/openmaic/classroom
+    → OpenMAIC backend queues generation job (job_id returned)
+    → Study Copilot creates placeholder CourseSpace
+    → Dual-Channel Synchronization:
+        Channel 1 (Active Polling): Frontend polls GET /api/integrations/openmaic/classroom/{job_id}/status
+            → If completed: backend automatically pulls OpenMAIC classroom assets and syncs course & quizzes
+        Channel 2 (Webhook): OpenMAIC pushes completion webhook to POST /api/integrations/openmaic/webhook
+            → HMAC signature verified, course & quizzes synced
+    → Quizzes integrated into Study Copilot error book and learning analytics
+```
+
 ### Async Task Queue
 
 ```
@@ -179,6 +217,7 @@ User uploads document / generates quiz
 - **TypeScript** — Type safety
 - **vue-tsc** — Vue type checking
 - **Pinia** — State management
+- **Element Plus** — UI Component library
 - **TailwindCSS** — Utility-first CSS
 - **Axios** — HTTP client with interceptors
 - **markdown-it** — Markdown rendering
@@ -199,8 +238,10 @@ User uploads document / generates quiz
 | Streaming | SSE (Server-Sent Events) | Simple, works over HTTP, no WebSocket complexity |
 | Auth | JWT tokens | Stateless, standard |
 | Async Tasks | In-process asyncio queue | Simple deployment, no Redis dependency |
-| Templates | Jinja2 | 27 prompt files across 7 subdirectories (rag/quiz/reflector/retriever/router/decomposer/transformations) |
+| Templates | Jinja2 | 30 prompt files across 7 subdirectories (rag/quiz/reflector/retriever/router/decomposer/transformations) |
 | Frontend TS | TypeScript + vue-tsc | Type safety, better IDE support |
+| Document Budgets | Proportional fair budget allocation | Ported from OpenMAIC: 1500 char base + proportional surplus distribution |
+| OpenMAIC Integration | REST Bridge + Webhook + Status Polling | Dual-channel self-healing; independent lifecycle and deployment |
 
 ## Project Structure
 

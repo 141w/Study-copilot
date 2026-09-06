@@ -26,9 +26,12 @@
   background-clip: content-box;
 }
 
-/* 文本选中色：品牌色系，替代浏览器默认蓝 */
+/* 文本选中色：黑白单色系。
+   primary 混 bg-primary 而非 transparent——暗色纯白主色下
+   transparent 混出灰白雾，改与画布混色收敛为可读的深浅灰 */
 ::selection {
-  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 20%, var(--bg-primary));
+  color: var(--text-primary);
 }
 
 /* 统一键盘焦点环（触屏不受影响） */

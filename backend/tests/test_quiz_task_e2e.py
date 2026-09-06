@@ -13,11 +13,12 @@ import asyncio
 import time
 
 import pytest
-from app.core import task_worker
-from app.db import Quiz
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.core import task_worker
+from app.db import Quiz
 
 
 class FakeQuizGenerator:

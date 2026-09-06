@@ -14,7 +14,7 @@ from app.core.transformations import (
     get_transformation,
     list_transformations,
 )
-from app.db import Document, Note, User, UserLLMConfig
+from app.db import Document, DocumentChunk, Note, User, UserLLMConfig
 from app.exceptions import ExternalServiceError, NotFoundError, ValidationError
 from app.services.config_service import get_llm_config_with_secret
 
@@ -139,25 +139,30 @@ async def transform_document_chunks(
 
     Returns dict with keys: transform_type, result, source_title, document_id
     """
-    from app.core.vector_store import DocumentVectorStore
-
     result = await db.execute(
-        select(Document).where(Document.id == doc_id, Document.user_id == user.id)
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == user.id,
+            Document.deleted_at.is_(None),
+        )
     )
     doc = result.scalar_one_or_none()
     if not doc:
         raise NotFoundError("文档不存在")
 
-    # Get chunks from vector store
-    store = DocumentVectorStore(doc_id)
-    await store.load()
-
-    chunks = store._store.chunks if store._store.chunks else []
-    if not chunks:
+    # Get chunks from database (replaces file-based DocumentVectorStore)
+    chunk_result = await db.execute(
+        select(DocumentChunk.content)
+        .where(DocumentChunk.document_id == doc_id)
+        .order_by(DocumentChunk.chunk_index)
+        .limit(30)
+    )
+    chunk_contents = [c[0] for c in chunk_result.all() if c[0] and c[0].strip()]
+    if not chunk_contents:
         raise ValidationError("文档内容为空")
 
     # Combine chunks (limit to avoid context overflow)
-    combined = "\n\n".join(c.get("text", "") for c in chunks[:30] if c.get("text"))
+    combined = "\n\n".join(chunk_contents)
 
     filename = str(doc.filename) if doc.filename else ""
 

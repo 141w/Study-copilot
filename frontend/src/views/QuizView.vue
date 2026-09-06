@@ -32,28 +32,24 @@
         />
       </div>
 
-      <div class="flex gap-4 items-end mb-4">
-        <div class="flex-1">
-          <label for="quiz-choice-count" class="block text-sm text-[var(--text-secondary)] mb-2">选择题数量</label>
-          <input
-            id="quiz-choice-count"
-            v-model.number="config.choiceCount"
-            type="number"
-            min="1"
-            max="10"
-            class="input"
+      <div class="flex flex-wrap gap-4 items-end mb-4">
+        <div class="flex-1 min-w-[140px]">
+          <label class="block text-sm text-[var(--text-secondary)] mb-2">选择题数量</label>
+          <el-input-number
+            v-model="config.choiceCount"
+            :min="1"
+            :max="10"
+            class="!w-full"
           />
         </div>
 
-        <div class="flex-1">
-          <label for="quiz-short-count" class="block text-sm text-[var(--text-secondary)] mb-2">简答题数量</label>
-          <input
-            id="quiz-short-count"
-            v-model.number="config.shortAnswerCount"
-            type="number"
-            min="1"
-            max="5"
-            class="input"
+        <div class="flex-1 min-w-[140px]">
+          <label class="block text-sm text-[var(--text-secondary)] mb-2">简答题数量</label>
+          <el-input-number
+            v-model="config.shortAnswerCount"
+            :min="1"
+            :max="5"
+            class="!w-full"
           />
         </div>
 
@@ -61,6 +57,7 @@
           @click="generateQuiz"
           :disabled="generating || quizStore.loading || selectedDocs.length === 0"
           type="primary"
+          class="!h-8"
         >
           {{ (generating || quizStore.loading) ? '生成中...' : '生成题目' }}
         </el-button>
@@ -120,11 +117,12 @@
 
         <!-- Short Answer Input -->
         <div v-else-if="quiz.question_type === 'short_answer'" class="mb-4 ml-9">
-          <textarea
+          <el-input
             v-model="selectedAnswers[quiz.id]"
+            type="textarea"
+            :rows="3"
             placeholder="请输入答案..."
-            class="input h-24"
-          ></textarea>
+          />
         </div>
 
         <!-- Submit Button (practice mode only) -->
@@ -231,6 +229,7 @@ import { useDocumentStore } from '../stores/document'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
 import api from '../services/api'
 import { useReducedMotion } from '../composables/useReducedMotion'
+import { useUserPrefs } from '../composables/useUserPrefs'
 
 /** 错题条目（/quiz/wrong-questions 响应） */
 interface WrongQuestion {
@@ -247,10 +246,11 @@ const quizStore = useQuizStore()
 const documentStore = useDocumentStore()
 // P1-1：GSAP 动画降级（prefers-reduced-motion）
 const { prefersReduced } = useReducedMotion()
+const { prefs } = useUserPrefs()
 
 const config = ref({
-  choiceCount: 3,
-  shortAnswerCount: 2
+  choiceCount: prefs.value.defaultChoiceCount ?? 5,
+  shortAnswerCount: prefs.value.defaultShortCount ?? 2
 })
 
 const selectedDocs = ref<string[]>([])

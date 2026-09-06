@@ -24,8 +24,11 @@ frontend/
 │   │   ├── ProfileView.vue    # User profile & password settings
 │   ├── components/
 │   │   ├── chat/
-│   │   │   ├── ChatHistoryPanel.vue  # Conversation history sidebar
-│   │   │   ├── ChatInput.vue         # Message input with document selector
+│   │   │   ├── ChatDiscussionItem.vue # Multi-agent persona discussion message item
+│   │   │   ├── ChatHistoryPanel.vue   # Conversation history sidebar
+│   │   │   ├── ChatInput.vue          # Message input with document & persona selector
+│   │   │   ├── ChatMessageItem.vue    # Chat message bubble with citations
+│   │   │   └── ChatSourceCards.vue    # Expandable source citation cards
 │   │   ├── common/
 │   │   │   ├── AppHeader.vue         # Top navigation bar (el-dropdown + theme toggle)
 │   │   │   ├── AppSidebar.vue        # Side navigation (el-menu with router)
@@ -35,7 +38,7 @@ frontend/
 │   │   │   ├── PageHeader.vue        # Page-level header with breadcrumb
 │   │   │   ├── SkeletonList.vue      # Skeleton loading for list views
 │   │   ├── integrations/
-│   │   │   ├── ClassroomBridgeDialog.vue  # Classroom platform integration
+│   │   │   ├── ClassroomBridgeDialog.vue  # Classroom platform integration (with image gen toggle)
 │   │   │   ├── OpenMAICLinkCard.vue        # OpenMAIC content link card
 │   │   ├── CopilotBotAvatar.vue     # Bot persona/avatar engine
 │   │   ├── CourseCard.vue           # Course space preview card (TypeScript)
@@ -52,7 +55,7 @@ frontend/
 │   │   ├── course.ts         # Course spaces, document associations
 │   │   ├── document.ts       # Document list, upload state
 │   │   ├── note.ts           # Notes list, tags, search, filters
-│   │   ├── openmaic.ts       # OpenMAIC integration state
+│   │   ├── openmaic.ts       # OpenMAIC integration, job status polling & auto-sync
 │   │   ├── quiz.ts           # Quiz state, answers, results
 │   │   ├── sidebar.ts        # Sidebar navigation state
 │   │   ├── theme.ts          # Light/dark theme state
@@ -80,14 +83,30 @@ frontend/
 │   ├── env.d.ts              # TypeScript environment declarations
 │   ├── App.vue               # Root component (layout shell)
 │   └── main.ts               # App bootstrap
-├── tests/                    # Vitest test suite
+├── tests/                    # Vitest test suite (17 SPA test files)
 │   ├── setup.js
 │   ├── components/
+│   │   ├── ChatMessageItem.test.js
+│   │   ├── ConfirmDialog.test.js
 │   │   └── UploadView.test.js
+│   ├── composables/
+│   │   ├── chatExport.test.js
+│   │   └── useFormat.test.js
+│   ├── services/
+│   │   └── api.test.js
 │   ├── stores/
 │   │   ├── auth.test.js
 │   │   ├── chat.test.js
-│   │   ├── quiz.test.js
+│   │   ├── chat.title.test.js
+│   │   ├── chat.sse-error.test.js
+│   │   ├── config.test.js
+│   │   ├── document.test.js
+│   │   ├── note.test.js
+│   │   ├── openmaic.test.ts
+│   │   └── quiz.test.js
+│   └── views/
+│       ├── AnalysisView.test.js
+│       └── ProfileView.test.js
 ├── tsconfig.json             # TypeScript configuration
 ├── tsconfig.node.json        # Node TypeScript config
 ├── vitest.config.js          # Test configuration
@@ -222,8 +241,8 @@ npm run preview    # Preview production build
 | HTTP | Axios 1.6 with JWT interceptors + auto-refresh |
 | Rendering | markdown-it 14.1 + highlight.js 11.9 |
 | Animations | GSAP 3.15 |
-| Testing | Vitest 4.1 + Vue Test Utils 2.4 + Testing Library |
-| Type Check | vue-tsc |
+| Testing | Vitest 4.1 + Vue Test Utils 2.4 + Testing Library (24 test files, 227 passed) |
+| Type Check | vue-tsc (0 errors) |
 | Lint | ESLint 10.x + eslint-plugin-vue 10.x |
 | Format | Prettier |
 

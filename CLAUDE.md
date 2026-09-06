@@ -15,22 +15,22 @@ This file provides architectural guidance for contributors working on Study Copi
 - **主题系统**: Light/Dark 主题切换，CSS 变量驱动
 - **响应式布局**: 移动端适配，自适应侧边栏，用户菜单
 - **通用组件**: AppHeader、AppSidebar、ConfirmDialog、PageHeader、SkeletonList、EmptyState、DocumentPicker
-- **功能组件**: CopilotBotAvatar、CourseCard、NoteCard、NoteEditor、TaskPanel、TransformDialog、TTSPlayer、UrlImportDialog、ChatHistoryPanel、ChatInput、ClassroomBridgeDialog、OpenMAICLinkCard、IconSet
+- **功能组件**: CopilotBotAvatar、CourseCard、NoteCard、NoteEditor、TaskPanel、TransformDialog、TTSPlayer、UrlImportDialog、ChatHistoryPanel、ChatInput、ChatDiscussionItem、ChatMessageItem、ChatSourceCards、ClassroomBridgeDialog、OpenMAICLinkCard、IconSet
 
-### v2 Features
+### v2 / v3 Features
 - **Agentic RAG**: 查询路由、上下文感知改写、自适应检索（4种策略）、纠错检索、会话摘要、答案自我反思
-- **混合检索**: FAISS语义检索 + BM25关键词检索 + RRF融合
+- **混合检索**: pgvector 语义检索 + PostgreSQL 中文全文检索 + RRF融合（生产）；FAISS+BM25 文件索引仅作 legacy 兼容
 - **笔记系统**: 手动/AI 笔记，标签管理，语义搜索
 - **课程空间**: 按课程组织文档和笔记
-- **内容转换**: 8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释）
+- **内容转换**: 9 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/中英翻译/通俗解释）
 - **URL 导入**: 从网页链接提取内容
 - **TTS 语音**: Edge TTS 朗读答案和笔记
 - **异步任务**: 批量操作，后台任务队列
 - **凭证加密**: Fernet 加密存储 API Key
-- **OpenMAIC 集成**: 课程文档自动生成（course_generator）, 人设讨论（persona_discussion）, 文档包（document_bundle）
-- **课堂桥接**: ClassroomBridge 对话框和 OpenMAICLinkCard 前端组件
+- **OpenMAIC 深度融合**: 课程文档自动生成（course_generator）, 4人设多智能体讨论（persona_discussion）, 多文档公平预算布包（document_bundle）, 双通道状态轮询与自愈（openmaic_bridge / openmaic_service）
+- **课堂桥接与配图**: ClassroomBridge 对话框（支持 AI 图像生成开关）和 OpenMAICLinkCard 前端组件
 - **数据库迁移**: Alembic
-- **代码质量**: Ruff linter
+- **代码质量**: Ruff linter + mypy + vue-tsc
 
 **Key Values**: Local-first embedding, multi-provider LLM support, Chinese-language optimized, self-hosted.
 
@@ -45,7 +45,7 @@ This file provides architectural guidance for contributors working on Study Copi
 ├──────────────────────────────────────────────┤
 │ - 14 views (Home, Login, Register, Upload, Document, Chat, Quiz, Analysis, ModelConfig, CourseList, CourseDetail, Notes, Tasks, Profile) │
 │ - 11 Pinia stores                             │
-│ - 7 common components + 13 feature components │
+│ - 7 common components + 16 feature components │
 │ - TailwindCSS + GSAP styling                  │
 │ - Axios HTTP client with JWT interceptors    │
 └──────────────────┬───────────────────────────┘
@@ -89,7 +89,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Auth**: JWT via python-jose + passlib (bcrypt)
 - **Validation**: Pydantic v2 + pydantic-settings
 - **Migrations**: Alembic
-- **Testing**: pytest + pytest-asyncio + pytest-cov
+- **Testing**: pytest + pytest-asyncio + pytest-cov (39 test files, 490 passed, 72.52% coverage)
 
 ### Frontend (`frontend/`)
 - **Framework**: Vue 3.4 (Composition API with `<script setup lang="ts">`)
@@ -101,7 +101,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - **HTTP**: Axios 1.6 with JWT interceptors + auto-refresh
 - **Rendering**: markdown-it 14.1 + highlight.js 11.9
 - **Animations**: GSAP 3.15
-- **Testing**: Vitest 4.1 + Vue Test Utils 2.4 + Testing Library
+- **Testing**: Vitest 4.1 + Vue Test Utils 2.4 + Testing Library (24 test files, 227 passed)
 - **UI Library**: Element Plus 2.14 (auto-imported via unplugin-vue-components)
 
 ### Backend Internal Modules (`backend/app/`)
@@ -118,12 +118,12 @@ This file provides architectural guidance for contributors working on Study Copi
 | `query_decomposer.py` | Query decomposition + entity extraction |
 | `answer_reflector.py` | Answer quality self-reflection |
 | `document_parser.py` | Factory: Docling / PyMuPDF / python-docx / python-pptx |
-| `document_bundle.py` | Document bundle management for course generation |
+| `document_bundle.py` | Multi-document proportional fair budget packing for LLM context |
 | `course_generator.py` | Auto-generate course structure from documents |
-| `persona_discussion.py` | AI persona-based discussion mode |
+| `persona_discussion.py` | Multi-agent sequential persona discussion (4 presets + custom) |
 | `chunker.py` | Fixed / Semantic / Hierarchical chunking |
 | `quiz_generator.py` | LLM-based question generation |
-| `transformations.py` | 8 transformation types (summary/keypoints/outline/flashcards/mindmap/qa/translate/explain) |
+| `transformations.py` | 9 transformation types (summary/keypoints/outline/flashcards/mindmap/qa/translate_en/translate_zh/explain) |
 | `encryption.py` | Fernet credential encryption |
 | `tts.py` | Edge TTS wrapper |
 | `url_extractor.py` | Web content extraction |
@@ -144,7 +144,7 @@ This file provides architectural guidance for contributors working on Study Copi
 | `course_service.py` | Course CRUD, document associations, auto-generation |
 | `document_service.py` | Upload, delete, list, get documents, document bundling |
 | `note_service.py` | Notes CRUD, tagging, semantic search |
-| `openmaic_service.py` | OpenMAIC integration, course broadcasting |
+| `openmaic_service.py` | OpenMAIC integration, course broadcasting, status polling & self-healing |
 | `quiz_service.py` | Quiz generation, submission, history |
 | `task_service.py` | Async task CRUD, cancel, recover interrupted |
 | `transform_service.py` | Content transformation orchestration |
@@ -152,7 +152,7 @@ This file provides architectural guidance for contributors working on Study Copi
 #### Other
 - **Middleware**: `trace.py` — TraceIdMiddleware (X-Trace-ID propagation, structured logs via ContextVar)
 - **Utils**: `auth.py` — Password hashing (bcrypt), JWT create/decode, get_current_user
-- **Templates**: 28 .jinja2 prompt files across 7 directories (rag/, quiz/, reflector/, retriever/, router/, decomposer/, transformations/)
+- **Templates**: 30 .jinja2 prompt files across 7 directories (rag/, quiz/, reflector/, retriever/, router/, decomposer/, transformations/)
 - **Additional API**: `openmaic_bridge.py` — OpenMAIC/classroom integration endpoints
 - **No `schemas/` directory**: Pydantic schemas defined inline in each router
 - **No `models/` directory**: ORM models defined in `app/db/database.py`
@@ -169,7 +169,7 @@ This file provides architectural guidance for contributors working on Study Copi
 
 #### Frontend Components
 - **Common**: `AppHeader.vue` (theme toggle, mobile menu, user dropdown), `AppSidebar.vue` (responsive nav, doc list), `ConfirmDialog.vue`, `PageHeader.vue`, `SkeletonList.vue`, `EmptyState.vue`, `DocumentPicker.vue`
-- **Feature**: `CopilotBotAvatar.vue`, `CourseCard.vue`, `NoteCard.vue`, `NoteEditor.vue`, `TaskPanel.vue`, `TransformDialog.vue`, `TTSPlayer.vue`, `UrlImportDialog.vue`, `ChatHistoryPanel.vue`, `ChatInput.vue`, `ClassroomBridgeDialog.vue`, `OpenMAICLinkCard.vue`, `IconSet` (icon registry)
+- **Feature**: `CopilotBotAvatar.vue`, `CourseCard.vue`, `NoteCard.vue`, `NoteEditor.vue`, `TaskPanel.vue`, `TransformDialog.vue`, `TTSPlayer.vue`, `UrlImportDialog.vue`, `ChatHistoryPanel.vue`, `ChatInput.vue`, `ChatDiscussionItem.vue`, `ChatMessageItem.vue`, `ChatSourceCards.vue`, `ClassroomBridgeDialog.vue`, `OpenMAICLinkCard.vue`, `IconSet` (icon registry)
 - **Note**: Base 通用组件（BaseDialog, BaseButton, BaseInput 等）使用 Element Plus 直接实现，无需自建。
 
 ---

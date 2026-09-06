@@ -347,24 +347,136 @@ Search across chat messages using vector similarity.
 
 ---
 
+### Get Persona List & Presets
+```
+GET /api/chat/personas
+```
+Get available persona presets and user custom personas (persisted in database).
+
+**Headers:** `Authorization: Bearer ***` (optional; if authenticated, returns custom personas as well)  
+**Response:** `200 OK`
+```json
+{
+  "personas": [
+    {
+      "id": "teacher",
+      "name": "苏老师",
+      "role": "teacher",
+      "avatar": "User",
+      "color": "#3b82f6",
+      "system_message": "...",
+      "is_custom": false
+    },
+    {
+      "id": "custom-uuid-1",
+      "name": "苏格拉底",
+      "role": "custom_socrates",
+      "avatar": "Brain",
+      "color": "#8b5cf6",
+      "system_message": "...",
+      "is_custom": true,
+      "created_at": "2026-09-06T05:00:00"
+    }
+  ],
+  "presets": [...],
+  "custom": [...]
+}
+```
+
+---
+
+### Create Custom Persona
+```
+POST /api/chat/personas
+```
+Create a new user-defined persona for multi-agent discussions, persisted in the database.
+
+**Headers:** `Authorization: Bearer ***`  
+**Request Body:**
+```json
+{
+  "name": "苏格拉底",
+  "avatar": "Brain",
+  "color": "#8b5cf6",
+  "system_message": "你是一位古希腊哲学家，善于用反问法引导学生思考并发现认知漏洞。",
+  "role": "custom_socrates"
+}
+```
+**Response:** `200 OK` (returns created persona object with `is_custom: true`)
+
+---
+
+### Update Custom Persona
+```
+PUT /api/chat/personas/{persona_id}
+```
+Update an existing user-defined persona. Ownership is strictly validated.
+
+**Headers:** `Authorization: Bearer ***`  
+**Request Body:**
+```json
+{
+  "name": "辩证法苏格拉底",
+  "avatar": "Lightning",
+  "color": "#8b5cf6",
+  "system_message": "更新后的人设描述..."
+}
+```
+**Response:** `200 OK`
+
+---
+
+### Delete Custom Persona
+```
+DELETE /api/chat/personas/{persona_id}
+```
+Delete a custom persona belonging to the current user.
+
+**Headers:** `Authorization: Bearer ***`  
+**Response:** `200 OK`
+```json
+{
+  "message": "角色已删除",
+  "id": "custom-uuid-1"
+}
+```
+
+---
+
 ### Multi-Persona Discussion
 ```
 POST /api/chat/discuss
 ```
-Stream a multi-persona discussion on a topic, optionally enriched with RAG context.
+Stream a multi-persona sequential discussion on a topic, optionally enriched with document context via RAG snippets or fair-budget full document bundle.
 
 **Headers:** `Authorization: Bearer ***`
 **Request Body:**
 ```json
 {
-  "question": "The topic to discuss",
+  "question": "请讨论 Transformer 架构中自注意力机制的计算复杂度与优化方案",
   "document_ids": ["uuid-1"],
+  "context_mode": "rag_snippets",
   "personas": [
-    { "name": "Expert", "system_message": "You are a domain expert..." }
+    "teacher",
+    "thinker",
+    {
+      "name": "算法工程师",
+      "role": "工程实践专家",
+      "avatar": "💻",
+      "system_message": "你是一名资深工程专家，重点关注 FlashAttention 等显存与推理优化工程落地..."
+    }
   ],
   "max_turns": 2
 }
 ```
+
+**Parameters:**
+- `question` *(string, required)*: The discussion topic.
+- `document_ids` *(list[string], optional)*: Associated documents for background context.
+- `context_mode` *(string, optional)*: `"rag_snippets"` (default, adaptive vector retrieval) or `"full_docs"` (proportional fair budget document packing).
+- `personas` *(list[string|object], optional)*: List of preset IDs (`"teacher"`, `"thinker"`, `"curious"`, `"notetaker"`) or custom persona objects (`{"name", "role", "avatar", "system_message"}`). Defaults to `["teacher", "thinker"]`.
+- `max_turns` *(integer, optional)*: Discussion round count (default `2`, max `5`).
+
 **Response:** `text/event-stream` (SSE). Events: `persona_speak` / `summary` / `error` / `done`.
 
 ---
@@ -974,6 +1086,7 @@ Trigger OpenMAIC classroom generation from selected documents. Requires OpenMAIC
   "requirement": "string (max 500 chars)",
   "enable_web_search": false,
   "enable_tts": true,
+  "enable_image_generation": false,
   "agent_mode": "default"
 }
 ```
@@ -986,6 +1099,27 @@ Trigger OpenMAIC classroom generation from selected documents. Requires OpenMAIC
   "poll_url": "https://openmaic.example.com/poll/...",
   "course_id": "uuid",
   "message": "课堂生成已排队"
+}
+```
+
+---
+
+### Get Classroom Status & Auto-Sync
+```
+GET /api/integrations/openmaic/classroom/{job_id}/status
+```
+Query the generation progress and status of an OpenMAIC classroom job. Provides **dual-channel self-healing**: if the job is completed in OpenMAIC, this endpoint automatically pulls generated outlines/scenes and synchronizes the course space and quizzes into Study Copilot without relying exclusively on webhook callbacks.
+
+**Headers:** `Authorization: Bearer ***`  
+**Response:** `200 OK`
+```json
+{
+  "job_id": "job-12345",
+  "status": "completed",
+  "progress": 100,
+  "stage": "persisting",
+  "classroom_url": "https://openmaic.example.com/classroom/cls-123",
+  "synced": true
 }
 ```
 

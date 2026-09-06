@@ -1,17 +1,18 @@
 import json
 import logging
+import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from sqlalchemy import select
+from pydantic import BaseModel, Field
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, get_optional_user
 from app.core.rate_limit import IPRateLimiter
-from app.db import Document, User, get_db
-from app.exceptions import RateLimitError
+from app.db import CustomPersona, Document, User, get_db
+from app.exceptions import NotFoundError, RateLimitError, ValidationError
 from app.services import chat_service
 
 router = APIRouter(prefix="/chat", tags=["问答"])
@@ -48,9 +49,30 @@ class AskResponse(BaseModel):
     session_id: str
 
 
+class CreatePersonaReq(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50)
+    system_message: str = Field(..., min_length=1, max_length=4000)
+    role: str | None = Field(None, max_length=50)
+    avatar: str = Field("User", max_length=50)
+    color: str | None = Field("#6366f1", max_length=20)
+
+
+class UpdatePersonaReq(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=50)
+    system_message: str | None = Field(None, min_length=1, max_length=4000)
+    role: str | None = Field(None, max_length=50)
+    avatar: str | None = Field(None, max_length=50)
+    color: str | None = Field(None, max_length=20)
+
+
 class PersonaConfig(BaseModel):
-    name: str
-    system_message: str
+    name: str | None = None
+    system_message: str | None = None
+    role: str | None = None
+    avatar: str | None = None
+    color: str | None = None
+    id: str | None = None
+    is_custom: bool | None = False
 
 
 class DiscussRequest(BaseModel):
@@ -236,6 +258,165 @@ async def search_messages(
     return [SearchResult(**r) for r in results]
 
 
+@router.get("/personas")
+async def list_personas(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    """获取多智能体讨论模式角色列表（内置预置角色 + 当前用户的自定义角色）。"""
+    from app.core.persona_discussion import get_persona_presets
+
+    presets = get_persona_presets()
+    result_presets = [{**p, "is_custom": False} for p in presets]
+
+    custom_personas = []
+    if current_user:
+        result = await db.execute(
+            select(CustomPersona)
+            .where(CustomPersona.user_id == current_user.id)
+            .order_by(CustomPersona.created_at.asc())
+        )
+        for cp in result.scalars().all():
+            custom_personas.append(
+                {
+                    "id": cp.id,
+                    "name": cp.name,
+                    "role": cp.role,
+                    "avatar": cp.avatar,
+                    "color": cp.color or "#6366f1",
+                    "system_message": cp.system_message,
+                    "is_custom": True,
+                    "created_at": cp.created_at.isoformat() if cp.created_at else None,
+                }
+            )
+
+    return {
+        "personas": result_presets + custom_personas,
+        "presets": result_presets,
+        "custom": custom_personas,
+    }
+
+
+@router.post("/personas")
+async def create_persona(
+    req: CreatePersonaReq,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """创建当前用户的自定义研讨角色，存入数据库。"""
+    name = req.name.strip()
+    if not name:
+        raise ValidationError("角色名称不能为空")
+    system_message = req.system_message.strip()
+    if not system_message:
+        raise ValidationError("人设提示词不能为空")
+
+    persona_id = str(uuid.uuid4())
+    role = req.role.strip() if req.role else f"custom_{persona_id[:8]}"
+
+    persona = CustomPersona(
+        id=persona_id,
+        user_id=current_user.id,
+        name=name,
+        role=role,
+        avatar=req.avatar.strip() or "User",
+        color=req.color.strip() if req.color else "#6366f1",
+        system_message=system_message,
+    )
+    db.add(persona)
+    await db.commit()
+    await db.refresh(persona)
+
+    return {
+        "id": persona.id,
+        "name": persona.name,
+        "role": persona.role,
+        "avatar": persona.avatar,
+        "color": persona.color,
+        "system_message": persona.system_message,
+        "is_custom": True,
+        "created_at": persona.created_at.isoformat() if persona.created_at else None,
+    }
+
+
+@router.put("/personas/{persona_id}")
+async def update_persona(
+    persona_id: str,
+    req: UpdatePersonaReq,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """修改当前用户的自定义研讨角色。"""
+    result = await db.execute(
+        select(CustomPersona).where(
+            CustomPersona.id == persona_id,
+            CustomPersona.user_id == current_user.id,
+        )
+    )
+    persona = result.scalar_one_or_none()
+    if not persona:
+        raise NotFoundError("自定义角色不存在或无权操作")
+
+    if req.name is not None:
+        name = req.name.strip()
+        if not name:
+            raise ValidationError("角色名称不能为空")
+        persona.name = name
+
+    if req.system_message is not None:
+        sm = req.system_message.strip()
+        if not sm:
+            raise ValidationError("人设提示词不能为空")
+        persona.system_message = sm
+
+    if req.avatar is not None:
+        persona.avatar = req.avatar.strip() or "User"
+
+    if req.color is not None:
+        persona.color = req.color.strip() or "#6366f1"
+
+    if req.role is not None:
+        r = req.role.strip()
+        if r:
+            persona.role = r
+
+    await db.commit()
+    await db.refresh(persona)
+
+    return {
+        "id": persona.id,
+        "name": persona.name,
+        "role": persona.role,
+        "avatar": persona.avatar,
+        "color": persona.color,
+        "system_message": persona.system_message,
+        "is_custom": True,
+        "created_at": persona.created_at.isoformat() if persona.created_at else None,
+    }
+
+
+@router.delete("/personas/{persona_id}")
+async def delete_persona(
+    persona_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """删除当前用户的自定义研讨角色。"""
+    result = await db.execute(
+        select(CustomPersona).where(
+            CustomPersona.id == persona_id,
+            CustomPersona.user_id == current_user.id,
+        )
+    )
+    persona = result.scalar_one_or_none()
+    if not persona:
+        raise NotFoundError("自定义角色不存在或无权操作")
+
+    await db.delete(persona)
+    await db.commit()
+    return {"message": "角色已删除", "id": persona_id}
+
+
 @router.post("/discuss")
 async def discuss(
     request: Request,
@@ -252,8 +433,10 @@ async def discuss(
         raise RateLimitError("请求过于频繁，请稍后再试")
 
     # 加载 LLM 配置
-    from app.services.config_service import get_llm_config_with_secret
-    user_config = await get_llm_config_with_secret(db, current_user)
+    user_config = None
+    if current_user:
+        from app.services.config_service import get_llm_config_with_secret
+        user_config = await get_llm_config_with_secret(db, current_user)
 
     # 可选上下文（批次10：接入 document_bundle，两种模式）
     # 安全修复：doc_ids 先过归属校验——原实现（含 rag_snippets 路径）直接把
@@ -261,18 +444,21 @@ async def discuss(
     context = ""
     doc_ids = req.document_ids or []
     if doc_ids:
-        owned_result = await db.execute(
-            select(Document.id).where(
-                Document.id.in_(doc_ids),
-                Document.user_id == current_user.id,
-                Document.deleted_at.is_(None),
+        if current_user:
+            owned_result = await db.execute(
+                select(Document.id).where(
+                    Document.id.in_(doc_ids),
+                    Document.user_id == current_user.id,
+                    Document.deleted_at.is_(None),
+                )
             )
-        )
-        owned_ids = {row[0] for row in owned_result.all()}
-        dropped = [d for d in doc_ids if d not in owned_ids]
-        if dropped:
-            logger.warning("discuss: dropped %d non-owned doc_ids", len(dropped))
-        doc_ids = list(owned_ids)
+            owned_ids = {row[0] for row in owned_result.all()}
+            dropped = [d for d in doc_ids if d not in owned_ids]
+            if dropped:
+                logger.warning("discuss: dropped %d non-owned doc_ids", len(dropped))
+            doc_ids = list(owned_ids)
+        else:
+            doc_ids = []
     if doc_ids and req.context_mode == "full_docs":
         # 全文打包：多文档合并 + CJK 预算 + 来源标注（此前为孤儿模块，按
         # docs/5-INTEGRATION §3.3 设计意图接入）
@@ -290,9 +476,9 @@ async def discuss(
             from app.core.rag_engine import rag_engine
             rag_result = await rag_engine.ask(
                 doc_ids=doc_ids,
-                question=req.question,
+                query=req.question,
                 history=[],
-                llm_config=user_config,
+                user_config=user_config,
             )
             context = "\n".join(
                 s.get("text", "") for s in rag_result.get("sources", [])[:5]
@@ -300,7 +486,78 @@ async def discuss(
         except Exception as exc:
             logger.warning("RAG context fetch failed for discussion: %s", exc)
 
-    personas = [{"name": p.name, "system_message": p.system_message} for p in (req.personas or [])]
+    # 查找并补全角色配置（若缺少 system_message 则从数据库或预置库补全）
+    from app.core.persona_discussion import PERSONA_PRESETS
+
+    needed_db_roles = set()
+    for p in (req.personas or []):
+        if not p.system_message:
+            role_key = (p.role or p.name or "").lower()
+            if role_key not in PERSONA_PRESETS:
+                if p.id:
+                    needed_db_roles.add(p.id)
+                if p.role:
+                    needed_db_roles.add(p.role)
+                if p.name:
+                    needed_db_roles.add(p.name)
+
+    db_persona_map: dict[str, CustomPersona] = {}
+    if needed_db_roles and current_user:
+        cp_result = await db.execute(
+            select(CustomPersona).where(
+                CustomPersona.user_id == current_user.id,
+                or_(
+                    CustomPersona.id.in_(needed_db_roles),
+                    CustomPersona.role.in_(needed_db_roles),
+                    CustomPersona.name.in_(needed_db_roles),
+                ),
+            )
+        )
+        for cp in cp_result.scalars().all():
+            db_persona_map[cp.id] = cp
+            db_persona_map[cp.role] = cp
+            db_persona_map[cp.name] = cp
+
+    personas = []
+    for p in (req.personas or []):
+        p_name = p.name or ""
+        p_sys = p.system_message or ""
+        p_role = p.role or ""
+        p_avatar = p.avatar or ""
+        p_color = p.color or ""
+
+        # 尝试从预置库补全
+        if p_role:
+            preset = PERSONA_PRESETS.get(p_role.lower())
+            if preset:
+                p_name = p_name or preset["name"]
+                p_avatar = p_avatar or preset.get("avatar", "User")
+                p_color = p_color or preset.get("color", "#6366f1")
+                if not p_sys:
+                    p_sys = preset.get("system_message", "")
+
+        if not p_sys:
+            match = (
+                db_persona_map.get(p.id or "")
+                or db_persona_map.get(p.role or "")
+                or db_persona_map.get(p.name or "")
+            )
+            if match:
+                p_name = p_name or match.name
+                p_sys = match.system_message
+                p_role = p_role or match.role
+                p_avatar = p_avatar or match.avatar
+                p_color = p_color or match.color
+
+        personas.append(
+            {
+                "name": p_name or p_role or "研讨员",
+                "system_message": p_sys,
+                "role": p_role,
+                "avatar": p_avatar or "User",
+                "color": p_color or "#6366f1",
+            }
+        )
 
     async def generate_stream():
         try:

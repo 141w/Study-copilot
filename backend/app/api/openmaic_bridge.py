@@ -9,6 +9,7 @@ Routes:
 
 import json
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -32,6 +33,7 @@ class ClassroomCreateRequest(BaseModel):
     requirement: str = Field(default="", max_length=500, description="课程主题/要求")
     enable_web_search: bool = Field(default=False)
     enable_tts: bool = Field(default=True)
+    enable_image_generation: bool = Field(default=False)
     agent_mode: str = Field(default="default", pattern=r"^(default|generate)$")
 
 
@@ -85,6 +87,7 @@ async def create_classroom(
             requirement=req.requirement,
             enable_web_search=req.enable_web_search,
             enable_tts=req.enable_tts,
+            enable_image_generation=req.enable_image_generation,
             agent_mode=req.agent_mode,
         )
         result = await openmaic_service.submit_classroom_generation(payload)
@@ -98,7 +101,8 @@ async def create_classroom(
     # 原实现首个 classroom_completed 回调必然 ignored——没有任何课包含该
     # classroom_id，webhook 找不到归属用户（鸡生蛋）。占位课让回调可循迹，
     # completed 事件原地更新占位课而非重复建课
-    class_id = result.get("id", "")
+    class_id = result.get("id", "") or result.get("jobId", "")
+    job_id = result.get("jobId", class_id)
     if class_id:
         try:
             import json as _json
@@ -110,6 +114,7 @@ async def create_classroom(
                 description=_json.dumps({
                     "openmaic_pending": True,
                     "classroom_id": class_id,
+                    "job_id": job_id,
                     "event": "classroom_submitted",
                 }),
                 color="#409EFF",
@@ -120,12 +125,59 @@ async def create_classroom(
             logger.warning("placeholder course creation failed: %s", e)
 
     return ClassroomResponse(
-        class_id=result.get("id", ""),
-        job_id=result.get("jobId", ""),
+        class_id=class_id,
+        job_id=job_id,
         status=result.get("status", "queued"),
         poll_url=result.get("pollUrl", ""),
         message=result.get("message", "课堂生成已排队"),
     )
+
+
+@router.get("/classroom/{job_id}/status")
+async def get_classroom_status(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """查询 OpenMAIC 课堂生成任务状态。
+
+    双通道同步自愈机制：
+    当轮询发现 OpenMAIC 已生成完成（succeeded/completed），
+    自动就地更新占位课程并同步测验（无需公网 Webhook 回调即可闭环）。
+    """
+    if not settings.openmaic_enabled:
+        raise HTTPException(status_code=403, detail="OpenMAIC 联动未启用")
+
+    try:
+        data = await openmaic_service.poll_generation_status(job_id)
+    except Exception as e:
+        logger.warning("Failed to poll OpenMAIC job status for %s: %s", job_id, e)
+        raise HTTPException(status_code=502, detail=f"查询 OpenMAIC 任务状态失败: {e}")
+
+    # 尝试自动就地同步
+    sync_result = None
+    try:
+        sync_result = await openmaic_service.sync_completed_classroom_job(
+            db, current_user, job_id, data
+        )
+    except Exception as e:
+        logger.warning("Auto sync completed classroom failed: %s", e)
+
+    raw_payload = data.get("data") if isinstance(data, dict) else None
+    payload: dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else (data if isinstance(data, dict) else {})
+    status_str = str(payload.get("status", "running"))
+    return {
+        "job_id": job_id,
+        "status": status_str,
+        "step": payload.get("step", ""),
+        "progress": payload.get("progress", 0),
+        "message": payload.get("message", ""),
+        "scenes_generated": payload.get("scenesGenerated", 0),
+        "total_scenes": payload.get("totalScenes", 0),
+        "done": bool(payload.get("done", False)) or status_str in ("succeeded", "completed"),
+        "result": payload.get("result"),
+        "sync_result": sync_result,
+    }
 
 
 @router.get("/classrooms", response_model=ClassroomListResponse)

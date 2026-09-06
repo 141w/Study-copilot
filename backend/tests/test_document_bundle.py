@@ -15,7 +15,6 @@ from sqlalchemy import select
 from app.core.document_bundle import build_bundle, build_bundle_from_doc_ids
 from app.db import Document, DocumentChunk
 
-
 # ── 纯函数：build_bundle ──────────────────────────────────────────────────────
 
 
@@ -64,6 +63,55 @@ async def test_build_bundle_empty_input():
     result = await build_bundle([])
     assert result.text == ""
     assert result.source_names == []
+
+
+def test_allocate_document_text_budgets_empty_and_zero():
+    from app.core.document_bundle import allocate_document_text_budgets
+
+    assert allocate_document_text_budgets([], 1000) == []
+    assert allocate_document_text_budgets([100, 200], 0) == [0, 0]
+
+
+def test_allocate_document_text_budgets_prevents_starvation():
+    """验证即使一个文档极大，其他较短的文档也不会被饿死（保留保底预算并按比例分配）。"""
+    from app.core.document_bundle import allocate_document_text_budgets
+
+    # 1. 较小总预算：3000 字符，文档长度 100k, 500, 800
+    # 保证每篇文档至少获得 base_per_doc 保底预算，短文档不会被大文档吞噬为 0
+    lengths = [100_000, 500, 800]
+    max_chars = 3000
+    budgets = allocate_document_text_budgets(lengths, max_chars)
+
+    assert sum(budgets) <= max_chars
+    # 3 篇文档均获得保底保障 (base_per_doc = (3000 * 0.4) // 3 = 400)
+    assert budgets[1] >= 400
+    assert budgets[2] >= 400
+    assert budgets[0] >= 400
+
+    # 2. 较充裕总预算：10000 字符，保底每篇 1333 字符
+    budgets_large = allocate_document_text_budgets(lengths, 10000)
+    assert sum(budgets_large) <= 10000
+    # 较短文档得到完全满足
+    assert budgets_large[1] == 500
+    assert budgets_large[2] == 800
+    # 剩余全部赋给大文档
+    assert budgets_large[0] == 10000 - 500 - 800
+
+
+async def test_build_bundle_multi_docs_no_starvation():
+    """多文档打包时，短文档即使排在超大文档后面也依然被包含在输出中。"""
+    huge_text = "核心概念。" * 200_000  # 约 1M+ 字符
+    short_text = "这是重要的第二篇小文档结论。"
+    result = await build_bundle([
+        ("大文档.txt", huge_text),
+        ("小文档.txt", short_text),
+    ])
+
+    assert result.truncated is True
+    assert "【来源 1】大文档.txt" in result.text
+    assert "【来源 2】小文档.txt" in result.text
+    # 关键断言：排在后面的小文档内容完整出现，没有被截断为 0 字符
+    assert "这是重要的第二篇小文档结论。" in result.text
 
 
 # ── DB 路径：build_bundle_from_doc_ids ────────────────────────────────────────

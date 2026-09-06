@@ -138,6 +138,19 @@ _register(
     )
 )
 
+_register(
+    TransformationType(
+        key="explain",
+        name="通俗解释",
+        name_en="Explain",
+        description="Explain the content in plain language with examples",
+        system_prompt=render_template("transformations/explain_system.jinja2"),
+        user_prompt_template=render_template("transformations/explain_user.jinja2", text="{text}"),
+        max_tokens=3000,
+        temperature=0.4,
+    )
+)
+
 
 def get_transformation(key: str) -> TransformationType | None:
     """Get a transformation type by key."""

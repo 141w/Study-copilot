@@ -25,7 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.embedder import embedder
-from app.db import get_db
+from app.db import AsyncSessionLocal
+from app.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,25 @@ logger = logging.getLogger(__name__)
 _RRF_K = 60
 _VECTOR_WEIGHT = 0.5
 _TEXT_WEIGHT = 0.5
+
+_cached_fts_config: str | None = None
+
+
+async def _get_fts_config(db: AsyncSession) -> str:
+    """探测 PostgreSQL 是否支持 'zh' 全文配置；若不支持则平滑降级为 'simple'。"""
+    global _cached_fts_config
+    if _cached_fts_config is not None:
+        return _cached_fts_config
+    try:
+        res = await db.execute(text("SELECT 1 FROM pg_ts_config WHERE cfgname = 'zh'"))
+        if res.scalar():
+            _cached_fts_config = "zh"
+            return "zh"
+    except Exception as exc:
+        logger.debug("pg_ts_config probe failed or not postgres: %s", exc)
+    logger.info("PostgreSQL 'zh' full-text configuration not detected; falling back to 'simple'")
+    _cached_fts_config = "simple"
+    return "simple"
 
 class PgVectorStore:
     """PostgreSQL + pgvector 向量存储。
@@ -80,6 +100,20 @@ class PgVectorStore:
 
         import json as _json
 
+        # H-1 预检：模型实际输出维度必须与配置一致。列维度（768）在建表时固化，
+        # 切换 BGE-M3(1024) 等模型时若不预检，INSERT 会在 DB 层报晦涩的
+        # 22023 "expected 768 dimensions" —— 这里提前给出明确中文指引。
+        if len(embeddings) > 0:
+            sample = embeddings[0]
+            actual_dim = len(sample) if hasattr(sample, "__len__") else int(getattr(sample, "shape", [0])[0])
+            if actual_dim != self.dimension:
+                raise ValidationError(
+                    f"Embedding 维度不匹配：模型输出 {actual_dim} 维，"
+                    f"但配置/数据库列为 {self.dimension} 维。请检查 .env 的 "
+                    f"EMBEDDING_MODEL 与 EMBEDDING_DIMENSION 是否一致；切换模型"
+                    f"需迁移数据库列并重新处理全部文档。"
+                )
+
         rows: list[dict] = []
         for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
             meta = {k: v for k, v in chunk.items() if k not in ("text", "id")}
@@ -102,15 +136,19 @@ class PgVectorStore:
         sql = text(
             "INSERT INTO document_chunks "
             "(id, document_id, content, embedding, chunk_index, chunk_metadata, created_at) "
-            "VALUES (:id, :document_id, :content, CAST(:embedding AS vector(768)), :chunk_index, :chunk_metadata, :created_at)"
+            f"VALUES (:id, :document_id, :content, CAST(:embedding AS vector({self.dimension})), :chunk_index, :chunk_metadata, :created_at)"
         )
 
         if db is not None:
-            await db.execute(sql, rows)
+            batch_size = 100
+            for start_idx in range(0, len(rows), batch_size):
+                await db.execute(sql, rows[start_idx : start_idx + batch_size])
             await db.commit()
         else:
-            async with get_db() as session:
-                await session.execute(sql, rows)
+            async with AsyncSessionLocal() as session:
+                batch_size = 100
+                for start_idx in range(0, len(rows), batch_size):
+                    await session.execute(sql, rows[start_idx : start_idx + batch_size])
                 await session.commit()
 
         self.chunks.extend(chunks)
@@ -140,46 +178,51 @@ class PgVectorStore:
         q_emb = await embedder.embed_query(query)
         q_emb_list = q_emb.tolist() if hasattr(q_emb, "tolist") else list(q_emb)
 
+        async with AsyncSessionLocal() as db:
+            fts_cfg = await _get_fts_config(db)
+
         sql = f"""
         WITH vector_results AS (
-            SELECT id, content, chunk_metadata,
+            SELECT id, document_id, content, chunk_metadata,
                    1.0 / ({_RRF_K} + ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:q_emb AS vector))) AS v_score
             FROM document_chunks
             WHERE document_id = ANY(:doc_ids)
               AND embedding IS NOT NULL
+              AND (chunk_metadata->>'is_parent' IS NULL OR chunk_metadata->>'is_parent' != 'true')
             ORDER BY embedding <=> CAST(:q_emb AS vector)
             LIMIT :overfetch
         ),
         text_results AS (
-            SELECT id, content, chunk_metadata,
+            SELECT id, document_id, content, chunk_metadata,
                    1.0 / ({_RRF_K} + ROW_NUMBER() OVER (
-                       ORDER BY ts_rank(to_tsvector('zh', content), plainto_tsquery('zh', :query)) DESC
+                       ORDER BY ts_rank(to_tsvector('{fts_cfg}', content), plainto_tsquery('{fts_cfg}', :query)) DESC
                    )) AS t_score
             FROM document_chunks,
-                 plainto_tsquery('zh', :query) AS query
+                 plainto_tsquery('{fts_cfg}', :query) AS query
             WHERE document_id = ANY(:doc_ids)
-            ORDER BY ts_rank(to_tsvector('zh', content), query) DESC
+              AND (chunk_metadata->>'is_parent' IS NULL OR chunk_metadata->>'is_parent' != 'true')
+            ORDER BY ts_rank(to_tsvector('{fts_cfg}', content), query) DESC
             LIMIT :overfetch
         ),
         fused AS (
             SELECT
                 COALESCE(v.id, t.id) AS id,
+                COALESCE(v.document_id, t.document_id) AS document_id,
                 COALESCE(v.content, t.content) AS content,
                 COALESCE(v.chunk_metadata, t.chunk_metadata) AS chunk_metadata,
                 COALESCE(v.v_score, 0) + COALESCE(t.t_score, 0) AS rrf_score
             FROM vector_results v
             FULL OUTER JOIN text_results t USING (id)
         )
-        SELECT id, content, chunk_metadata, rrf_score
+        SELECT id, document_id, content, chunk_metadata, rrf_score
         FROM fused
         ORDER BY rrf_score DESC
         LIMIT :top_k
         """
 
-        overfetch = top_k * 2
+        overfetch = max(top_k * 3, 20)
 
-        db = await anext(get_db())
-        try:
+        async with AsyncSessionLocal() as db:
             cursor = await db.execute(
                 text(sql),
                 {
@@ -191,8 +234,6 @@ class PgVectorStore:
                 },
             )
             rows = cursor.fetchall()
-        finally:
-            await db.close()
 
         if not rows:
             return []
@@ -205,11 +246,24 @@ class PgVectorStore:
         results: list[dict[str, Any]] = []
         for row in rows:
             rel = float(row.rrf_score) / best_score
+            meta = row.chunk_metadata or {}
+            if isinstance(meta, str):
+                # JSONB 列通常已反序列化；防御驱动直接返回字符串的场景
+                try:
+                    meta = json.loads(meta)
+                except Exception:  # noqa: BLE001 - 保留可显示部分
+                    meta = {}
             results.append(
                 {
                     "chunk": {
+                        # 扁平字段与 legacy vector_store 保持同一契约：
+                        # rag_engine 从顶层读取 page/source/document_id
+                        # 构建来源卡（此前嵌套在 metadata 里，来源卡页码恒空）
                         "text": row.content,
-                        "metadata": row.chunk_metadata or {},
+                        "page": meta.get("page", ""),
+                        "source": meta.get("source", ""),
+                        "document_id": row.document_id,
+                        "metadata": meta,
                     },
                     "relevance": max(0.0, min(1.0, rel)),
                     "fused_score": float(row.rrf_score),

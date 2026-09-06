@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import uuid
+from collections.abc import Awaitable, Callable
 
 import aiofiles
 from sqlalchemy import select
@@ -37,14 +38,24 @@ from app.services import task_service
 logger = logging.getLogger(__name__)
 
 
-def _choose_chunker_method(total_text_len: int, sentence_count: int) -> str:
+def _choose_chunker_method(total_text_len: int, sentence_count: int, filename: str = "") -> str:
     """Auto-select chunking strategy based on document characteristics."""
-    if total_text_len > 100_000:
+    # 幻灯片演示文稿（PPTX）：天然按页组织，固定分块保留单页边界最佳
+    if filename.lower().endswith((".pptx", ".ppt")):
         return "fixed"
-    if total_text_len > 20_000:
+
+    # 长篇文档（>15k）且句子充分：层级分块兼具检索精度与大块上下文
+    if total_text_len > 15_000 and sentence_count >= 15:
+        return "hierarchical"
+
+    # 中等长度单篇（3k ~ 15k）：语义分块计算量适中，边界切分高质量
+    if 3_000 <= total_text_len <= 15_000 and sentence_count >= 5:
         return "semantic"
+
+    # 短文或句子较少的情况：固定分块最稳定
     if sentence_count >= 10:
         return "hierarchical"
+
     return "fixed"
 
 
@@ -96,7 +107,16 @@ async def upload_document(
         file_size=file_size,
     )
     db.add(new_doc)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        # 事务失败时清理磁盘上的孤儿文件
+        if os.path.exists(fp):
+            try:
+                os.remove(fp)
+            except OSError:
+                pass
+        raise
 
     # Create a tracking task and enqueue background processing
     task = await task_service.create_task(
@@ -140,6 +160,7 @@ async def _do_process_document(
     db: AsyncSession,
     user: User,
     doc_id: str,
+    progress_callback: Callable[[float, str], Awaitable[None]] | None = None,
 ) -> tuple[int, str]:
     """Parse → chunk → vectorise a saved document and update its DB row.
 
@@ -158,6 +179,8 @@ async def _do_process_document(
 
     try:
         # Parse
+        if progress_callback:
+            await progress_callback(0.1, "正在解析文档...")
         try:
             logger.info("Starting document parsing...")
             pages = await document_parser.extract_pages(fp)
@@ -170,12 +193,15 @@ async def _do_process_document(
             logger.error("Failed to extract pages: %s", e)
             raise ExternalServiceError(f"文档解析失败: {str(e)}")
 
+        if progress_callback:
+            await progress_callback(0.3, f"文档解析完成，共提取 {len(pages)} 页内容")
+
         # Choose chunking strategy
         total_text_len = sum(len(p.get("text", "")) for p in pages)
         rough_sentences = sum(
             len(re.split(r"(?<=[.!?。！？;；])\s+", p.get("text", ""))) for p in pages
         )
-        method = _choose_chunker_method(total_text_len, rough_sentences)
+        method = _choose_chunker_method(total_text_len, rough_sentences, doc.filename or "")
         logger.debug(
             "Auto-selected chunking method: %s (len=%d, sentences=%d)",
             method,
@@ -184,6 +210,8 @@ async def _do_process_document(
         )
 
         # Chunk
+        if progress_callback:
+            await progress_callback(0.5, f"开始以 {method} 策略分块...")
         try:
             logger.info("Starting chunking with %s strategy...", method)
             chunker = create_chunker(method=method)
@@ -199,14 +227,21 @@ async def _do_process_document(
             raise ExternalServiceError(f"文档分块失败: {str(e)}")
 
         # Build vector store (pgvector SQL-backed)
+        if progress_callback:
+            await progress_callback(0.7, f"分块完成（{len(chunks)} 块），正在计算向量并构建索引...")
         logger.info("Building vector store...")
         store = PgVectorStore(user_id=user.id)
         await store.add_chunks(chunks, doc_id, db=db)
+
+        if progress_callback:
+            await progress_callback(0.95, "正在完成数据库同步...")
 
         # Mark ready
         doc.status = "ready"
         doc.chunk_count = len(chunks)
         await db.commit()
+        if progress_callback:
+            await progress_callback(1.0, "处理完成")
         logger.info("Processing complete: %s (%d chunks)", doc_id, len(chunks))
         return len(chunks), method
 
@@ -219,6 +254,77 @@ async def _do_process_document(
             raise
         logger.error("document processing: %s", e, exc_info=True)
         raise ExternalServiceError(str(e))
+
+
+async def reprocess_document(
+    db: AsyncSession,
+    user: User,
+    doc_id: str,
+) -> dict:
+    """重新处理文档：清理旧 chunk，重置状态为 processing，并重新派发异步任务。"""
+    from sqlalchemy import delete as sa_delete
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == user.id,
+            Document.deleted_at.is_(None),
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("文档不存在")
+
+    if not doc.file_path or not os.path.exists(doc.file_path):
+        raise NotFoundError("原始文件不存在，请重新上传文件")
+
+    # 清理该文档现存的 chunk 记录（防止残留脏数据）
+    await db.execute(
+        sa_delete(DocumentChunk).where(DocumentChunk.document_id == doc_id)
+    )
+    doc.status = "processing"
+    doc.chunk_count = 0
+    await db.commit()
+
+    # 创建新的异步处理任务并入队
+    task = await task_service.create_task(
+        db, user.id, "document_process", {"doc_id": doc_id, "filename": doc.filename}
+    )
+    try:
+        await enqueue(task.id, user.id, "document_process", {"doc_id": doc_id})
+        logger.info("Document %s re-queued for background processing", doc_id)
+        return {
+            "id": doc_id,
+            "filename": doc.filename,
+            "status": "processing",
+            "message": "文档已开始重新处理，请稍候查看",
+            "chunk_count": 0,
+        }
+    except RuntimeError:
+        # Worker 未运行（测试或离线模式），同步执行回退
+        logger.warning("Task worker unavailable, re-processing document %s synchronously", doc_id)
+        await task_service.update_task(db, task.id, user.id, status="running")
+        try:
+            chunk_count, method = await _do_process_document(db, user, doc_id)
+            await task_service.update_task(
+                db,
+                task.id,
+                user.id,
+                status="completed",
+                result={"doc_id": doc_id, "chunk_count": chunk_count},
+            )
+        except Exception as e:
+            await task_service.update_task(
+                db, task.id, user.id, status="failed", error=str(e)
+            )
+            raise
+        return {
+            "id": doc_id,
+            "filename": doc.filename,
+            "status": "ready",
+            "message": f"重新处理成功，使用 {method} 分块策略",
+            "chunk_count": chunk_count,
+        }
 
 
 async def list_documents(

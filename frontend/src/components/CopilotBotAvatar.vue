@@ -17,6 +17,7 @@ import { RAYON, DEMI_VIEWBOX } from '@/bot/repere'
 import { type Block } from '@/bot/cycles'
 import { lookTarget } from '@/bot/gaze'
 import { NOTIF_BLUE } from '@/bot/decor'
+import { useUserPrefs } from '@/composables/useUserPrefs'
 
 const emit = defineEmits<{ interact: [mood: BotMood] }>()
 
@@ -55,6 +56,8 @@ export type BotMood =
   /** 导出/长任务完成（彗尾飘移） */
   | 'comet'
 
+const { prefs } = useUserPrefs()
+
 const props = withDefaults(
   defineProps<{
     isStreaming?: boolean
@@ -63,11 +66,15 @@ const props = withDefaults(
     mood?: BotMood
     /** 表情（默认 neutre；thinking/answering 等可指定惊/喜等） */
     expression?: ExpressionId
-    /** 指针注视跟随（默认开；空态大球也适用） */
+    /** 指针注视跟随（未指定时跟随全局用户偏好） */
     gaze?: boolean
   }>(),
-  { isStreaming: false, size: 32, mood: 'idle', expression: 'neutre', gaze: true }
+  { isStreaming: false, size: 32, mood: 'idle', expression: 'neutre', gaze: undefined }
 )
+
+const effectiveGaze = computed(() => {
+  return props.gaze !== undefined ? props.gaze : (prefs.value.botGaze ?? true)
+})
 
 const R = RAYON
 const VB = DEMI_VIEWBOX
@@ -225,7 +232,7 @@ function onPointerLeave(): void {
  * 混合交给引擎——只有它知道 t 时刻的 pose；这里补偿表情会重蹈眼睛跳变坑。
  */
 function aim(): void {
-  if (!props.gaze || prefersReduced() || !rootEl.value) return
+  if (!effectiveGaze.value || prefersReduced() || !rootEl.value) return
   const box = rootEl.value.getBoundingClientRect()
   if (!box || box.width === 0 || box.height === 0) return
   const demiW = Math.max(1, window.innerWidth / 2)

@@ -83,7 +83,7 @@ async def test_upload_without_filename_rejected_with_422(db_session, monkeypatch
     upload_file = UploadFile(file=io.BytesIO(b"fake-pdf-bytes"), filename="")
     with pytest.raises(HTTPException) as exc_info:
         await document_api.upload(
-            request=None,  # noqa: 未用到——限流器已被桩替换
+            request=None,  # 未用到——限流器已被桩替换
             file=upload_file,
             db=db_session,
             current_user=_FAKE_USER,

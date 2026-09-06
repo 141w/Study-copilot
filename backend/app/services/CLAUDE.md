@@ -40,6 +40,7 @@ Core (app/core/*.py)
 | `course_service.py` | Course spaces | create_course, update_course, list_courses, get_course_detail |
 | `transform_service.py` | Content transformation | transform_content, get_transform_types |
 | `task_service.py` | Async task queue | create_task, get_task_status, list_tasks, cancel_task |
+| `openmaic_service.py` | OpenMAIC platform bridge | build_classroom_request, submit_classroom_generation, poll_generation_status, sync_completed_classroom_job, handle_webhook_callback, sync_quiz_results |
 
 ## Adding a New Service
 

@@ -53,14 +53,18 @@
       </div>
 
       <!-- 高级选项 -->
-      <div class="flex items-center gap-6">
+      <div class="grid grid-cols-3 gap-4 py-1">
         <label class="flex items-center gap-2 text-sm cursor-pointer">
           <el-switch v-model="enableWebSearch" size="small" />
-          <span class="text-[var(--text-secondary)]">开启联网搜索</span>
+          <span class="text-[var(--text-secondary)]">联网检索</span>
         </label>
         <label class="flex items-center gap-2 text-sm cursor-pointer">
           <el-switch v-model="enableTTS" size="small" />
-          <span class="text-[var(--text-secondary)]">AI 语音讲解</span>
+          <span class="text-[var(--text-secondary)]">AI 语音</span>
+        </label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <el-switch v-model="enableImageGeneration" size="small" />
+          <span class="text-[var(--text-secondary)]">课件插图</span>
         </label>
       </div>
 
@@ -124,6 +128,7 @@ const requirement = ref('')
 const selectedDocs = ref<string[]>([])
 const enableWebSearch = ref(false)
 const enableTTS = ref(true)
+const enableImageGeneration = ref(false)
 const generating = ref(false)
 const error = ref('')
 const generated = ref(false)
@@ -157,6 +162,7 @@ async function generate(): Promise<void> {
       requirement: requirement.value.trim(),
       enable_web_search: enableWebSearch.value,
       enable_tts: enableTTS.value,
+      enable_image_generation: enableImageGeneration.value,
       agent_mode: 'default',
     })
     generated.value = true

@@ -210,3 +210,117 @@ async def test_webhook_fallback_creates_course_without_placeholder(db_session, l
     # 且课程表能匹配到任意课程的场景；纯孤儿回调按设计 ignored，防误归属）
     assert resp.status_code == 200
     assert resp.json()["status"] == "ignored"
+
+
+# ── GET /classroom/{job_id}/status 轮询与自愈测试 ──────────────────────────────
+
+
+async def test_get_classroom_status_requires_openmaic_enabled(client, local_user, monkeypatch):
+    from app.services import openmaic_service as svc
+    from app.utils.auth import create_access_token
+
+    monkeypatch.setattr(svc.settings, "openmaic_enabled", False, raising=False)
+    token = create_access_token({"sub": local_user.id, "username": local_user.username})
+
+    resp = await client.get(
+        "/api/integrations/openmaic/classroom/job-123/status",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_get_classroom_status_in_progress(client, local_user, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from app.services import openmaic_service as svc
+    from app.utils.auth import create_access_token
+
+    monkeypatch.setattr(svc.settings, "openmaic_enabled", True, raising=False)
+    monkeypatch.setattr(svc.settings, "openmaic_base_url", "https://openmaic.local", raising=False)
+    token = create_access_token({"sub": local_user.id, "username": local_user.username})
+
+    mock_poll = AsyncMock(return_value={
+        "status": "running",
+        "step": "generating_scenes",
+        "progress": 0.6,
+        "message": "正在生成场景课件...",
+        "scenesGenerated": 3,
+        "totalScenes": 5,
+        "done": False,
+    })
+    monkeypatch.setattr(svc, "poll_generation_status", mock_poll)
+
+    resp = await client.get(
+        "/api/integrations/openmaic/classroom/job-progress-1/status",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "running"
+    assert data["step"] == "generating_scenes"
+    assert data["progress"] == 0.6
+    assert data["done"] is False
+    assert data["scenes_generated"] == 3
+
+
+async def test_get_classroom_status_auto_syncs_placeholder(db_session, local_user, client, monkeypatch):
+    """验证当轮询发现任务完成时，双通道自愈逻辑会自动更新占位课并同步测验。"""
+    from unittest.mock import AsyncMock
+
+    from app.services import openmaic_service as svc
+    from app.services.course_service import create_course_space
+    from app.utils.auth import create_access_token
+
+    monkeypatch.setattr(svc.settings, "openmaic_enabled", True, raising=False)
+    monkeypatch.setattr(svc.settings, "openmaic_base_url", "https://openmaic.local", raising=False)
+    token = create_access_token({"sub": local_user.id, "username": local_user.username})
+
+    job_id = "job-auto-sync-99"
+    # 创建占位课
+    placeholder = await create_course_space(
+        db_session, local_user,
+        name="离散数学（生成中）",
+        description=json.dumps({"openmaic_pending": True, "job_id": job_id, "classroom_id": "cls-99"}),
+        color="#409EFF",
+    )
+    await db_session.commit()
+
+    mock_poll = AsyncMock(return_value={
+        "status": "succeeded",
+        "step": "completed",
+        "progress": 1.0,
+        "message": "生成完毕",
+        "done": True,
+        "result": {
+            "classroomId": "cls-99",
+            "url": "https://open.maic.chat/c/cls-99",
+            "title": "离散数学：图论基础",
+            "quiz_results": [
+                {
+                    "question": "什么是欧拉图？",
+                    "user_answer": "存在欧拉回路",
+                    "correct_answer": "存在欧拉回路",
+                    "is_correct": True,
+                }
+            ],
+        },
+    })
+    monkeypatch.setattr(svc, "poll_generation_status", mock_poll)
+
+    resp = await client.get(
+        f"/api/integrations/openmaic/classroom/{job_id}/status",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["done"] is True
+    assert data["status"] == "succeeded"
+    assert data["sync_result"] is not None
+    assert data["sync_result"]["course_id"] == placeholder.id
+    assert data["sync_result"]["quizzes_synced"] == 1
+
+    # 验证数据库中的占位课已被就地更新
+    await db_session.refresh(placeholder)
+    assert placeholder.name == "离散数学：图论基础"
+    meta = json.loads(placeholder.description)
+    assert meta["openmaic_url"] == "https://open.maic.chat/c/cls-99"

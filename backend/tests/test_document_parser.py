@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from app.core.document_parser import DocumentParser, DOCXParser, PDFParser, PPTXParser, TextParser
 
 # ── BaseParser ───────────────────────────────────────────────────────────────

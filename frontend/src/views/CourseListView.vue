@@ -21,11 +21,12 @@
 
     <!-- Search -->
     <div class="mb-6">
-      <input
+      <el-input
         v-model="searchQuery"
-        type="text"
+        :prefix-icon="Search"
+        clearable
         placeholder="搜索课程..."
-        class="input max-w-md"
+        class="max-w-md"
       />
     </div>
 
@@ -174,7 +175,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Reading } from '@/components/icons'
+import { Plus, Reading, Search } from '@/components/icons'
 import { useCourseStore } from '../stores/course'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'

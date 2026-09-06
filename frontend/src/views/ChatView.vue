@@ -1,43 +1,130 @@
 <template>
-  <div class="flex h-[calc(100dvh-4rem)]">
+  <div class="flex" :style="containerHeightStyle">
     <!-- Chat Area -->
     <div class="flex-1 flex flex-col" @mouseenter="mouseInChat = true" @mouseleave="mouseInChat = false">
       <!-- Top Bar -->
-      <div class="border-b border-[var(--border-default)] px-6 py-3 bg-[var(--surface-card)] flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <h1 class="text-xl font-semibold text-[var(--text-primary)]">AI 问答</h1>
-          <span v-if="chatStore.currentSession" class="text-sm text-[var(--text-muted)]">
+      <div class="border-b border-[var(--border-default)] px-4 sm:px-6 py-2.5 bg-[var(--surface-card)] flex items-center justify-between gap-3 overflow-x-auto">
+        <div class="flex items-center gap-3 min-w-0 shrink">
+          <h1 class="text-lg sm:text-xl font-semibold text-[var(--text-primary)] shrink-0">AI 问答</h1>
+          <span
+            v-if="chatStore.currentSession"
+            class="text-xs sm:text-sm text-[var(--text-muted)] truncate max-w-[140px] sm:max-w-[220px]"
+            :title="chatStore.currentSessionTitle"
+          >
             {{ chatStore.currentSessionTitle }}
           </span>
         </div>
-        <div class="flex items-center gap-3">
-          <el-button type="primary" :icon="Plus" @click="newChat">新建对话</el-button>
-          <el-button :icon="Download" :disabled="chatStore.messages.length === 0" @click="exportChat">
-            导出对话
-          </el-button>
-          <div class="flex items-center gap-1 text-sm border-l pl-3 ml-1">
-            <span class="text-[var(--text-muted)]">模式:</span>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <el-button type="primary" size="small" :icon="Plus" class="!px-2.5" @click="newChat">新建对话</el-button>
+
+          <el-tooltip content="导出当前会话为 Markdown" placement="bottom">
+            <el-button
+              size="small"
+              :icon="Download"
+              :disabled="chatStore.messages.length === 0"
+              class="!px-2 sm:!px-2.5"
+              @click="exportChat"
+            >
+              <span class="hidden xl:inline ml-1">导出</span>
+            </el-button>
+          </el-tooltip>
+
+          <!-- 模式切换：问答 / 讨论 -->
+          <div class="flex items-center gap-1.5 text-sm border-l border-[var(--border-default)] pl-2.5 ml-0.5">
             <el-radio-group v-model="chatMode" size="small">
               <el-radio-button label="qa">问答</el-radio-button>
               <el-radio-button label="discuss">讨论</el-radio-button>
             </el-radio-group>
           </div>
-          <!-- 批次10：讨论上下文模式（仅讨论态显示）——全文 vs 检索片段 -->
-          <div v-if="chatMode === 'discuss'" class="flex items-center gap-1 text-sm border-l pl-3 ml-1">
-            <el-tooltip content="检索模式：按问题检索相关片段；全文模式：携带所选文档完整内容（长文档自动截断）" placement="bottom">
-              <span class="text-[var(--text-muted)] cursor-help">上下文:</span>
-            </el-tooltip>
-            <el-radio-group v-model="discussContextMode" size="small">
-              <el-radio-button label="rag_snippets">检索片段</el-radio-button>
-              <el-radio-button label="full_docs">全文</el-radio-button>
-            </el-radio-group>
-          </div>
-          <el-button :type="showHistory ? 'primary' : 'default'" :icon="Clock" @click="showHistory = !showHistory">
-            {{ showHistory ? '隐藏记录' : '历史记录' }}
-          </el-button>
-          <router-link to="/model-config" class="text-sm text-[var(--text-muted)] hover:text-[var(--color-primary)]">
-            模型配置
-          </router-link>
+
+          <!-- 讨论模式树形下拉配置框（整合讨论角色、上下文模式、研讨深度，节约横向空间） -->
+          <Transition name="fade">
+            <div v-if="chatMode === 'discuss'" class="flex items-center gap-1.5 shrink-0">
+              <el-tree-select
+                v-model="treeSelectValues"
+                :data="discussTreeData"
+                node-key="value"
+                :props="{ label: 'label', children: 'children', disabled: 'disabled' }"
+                multiple
+                show-checkbox
+                check-strictly
+                check-on-click-node
+                default-expand-all
+                :indent="0"
+                :fit-input-width="false"
+                placement="bottom-end"
+                popper-class="discuss-tree-popper"
+                size="small"
+                class="discuss-tree-select !text-xs"
+                @change="onDiscussTreeChange"
+              >
+                <template #prefix>
+                  <span class="text-xs text-[var(--text-primary)] font-medium select-none pl-0.5">讨论配置</span>
+                </template>
+                <template #default="{ data }">
+                  <el-tooltip
+                    :content="data.description"
+                    :disabled="!data.description"
+                    placement="left"
+                    :show-after="200"
+                    :enterable="false"
+                  >
+                    <span class="flex items-center gap-1.5 py-0.5 text-xs w-full">
+                      <el-icon :size="13" class="shrink-0" :style="{ color: data.color || 'var(--text-secondary)' }">
+                        <component :is="data.icon || User" />
+                      </el-icon>
+                      <span class="font-medium text-[var(--text-primary)] shrink-0">{{ data.label }}</span>
+                      <span
+                        v-if="data.isCustom"
+                        class="ml-auto text-[9px] px-1 py-0.2 rounded font-medium"
+                        :style="{ color: data.color || '#6366f1', backgroundColor: (data.color || '#6366f1') + '15' }"
+                      >
+                        自定义
+                      </span>
+                    </span>
+                  </el-tooltip>
+                </template>
+              </el-tree-select>
+
+              <!-- 管理研讨角色按钮 -->
+              <el-tooltip content="管理研讨角色 (自定义角色)" placement="bottom">
+                <el-button
+                  size="small"
+                  circle
+                  aria-label="管理研讨角色"
+                  class="persona-manage-btn"
+                  @click="showPersonaDialog = true"
+                >
+                  <el-icon><User /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
+          </Transition>
+
+          <div class="h-4 w-[1px] bg-[var(--border-default)] mx-0.5"></div>
+
+          <!-- 历史记录（SVG 图标按钮） -->
+          <el-tooltip :content="showHistory ? '隐藏历史记录' : '查看历史记录'" placement="bottom">
+            <el-button
+              size="small"
+              :type="showHistory ? 'primary' : 'default'"
+              circle
+              aria-label="历史记录"
+              @click="showHistory = !showHistory"
+            >
+              <el-icon><Clock /></el-icon>
+            </el-button>
+          </el-tooltip>
+
+          <!-- 模型配置（SVG 图标按钮） -->
+          <el-tooltip content="模型配置" placement="bottom">
+            <router-link to="/model-config" class="inline-flex">
+              <el-button size="small" circle aria-label="模型配置">
+                <el-icon><Setting /></el-icon>
+              </el-button>
+            </router-link>
+          </el-tooltip>
         </div>
       </div>
 
@@ -71,148 +158,28 @@
           <div v-if="lastAssistantIdx === -1" class="flex items-center gap-2.5">
             <CopilotBotAvatar class="bot-avatar-flip" :size="48" :mood="avatarMood" :expression="avatarExpr" />
           </div>
-          <div
-            v-for="(msg, idx) in chatStore.messages"
-            :key="idx"
-            class="group"
-          >
-            <!-- Assistant message（P5-1 网页式：作者行 + 全宽正文，无气泡） -->
-            <div v-if="msg.role === 'assistant'" class="msg-enter">
-              <!-- 作者行（P7：全页唯一动画球挂在最新一条，历史消息仅名字） -->
-              <div class="flex items-center gap-2.5 mb-1.5">
-                <CopilotBotAvatar
-                  v-if="idx === lastAssistantIdx"
-                  class="bot-avatar-flip"
-                  :is-streaming="msg.isStreaming"
-                  :size="48"
-                  :mood="msg === chatStore.messages[chatStore.messages.length - 1] ? avatarMood : 'idle'"
-                  :expression="msg === chatStore.messages[chatStore.messages.length - 1] ? avatarExpr : 'neutre'"
-                />
-                <span class="text-sm font-medium text-[var(--text-primary)]">Study Copilot</span>
-              </div>
 
-              <div class="pl-0 min-w-0">
-                <!-- Thinking indicator -->
-                <!-- P5-2：思考中改三点脉冲（与打字机光标同语言，替代 spinner） -->
-                <div v-if="msg.isStreaming && !msg.content" class="flex items-center gap-1.5 py-1.5" aria-label="思考中">
-                  <span class="thinking-dot"></span>
-                  <span class="thinking-dot" style="animation-delay: 0.15s"></span>
-                  <span class="thinking-dot" style="animation-delay: 0.3s"></span>
-                </div>
+          <template v-for="(msg, idx) in chatStore.messages" :key="idx">
+            <!-- Discussion mode -->
+            <ChatDiscussionItem
+              v-if="msg.role === 'discussion'"
+              :message="msg"
+            />
 
-                <!-- Thinking steps -->
-                <details
-                  v-else-if="Array.isArray(msg.thinking) && msg.thinking.length > 0"
-                  class="thinking-section mb-3"
-                >
-                  <summary class="thinking-summary text-xs text-[var(--text-muted)] cursor-pointer select-none flex items-center gap-1.5 list-none py-1 hover:text-[var(--text-secondary)]">
-                    <el-icon class="w-3.5 h-3.5 transition-transform duration-200">
-                      <ArrowRight />
-                    </el-icon>
-                    思考过程 ({{ msg.thinking.length }} 步)
-                  </summary>
-                  <div v-for="(t, ti) in msg.thinking" :key="ti"
-                       class="flex items-start gap-2 py-1 text-xs text-[var(--text-muted)]">
-                    <span class="font-medium text-[var(--text-secondary)] flex-shrink-0">{{ String(t.step) }}.</span>
-                    <span class="leading-relaxed">{{ t.detail }}</span>
-                  </div>
-                </details>
-
-                <!-- Answer body（流式时尾部带打字机光标） -->
-                <div v-if="msg.isStreaming || msg.content"
-                     class="text-[0.9rem] leading-[1.75] text-[var(--text-primary)] prose prose-sm max-w-none"
-                     v-html="renderMarkdown(msg.content, msg.isStreaming)">
-                </div>
-                <span v-if="msg.isStreaming && msg.content" class="stream-caret" aria-hidden="true"></span>
-
-                <!-- Actions（触屏常显 / md hover 显示） -->
-                <div v-if="!msg.isStreaming && msg.content"
-                     class="flex items-center gap-2 mt-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                  <TTSPlayer :text="msg.content" />
-                  <el-button size="small" text bg @click="copyMessage(msg)" title="复制回答">
-                    <el-icon class="w-3.5 h-3.5 mr-1"><DocumentCopy /></el-icon>
-                    {{ copiedMsgId === msg.id ? '已复制' : '复制' }}
-                  </el-button>
-                </div>
-
-                <!-- Sources（P5-1 网页式引用区：分隔线下行式引用条目） -->
-                <div v-if="msg.sources && msg.sources.length > 0 && (!msg.isStreaming || msg.content)"
-                     class="mt-4 pt-3 border-t border-[var(--border-default)]">
-                  <div class="text-xs text-[var(--text-muted)] mb-2">
-                    参考来源
-                    <span v-if="msg.used_source_indices && msg.used_source_indices.length > 0">
-                      共 {{ msg.used_source_indices.length }} 个
-                    </span>
-                  </div>
-                  <div class="space-y-0.5 source-stagger">
-                    <button
-                      v-for="(source, sidx) in (msg.filtered_sources && msg.filtered_sources.length > 0 ? msg.filtered_sources : msg.sources)"
-                      :key="sidx"
-                      @click="scrollToSource(source.index)"
-                      class="source-card-btn source-row w-full text-left text-xs px-2 py-1.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-2"
-                    >
-                      <span class="w-4 h-4 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[10px] flex items-center justify-center font-medium flex-shrink-0">{{
-                        source.index }}</span>
-                      <span v-if="source.source" class="truncate flex-shrink min-w-0">{{ source.source }}</span>
-                      <span v-if="source.page" class="text-[var(--text-muted)] flex-shrink-0">P{{ source.page }}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Source Cards -->
-                <div v-if="msg.expandedSources" class="mt-3 grid grid-cols-1 gap-2">
-                  <div
-                    v-for="(source, sidx) in msg.sources"
-                    :key="sidx"
-                    :id="`source-card-${source.index}`"
-                    class="source-card p-3 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-default)] text-sm"
-                  >
-                    <div class="flex items-center gap-2 mb-1">
-                      <span class="w-4 h-4 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[10px] flex items-center justify-center">{{ source.index }}</span>
-                      <span v-if="source.source" class="font-medium text-[var(--text-primary)]">{{ source.source }}</span>
-                      <span v-if="source.page" class="text-xs text-[var(--text-muted)]">P{{ source.page }}</span>
-                    </div>
-                    <div class="text-xs text-[var(--text-secondary)] line-clamp-2">{{ source.text }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Discussion mode（多 persona 讨论） -->
-            <div v-else-if="msg.role === 'discussion'" class="msg-enter">
-              <div class="flex items-center gap-2.5 mb-3">
-                <span class="text-sm font-medium text-[var(--text-primary)]">💬 多角色讨论</span>
-              </div>
-              <div class="space-y-4">
-                <div
-                  v-for="(persona, pidx) in (msg.personas || [])"
-                  :key="pidx"
-                  class="flex gap-3"
-                >
-                  <div class="w-8 h-8 rounded-lg bg-[var(--bg-secondary)] flex items-center justify-center flex-shrink-0 text-sm">
-                    {{ persona.avatar }}
-                  </div>
-                  <div class="flex-1 min-w-0 card p-3">
-                    <span class="text-sm font-medium text-[var(--text-primary)]">{{ persona.name }}</span>
-                    <div class="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed whitespace-pre-wrap" v-html="renderMarkdown(persona.content)"></div>
-                  </div>
-                </div>
-              </div>
-              <div v-if="msg.isStreaming" class="flex items-center gap-2 mt-3 text-sm text-[var(--text-muted)]">
-                <span class="thinking-dot"></span>
-                <span class="thinking-dot" style="animation-delay: 0.15s"></span>
-                <span class="thinking-dot" style="animation-delay: 0.3s"></span>
-                <span class="text-xs ml-1">讨论中…</span>
-              </div>
-            </div>
-
-            <!-- User message（P6-1：网页式浅底卡片 + 纯文本渲染，所见即所得） -->
-            <div v-else-if="msg.role === 'user'" class="flex justify-end msg-enter">
-              <div class="max-w-[85%] min-w-0">
-                <div class="text-[0.9rem] leading-[1.75] text-[var(--text-primary)] px-4 py-2.5 rounded-lg rounded-tr-sm bg-[var(--bg-hover)] border border-[var(--border-default)] inline-block max-w-full break-words whitespace-pre-wrap">{{ msg.content }}</div>
-              </div>
-            </div>
-          </div>
+            <!-- Regular Assistant / User message -->
+            <ChatMessageItem
+              v-else
+              :message="msg"
+              :rendered-markdown="renderMarkdown(msg.content, msg.isStreaming)"
+              :show-avatar="idx === lastAssistantIdx"
+              :is-latest-assistant="msg === chatStore.messages[chatStore.messages.length - 1]"
+              :avatar-mood="avatarMood"
+              :avatar-expr="avatarExpr"
+              :is-copied="copiedMsgId === msg.id"
+              @copy="copyMessage"
+              @scroll-to-source="scrollToSource"
+            />
+          </template>
         </div>
       </div>
 
@@ -236,6 +203,12 @@
       @loaded="onSessionLoaded"
       @deleted="onSessionDeleted"
     />
+
+    <!-- 自定义角色管理弹窗 -->
+    <PersonaManageDialog
+      v-model="showPersonaDialog"
+      @updated="onPersonaUpdated"
+    />
   </div>
 </template>
 
@@ -244,6 +217,7 @@ defineOptions({ name: 'ChatView' })
 
 import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import api from '../services/api'
 import { useChatStore } from '../stores/chat'
 import type { ChatStreamMessage } from '../stores/chat'
 import type { BotMood } from '../components/CopilotBotAvatar.vue'
@@ -252,25 +226,246 @@ import { useDocumentStore } from '../stores/document'
 import ChatInput from '../components/chat/ChatInput.vue'
 import ChatHistoryPanel from '../components/chat/ChatHistoryPanel.vue'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
+import ChatMessageItem from '../components/chat/ChatMessageItem.vue'
+import ChatDiscussionItem from '../components/chat/ChatDiscussionItem.vue'
+import PersonaManageDialog from '../components/chat/PersonaManageDialog.vue'
+import { useVisualViewport } from '../composables/useVisualViewport'
 import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatExport'
-import TTSPlayer from '../components/TTSPlayer.vue'
 import { useMarkdown } from '../composables/useMarkdown'
 import { useReducedMotion } from '../composables/useReducedMotion'
 import gsap from 'gsap'
 import CopilotBotAvatar from '../components/CopilotBotAvatar.vue'
-import { Plus, Download, Clock, DocumentCopy, ArrowRight, Upload, Document, DocumentChecked } from '@/components/icons'
+import { useUserPrefs } from '@/composables/useUserPrefs'
+import {
+  Plus,
+  Download,
+  Clock,
+  Upload,
+  Document,
+  DocumentChecked,
+  Setting,
+  Search,
+  User,
+  ChatLineRound,
+  EditPen,
+  GraduationCap,
+  Lightning,
+  Brain,
+  TrendCharts
+} from '@/components/icons'
 
+const { prefs } = useUserPrefs()
+const { containerHeightStyle } = useVisualViewport()
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 const readyDocs = computed(() => documentStore.readyDocuments)
 const selectedDocs = ref<string[]>([])
 const showHistory = ref(false)
+const showPersonaDialog = ref(false)
 const botMood = ref<BotMood>('idle')
 const messagesRef = ref<HTMLElement | null>(null)
 const route = useRoute()
 const chatMode = ref<'qa' | 'discuss'>('qa')
-// 批次10：讨论上下文模式（rag_snippets=检索片段 / full_docs=全文打包）
+// 讨论上下文模式（rag_snippets=检索片段 / full_docs=全文打包）
 const discussContextMode = ref<'rag_snippets' | 'full_docs'>('rag_snippets')
+const discussMaxTurns = ref<number>(2)
+
+// OpenMAIC 风格多 Agent 讨论角色库
+interface AvailablePersona {
+  id?: string
+  role: string
+  name: string
+  avatar?: string
+  color?: string
+  system_message?: string
+  is_custom?: boolean
+}
+const availablePersonas = ref<AvailablePersona[]>([
+  { role: 'teacher', name: '苏老师', avatar: 'User', color: '#3b82f6' },
+  { role: 'thinker', name: '学霸', avatar: 'GraduationCap', color: '#10b981' },
+  { role: 'curious', name: '求知同学', avatar: 'ChatLineRound', color: '#f59e0b' },
+  { role: 'notetaker', name: '归纳助手', avatar: 'EditPen', color: '#8b5cf6' },
+])
+const selectedPersonas = ref<string[]>(['thinker', 'curious'])
+
+const personaIconMap: Record<string, any> = {
+  teacher: User,
+  thinker: GraduationCap,
+  curious: ChatLineRound,
+  notetaker: EditPen,
+  User,
+  GraduationCap,
+  ChatLineRound,
+  EditPen,
+  Brain,
+  Lightning,
+  TrendCharts
+}
+
+const personaDescMap: Record<string, string> = {
+  thinker: '深入推导',
+  curious: '提问质疑',
+  teacher: '体系讲解',
+  notetaker: '要点归纳',
+}
+
+// 讨论树形选项配置（把多按钮整合为一棵层级树，使用 SVG 图标代替 Emoji）
+interface DiscussTreeNode {
+  value: string
+  label: string
+  icon?: any
+  avatar?: string
+  color?: string
+  description?: string
+  disabled?: boolean
+  isCustom?: boolean
+  children?: DiscussTreeNode[]
+}
+
+const discussTreeData = computed<DiscussTreeNode[]>(() => [
+  {
+    value: 'group_personas',
+    label: '讨论角色',
+    icon: User,
+    disabled: true,
+    children: [
+      ...availablePersonas.value.map(p => ({
+        value: `persona_${p.role}`,
+        label: p.name,
+        avatar: p.avatar,
+        color: p.color,
+        icon: (p.avatar && personaIconMap[p.avatar]) || personaIconMap[p.role] || User,
+        description: p.system_message
+          ? (p.system_message.length > 30 ? p.system_message.slice(0, 30) + '...' : p.system_message)
+          : (personaDescMap[p.role] || '参与研讨'),
+        isCustom: !!p.is_custom
+      })),
+      {
+        value: 'action_manage_personas',
+        label: '管理/新建角色...',
+        icon: Plus,
+        description: '配置与创建专属研讨角色'
+      }
+    ]
+  },
+  {
+    value: 'group_context',
+    label: '参考上下文',
+    icon: Document,
+    disabled: true,
+    children: [
+      {
+        value: 'context_rag_snippets',
+        label: '检索片段',
+        icon: Search,
+        description: '语义检索'
+      },
+      {
+        value: 'context_full_docs',
+        label: '完整全文',
+        icon: Document,
+        description: '文档全文'
+      }
+    ]
+  },
+  {
+    value: 'group_depth',
+    label: '研讨深度',
+    icon: TrendCharts,
+    disabled: true,
+    children: [
+      {
+        value: 'depth_standard',
+        label: '标准研讨',
+        icon: Lightning,
+        description: '2 轮研讨'
+      },
+      {
+        value: 'depth_deep',
+        label: '深度辩论',
+        icon: Brain,
+        description: '3 轮辩论'
+      }
+    ]
+  }
+])
+
+const treeSelectValues = ref<string[]>([
+  'persona_thinker',
+  'persona_curious',
+  'context_rag_snippets',
+  'depth_standard'
+])
+
+function onDiscussTreeChange(vals: string[]): void {
+  let updated = [...vals]
+
+  // 0. 快捷动作：管理/新建角色
+  if (updated.includes('action_manage_personas')) {
+    updated = updated.filter(v => v !== 'action_manage_personas')
+    treeSelectValues.value = updated
+    showPersonaDialog.value = true
+    return
+  }
+
+  // 1. 上下文模式 (单选互斥)
+  const contextKeys = updated.filter(v => v.startsWith('context_'))
+  if (contextKeys.length > 1) {
+    const previousContext = discussContextMode.value === 'full_docs' ? 'context_full_docs' : 'context_rag_snippets'
+    const newContext = contextKeys.find(k => k !== previousContext) || contextKeys[contextKeys.length - 1]
+    updated = updated.filter(v => !v.startsWith('context_') || v === newContext)
+  } else if (contextKeys.length === 0) {
+    updated.push('context_rag_snippets')
+  }
+
+  // 2. 研讨深度 (单选互斥)
+  const depthKeys = updated.filter(v => v.startsWith('depth_'))
+  if (depthKeys.length > 1) {
+    const previousDepth = discussMaxTurns.value === 3 ? 'depth_deep' : 'depth_standard'
+    const newDepth = depthKeys.find(k => k !== previousDepth) || depthKeys[depthKeys.length - 1]
+    updated = updated.filter(v => !v.startsWith('depth_') || v === newDepth)
+  } else if (depthKeys.length === 0) {
+    updated.push('depth_standard')
+  }
+
+  // 3. 角色选择 (至少保留 1 个角色)
+  const personaKeys = updated.filter(v => v.startsWith('persona_'))
+  if (personaKeys.length === 0) {
+    updated.push('persona_thinker')
+  }
+
+  treeSelectValues.value = updated
+
+  // 同步到业务状态
+  selectedPersonas.value = updated
+    .filter(v => v.startsWith('persona_'))
+    .map(v => v.replace('persona_', ''))
+
+  discussContextMode.value = updated.includes('context_full_docs') ? 'full_docs' : 'rag_snippets'
+  discussMaxTurns.value = updated.includes('depth_deep') ? 3 : 2
+}
+
+const loadPersonas = async () => {
+  try {
+    const { data } = await api.get('/chat/personas')
+    if (Array.isArray(data?.personas) && data.personas.length > 0) {
+      availablePersonas.value = data.personas
+    }
+  } catch {
+    // 回退预置
+  }
+}
+
+const onPersonaUpdated = async (newRole?: string) => {
+  await loadPersonas()
+  if (newRole) {
+    const key = `persona_${newRole}`
+    if (!treeSelectValues.value.includes(key)) {
+      treeSelectValues.value.push(key)
+      onDiscussTreeChange(treeSelectValues.value)
+    }
+  }
+}
 // P1-1：GSAP 动画降级（prefers-reduced-motion）
 const { prefersReduced } = useReducedMotion()
 
@@ -422,6 +617,8 @@ async function handleDiscuss(content: string): Promise<void> {
     role: 'discussion',
     content: '',
     personas: [],
+    discussionTurns: [],
+    currentSpeaker: null,
     sources: [],
     used_source_indices: [],
     filtered_sources: [],
@@ -440,8 +637,20 @@ async function handleDiscuss(content: string): Promise<void> {
       body: JSON.stringify({
         question: content,
         document_ids: selectedDocs.value,
-        personas: null,
-        max_turns: 2,
+        personas: selectedPersonas.value.length > 0
+          ? selectedPersonas.value.map(role => {
+              const p = availablePersonas.value.find(item => item.role === role)
+              return {
+                id: p?.id,
+                role,
+                name: p?.name || role,
+                avatar: p?.avatar || 'User',
+                color: p?.color,
+                system_message: p?.system_message || undefined
+              }
+            })
+          : null,
+        max_turns: discussMaxTurns.value || 2,
         context_mode: discussContextMode.value,
       }),
       signal: controller.signal,
@@ -454,7 +663,7 @@ async function handleDiscuss(content: string): Promise<void> {
     if (!reader) throw new Error('No response body')
 
     const msg = chatStore.messages.find((m: any) => m.id === discussionMsgId)
-    const personaBlocks: Record<string, { avatar: string; lines: string[] }> = {}
+    const personaBlocks: Record<string, { avatar: string; color?: string; lines: string[] }> = {}
 
     while (true) {
       const { done, value } = await reader.read()
@@ -470,24 +679,139 @@ async function handleDiscuss(content: string): Promise<void> {
           const event = JSON.parse(payload)
           const _msg = msg!
 
-          if (event.type === 'persona_speak') {
+          if (event.type === 'persona_start') {
             const p = event.persona
-            if (!personaBlocks[p]) {
-              personaBlocks[p] = { avatar: event.avatar || '💬', lines: [] }
+            const matchedP = availablePersonas.value.find(item => item.name === p || item.role === p)
+            const avatar = event.avatar || matchedP?.avatar || 'User'
+            const color = event.color || matchedP?.color || '#3b82f6'
+            const turn = event.turn || 1
+
+            _msg.currentSpeaker = {
+              name: p,
+              avatar,
+              color,
+              action: turn > 1 ? '正在针对前序观点进行深度互辩…' : '正在梳理思路并阐述见解…'
             }
-            personaBlocks[p].lines.push(event.content)
-            // 更新消息展示
+
+            if (!_msg.discussionTurns) _msg.discussionTurns = []
+            _msg.discussionTurns.push({
+              id: `turn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              persona: p,
+              avatar,
+              color,
+              content: '',
+              turn,
+              isStreaming: true,
+            })
+          }
+          else if (event.type === 'persona_chunk') {
+            const p = event.persona
+            const delta = event.delta || ''
+            if (_msg.discussionTurns && _msg.discussionTurns.length > 0) {
+              const activeTurn = _msg.discussionTurns[_msg.discussionTurns.length - 1]
+              if (activeTurn && activeTurn.persona === p) {
+                activeTurn.content += delta
+              }
+            }
+            // 兼容 legacy personas 聚合
+            if (!personaBlocks[p]) {
+              const matchedP = availablePersonas.value.find(item => item.name === p || item.role === p)
+              personaBlocks[p] = {
+                avatar: matchedP?.avatar || 'User',
+                color: matchedP?.color,
+                lines: ['']
+              }
+            }
+            personaBlocks[p].lines[personaBlocks[p].lines.length - 1] += delta
             _msg.personas = Object.entries(personaBlocks).map(([name, block]) => ({
-              name, avatar: block.avatar,
+              name,
+              avatar: block.avatar,
+              color: block.color,
               content: block.lines.join('\n\n'),
             }))
-            _msg.content = _msg.personas.map(p => p.content).join('\n\n')
+            _msg.content = _msg.discussionTurns?.map(t => `【${t.persona}】：${t.content}`).join('\n\n') || ''
+          }
+          else if (event.type === 'persona_speak') {
+            const p = event.persona
+            const turn = event.turn || 1
+            if (_msg.discussionTurns && _msg.discussionTurns.length > 0) {
+              const activeTurn = _msg.discussionTurns[_msg.discussionTurns.length - 1]
+              if (activeTurn && activeTurn.persona === p) {
+                activeTurn.content = event.content || activeTurn.content
+                activeTurn.isStreaming = false
+              }
+            } else {
+              // 降级支持：如果未发 persona_start 直接发 persona_speak
+              const matchedP = availablePersonas.value.find(item => item.name === p || item.role === p)
+              if (!_msg.discussionTurns) _msg.discussionTurns = []
+              _msg.discussionTurns.push({
+                id: `turn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                persona: p,
+                avatar: event.avatar || matchedP?.avatar || 'User',
+                color: event.color || matchedP?.color || '#3b82f6',
+                content: event.content,
+                turn,
+                isStreaming: false,
+              })
+            }
+
+            if (!personaBlocks[p]) {
+              const matchedP = availablePersonas.value.find(item => item.name === p || item.role === p)
+              personaBlocks[p] = {
+                avatar: event.avatar || matchedP?.avatar || 'User',
+                color: event.color || matchedP?.color,
+                lines: []
+              }
+            }
+            personaBlocks[p].lines.push(event.content)
+            _msg.personas = Object.entries(personaBlocks).map(([name, block]) => ({
+              name,
+              avatar: block.avatar,
+              color: block.color,
+              content: block.lines.join('\n\n'),
+            }))
+
+            if (_msg.currentSpeaker?.name === p) {
+              _msg.currentSpeaker = null
+            }
+          }
+          else if (event.type === 'summary_start') {
+            _msg.currentSpeaker = {
+              name: '主持人',
+              avatar: 'ChatDotSquare',
+              color: '#10b981',
+              action: '正在归纳核心共识与学习建议…'
+            }
+            _msg.summary = ''
+            _msg.summaryStreaming = true
+          }
+          else if (event.type === 'summary_chunk') {
+            _msg.summary = (_msg.summary || '') + (event.delta || '')
+            _msg.summaryStreaming = true
           }
           else if (event.type === 'summary') {
+            _msg.summary = event.content
+            _msg.summaryStreaming = false
+            _msg.currentSpeaker = null
             _msg.content += '\n\n---\n\n**讨论总结**\n\n' + event.content
           }
-          else if (event.type === 'done' || event.type === 'error') {
+          else if (event.type === 'error') {
+            // 讨论失败 → 保留后端友好错误信息
+            const errText = String(event.message || '讨论生成失败，请稍后重试')
             _msg.isStreaming = false
+            _msg.currentSpeaker = null
+            _msg.error = errText
+            _msg.content = _msg.content
+              ? _msg.content + '\n\n---\n\n' + errText
+              : errText
+          }
+          else if (event.type === 'done') {
+            _msg.isStreaming = false
+            _msg.currentSpeaker = null
+            if (_msg.discussionTurns) {
+              _msg.discussionTurns.forEach(t => { t.isStreaming = false })
+            }
+            _msg.summaryStreaming = false
           }
         }
         catch { /* skip malformed */ }
@@ -500,8 +824,10 @@ async function handleDiscuss(content: string): Promise<void> {
     if (e.name !== 'AbortError') {
       const msg = chatStore.messages.find((m: any) => m.id === discussionMsgId)
       if (msg) {
-        msg.content = `讨论失败：${e.message}`
+        msg.error = `讨论失败：${e.message}`
+        msg.content = msg.error
         msg.isStreaming = false
+        msg.currentSpeaker = null
       }
     }
   }
@@ -642,6 +968,8 @@ function scheduleVariant(): void {
 }
 
 function enterSleep(): void {
+  // 尊重用户偏好中的打瞌睡开关：若关闭则不自动进入瞌睡
+  if (!prefs.value.botIdleSleep) return
   // 流式中永不瞌睡（球有活干）
   if (chatStore.isStreaming) return
   sleepVariant = 0
@@ -741,6 +1069,8 @@ onMounted(async () => {
   await chatStore.fetchSessions()
   await documentStore.fetchDocuments()
 
+  await loadPersonas()
+
   if (documentStore.documents.length > 0) {
     selectedDocs.value = documentStore.documents
       .filter(d => d.status === 'ready')
@@ -809,12 +1139,39 @@ onUnmounted(() => {
   font-weight: 600;
   line-height: 1.4;
 }
+/* DESIGN.md link-on-dark/light：链接 = text-link 色 + 持久下划线（品牌签名） */
+.prose a {
+  color: var(--text-link);
+  text-decoration: underline;
+  text-decoration-color: var(--border-hover);
+  text-underline-offset: 2px;
+  transition: text-decoration-color 0.15s ease;
+}
+.prose a:hover {
+  text-decoration-color: var(--text-link);
+}
+/* markdown 表格：发丝线分界 */
+.prose table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+}
+.prose th, .prose td {
+  border: 1px solid var(--border-default);
+  padding: 0.35em 0.7em;
+  font-size: 0.875rem;
+}
+.prose th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+}
 .prose h1:first-child, .prose h2:first-child, .prose h3:first-child, .prose h4:first-child {
   margin-top: 0;
 }
 .prose blockquote {
   margin: 0.6em 0;
   padding: 0.3em 0.8em;
+  border-left: 2px solid var(--border-hover);
+  color: var(--text-secondary);
 }
 .prose pre.hljs {
   background: var(--bg-tertiary);
@@ -935,9 +1292,109 @@ onUnmounted(() => {
   .thinking-dot {
     animation: none;
   }
-  .stream-caret {
-    animation: none;
-    opacity: 1;
-  }
+}
+
+/* 讨论配置树形下拉菜单美化（仅保留关键选项，悬停展示详情提示） */
+.discuss-tree-popper {
+  width: 176px !important;
+  min-width: 176px !important;
+  max-width: 220px !important;
+  padding: 4px 6px !important;
+}
+
+/* 消除下拉列表默认额外内边距 */
+.discuss-tree-popper .el-select-dropdown__list {
+  padding: 0 !important;
+}
+
+/* 彻底清空 el-select-dropdown__item 的默认 padding、高度与多选伪元素对勾，解决选项被挤压和截断问题 */
+.discuss-tree-popper .el-select-dropdown__item {
+  padding: 0 !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  background-color: transparent !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.discuss-tree-popper .el-select-dropdown.is-multiple .el-select-dropdown__item.is-selected:after {
+  display: none !important;
+}
+
+/* 彻底隐藏所有 expand-icon（包括叶子节点的占位空白），消除选项左侧死空白 */
+.discuss-tree-popper .el-tree-node__expand-icon {
+  display: none !important;
+}
+
+/* 树节点内容盒模型自适应 */
+.discuss-tree-popper .el-tree-node__content {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.discuss-tree-popper .el-tree-node__label {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+/* 一级分类标题栏：无复选框、整洁浅色背景横条，与菜单宽度自然契合 */
+.discuss-tree-popper .el-tree > .el-tree-node > .el-tree-node__content > .el-checkbox {
+  display: none !important;
+}
+.discuss-tree-popper .el-tree > .el-tree-node > .el-tree-node__content {
+  cursor: default;
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-xs);
+  margin-top: 5px;
+  margin-bottom: 2px;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  pointer-events: none;
+}
+.discuss-tree-popper .el-tree > .el-tree-node:first-child > .el-tree-node__content {
+  margin-top: 0;
+}
+
+/* 二级选项：贴左精致对齐，去除默认缩进，名称与右侧描述在 176px 宽度内完美呼应 */
+.discuss-tree-popper .el-tree-node__children .el-tree-node__content {
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  border-radius: var(--radius-xs);
+  transition: background-color 0.15s ease;
+}
+.discuss-tree-popper .el-tree-node__children .el-tree-node__content:hover {
+  background-color: var(--bg-tertiary);
+}
+.discuss-tree-popper .el-tree-node__children .el-tree-node__content .el-checkbox {
+  margin-right: 6px !important;
+  margin-left: 0 !important;
+}
+
+/* 讨论配置下拉：隐藏已选标签与输入框，保持"讨论配置 ⌄"简洁按钮 */
+.discuss-tree-select .el-select__selection,
+.discuss-tree-select .el-select__tags,
+.discuss-tree-select .el-select__placeholder,
+.discuss-tree-select .el-select__input-wrapper {
+  display: none !important;
+}
+.discuss-tree-select .el-select__wrapper {
+  justify-content: space-between !important;
+  cursor: pointer;
+  padding-left: 10px !important;
+  padding-right: 8px !important;
 }
 </style>

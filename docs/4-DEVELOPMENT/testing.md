@@ -37,40 +37,49 @@ pytest tests/ --cov-report=html
 
 **Note**: Coverage failure threshold (currently 65%) is set in `pyproject.toml` under `[tool.pytest.ini_options]` as `--cov-fail-under=65`. All invocations inherit it; use `--no-cov` to skip the check.
 
-### Test Files
+### Test Files (39 files, 490 tests, 72.52% coverage)
 
 | File | Tests |
 |------|-------|
-| `tests/test_api.py` | Health check, root endpoint |
-| `tests/test_auth.py` | Password hash, JWT encode/decode |
 | `tests/test_analysis_service.py` | Wrong answer analysis, knowledge stats, progress |
-| `tests/test_chunker.py` | Fixed/Semantic/Hierarchical chunking |
+| `tests/test_api.py` | Health check, root endpoint |
+| `tests/test_auth.py` | Password hash, JWT encode/decode, expiration |
+| `tests/test_auth_service.py` | Registration, login, token refresh service logic |
+| `tests/test_chat_service.py` | RAG Q&A, chat sessions, history retrieval |
+| `tests/test_chunker.py` | Fixed/Semantic/Hierarchical chunking strategies |
 | `tests/test_config_service.py` | LLM config CRUD, temperature roundtrip |
-| `tests/test_course_service.py` | Course CRUD, document associations |
+| `tests/test_course_generator.py` | Local course outline & quiz generation |
+| `tests/test_course_service.py` | Course space CRUD, document associations |
+| `tests/test_dimension_and_transform_fixes.py` | Embedding dimensions and transformation fixes |
+| `tests/test_document_bundle.py` | Multi-document packing, CJK budget, proportional allocation |
 | `tests/test_document_parser.py` | PDF/DOCX/PPTX parsing, edge cases |
-| `tests/test_document_service.py` | Document upload, delete, soft-delete |
-| `tests/test_exceptions.py` | Custom exception hierarchy |
-| `tests/test_hybrid_retrieval_contract.py` | FAISS+BM25 RRF contract |
-| `tests/test_list_pagination.py` | Paginated list endpoints |
-| `tests/test_logging_config.py` | Structured logging setup |
-| `tests/test_metrics.py` | `/api/metrics` endpoint |
-| `tests/test_note_indexing.py` | Note-vector-store indexing |
-| `tests/test_profile.py` | User profile endpoint |
-| `tests/test_quiz.py` | Quiz API endpoints |
-| `tests/test_quiz_generator.py` | Quiz generation, question formatting |
-| `tests/test_quiz_task_e2e.py` | Quiz async task flow |
-| `tests/test_rag_engine.py` | RAG pipeline, retrieval, reranking |
-| `tests/test_rate_limit.py` | IP rate limiter |
-| `tests/test_security_headers.py` | Security middleware headers |
-| `tests/test_soft_delete.py` | Document/note soft-delete |
-| `tests/test_task_persistence.py` | Async task persistence and recovery |
-| `tests/test_task_service.py` | Task CRUD service |
-| `tests/test_tasks.py` | Task API endpoints |
+| `tests/test_document_service.py` | Document upload, delete, soft-delete, restore |
+| `tests/test_error_visibility_fixes.py` | API error responses and exception formatting |
+| `tests/test_exceptions.py` | Custom exception hierarchy and mapping |
+| `tests/test_hybrid_retrieval_contract.py` | FAISS+BM25 RRF hybrid retrieval contract |
+| `tests/test_list_pagination.py` | Paginated list endpoints and offset/limit validation |
+| `tests/test_logging_config.py` | Structured JSON/text logging and trace context |
+| `tests/test_metrics.py` | `/api/metrics` operational task counts snapshot |
+| `tests/test_note_indexing.py` | Note-vector-store indexing and semantic search |
+| `tests/test_openmaic_integration.py` | OpenMAIC bridge, classroom status, webhook, self-healing |
+| `tests/test_persona_discussion.py` | Multi-persona discussion presets and sequential chain |
+| `tests/test_profile.py` | User profile and password update endpoints |
+| `tests/test_quiz.py` | Quiz generation and submission API endpoints |
+| `tests/test_quiz_generator.py` | LLM quiz generation, parsing, formatting |
+| `tests/test_quiz_task_e2e.py` | Quiz async task end-to-end processing |
+| `tests/test_rag_engine.py` | Agentic RAG pipeline, routing, retrieval, reflection |
+| `tests/test_rate_limit.py` | Sliding-window IP rate limiter |
+| `tests/test_security_headers.py` | Security middleware headers and trace propagation |
+| `tests/test_soft_delete.py` | Document/note soft-delete and restore isolation |
+| `tests/test_task_persistence.py` | Async task persistence, recovery, and watchdog |
+| `tests/test_task_service.py` | Task CRUD service, enqueue, and status reporting |
+| `tests/test_tasks.py` | Task API endpoints and cancellation |
 | `tests/test_trace_middleware.py` | Trace middleware (X-Trace-ID propagation) |
-| `tests/test_transform_service.py` | Content transformations |
-| `tests/test_tts.py` | Text-to-speech |
-| `tests/test_type_safety_regressions.py` | Type safety baseline |
-| `tests/test_vector_store.py` | FAISS/BM25/Hybrid vector stores |
+| `tests/test_transform_service.py` | 9 content transformation types orchestration |
+| `tests/test_tts.py` | Edge TTS audio generation and voice listing |
+| `tests/test_type_safety_regressions.py` | Type safety baseline and regression checks |
+| `tests/test_url_extractor.py` | Web URL content fetching and Markdown extraction |
+| `tests/test_vector_store.py` | FAISS/BM25/pgvector stores and Chinese tokenization |
 
 ### How Backend Tests Work
 
@@ -162,26 +171,31 @@ Both share `tests/setup.js`, which auto-detects `window` availability:
 - **jsdom**: registers Element Plus (zh-CN), mocks `axios` and `localStorage`, resets Pinia per test
 - **node**: skips DOM mocks, only mocks `axios`
 
-### Test Files
+### Test Files (24 files, 227 tests)
 
-#### SPA tests (`tests/`)
+#### SPA tests (`tests/` — 17 files)
 
 | File | Tests |
 |------|-------|
+| `components/ChatMessageItem.test.js` | Chat message item rendering & interactions |
 | `components/ConfirmDialog.test.js` | ConfirmDialog component |
 | `components/UploadView.test.js` | Upload component rendering |
 | `composables/chatExport.test.js` | Chat markdown export |
 | `composables/useFormat.test.js` | Text formatting utility |
 | `services/api.test.js` | Axios interceptor retry logic |
-| `stores/auth.test.ts` | Auth store: login, logout, token |
-| `stores/chat.test.ts` | Chat store: messages, streaming |
-| `stores/chat.title.test.ts` | Chat session title updates |
-| `stores/config.test.ts` | LLM config store |
-| `stores/document.test.ts` | Document store: CRUD, SWR cache |
-| `stores/note.test.ts` | Note store: filters, SWR cache |
-| `stores/quiz.test.ts` | Quiz store: generation, submission |
+| `stores/auth.test.js` | Auth store: login, logout, token |
+| `stores/chat.test.js` | Chat store: messages, streaming |
+| `stores/chat.title.test.js` | Chat session title updates |
+| `stores/chat.sse-error.test.js` | Chat SSE error resilience & handling |
+| `stores/config.test.js` | LLM config store |
+| `stores/document.test.js` | Document store: CRUD, SWR cache |
+| `stores/note.test.js` | Note store: filters, SWR cache |
+| `stores/openmaic.test.ts` | OpenMAIC store: job polling, auto-invalidation |
+| `stores/quiz.test.js` | Quiz store: generation, submission |
+| `views/AnalysisView.test.js` | Learning analytics dashboard rendering |
+| `views/ProfileView.test.js` | User profile and settings view rendering |
 
-#### Bot engine tests (`src/bot/`)
+#### Bot engine tests (`src/bot/` — 7 files)
 
 | File | Tests |
 |------|-------|
@@ -196,7 +210,6 @@ Both share `tests/setup.js`, which auto-detects `window` availability:
 ### Writing Frontend Tests
 
 ```typescript
-import { describe, it, expect, vi } from 'vitest'
 import { describe, it, expect, vi } from 'vitest'
 
 // Store test (spa project — Pinia auto-reset by setup.js)

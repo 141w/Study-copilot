@@ -48,21 +48,21 @@ The frontend runs at `http://localhost:3000` with Vite HMR. API requests to `/ap
 ```
 backend/
 ├── app/
-│   ├── api/                    # FastAPI route handlers (14 routers)
+│   ├── api/                    # FastAPI route handlers (13 routers)
 │   │   ├── auth.py             # POST /register, /login, GET/PUT /me, /password, /refresh
 │   │   ├── document.py         # Upload, list, delete, restore documents
-│   │   ├── chat.py             # Streaming RAG Q&A, session history
+│   │   ├── chat.py             # Streaming RAG Q&A, session history, personas, discuss
 │   │   ├── quiz.py              # Generate, submit, wrong-questions
 │   │   ├── analysis.py          # Wrong answer analysis, knowledge & progress stats
 │   │   ├── notes.py             # CRUD notes, tags, semantic search
-│   │   ├── courses.py            # CRUD course spaces, document associations
-│   │   ├── transform.py         # 8 content transformation types
+│   │   ├── courses.py            # CRUD course spaces, document associations, course generation
+│   │   ├── transform.py         # 9 content transformation types
 │   │   ├── tts.py               # Text-to-speech synthesis
 │   │   ├── tasks.py             # Async task queue
 │   │   ├── config.py            # LLM provider configuration
 │   │   ├── metrics.py            # Operational metrics
-│   │   └── openmaic_bridge.py    # Classroom platform integration
-│   ├── core/                    # Business logic (no HTTP concerns)
+│   │   └── openmaic_bridge.py    # Classroom platform integration & status self-healing
+│   ├── core/                    # Business logic (no HTTP concerns — 24 modules)
 │   │   ├── llm.py               # OpenAI SDK wrapper with retry/backoff
 │   │   ├── embedder.py          # sentence-transformers wrapper (async + caching)
 │   │   ├── pgvector_store.py    # Production vector search via PostgreSQL+pgvector
@@ -75,17 +75,19 @@ backend/
 │   │   ├── answer_reflector.py  # Answer quality self-reflection
 │   │   ├── document_parser.py   # Factory: Docling / PyMuPDF / python-docx / python-pptx
 │   │   ├── chunker.py           # Fixed / Semantic / Hierarchical chunking
+│   │   ├── document_bundle.py   # Multi-doc fair proportional budget allocator
+│   │   ├── course_generator.py  # Auto-generate course outline and quizzes from docs
+│   │   ├── persona_discussion.py # Multi-agent sequential persona discussion
 │   │   ├── quiz_generator.py    # LLM-based question generation
-│   │   ├── transformations.py   # 8 transformation types
+│   │   ├── transformations.py   # 9 transformation types
 │   │   ├── encryption.py        # Fernet credential encryption
 │   │   ├── tts.py               # Edge TTS wrapper
 │   │   ├── url_extractor.py     # Web content extraction
 │   │   ├── rate_limit.py        # Sliding-window IP rate limiter
 │   │   ├── logger.py            # Structured logging with trace-id ContextVar
-│   │   ├── template_manager.py  # Jinja2 template renderer (27 templates)
-│   │   ├── task_worker.py       # Background task enqueue/dequeue/process
-│   │   └── persona_discussion.py # Bot persona engine
-│   ├── services/                # Business orchestration (12 modules)
+│   │   ├── template_manager.py  # Jinja2 template renderer (30 templates)
+│   │   └── task_worker.py       # Background task enqueue/dequeue/process
+│   ├── services/                # Business orchestration (11 modules)
 │   │   ├── auth_service.py
 │   │   ├── chat_service.py
 │   │   ├── document_service.py

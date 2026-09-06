@@ -20,6 +20,12 @@ class QuizGenerator:
 文档：{context[:500]}"""
         try:
             resp = await self.llm.generate(prompt) or ""
+        except Exception as e:
+            # LLM 调用失败必须上抛：此前吞错返回 []，service 层把空列表
+            # 当成功入库、任务标记 completed，用户看到"生成完成 0 题"无从知晓
+            logger.error(f"generate_choice LLM call failed: {e}")
+            raise
+        try:
             match = re.search(r"\[[\s\S]+\]", resp)
             if match:
                 data = json.loads(match.group())
@@ -32,8 +38,7 @@ class QuizGenerator:
                     d["answer"] = letter[0] if letter else ans
                 return data[:count]
         except Exception as e:
-            logger.error(f"generate_choice: {e}")
-            pass
+            logger.error(f"generate_choice parse failed: {e}")
         return []
 
     async def generate_short_answer(self, context, count=1):
@@ -45,6 +50,11 @@ class QuizGenerator:
 文档：{context[:500]}"""
         try:
             resp = await self.llm.generate(prompt) or ""
+        except Exception as e:
+            # 同 generate_choice：LLM 失败上抛，避免静默成功 0 题
+            logger.error(f"generate_short_answer LLM call failed: {e}")
+            raise
+        try:
             match = re.search(r"\[[\s\S]+\]", resp)
             if match:
                 data = json.loads(match.group())
@@ -56,8 +66,7 @@ class QuizGenerator:
                     d["answer"] = ans
                 return data[:count]
         except Exception as e:
-            logger.error(f"generate_short_answer: {e}")
-            pass
+            logger.error(f"generate_short_answer parse failed: {e}")
         return []
 
     async def generate_quizzes(self, context, choice_count=3, short_answer_count=2):

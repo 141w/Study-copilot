@@ -99,7 +99,9 @@ class LLM:
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
-                return resp.choices[0].message.content
+                if resp.choices:
+                    return resp.choices[0].message.content
+                return None
             except Exception as e:
                 last_err = e
                 if attempt < max_retries - 1:
@@ -126,8 +128,10 @@ class LLM:
                     max_tokens=max_tokens,
                 )
                 # SDK 的 content 可为 None（模型空回复）；chat 契约是非空 str
-                content = resp.choices[0].message.content
-                return content if content is not None else ""
+                if resp.choices:
+                    content = resp.choices[0].message.content
+                    return content if content is not None else ""
+                return ""
             except Exception as e:
                 if attempt == max_retries - 1:
                     raise  # 最后一次重试失败，抛出异常
@@ -145,6 +149,7 @@ class LLM:
         """流式聊天接口，逐 token 返回生成内容。支持重试（stream 创建阶段）。"""
         last_err: Exception | None = None
         for attempt in range(max_retries + 1):
+            has_yielded = False
             try:
                 stream = await self.client.chat.completions.create(
                     model=self.model,
@@ -154,11 +159,15 @@ class LLM:
                     stream=True,
                 )
                 async for chunk in stream:
-                    delta = chunk.choices[0].delta
+                    delta = chunk.choices[0].delta if chunk.choices else None
                     if delta and delta.content:
+                        has_yielded = True
                         yield delta.content
                 return  # 成功完成，退出重试循环
             except Exception as e:
+                if has_yielded:
+                    # 已有 token 发出，重试会导致内容重复，直接抛出
+                    raise
                 last_err = e
                 if attempt < max_retries:
                     logger.warning(f"ChatStream attempt {attempt + 1} failed: {e}. Retrying...")
@@ -174,7 +183,7 @@ class LLM:
         return cls(
             api_key=c.get("api_key"),
             base_url=c.get("base_url"),
-            model=c.get("model_name"),
+            model=c.get("model_name") or c.get("model"),
         )
 
     def format_messages(
@@ -190,7 +199,8 @@ class LLM:
 
         返回 (normalized_messages, system_instruction | None)。
         """
-        return normalize_message_format(messages, message_format)
+        _, filtered, system_instr = normalize_message_format(messages, message_format)
+        return filtered, system_instr
 
 
 llm = LLM()

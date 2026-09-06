@@ -97,6 +97,19 @@ _CLASSIFICATION_RULES: list[tuple[list[str], type[AppError], str | None]] = [
         RateLimitError,
         "请求频率超限，请稍后再试。",
     ),
+    # Billing / insufficient balance（供应商计费类失败——402 未在前述规则覆盖）
+    (
+        [
+            "402",
+            "insufficient balance",
+            "insufficient_quota",
+            "insufficient quota",
+            "billing",
+            "payment required",
+        ],
+        ExternalServiceError,
+        "AI 服务余额不足或计费异常，请检查账户额度或更换模型提供商。",
+    ),
     # Model configuration
     (
         ["model not found", "does not exist", "model_not_found"],

@@ -11,7 +11,7 @@
           <el-icon class="w-6 h-6"><Fold /></el-icon>
         </button>
         <router-link to="/" class="flex items-center gap-2">
-          <CopilotBotAvatar :size="48" mood="idle" />
+          <CopilotBotAvatar :size="48" :mood="headerBotMood" />
           <span class="text-lg font-semibold text-[var(--text-primary)] hidden sm:inline">Study Copilot</span>
         </router-link>
       </div>
@@ -36,8 +36,21 @@
               class="flex items-center gap-2 cursor-pointer rounded-md px-1.5 py-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
               aria-label="用户菜单"
             >
-              <!-- 批次4：真实头像——用户名首字 + 品牌渐变，替代裸图标 -->
+              <!-- 头像展现：支持自定义上传图片、Copilot 机器人与首字母渐变 -->
+              <img
+                v-if="prefs.avatarType === 'custom' && prefs.customAvatar"
+                :src="prefs.customAvatar"
+                alt="头像"
+                class="w-7 h-7 rounded-full object-cover border border-[var(--border-default)] shadow-xs flex-shrink-0"
+              />
               <span
+                v-else-if="prefs.avatarType === 'bot'"
+                class="w-7 h-7 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-default)] flex items-center justify-center overflow-hidden flex-shrink-0"
+              >
+                <CopilotBotAvatar :size="24" mood="idle" />
+              </span>
+              <span
+                v-else
                 class="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)]
                        flex items-center justify-center text-xs font-semibold text-[var(--text-inverse)] flex-shrink-0"
                 aria-hidden="true"
@@ -68,18 +81,47 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useSidebarStore } from '../../stores/sidebar'
 import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
 import { User, Sunny, Moon, Fold } from '@/components/icons'
-import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
+import CopilotBotAvatar, { type BotMood } from '@/components/CopilotBotAvatar.vue'
+import { useUserPrefs } from '@/composables/useUserPrefs'
 
 const authStore = useAuthStore()
 const sidebarStore = useSidebarStore()
 const themeStore = useThemeStore()
 const router = useRouter()
+const { prefs } = useUserPrefs()
+
+const headerBotMood = ref<BotMood>('idle')
+let headerIdleTimer: ReturnType<typeof setTimeout> | null = null
+
+function onActivity(): void {
+  if (headerBotMood.value === 'sleep') {
+    headerBotMood.value = 'idle'
+  }
+  if (headerIdleTimer) clearTimeout(headerIdleTimer)
+  if (prefs.value.botIdleSleep) {
+    headerIdleTimer = setTimeout(() => {
+      headerBotMood.value = 'sleep'
+    }, 60_000) // 60s 无任何指针或按键交互进入呼吸睡眠微动画
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('pointerdown', onActivity, { passive: true })
+  window.addEventListener('keydown', onActivity, { passive: true })
+  onActivity()
+})
+
+onBeforeUnmount(() => {
+  if (headerIdleTimer) clearTimeout(headerIdleTimer)
+  window.removeEventListener('pointerdown', onActivity)
+  window.removeEventListener('keydown', onActivity)
+})
 
 /** 批次4：头像首字符（用户名首字大写，兜底 "?"） */
 const avatarLetter = computed(() => {

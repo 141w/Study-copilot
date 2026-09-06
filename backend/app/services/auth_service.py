@@ -89,6 +89,8 @@ async def refresh_user_token(
     user = result.scalar_one_or_none()
     if not user:
         raise NotFoundError("用户不存在")
+    if not user.is_active:
+        raise AuthenticationError("账户已被禁用")
 
     token_data = {"sub": user.id, "username": user.username}
     return {
@@ -106,6 +108,9 @@ async def get_user_from_token(
     if payload is None:
         raise AuthenticationError("无法验证凭据")
 
+    if payload.get("type") != "access":
+        raise AuthenticationError("无效的访问令牌类型")
+
     user_id = payload.get("sub")
     if user_id is None:
         raise AuthenticationError("无法验证凭据")
@@ -114,6 +119,9 @@ async def get_user_from_token(
     user = result.scalar_one_or_none()
     if user is None:
         raise AuthenticationError("无法验证凭据")
+
+    if not user.is_active:
+        raise AuthenticationError("账户已被禁用")
 
     return user
 

@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import os
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +30,7 @@ class Embedder:
         self._cache_dir = Path(cache_dir)
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache: dict = {}
+        self._save_lock = threading.Lock()
         self._load_cache()
 
     @property
@@ -129,16 +131,23 @@ class Embedder:
                 self._cache = {}
 
     def _save_cache(self):
-        """将缓存持久化到磁盘"""
+        """将缓存持久化到磁盘（线程安全 + 原子替换）"""
+        if not self._save_lock.acquire(blocking=False):
+            return  # 另一次保存正在进行中，避免重复开销
         try:
             cf = self._cache_file()
-            # 序列化 numpy -> list
-            data = {k: v.tolist() for k, v in self._cache.items()}
-            with open(cf, "w", encoding="utf-8") as f:
+            # 拷贝当前缓存快照，避免多线程迭代时字典大小改变
+            cache_snapshot = list(self._cache.items())
+            data = {k: v.tolist() if hasattr(v, "tolist") else list(v) for k, v in cache_snapshot}
+            tmp = cf.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f)
-            logger.info(f"Embedding cache saved: {len(self._cache)} entries")
+            tmp.replace(cf)
+            logger.debug(f"Embedding cache saved: {len(data)} entries")
         except Exception as e:
             logger.warning(f"Failed to save embedding cache: {e}")
+        finally:
+            self._save_lock.release()
 
     # ------------------------------------------------------------------
     # 异步 Embedding

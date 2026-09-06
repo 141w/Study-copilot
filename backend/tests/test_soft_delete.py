@@ -6,11 +6,12 @@ restore 恢复；purge 物理清除超期项。
 import uuid
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db import Document, Note, User
 from app.exceptions import NotFoundError
 from app.services import document_service, note_service
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_user(db_session: AsyncSession) -> User:

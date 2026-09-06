@@ -11,6 +11,7 @@ Column[str] vs str 误报由此根除）。
 import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -60,12 +61,12 @@ class _Vector(TypeDecorator):
         super().__init__()
         self.dimension = dimension
 
-    def get_col_spec(self, **kw):
+    def get_col_spec(self, **kw: Any) -> str:
         if kw.get("dialect") and kw["dialect"].name == "postgresql":
             return f"vector({self.dimension})"
         return "TEXT"
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Any, dialect: Any) -> Any:
         """Convert Python list to the DB representation."""
         if value is None:
             return None
@@ -77,7 +78,7 @@ class _Vector(TypeDecorator):
         import json as _json
         return _json.dumps(value)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Any, dialect: Any) -> Any:
         """Convert DB value back to Python list."""
         if value is None:
             return None
@@ -182,6 +183,7 @@ class UserLLMConfig(Base):
     model_name: Mapped[str] = mapped_column(String, default="gpt-4o-mini")
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
     max_tokens: Mapped[int] = mapped_column(Integer, default=2048)
+    context_window: Mapped[int] = mapped_column(Integer, default=262144)
     embedding_model: Mapped[str] = mapped_column(
         String, default="shibing624/text2vec-base-chinese"
     )
@@ -308,6 +310,28 @@ class DocumentChunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, default=0)
     chunk_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+
+
+class CustomPersona(Base):
+    """User-defined custom discussion persona, persisted in DB and scoped per user."""
+
+    __tablename__ = "custom_personas"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(50))
+    role: Mapped[str] = mapped_column(String(50), index=True)
+    avatar: Mapped[str] = mapped_column(String(50), default="User")
+    color: Mapped[str | None] = mapped_column(String(20), default="#6366f1")
+    system_message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=_utcnow_naive,
+        onupdate=_utcnow_naive,
+    )
 
 
 

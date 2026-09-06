@@ -4,6 +4,7 @@ from app.db.database import (
     Base,
     ChatSession,
     CourseSpace,
+    CustomPersona,
     Document,
     DocumentChunk,
     Message,

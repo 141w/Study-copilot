@@ -126,9 +126,37 @@ export interface LLMConfig {
   embedding_model?: string
   embedding_dimension?: number
   message_format?: string
+  /** 模型上下文窗口大小（默认 256k = 262144） */
+  context_window?: number
   /** GET /config/llm 返回：是否已保存 Key + 掩码展示值 */
   has_api_key?: boolean
   api_key_masked?: string
+}
+
+export interface SystemStatus {
+  database: {
+    status: string
+    document_chunks: number
+    pgvector_dimension: number
+  }
+  vector_engine: {
+    name: string
+    model_name: string
+    dimension: number
+    device: string
+    is_ready: boolean
+  }
+  timestamp: string
+}
+
+export interface LLMCapabilities {
+  success: boolean
+  context_window: number
+  max_output_tokens: number
+  source: 'vendor_api' | 'vendor_spec' | 'default_256k'
+  model_name: string
+  latency_ms?: number
+  message?: string
 }
 
 export interface Transformation {

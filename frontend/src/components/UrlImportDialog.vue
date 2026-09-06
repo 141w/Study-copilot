@@ -20,7 +20,8 @@
       {{ error }}
     </div>
     <div v-if="success" class="mt-4 p-3 bg-[var(--color-success-light)] border border-[var(--color-success)]/20 rounded-lg text-sm text-[var(--color-success)]">
-      导入成功！已生成 {{ chunkCount }} 个知识块
+      <span v-if="importedStatus === 'processing'">URL 导入成功，文档正在后台解析与切片中...</span>
+      <span v-else>导入成功！已生成 {{ chunkCount }} 个知识块</span>
     </div>
 
     <template #footer>
@@ -59,6 +60,7 @@ const loading = ref(false)
 const error = ref('')
 const success = ref(false)
 const chunkCount = ref(0)
+const importedStatus = ref('')
 const localVisible = ref(false)
 
 watch(() => props.visible, (val) => {
@@ -67,6 +69,7 @@ watch(() => props.visible, (val) => {
     url.value = ''
     error.value = ''
     success.value = false
+    importedStatus.value = ''
   }
 })
 
@@ -74,6 +77,7 @@ function close(): void {
   url.value = ''
   error.value = ''
   success.value = false
+  importedStatus.value = ''
   localVisible.value = false
 }
 
@@ -88,11 +92,13 @@ async function importUrl(): Promise<void> {
   loading.value = true
   error.value = ''
   success.value = false
+  importedStatus.value = ''
 
   try {
     const response = await api.post<DocumentModel>('/documents/from-url', {
       url: url.value.trim()
     })
+    importedStatus.value = (response.data as unknown as { status?: string }).status || ''
     chunkCount.value = (response.data as unknown as { chunk_count?: number }).chunk_count || 0
     success.value = true
     emit('imported', response.data)

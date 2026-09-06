@@ -260,4 +260,19 @@ export const Check = makeIcon({
 })
 
 
-export default { Search, User, Document, Close, EditPen, ChatDotSquare, DocumentChecked, Edit, Delete, Tickets, Upload, CopyDocument, TrendCharts, Plus, VideoPlay, VideoPause, Promotion, HomeFilled, Setting, Download, WarningFilled, DocumentAdd, List, Switch, CircleCheckFilled, CircleCloseFilled, Clock, Loading, ArrowRight, View, Sunny, Moon, Fold, ChatLineRound, Top, CircleCheck, Link, DocumentCopy, MagicStick, ArrowLeft, Reading, Check }
+export const GraduationCap = makeIcon({
+  name: 'GraduationCap',
+  inner: `<path d="M22 10V16M2 10L12 5L22 10L12 15L2 10Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 12.5V17C6 17 8.5 19 12 19C15.5 19 18 17 18 17V12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
+})
+
+export const Lightning = makeIcon({
+  name: 'Lightning',
+  inner: `<path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
+})
+
+export const Brain = makeIcon({
+  name: 'Brain',
+  inner: `<path d="M9.5 2C7.01472 2 5 4.01472 5 6.5C5 7.02525 5.09002 7.52843 5.25368 7.99464C3.93175 8.76182 3 10.2748 3 12C3 13.7252 3.93175 15.2382 5.25368 16.0054C5.09002 16.4716 5 16.9748 5 17.5C5 19.9853 7.01472 22 9.5 22C10.6015 22 11.6083 21.6033 12.3853 20.9443C12.75 20.635 13 20.15 13 19.6V4.4C13 3.85 12.75 3.365 12.3853 3.0557C11.6083 2.3967 10.6015 2 9.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.5 2C16.9853 2 19 4.01472 19 6.5C19 7.02525 18.91 7.52843 18.7463 7.99464C20.0683 8.76182 21 10.2748 21 12C21 13.7252 20.0683 15.2382 18.7463 16.0054C18.91 16.4716 19 16.9748 19 17.5C19 19.9853 16.9853 22 14.5 22C13.3985 22 12.3917 21.6033 11.6147 20.9443C11.25 20.635 11 20.15 11 19.6V4.4C11 3.85 11.25 3.365 11.6147 3.0557C12.3917 2.3967 13.3985 2 14.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
+})
+
+export default { Search, User, Document, Close, EditPen, ChatDotSquare, DocumentChecked, Edit, Delete, Tickets, Upload, CopyDocument, TrendCharts, Plus, VideoPlay, VideoPause, Promotion, HomeFilled, Setting, Download, WarningFilled, DocumentAdd, List, Switch, CircleCheckFilled, CircleCloseFilled, Clock, Loading, ArrowRight, View, Sunny, Moon, Fold, ChatLineRound, Top, CircleCheck, Link, DocumentCopy, MagicStick, ArrowLeft, Reading, Check, GraduationCap, Lightning, Brain }

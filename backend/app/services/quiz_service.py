@@ -101,7 +101,9 @@ async def _do_generate_quiz(
     logger.debug(f"context length: {len(ctx)}")
 
     user_config = await get_llm_config_with_secret(db, user)
-    llm_config = config if config else user_config
+    llm_config = dict(user_config)
+    if config:
+        llm_config.update({k: v for k, v in config.items() if v is not None})
 
     try:
         qgen = QuizGenerator(llm_config) if llm_config else QuizGenerator()
@@ -113,6 +115,11 @@ async def _do_generate_quiz(
 
         traceback.print_exc()
         raise ExternalServiceError(f"生成题目失败: {str(e)}")
+
+    if not qdata:
+        # LLM 返回了内容但没解析出任何题目（如响应被截断/格式错乱）——
+        # 明确报错而非静默成功 0 题（任务此前会被标 completed）
+        raise ExternalServiceError("AI 未能生成任何题目，请稍后重试或调整题目数量")
 
     saved = []
     for q in qdata:

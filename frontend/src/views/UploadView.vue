@@ -73,17 +73,28 @@
             <el-icon class="w-5 h-5 text-[var(--text-secondary)]"><Document /></el-icon>
           </div>
           
-          <div class="flex-1">
-            <h3 class="font-medium text-[var(--text-primary)]">{{ doc.filename }}</h3>
-            <p class="text-sm text-[var(--text-muted)]">
-              {{ doc.chunk_count }} chunks · 
-              <span :class="statusColor(doc.status)">{{ statusText(doc.status) }}</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-medium text-[var(--text-primary)] truncate">{{ doc.filename }}</h3>
+            <p class="text-sm text-[var(--text-muted)] flex items-center gap-1.5 mt-0.5">
+              <span v-if="doc.file_size">{{ formatSize(doc.file_size) }} ·</span>
+              <template v-if="doc.status === 'processing'">
+                <span class="inline-flex items-center gap-1.5 text-[var(--color-warning)] font-medium">
+                  <el-icon class="is-loading text-xs"><Loading /></el-icon>
+                  正在解析与切片...
+                </span>
+              </template>
+              <template v-else>
+                <span>{{ doc.chunk_count }} 个知识块</span>
+                <span>·</span>
+                <span :class="statusColor(doc.status)">{{ statusText(doc.status) }}</span>
+              </template>
             </p>
           </div>
           
           <button
             @click="confirmDeleteDoc(doc)"
-            class="text-[var(--text-muted)] hover:text-[var(--color-error)] transition-colors"
+            class="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-light)] transition-all active:scale-95"
+            :title="`删除 ${doc.filename}`"
             :aria-label="`删除文档 ${doc.filename}`"
           >
             <el-icon class="w-5 h-5"><Delete /></el-icon>
@@ -106,7 +117,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import gsap from 'gsap'
-import { Upload, Link, Document, Delete } from '@/components/icons'
+import { Upload, Link, Document, Delete, Loading } from '@/components/icons'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
 import type { Document as DocumentModel } from '../types/models'
@@ -114,6 +125,7 @@ import UrlImportDialog from '../components/UrlImportDialog.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import SkeletonList from '../components/common/SkeletonList.vue'
 import { useReducedMotion } from '../composables/useReducedMotion'
+import { formatSize } from '../composables/useFormat'
 
 const documentStore = useDocumentStore()
 const toastStore = useToastStore()
@@ -154,8 +166,12 @@ async function uploadFile(file: File): Promise<void> {
   uploading.value = true
   try {
     const result = await documentStore.uploadDocument(file)
-    const chunkCount = result?.chunk_count ?? 0
-    toastStore.success(`文档上传成功！共生成 ${chunkCount} 个知识块`)
+    if (result?.status === 'processing') {
+      toastStore.info('文档上传成功，正在后台解析与切片...')
+    } else {
+      const chunkCount = result?.chunk_count ?? 0
+      toastStore.success(`文档上传成功！共生成 ${chunkCount} 个知识块`)
+    }
   } catch (error) {
     console.error('Upload failed:', error)
     const axiosError = error as { response?: { data?: { detail?: string } } }
@@ -203,9 +219,13 @@ async function doDeleteDoc(): Promise<void> {
 
 // 修复（2026-08-19）：模板绑定了 @imported="onUrlImported" 但函数未定义，
 // URL 导入成功后列表不刷新、无提示。补上 handler。
-function onUrlImported(doc: { filename?: string } | null): void {
-  toastStore.success(`URL 导入成功：${doc?.filename || '文档已加入列表'}`)
-  documentStore.fetchDocuments()
+function onUrlImported(doc: { filename?: string; status?: string; chunk_count?: number } | null): void {
+  if (doc?.status === 'processing') {
+    toastStore.info(`URL 导入成功，正在后台解析与切片：${doc?.filename || '文档'}`)
+  } else {
+    toastStore.success(`URL 导入成功：${doc?.filename || '文档已加入列表'}`)
+  }
+  documentStore.fetchDocuments(true)
 }
 
 function statusColor(status: string): string {

@@ -60,6 +60,7 @@ async def build_classroom_request(
     requirement: str,
     enable_web_search: bool = False,
     enable_tts: bool = True,
+    enable_image_generation: bool = False,
     agent_mode: str = "default",
 ) -> dict[str, Any]:
     """组装 OpenMAIC generate-classroom 请求体。
@@ -82,6 +83,7 @@ async def build_classroom_request(
         "pdfContent": [{"text": d["text"]} for d in docs] if docs else None,
         "enableWebSearch": enable_web_search,
         "enableTTS": enable_tts,
+        "enableImageGeneration": enable_image_generation,
         "agentMode": agent_mode,
     }
 
@@ -111,6 +113,60 @@ async def poll_generation_status(job_id: str) -> dict[str, Any]:
         resp = await client.get(url)
         resp.raise_for_status()
         return resp.json()
+
+
+async def sync_completed_classroom_job(
+    db: AsyncSession,
+    user: User,
+    job_id: str,
+    job_info: dict[str, Any],
+) -> dict[str, Any] | None:
+    """当轮询发现课堂任务完成时，就地更新占位课程并同步测验（双通道自愈）。"""
+    raw_data = job_info.get("data") if isinstance(job_info, dict) else None
+    payload: dict[str, Any] = raw_data if isinstance(raw_data, dict) else (job_info if isinstance(job_info, dict) else {})
+    status = payload.get("status", "")
+    is_done = payload.get("done") is True or status in ("succeeded", "completed")
+    if not is_done:
+        return None
+
+    result = payload.get("result") or {}
+    classroom_id = result.get("classroomId") or payload.get("classroomId") or job_id
+    url = result.get("url") or payload.get("url") or ""
+    title = result.get("title") or payload.get("title") or ""
+
+    escaped = job_id.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    matched = await db.execute(
+        select(CourseSpace)
+        .where(
+            CourseSpace.user_id == user.id,
+            CourseSpace.description.like(f"%{escaped}%"),
+        )
+        .order_by(CourseSpace.created_at.desc())
+        .limit(1)
+    )
+    course_row = matched.scalar_one_or_none()
+
+    if not course_row and classroom_id:
+        escaped_cid = classroom_id.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        matched_cid = await db.execute(
+            select(CourseSpace)
+            .where(
+                CourseSpace.user_id == user.id,
+                CourseSpace.description.like(f"%{escaped_cid}%"),
+            )
+            .order_by(CourseSpace.created_at.desc())
+            .limit(1)
+        )
+        course_row = matched_cid.scalar_one_or_none()
+
+    callback_payload = {
+        "event": "classroom_completed",
+        "classroom_id": classroom_id,
+        "title": title or (course_row.name.replace("（生成中）", "") if course_row else "OpenMAIC 课堂"),
+        "url": url,
+        "quiz_results": payload.get("quiz_results") or result.get("quiz_results") or [],
+    }
+    return await handle_webhook_callback(db, user, callback_payload, matched_course=course_row)
 
 
 # ── Webhook 处理 ─────────────────────────────────────────────────────────────

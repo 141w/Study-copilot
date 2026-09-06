@@ -48,6 +48,7 @@ async def create_or_update_llm_config(
     embedding_model: str,
     embedding_dimension: int,
     message_format: str | None = None,
+    context_window: int = 262144,
 ) -> dict:
     """Create or upsert LLM config for user."""
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
@@ -72,6 +73,7 @@ async def create_or_update_llm_config(
         existing.model_name = model_name
         existing.temperature = temperature
         existing.max_tokens = max_tokens
+        existing.context_window = context_window
         existing.embedding_model = embedding_model
         existing.embedding_dimension = embedding_dimension
         existing.message_format = fmt
@@ -85,6 +87,7 @@ async def create_or_update_llm_config(
             model_name=model_name,
             temperature=temperature,
             max_tokens=max_tokens,
+            context_window=context_window,
             embedding_model=embedding_model,
             embedding_dimension=embedding_dimension,
             message_format=fmt,
@@ -99,6 +102,7 @@ async def create_or_update_llm_config(
         "model_name": model_name,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "context_window": context_window,
         "embedding_model": embedding_model,
         "embedding_dimension": embedding_dimension,
         "message_format": fmt,
@@ -119,6 +123,7 @@ async def update_llm_config(
     embedding_model: str,
     embedding_dimension: int,
     message_format: str = "openai",
+    context_window: int = 262144,
 ) -> dict:
     """Update existing LLM config. Raises NotFoundError if none exists."""
     result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
@@ -134,6 +139,7 @@ async def update_llm_config(
     config.model_name = model_name
     config.temperature = temperature
     config.max_tokens = max_tokens
+    config.context_window = context_window
     config.embedding_model = embedding_model
     config.embedding_dimension = embedding_dimension
     config.message_format = message_format
@@ -195,6 +201,7 @@ def _default_config() -> dict:
         "model_name": "gpt-4o-mini",
         "temperature": 0.7,
         "max_tokens": 2048,
+        "context_window": 262144,
         "embedding_model": "shibing624/text2vec-base-chinese",
         "embedding_dimension": 768,
         "message_format": "openai",
@@ -213,6 +220,7 @@ def _config_to_dict(config: UserLLMConfig) -> dict:
         "model_name": config.model_name,
         "temperature": config.temperature,
         "max_tokens": config.max_tokens,
+        "context_window": getattr(config, "context_window", 262144),
         "embedding_model": config.embedding_model,
         "embedding_dimension": config.embedding_dimension,
         "message_format": config.message_format,

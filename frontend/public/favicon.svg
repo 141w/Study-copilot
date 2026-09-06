@@ -1,0 +1,22 @@
+<!-- Study Copilot favicon — 黑白单色系（DESIGN.md）。
+     圆形轮廓 + 双眼挖孔的极简 bot 头像，ink 填充；暗色标签页自动反转为白 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-108 -108 216 216">
+  <style>
+    .corps {
+      fill: #000000;
+    }
+    @media (prefers-color-scheme: dark) {
+      .corps {
+        fill: #ffffff;
+      }
+    }
+  </style>
+  <mask id="yeux" maskUnits="userSpaceOnUse" x="-108" y="-108" width="216" height="216">
+    <circle cx="0" cy="0" r="100" fill="#fff" />
+    <ellipse cx="-34" cy="-8" rx="13" ry="16" fill="#000" />
+    <ellipse cx="34" cy="-8" rx="13" ry="16" fill="#000" />
+  </mask>
+  <g mask="url(#yeux)">
+    <rect x="-108" y="-108" width="216" height="216" class="corps" />
+  </g>
+</svg>

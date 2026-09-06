@@ -7,10 +7,9 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.transformations import list_transformations
-from app.db import Document, Note, User
+from app.db import Document, DocumentChunk, Note, User
 from app.exceptions import ExternalServiceError, NotFoundError, ValidationError
 from app.services import transform_service
-
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -55,7 +54,7 @@ class TestGetAvailableTransformations:
     def test_returns_list(self):
         result = list_transformations()
         assert isinstance(result, list)
-        assert len(result) == 8
+        assert len(result) == 9
 
     def test_each_has_required_keys(self):
         for t in list_transformations():
@@ -67,7 +66,8 @@ class TestGetAvailableTransformations:
     def test_includes_all_expected_types(self):
         keys = {t["key"] for t in list_transformations()}
         expected = {"summary", "keypoints", "outline", "flashcards",
-                     "mindmap", "qa_pairs", "translate_en", "translate_zh"}
+                     "mindmap", "qa_pairs", "translate_en", "translate_zh",
+                     "explain"}
         assert keys == expected
 
 
@@ -327,16 +327,10 @@ class TestTransformDocumentChunks:
         mock_llm.generate = AsyncMock(return_value="result")
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
-            with patch("app.core.vector_store.DocumentVectorStore") as mock_vs:
-                mock_store = MagicMock()
-                mock_store._store.chunks = []
-                mock_store.load = AsyncMock()
-                mock_vs.return_value = mock_store
-
-                with pytest.raises(ValidationError, match="文档内容为空"):
-                    await transform_service.transform_document_chunks(
-                        db_session, u, doc.id, "summary"
-                    )
+            with pytest.raises(ValidationError, match="文档内容为空"):
+                await transform_service.transform_document_chunks(
+                    db_session, u, doc.id, "summary"
+                )
 
     @pytest.mark.asyncio
     async def test_successful_document_transform(self, db_session: AsyncSession):
@@ -348,23 +342,19 @@ class TestTransformDocumentChunks:
         db_session.add(doc)
         await db_session.commit()
 
+        c1 = DocumentChunk(id=str(uuid.uuid4()), document_id=doc.id, content="Chapter 1 content", chunk_index=0)
+        c2 = DocumentChunk(id=str(uuid.uuid4()), document_id=doc.id, content="Chapter 2 content", chunk_index=1)
+        c3 = DocumentChunk(id=str(uuid.uuid4()), document_id=doc.id, content="   ", chunk_index=2)  # whitespace filtered out
+        db_session.add_all([c1, c2, c3])
+        await db_session.commit()
+
         mock_llm = MagicMock()
         mock_llm.generate = AsyncMock(return_value="文档摘要结果")
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
-            with patch("app.core.vector_store.DocumentVectorStore") as mock_vs:
-                mock_store = MagicMock()
-                mock_store._store.chunks = [
-                    {"text": "Chapter 1 content"},
-                    {"text": "Chapter 2 content"},
-                    {"text": ""},  # empty chunk filtered out
-                ]
-                mock_store.load = AsyncMock()
-                mock_vs.return_value = mock_store
-
-                result = await transform_service.transform_document_chunks(
-                    db_session, u, doc.id, "summary"
-                )
+            result = await transform_service.transform_document_chunks(
+                db_session, u, doc.id, "summary"
+            )
 
         assert result["document_id"] == doc.id
         assert result["transform_type"] == "summary"
@@ -381,21 +371,21 @@ class TestTransformDocumentChunks:
         db_session.add(doc)
         await db_session.commit()
 
+        # Create 35 chunks (>30 limit)
+        chunks = [
+            DocumentChunk(id=str(uuid.uuid4()), document_id=doc.id, content=f"chunk {i}", chunk_index=i)
+            for i in range(35)
+        ]
+        db_session.add_all(chunks)
+        await db_session.commit()
+
         mock_llm = MagicMock()
         mock_llm.generate = AsyncMock(return_value="result")
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
-            with patch("app.core.vector_store.DocumentVectorStore") as mock_vs:
-                # Create 35 chunks (>30 limit)
-                chunks = [{"text": f"chunk {i}"} for i in range(35)]
-                mock_store = MagicMock()
-                mock_store._store.chunks = chunks
-                mock_store.load = AsyncMock()
-                mock_vs.return_value = mock_store
-
-                await transform_service.transform_document_chunks(
-                    db_session, u, doc.id, "summary"
-                )
+            await transform_service.transform_document_chunks(
+                db_session, u, doc.id, "summary"
+            )
 
         # Verify only first 30 chunks were combined
         call_kwargs = mock_llm.generate.call_args.kwargs

@@ -20,42 +20,42 @@
 | **框架** | FastAPI 0.109+ | FastAPI 0.104+ |
 | **语言** | Python 3.11+ | Python 3.11+ |
 | **ORM** | SQLAlchemy 2.0 异步（asyncpg） | **SurrealDB** 原生异步客户端（无 ORM） |
-| **数据库** | PostgreSQL 16+ | SurrealDB v2（图数据库，内置向量存储） |
-| **向量搜索** | **FAISS**（文件索引）+ **BM25**（Okapi）+ RRF 融合 | SurrealDB 内置向量搜索（`fn::vector_search`）+ 全文搜索 |
-| **Embedding** | sentence-transformers（本地模型） | 多 provider 通过 Esperanto 库 |
-| **LLM 抽象** | OpenAI SDK（OpenAI/Anthropic/Gemini/自定义） | Esperanto 库（18+ provider：OpenAI/Anthropic/Ollama/LM Studio 等） |
-| **LLM 编排** | 自研 Agentic RAG pipeline | **LangGraph** 状态机（chat/ask/source/transformation 图） |
+| **数据库** | PostgreSQL 16+ + pgvector | SurrealDB v2（图数据库，内置向量存储） |
+| **向量搜索** | **PostgreSQL + pgvector**（生产 IVFFlat/HNSW）+ **FAISS/BM25/RRF**（legacy） | SurrealDB 内置向量搜索（`fn::vector_search`）+ 全文搜索 |
+| **Embedding** | sentence-transformers（本地模型，text2vec / BGE-M3） | 多 provider 通过 Esperanto 库 |
+| **LLM 抽象** | OpenAI SDK（OpenRouter/OpenAI/Anthropic/Gemini/自定义） | Esperanto 库（18+ provider：OpenAI/Anthropic/Ollama/LM Studio 等） |
+| **LLM 编排** | 自研 Agentic RAG pipeline + 4角色讨论引擎 | **LangGraph** 状态机（chat/ask/source/transformation 图） |
 | **内容解析** | Docling + PyMuPDF + python-docx + python-pptx | content-core 库（50+ 文件类型） |
-| **Prompt 管理** | 硬编码在 Python 中 | ai-prompter + Jinja2 模板文件 |
-| **认证** | **JWT**（access + refresh token） | 简单密码中间件（PasswordAuthMiddleware） |
+| **Prompt 管理** | Jinja2 模板引擎（30 个 .jinja2 模板，7 个子目录） | ai-prompter + Jinja2 模板文件 |
+| **认证** | **JWT**（access + refresh token，密码 bcrypt 哈希） | 简单密码中间件（PasswordAuthMiddleware） |
 | **RAG 策略** | 5 步 Agentic RAG（路由→自适应检索→纠错→摘要→反思） | LangGraph 工作流（chat/ask/source_chat） |
-| **异步任务** | AsyncTask ORM 模型 + 前端轮询 | surreal-commands 后台作业队列（fire-and-forget） |
+| **异步任务** | 持久化队列（pending 落库 + worker 轮询 + 看门狗超时保护 + 重启恢复） | surreal-commands 后台作业队列（fire-and-forget） |
 | **播客生成** | ❌ 不支持 | ✅ podcast-creator 库，多说话人，EpisodeProfile/SpeakerProfile |
 | **速率限制** | 自研滑动窗口 IPRateLimiter（内存实现） | ❌ 无内置速率限制 |
 | **迁移工具** | Alembic | AsyncMigrationManager（自研，自动运行） |
-| **日志** | logging 标准库 | loguru |
-| **测试** | pytest + pytest-asyncio + pytest-cov（12 个测试文件） | pytest + pytest-asyncio（15 个测试文件） |
-| **代码检查** | ❌ 未配置 | ruff + mypy |
-| **包管理** | requirements.txt + alembic | pyproject.toml + uv |
+| **日志** | 结构化 JSON（生产）/ 文本（开发）+ X-Trace-ID 追踪中间件 | loguru |
+| **测试** | pytest + pytest-asyncio + pytest-cov（39 个测试文件，490 用例，72.52% 覆盖率） | pytest + pytest-asyncio（15 个测试文件） |
+| **代码检查** | ruff linter + mypy 类型门禁 | ruff + mypy |
+| **包管理** | pyproject.toml + uv.lock + requirements.txt 兼容层 | pyproject.toml + uv |
 
 ### 前端
 
 | 维度 | Study Copilot | Open Notebook |
 |------|--------------|---------------|
 | **框架** | **Vue 3.4**（Composition API） | **Next.js 16 + React 19** |
-| **语言** | JavaScript（无 TypeScript） | **TypeScript**（全量类型标注） |
-| **状态管理** | Pinia 2.1（10 个 store） | **Zustand 5** + TanStack React Query |
-| **路由** | Vue Router 4.3 | Next.js App Router（文件系统路由） |
-| **样式** | TailwindCSS 3.4 + GSAP 动画 | TailwindCSS v4 + Shadcn/ui 组件库 |
-| **HTTP 客户端** | Axios（JWT 拦截器 + 自动刷新） | TanStack Query（React Query） |
+| **语言** | **TypeScript**（渐进式迁移，核心 100% TS，vue-tsc 门禁） | **TypeScript**（全量类型标注） |
+| **状态管理** | Pinia 2.1（11 个 TS store，含 SWR 缓存） | **Zustand 5** + TanStack React Query |
+| **路由** | Vue Router 4.3（懒加载 + 路由守卫） | Next.js App Router（文件系统路由） |
+| **样式** | TailwindCSS 3.4 + CSS Variables 设计系统 + GSAP 动画 | TailwindCSS v4 + Shadcn/ui 组件库 |
+| **HTTP 客户端** | Axios（JWT 拦截器 + 401 自动无感刷新） | TanStack Query（React Query） |
 | **Markdown 渲染** | markdown-it + highlight.js | react-markdown + remark-gfm + KaTeX |
-| **表单** | 手写 | react-hook-form + zod |
-| **国际化** | ❌ 不支持 | ✅ i18next（中/英/日/韩/德/法/西/葡/俄/意/土/孟加拉 等 13 种语言） |
-| **主题** | ❌ 无主题切换 | ✅ next-themes（暗色/亮色） |
-| **UI 组件** | 手写 15 个组件 | Shadcn/ui（25+ 预制组件）+ Radix UI |
-| **开发工具** | Vite 5.2 + Vitest | Next.js + ESLint + Vitest |
-| **组件数量** | ~15 个视图 + ~14 个组件 | ~20 个页面 + ~60 个组件 |
-| **代码规模** | ~6,900 行 | ~38,741 行 |
+| **表单** | Element Plus 校验表单 | react-hook-form + zod |
+| **国际化** | ❌ 不支持（专注中文教学优化） | ✅ i18next（中/英/日/韩/德/法/西/葡/俄/意/土/孟加拉 等 13 种语言） |
+| **主题** | ✅ CSS Variables 驱动的 Light/Dark 双主题切换 | ✅ next-themes（暗色/亮色） |
+| **UI 组件** | Element Plus 2.14（按需自动导入）+ 20+ 业务定制组件 | Shadcn/ui（25+ 预制组件）+ Radix UI |
+| **开发工具** | Vite 5.2 + Vitest（24 测试文件，227 用例）+ vue-tsc + ESLint | Next.js + ESLint + Vitest |
+| **组件数量** | 14 个视图 + 20+ 个组件 | ~20 个页面 + ~60 个组件 |
+| **代码规模** | ~13k LOC Python + ~9k LOC TS/Vue | ~23,569 行 Python + ~38,741 行 TS/TSX |
 
 ---
 
@@ -66,13 +66,17 @@
 | 功能 | 说明 |
 |------|------|
 | **Agentic RAG** | 5 步检索增强：查询路由→自适应检索策略（4 种）→纠错检索→会话摘要→答案自我反思 |
-| **混合检索** | FAISS 语义 + BM25 关键词 + RRF 融合 |
-| **错题分析** | 错题记录 → 知识漏洞分析 → 学习进度追踪 |
-| **课程空间** | 按课程组织文档和笔记 |
-| **内容转换** | 8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释） |
+| **混合检索** | pgvector 语义 + FTS 中文全文 + RRF 融合（支持 legacy FAISS+BM25） |
+| **多智能体讨论** | 4 角色预设（苏老师/学霸/求知同学/归纳助手）+ 自定义人设 + 流式多轮讨论 |
+| **多文档布包** | OpenMAIC 移植的两阶段公平比例预算算法（1500 保底 + 需求比例分配） |
+| **OpenMAIC 平台联动** | 一键发起 AI 课堂生成（支持配图）+ 双通道轮询自愈落库 + 测验回流 |
+| **本地课程生成** | 基于文档一键自动生成课程大纲与多套测验题 |
+| **错题分析与归因** | 错题记录 → 知识漏洞分析 → 学习进度追踪 |
+| **课程空间** | 按课程组织文档和笔记，支持跨文档测验 |
+| **内容转换** | 9 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/英汉互译/通俗解释） |
 | **TTS 语音** | Edge TTS 朗读答案和笔记 |
 | **学习进度** | 知识漏洞分析 + 进度可视化 |
-| **标签管理** | 笔记标签体系 |
+| **标签管理** | 笔记标签体系与语义检索 |
 
 ### Open Notebook 独有功能
 

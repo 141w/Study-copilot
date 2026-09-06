@@ -63,7 +63,7 @@ export const useQuizStore = defineStore('quiz', () => {
   async function fetchKnowledgeStats(): Promise<void> {
     try {
       const response = await api.get<KnowledgeStats>('/analysis/knowledge')
-      knowledgeStats.value = response.data
+      knowledgeStats.value = response.data || { total_quizzes: 0, correct_count: 0, accuracy_rate: 0 }
     } catch (error) {
       console.error('Error fetching knowledge stats:', error)
       throw error
@@ -74,7 +74,7 @@ export const useQuizStore = defineStore('quiz', () => {
     analyzing.value = true
     try {
       const response = await api.get<{ weak_areas: WeakArea[] }>('/analysis/wrong')
-      weakAreas.value = response.data.weak_areas || []
+      weakAreas.value = Array.isArray(response.data?.weak_areas) ? response.data.weak_areas : []
     } catch (error) {
       console.error('Error analyzing wrong answers:', error)
       throw error
@@ -120,6 +120,8 @@ export const useQuizStore = defineStore('quiz', () => {
         quiz.user_answer = userAnswer
         quiz.result = result
       }
+      // 答案提交后废弃做题历史本地缓存，确保再次进入分析页时拉取最新结果
+      lastFetched.value = 0
 
       return result
     } catch (error) {
@@ -130,13 +132,16 @@ export const useQuizStore = defineStore('quiz', () => {
 
   async function fetchQuizHistory(forceRefresh = false): Promise<void> {
     if (!forceRefresh && isCacheFresh()) return
+    loading.value = true
     try {
       const response = await api.get<QuizHistoryItem[]>('/quiz/result-history')
-      quizResults.value = response.data
+      quizResults.value = Array.isArray(response.data) ? response.data : []
       lastFetched.value = Date.now()
     } catch (error) {
       console.error('Error fetching quiz history:', error)
       throw error
+    } finally {
+      loading.value = false
     }
   }
 

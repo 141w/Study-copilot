@@ -192,6 +192,15 @@
 }
 
 /* ==================== Global Styles ==================== */
+/* color-scheme：原生控件（autofill 底色、原生表单控件、系统滚动条回退）
+   跟随主题切换——暗色下避免白色 autofill 闪斑 */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
 body {
   font-family: var(--font-primary);
   color: var(--text-primary);

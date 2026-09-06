@@ -12,22 +12,25 @@
 
     <!-- Filters -->
     <div class="flex items-center gap-4 mb-6 flex-wrap">
-      <input
+      <el-input
         v-model="searchInput"
-        type="text"
+        :prefix-icon="Search"
+        clearable
         placeholder="搜索笔记..."
-        class="input max-w-xs"
+        class="max-w-xs"
         @input="onSearchInput"
+        @clear="onSearchInput"
       />
 
-      <select
+      <el-select
         v-model="selectedCourseId"
+        placeholder="全部课程"
         @change="onCourseFilter"
-        class="input max-w-[200px]"
+        class="w-[180px]"
       >
-        <option value="">全部课程</option>
-        <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
-      </select>
+        <el-option value="" label="全部课程" />
+        <el-option v-for="c in courses" :key="c.id" :value="c.id" :label="c.name" />
+      </el-select>
 
       <div class="flex items-center gap-2 flex-wrap">
         <el-button
@@ -37,7 +40,7 @@
           :type="!selectedTag ? 'primary' : 'info'"
           :plain="!!selectedTag"
         >
-          全部标签
+          全部标签 ({{ noteStore.notes.length }})
         </el-button>
         <el-button
           v-for="tag in noteStore.allTags"
@@ -48,7 +51,7 @@
           :type="selectedTag === tag ? 'primary' : 'info'"
           :plain="selectedTag !== tag"
         >
-          {{ tag }}
+          {{ tag }} <span class="ml-1 text-[11px] opacity-80">({{ tagCountMap[tag] || 0 }})</span>
         </el-button>
       </div>
 
@@ -71,10 +74,10 @@
         @save="onDraftInput('create')"
       />
       <div class="flex items-center justify-between mt-3">
-        <select v-model="newNote.course_id" class="input max-w-[200px] text-sm">
-          <option value="">不关联课程</option>
-          <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
+        <el-select v-model="newNote.course_id" placeholder="不关联课程" class="w-[200px]">
+          <el-option value="" label="不关联课程" />
+          <el-option v-for="c in courses" :key="c.id" :value="c.id" :label="c.name" />
+        </el-select>
         <div class="flex items-center gap-3">
           <el-button @click="cancelCreate">取消</el-button>
           <el-button @click="saveNewNote" type="primary">保存笔记</el-button>
@@ -107,10 +110,10 @@
             @save="onDraftInput('edit')"
           />
           <div class="flex items-center justify-between mt-3">
-            <select v-model="editNote.course_id" class="input max-w-[200px] text-sm">
-              <option value="">不关联课程</option>
-              <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select>
+            <el-select v-model="editNote.course_id" placeholder="不关联课程" class="w-[200px]">
+              <el-option value="" label="不关联课程" />
+              <el-option v-for="c in courses" :key="c.id" :value="c.id" :label="c.name" />
+            </el-select>
             <div class="flex items-center gap-3">
               <el-button @click="cancelEdit">取消</el-button>
               <el-button @click="saveEditNote" type="primary">保存</el-button>
@@ -140,7 +143,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Plus, EditPen } from '@/components/icons'
+import { Plus, EditPen, Search } from '@/components/icons'
 import { useNoteStore } from '../stores/note'
 import type { NoteDetail } from '../stores/note'
 import { useCourseStore } from '../stores/course'
@@ -200,6 +203,21 @@ const courses = computed(() => courseStore.courses)
 const hasActiveFilters = computed(() =>
   searchInput.value.trim() || selectedCourseId.value || selectedTag.value
 )
+
+/** 统计每个标签下的笔记数量 */
+const tagCountMap = computed<Record<string, number>>(() => {
+  const map: Record<string, number> = {}
+  noteStore.notes.forEach(note => {
+    if (!note.tags) return
+    note.tags.forEach(t => {
+      const name = typeof t === 'string' ? t : t?.name
+      if (name) {
+        map[name] = (map[name] || 0) + 1
+      }
+    })
+  })
+  return map
+})
 
 function courseNameFor(note: NoteDetail): string {
   if (!note.course_space_id) return ''

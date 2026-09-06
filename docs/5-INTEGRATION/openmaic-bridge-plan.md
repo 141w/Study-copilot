@@ -300,9 +300,9 @@ M7  Doc Bundle    ██████████████░░░░░░  
 | 检查 | 结果 |
 |------|------|
 | 前端 vue-tsc | 0 errors |
-| 前端 vitest | 209/209 passed |
-| 后端 pytest | 425/425 passed |
-| 覆盖率 | 66% (≥65% 要求) |
+| 前端 vitest | 227/227 passed (24 测试文件) |
+| 后端 pytest | 490/490 passed (39 测试文件) |
+| 覆盖率 | 72.52% (≥65% 要求) |
 
 ### 待验证
 
@@ -316,11 +316,9 @@ M7  Doc Bundle    ██████████████░░░░░░  
 
 | 阶段 | 新增文件 | 修改文件 | 实际已完成 |
 |------|---------|---------|----------|
-| 阶段一 | 5（openmaic_service.py, openmaic_bridge.py, ClassroomBridgeDialog.vue, OpenMAICLinkCard.vue, integrations/\_\_init\_\_.py[^1]） | 4（config.py ✅, main.py ✅, api/\_\_init\_\_.py ✅, CourseDetailView.vue ✅ + DocumentView.vue ✅） | ✅ M1-M2 完成 |
-| 阶段二 | 1（OpenMAICLinkCard.vue ✅ 已提前完成） | 3（quiz_service 格式适配, AnalysisView 课堂学习标签页, webhook handler 已在 bridge 中） | ❌ Quiz 同步逻辑待实现 |
-| 阶段三 | 3（persona_discussion, course_generator, doc_bundle） | 2（ChatView mode param, quiz API 扩展） | ❌ 阶段三未开始 |
-
-[^1]: OpenMAICLinkCard.vue 在阶段二清单中提前创建，可复用。
+| 阶段一 | 5（openmaic_service.py, openmaic_bridge.py, ClassroomBridgeDialog.vue, OpenMAICLinkCard.vue, integrations/\_\_init\_\_.py） | 4（config.py ✅, main.py ✅, api/\_\_init\_\_.py ✅, CourseDetailView.vue ✅ + DocumentView.vue ✅） | ✅ M1-M3 基础完成 |
+| 阶段二 | 1（OpenMAICLinkCard.vue ✅） | 3（quiz_service 格式适配 ✅, AnalysisView 课堂学习标签页 ✅, 双通道自愈状态轮询 ✅） | ✅ M4 完成（Quiz 同步与自动自愈落库） |
+| 阶段三 | 3（persona_discussion ✅, course_generator ✅, doc_bundle ✅） | 4（ChatView 人设选择与讨论模式 ✅, ClassroomBridgeDialog 配图开关 ✅, chat.py personas 端点 ✅, quiz document_id nullable 迁移 ✅） | ✅ M5-M7 全部完成 |
 
 ---
 
@@ -328,50 +326,52 @@ M7  Doc Bundle    ██████████████░░░░░░  
 
 | 决策 | 选择 | 理由 |
 |------|------|------|
-| **集成方式** | REST API + Webhook（不改两方核心代码） | 两项目技术栈不兼容（Python FastAPI vs TS Next.js），改核心代价远超收益 |
+| **集成方式** | REST API + Webhook + 状态轮询自愈 | 两项目独立部署；通过双通道消除单纯依赖 Webhook 的单点风险 |
 | **Deployment** | 独立部署，HTTP 通信 | 双方架构差异过大，monorepo 合并 ROI 极低 |
-| **讨论模式** | 简化 Sequential persona chain（不用 LangGraph） | LangGraph 无法在 FastAPI 侧运行，且 OpenMAIC 的 Director Graph 是过度设计 |
-| **课程生成** | Study Copilot 本地轻量版（不用 LangGraph/render-service） | 避免 LangGraph Python mirror + FFmpeg 集群的维护成本 |
+| **讨论模式** | 4 预设 Sequential persona chain（苏老师/学霸/求知同学/归纳助手） | 结构化多角度启发，避免 LangGraph 重型运行时代价 |
+| **课程生成** | Study Copilot 本地轻量版（Jinja2 + QuizGenerator） | 本地即时可用，不强依赖外部服务 |
+| **文档预算** | 两阶段公平比例预算算法（OpenMAIC 移植） | 基础保底 1500 字 + 剩余预算按未满足需求动态分配 + 标点安全截断 |
 | **白板系统** | ❌ 跳过 | 需要 React Flow（React 生态），Vue 无替代品规模太大 |
 | **视频导出** | ❌ 跳过 | 需要 Docker + FFmpeg 集群，通过 OpenMAIC iframe 调用即可 |
 
 ---
 
-## 五之一、全量完成成果（2026-09-04）
+## 五之一、全量完成成果（2026-09-05 更新）
 
 ### 后端新增/修改文件
 
 | 文件 | 说明 | 验证 |
 |------|------|------|
 | `backend/app/config.py` | 新增 `openmaic_base_url`, `openmaic_webhook_secret`, `openmaic_enabled` | ✅ 加载测试通过 |
-| `backend/app/services/openmaic_service.py` | 桥接服务层：5 个核心函数 | ✅ 模块导入通过 |
-| `backend/app/api/openmaic_bridge.py` | 4 条路由：classroom / classrooms / webhook / quiz/import | ✅ 路由注册通过 |
+| `backend/app/services/openmaic_service.py` | 桥接服务层：构建请求、提交生成、状态轮询、双通道自愈落库、测验导入 | ✅ 12/12 单测通过 |
+| `backend/app/api/openmaic_bridge.py` | 5 条路由：classroom / classrooms / webhook / quiz/import / classroom/{job_id}/status | ✅ 路由契约测试通过 |
 | `backend/app/api/courses.py` | 新增 `POST /courses/generate` 端点 | ✅ 路由注册通过 |
-| `backend/app/api/chat.py` | 新增 `POST /chat/discuss` SSE 端点 + DiscussRequest schema | ✅ 路由注册通过 |
+| `backend/app/api/chat.py` | 新增 `GET /chat/personas` 与 `POST /chat/discuss` SSE 端点 | ✅ 路由注册通过 |
 | `backend/app/main.py` | 注册 openmaic_bridge_router | ✅ App 加载通过 |
-| `backend/app/core/persona_discussion.py` | 多智能体讨论引擎（Sequential persona chain） | ✅ 模块导入通过 |
-| `backend/app/core/course_generator.py` | 课程大纲生成器（LLM + QuizGenerator 组合） | ✅ 模块导入通过 |
-| `backend/app/core/document_bundle.py` | 多文档 CJK 预算打包引擎 | ✅ smoke test 通过 |
+| `backend/app/core/persona_discussion.py` | 多智能体讨论引擎（4 套角色预设 + 动态人设 + 上下文注入） | ✅ 4/4 单测通过 |
+| `backend/app/core/course_generator.py` | 课程大纲生成器（LLM + QuizGenerator 组合） | ✅ 5/5 单测通过 |
+| `backend/app/core/document_bundle.py` | 多文档公平比例预算打包引擎（OpenMAIC 算法移植） | ✅ 11/11 单测通过 |
+| `backend/alembic/versions/b9a8c7d6e5f4_*.py` | 数据库迁移：quizzes.document_id 改为 nullable | ✅ 迁移测试通过 |
 
 ### 前端新增/修改文件
 
 | 文件 | 说明 | 验证 |
 |------|------|------|
-| `frontend/src/components/integrations/ClassroomBridgeDialog.vue` | 课堂生成配置弹窗 | ✅ vue-tsc 通过 |
+| `frontend/src/components/integrations/ClassroomBridgeDialog.vue` | 课堂生成配置弹窗（支持配图开关） | ✅ vue-tsc 通过 |
 | `frontend/src/components/integrations/OpenMAICLinkCard.vue` | 课堂链接卡片 + iframe 预览 | ✅ vue-tsc 通过 |
-| `frontend/src/stores/openmaic.ts` | Pinia store 管理课堂状态 | ✅ 编译通过 |
+| `frontend/src/stores/openmaic.ts` | Pinia store 管理课堂状态与双通道轮询 | ✅ 编译通过 |
 | `frontend/src/views/CourseDetailView.vue` | 工具栏"生成课堂"按钮 + 弹窗集成 | ✅ 编译通过 |
 | `frontend/src/views/DocumentView.vue` | 文档列表"生成课堂"按钮 + 弹窗集成 | ✅ 编译通过 |
 | `frontend/src/views/AnalysisView.vue` | 新增"课堂学习"标签页 | ✅ 编译通过 |
-| `frontend/src/views/ChatView.vue` | 讨论模式 toggle + persona 渲染 | ✅ 编译通过 |
+| `frontend/src/views/ChatView.vue` | 讨论模式 toggle + 4 人设选择器 + 上下文模式切换 | ✅ 编译通过 |
 | `frontend/src/views/CourseListView.vue` | AI 生成课程入口（dropdown + dialog） | ✅ 编译通过 |
 
 ### 验证结果
 
-- ✅ 后端 `python -c "from app.main import app"` → 5 条新 routes 注册成功
+- ✅ 后端 `python -c "from app.main import app"` → 所有 routes 注册成功
 - ✅ 前端 `npx vue-tsc --noEmit` → 0 errors
-- ✅ 前端 `npx vitest run` → 209/209 tests passed
-- ✅ 后端 `pytest tests/ -x -q` → 425 passed
+- ✅ 前端 `npx vitest run` → 227/227 tests passed (24 files)
+- ✅ 后端 `pytest tests/ -x -q` → 490 passed (39 files, 72.52% coverage)
 
 ### 待验证
 

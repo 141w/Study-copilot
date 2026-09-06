@@ -14,19 +14,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.embedder import embedder
 from app.core.rag_engine import rag_engine
-from app.db import ChatSession, Message, User
-from app.exceptions import NotFoundError, ValidationError
+from app.db import ChatSession, Document, Message, User
+from app.exceptions import NotFoundError
 from app.services.config_service import get_llm_config_with_secret
 
 logger = logging.getLogger(__name__)
 
-_Msg_INSERT = text("""
+_Msg_INSERT_PG = text("""
     INSERT INTO messages (id, session_id, role, content, sources, embedding, created_at)
     VALUES (
         :id, :session_id, :role, :content, :sources,
         CAST(:embedding AS vector(768)), :created_at
     )
 """)
+
+
+def _vec_str(embedding: list[float] | None) -> str | None:
+    """Convert embedding list to pgvector string format '[0.1,0.2,...]'."""
+    if embedding is None:
+        return None
+    return "[" + ",".join(str(v) for v in embedding) + "]"
 
 
 async def _embed_text(text_str: str) -> list[float] | None:
@@ -41,13 +48,6 @@ async def _embed_text(text_str: str) -> list[float] | None:
         return None
 
 
-def _vec_str(embedding: list[float] | None) -> str | None:
-    """Convert embedding list to pgvector string format '[0.1,0.2,...]'."""
-    if embedding is None:
-        return None
-    return "[" + ",".join(str(v) for v in embedding) + "]"
-
-
 async def _insert_message(
     db: AsyncSession,
     msg_id: str,
@@ -57,20 +57,85 @@ async def _insert_message(
     sources_json: str | None,
     embedding: list[float] | None,
 ) -> None:
-    """Raw-SQL insert so CAST(:embedding AS vector(768)) is explicit."""
-    await db.execute(
-        _Msg_INSERT,
-        {
-            "id": msg_id,
-            "session_id": session_id,
-            "role": role,
-            "content": content,
-            "sources": sources_json,
-            "embedding": _vec_str(embedding),
-            "created_at": datetime.now(UTC).replace(tzinfo=None),
-        },
+    """Insert message into DB.
+
+    Uses explicit CAST(:embedding AS vector(768)) for PostgreSQL/pgvector,
+    and ORM for SQLite. If vector insertion encounters any type or dialect
+    mismatch, falls back to embedding=None so user conversation is never blocked.
+    """
+    bind = db.get_bind()
+    is_pg = bind is not None and getattr(bind.dialect, "name", "") == "postgresql"
+
+    try:
+        if is_pg:
+            await db.execute(
+                _Msg_INSERT_PG,
+                {
+                    "id": msg_id,
+                    "session_id": session_id,
+                    "role": role,
+                    "content": content,
+                    "sources": sources_json,
+                    "embedding": _vec_str(embedding),
+                    "created_at": datetime.now(UTC).replace(tzinfo=None),
+                },
+            )
+        else:
+            msg = Message(
+                id=msg_id,
+                session_id=session_id,
+                role=role,
+                content=content,
+                sources=sources_json,
+                embedding=embedding,
+                created_at=datetime.now(UTC).replace(tzinfo=None),
+            )
+            db.add(msg)
+        await db.commit()
+    except Exception as exc:
+        logger.warning("Failed to insert message with embedding: %s. Falling back to embedding=None.", exc)
+        await db.rollback()
+        if is_pg:
+            await db.execute(
+                _Msg_INSERT_PG,
+                {
+                    "id": msg_id,
+                    "session_id": session_id,
+                    "role": role,
+                    "content": content,
+                    "sources": sources_json,
+                    "embedding": None,
+                    "created_at": datetime.now(UTC).replace(tzinfo=None),
+                },
+            )
+        else:
+            msg = Message(
+                id=msg_id,
+                session_id=session_id,
+                role=role,
+                content=content,
+                sources=sources_json,
+                embedding=None,
+                created_at=datetime.now(UTC).replace(tzinfo=None),
+            )
+            db.add(msg)
+        await db.commit()
+
+
+async def _validate_document_ids(
+    db: AsyncSession, user_id: str, document_ids: list[str]
+) -> list[str]:
+    """Filter document_ids to ensure they belong to the user and are not soft-deleted."""
+    if not document_ids:
+        return []
+    result = await db.execute(
+        select(Document.id).where(
+            Document.id.in_(document_ids),
+            Document.user_id == user_id,
+            Document.deleted_at.is_(None),
+        )
     )
-    await db.commit()
+    return list(result.scalars().all())
 
 
 async def ask_question(
@@ -83,12 +148,15 @@ async def ask_question(
 ) -> dict:
     """Non-streaming RAG ask. Returns {answer, sources, used_source_indices, filtered_sources, session_id}."""
     user_config = await get_llm_config_with_secret(db, user)
-    llm_config = config if config else user_config
+    llm_config = dict(user_config)
+    if config:
+        llm_config.update({k: v for k, v in config.items() if v is not None})
 
+    valid_doc_ids = await _validate_document_ids(db, user.id, document_ids)
     session_id, _ = await _ensure_session(db, user.id, session_id, question)
     history = await _get_history(db, session_id)
 
-    result = await rag_engine.ask(document_ids, question, history, llm_config)
+    result = await rag_engine.ask(valid_doc_ids, question, history, llm_config)
 
     # Persist messages with embeddings (non-blocking: embedding failure doesn't break the flow)
     sources_json = json.dumps(result.get("sources", []), ensure_ascii=False)
@@ -116,8 +184,11 @@ async def ask_question_stream(
 ) -> AsyncIterator[dict]:
     """Streaming RAG ask. Yields dicts with 'type' key: sources / token / answer / done."""
     user_config = await get_llm_config_with_secret(db, user)
-    llm_config = config if config else user_config
+    llm_config = dict(user_config)
+    if config:
+        llm_config.update({k: v for k, v in config.items() if v is not None})
 
+    valid_doc_ids = await _validate_document_ids(db, user.id, document_ids)
     session_id, _ = await _ensure_session(db, user.id, session_id, question)
     history = await _get_history(db, session_id)
 
@@ -129,11 +200,13 @@ async def ask_question_stream(
     await _insert_message(db, user_msg_id, session_id, "user", question, None, q_emb)
 
     answer_parts: list[str] = []
+    collected_sources: list[dict] = []
     done_yielded = False
 
     try:
-        async for chunk in rag_engine.ask_stream(document_ids, question, history, llm_config):
+        async for chunk in rag_engine.ask_stream(valid_doc_ids, question, history, llm_config):
             if chunk["type"] == "sources":
+                collected_sources = chunk.get("sources", [])
                 yield {
                     "type": "sources",
                     "sources": chunk["sources"],
@@ -153,14 +226,27 @@ async def ask_question_stream(
                 answer_parts.clear()
                 answer_parts.append(chunk["content"])
                 yield {"type": "answer_refined", "content": chunk["content"]}
-    finally:
-        if not done_yielded:
-            full_answer = "".join(answer_parts)
+    except GeneratorExit:
+        full_answer = "".join(answer_parts)
+        if full_answer:
+            sources_json = json.dumps(collected_sources, ensure_ascii=False)
             a_emb = await _embed_text(full_answer)
             await _insert_message(
                 db, str(uuid.uuid4()), session_id, "assistant", full_answer,
-                json.dumps([], ensure_ascii=False), a_emb,
+                sources_json, a_emb,
             )
+        done_yielded = True
+        return
+    finally:
+        if not done_yielded:
+            full_answer = "".join(answer_parts)
+            if full_answer:
+                sources_json = json.dumps(collected_sources, ensure_ascii=False)
+                a_emb = await _embed_text(full_answer)
+                await _insert_message(
+                    db, str(uuid.uuid4()), session_id, "assistant", full_answer,
+                    sources_json, a_emb,
+                )
             done_yielded = True
             yield {"type": "done"}
 
@@ -217,6 +303,13 @@ async def search_messages(
     q_emb = await _embed_text(query)
     if q_emb is None:
         return []
+
+    try:
+        bind = db.get_bind()
+        if bind and bind.dialect.name != "postgresql":
+            return []
+    except Exception:
+        pass
 
     q_emb_str = "[" + ",".join(str(v) for v in q_emb) + "]"
     top_k = max(1, min(top_k, 50))
@@ -317,7 +410,7 @@ async def _ensure_session(
     session_id: str | None,
     question: str,
 ) -> tuple[str, bool]:
-    """Return (session_id, is_new). Creates a new session if session_id is None."""
+    """Return (session_id, is_new). Creates a new session if session_id is None, validates ownership if provided."""
     is_new = False
     if not session_id:
         session_id = str(uuid.uuid4())
@@ -325,6 +418,16 @@ async def _ensure_session(
         db.add(new_session)
         await db.commit()
         is_new = True
+    else:
+        result = await db.execute(
+            select(ChatSession).where(
+                ChatSession.id == session_id,
+                ChatSession.user_id == user_id,
+            )
+        )
+        session = result.scalar_one_or_none()
+        if not session:
+            raise NotFoundError("会话不存在")
     return session_id, is_new
 
 

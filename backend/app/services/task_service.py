@@ -79,6 +79,11 @@ async def update_task(
     """
     task = await _get_task_or_raise(db, task_id, user_id)
 
+    # Protect cancelled state: do not overwrite a cancelled task with completed/failed
+    if task.status == "cancelled" and status != "cancelled":
+        logger.info("Task %s is already cancelled; ignoring status change to %s", task_id, status)
+        return task
+
     if status is not None:
         task.status = status
     if progress is not None:
@@ -109,23 +114,13 @@ async def get_user_tasks(
     offset: int = 0,
 ) -> list[AsyncTask]:
     """
-    Get all tasks for a user, optionally filtered by status.
+    Get tasks for a specific user, optionally filtered by status.
 
-    Args:
-        db: Database session.
-        user_id: The ID of the task owner.
-        status: Optional status filter.
-        limit: Maximum number of tasks to return.
-        offset: Number of tasks to skip.
-
-    Returns:
-        List of AsyncTask objects, newest first.
+    Returns newest tasks first.
     """
     query = select(AsyncTask).where(AsyncTask.user_id == user_id)
-
     if status:
         query = query.where(AsyncTask.status == status)
-
     query = query.order_by(AsyncTask.created_at.desc()).limit(limit).offset(offset)
 
     result = await db.execute(query)
@@ -146,17 +141,13 @@ async def get_task(
     return await _get_task_or_raise(db, task_id, user_id)
 
 
-async def cancel_task(
-    db: AsyncSession,
-    task_id: str,
-    user_id: str,
-) -> AsyncTask:
+async def cancel_task(db: AsyncSession, task_id: str, user_id: str) -> AsyncTask:
     """
     Cancel a pending or running task.
 
     Raises:
-        NotFoundError: If the task doesn't exist or doesn't belong to the user.
-        ValidationError: If the task is already in a terminal state.
+        NotFoundError: If task doesn't exist.
+        ValidationError: If task is already completed or failed.
     """
     task = await _get_task_or_raise(db, task_id, user_id)
 
@@ -173,7 +164,7 @@ async def cancel_task(
 
 
 async def recover_interrupted_tasks(db: AsyncSession) -> int:
-    """把上一次进程遗留的 running 孤儿任务标记为 failed。
+    """把上一次进程遗留的 running 孤儿任务标记为 failed，并同步更新相关文档状态。
 
     队列已持久化（pending 行落库、worker 轮询认领）：重启后未执行的
     pending 任务由新进程继续处理，不再丢失；仅崩溃时正在执行中的
@@ -190,11 +181,23 @@ async def recover_interrupted_tasks(db: AsyncSession) -> int:
     if not stale:
         return 0
 
+    from app.db import Document
+
     now = datetime.now(UTC).replace(tzinfo=None)
     for task in stale:
         task.status = "failed"
         task.error = "服务重启时任务正在执行，已被中断，请重新发起"
         task.completed_at = now
+        if task.task_type == "document_process" and task.result:
+            try:
+                payload = json.loads(task.result) if isinstance(task.result, str) else task.result
+                doc_id = payload.get("doc_id")
+                if doc_id:
+                    doc = await db.get(Document, doc_id)
+                    if doc and doc.status in ("pending", "processing"):
+                        doc.status = "error"
+            except Exception as e:
+                logger.warning("Failed to recover document state for task %s: %s", task.id, e)
     await db.commit()
 
     logger.info("Recovered %d interrupted tasks -> failed", len(stale))

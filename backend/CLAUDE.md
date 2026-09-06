@@ -79,25 +79,33 @@ backend/
 ├── alembic/                           # Database migrations
 │   ├── versions/
 │   └── env.py
-├── tests/                             # Pytest suite (32 test files)
+├── tests/                             # Pytest suite (39 test files, 490 tests, 72.52% cov)
 │   ├── conftest.py
 │   ├── conftest_async.py
 │   ├── conftest_fixtures.py
 │   ├── fixtures/
-│   ├── test_api.py
 │   ├── test_analysis_service.py
+│   ├── test_api.py
 │   ├── test_auth.py
+│   ├── test_auth_service.py
+│   ├── test_chat_service.py
 │   ├── test_chunker.py
 │   ├── test_config_service.py
+│   ├── test_course_generator.py
 │   ├── test_course_service.py
+│   ├── test_dimension_and_transform_fixes.py
+│   ├── test_document_bundle.py
 │   ├── test_document_parser.py
 │   ├── test_document_service.py
+│   ├── test_error_visibility_fixes.py
 │   ├── test_exceptions.py
 │   ├── test_hybrid_retrieval_contract.py
 │   ├── test_list_pagination.py
 │   ├── test_logging_config.py
 │   ├── test_metrics.py
 │   ├── test_note_indexing.py
+│   ├── test_openmaic_integration.py
+│   ├── test_persona_discussion.py
 │   ├── test_profile.py
 │   ├── test_quiz.py
 │   ├── test_quiz_generator.py
@@ -113,13 +121,14 @@ backend/
 │   ├── test_transform_service.py
 │   ├── test_tts.py
 │   ├── test_type_safety_regressions.py
+│   ├── test_url_extractor.py
 │   └── test_vector_store.py
 ├── uploads/                           # User-uploaded files (gitignored)
 ├── vectorstore/                       # FAISS index files (gitignored)
 ├── alembic.ini
-├── requirements.txt
+├── pyproject.toml                     # Hatchling packaging + pytest config + ruff + mypy
+├── requirements.txt                   # Compatibility dependency layer
 ├── run.py                             # Entry point: uvicorn app.main:app
-├── pytest.ini
 ├── Dockerfile
 ├── entrypoint.sh
 └── start.sh
@@ -308,6 +317,8 @@ pytest tests/ -v           # Run tests
 | POST | `/api/documents/{id}/restore` | Restore soft-deleted document |
 | POST | `/api/chat/ask` | Non-streaming RAG Q&A |
 | POST | `/api/chat/ask` (stream:true) | Streaming RAG Q&A (SSE) |
+| GET | `/api/chat/personas` | Get persona presets for discussion mode |
+| POST | `/api/chat/discuss` | Multi-persona discussion (SSE stream) |
 | GET | `/api/chat/history` | List chat sessions |
 | GET | `/api/chat/history/{id}` | Get session messages |
 | PUT | `/api/chat/history/{id}` | Update session title |
@@ -330,6 +341,7 @@ pytest tests/ -v           # Run tests
 | DELETE | `/api/notes/tags/{tag_id}` | Delete a tag |
 | POST | `/api/courses` | Create course space |
 | GET | `/api/courses` | List course spaces |
+| POST | `/api/courses/generate` | Auto-generate course outline + quizzes from docs |
 | GET | `/api/courses/{id}` | Get course detail |
 | PUT | `/api/courses/{id}` | Update course space |
 | DELETE | `/api/courses/{id}` | Delete course space |
@@ -347,9 +359,11 @@ pytest tests/ -v           # Run tests
 | GET | `/api/config/llm` | Get user's LLM config |
 | POST | `/api/config/llm` | Update user's LLM config |
 | PUT | `/api/config/llm` | Update user's LLM config |
-| POST | `/api/integrations/openmaic/classroom` | Initiate OpenMAIC classroom generation |
+| POST | `/api/integrations/openmaic/classroom` | Initiate OpenMAIC classroom generation (with image gen flag) |
+| GET | `/api/integrations/openmaic/classroom/{job_id}/status` | Get classroom generation status & dual-channel auto-sync |
 | GET | `/api/integrations/openmaic/classrooms` | List generated classrooms |
 | POST | `/api/integrations/openmaic/webhook` | OpenMAIC callback endpoint |
+| POST | `/api/integrations/openmaic/quiz/import` | Import OpenMAIC quiz results into error book |
 | GET | `/` | App info |
 | GET | `/health` | Health check |
 | GET | `/api/metrics` | Operational metrics (task counts by status) |

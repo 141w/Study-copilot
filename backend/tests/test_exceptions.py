@@ -9,6 +9,7 @@ Covers:
 """
 
 import pytest
+
 from app.exception_handlers import setup_exception_handlers
 from app.exceptions import (
     AppError,

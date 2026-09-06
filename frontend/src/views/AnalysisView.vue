@@ -1,6 +1,59 @@
 <template>
-  <div ref="contentRef" class="max-w-4xl mx-auto px-6 py-8">
-    <h1 class="text-2xl font-semibold text-[var(--text-primary)] mb-8">学习分析</h1>
+  <div class="max-w-4xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-8">
+      <h1 class="text-2xl font-semibold text-[var(--text-primary)]">学习分析</h1>
+      <el-button
+        :loading="pageLoading"
+        size="small"
+        class="!rounded-lg"
+        @click="refreshData(true)"
+      >
+        <el-icon v-if="!pageLoading" class="mr-1.5"><TrendCharts /></el-icon>
+        刷新数据
+      </el-button>
+    </div>
+
+    <!-- 学习总览指标卡片 -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div class="card p-4 flex flex-col justify-between">
+        <span class="text-xs font-medium text-[var(--text-muted)]">学习文档</span>
+        <div class="mt-2 flex items-baseline gap-1">
+          <span class="text-2xl font-bold tabular-nums text-[var(--text-primary)]">
+            {{ documentStore.documents.length }}
+          </span>
+          <span class="text-xs text-[var(--text-muted)]">篇</span>
+        </div>
+      </div>
+      <div class="card p-4 flex flex-col justify-between">
+        <span class="text-xs font-medium text-[var(--text-muted)]">AI 问答</span>
+        <div class="mt-2 flex items-baseline gap-1">
+          <span class="text-2xl font-bold tabular-nums text-[var(--text-primary)]">
+            {{ chatStore.sessions.length }}
+          </span>
+          <span class="text-xs text-[var(--text-muted)]">次会话</span>
+        </div>
+      </div>
+      <div class="card p-4 flex flex-col justify-between">
+        <span class="text-xs font-medium text-[var(--text-muted)]">做题练习</span>
+        <div class="mt-2 flex items-baseline gap-1">
+          <span class="text-2xl font-bold tabular-nums text-[var(--text-primary)]">
+            {{ quizStore.knowledgeStats.total_quizzes }}
+          </span>
+          <span class="text-xs text-[var(--text-muted)]">道</span>
+        </div>
+      </div>
+      <div class="card p-4 flex flex-col justify-between">
+        <span class="text-xs font-medium text-[var(--text-muted)]">练习正确率</span>
+        <div class="mt-2 flex items-baseline gap-1">
+          <span
+            class="text-2xl font-bold tabular-nums"
+            :class="accuracyColor(quizStore.knowledgeStats.accuracy_rate)"
+          >
+            {{ quizStore.knowledgeStats.total_quizzes > 0 ? `${quizStore.knowledgeStats.accuracy_rate}%` : '--' }}
+          </span>
+        </div>
+      </div>
+    </div>
 
     <!-- Tabs（P2-5：el-tabs 替换手写按钮） -->
     <el-tabs v-model="activeTab" class="mb-6">
@@ -11,8 +64,8 @@
 
     <!-- History Tab -->
     <div v-if="activeTab === 'history'">
-      <!-- P1-2：首载骨架屏（匹配分组卡片形状），避免空态闪烁 -->
-      <SkeletonList v-if="quizStore.loading && history.length === 0" variant="blocks" :count="2" />
+      <!-- 首载骨架屏（匹配分组卡片形状），避免空态闪烁 -->
+      <SkeletonList v-if="pageLoading && history.length === 0" variant="blocks" :count="2" />
       <div v-else-if="history.length === 0" class="text-center text-[var(--text-muted)] py-12">
         <el-icon class="w-16 h-16 mx-auto mb-4"><Document /></el-icon>
         <p class="text-[var(--text-muted)]">暂无做题记录</p>
@@ -67,19 +120,24 @@
     </div>
 
     <!-- Stats Tab -->
-    <div v-else>
-      <!-- Knowledge Stats -->
-      <div class="card p-6 mb-8">
-        <h2 class="font-semibold text-[var(--text-primary)] mb-4">整体掌握情况</h2>
+    <div v-else-if="activeTab === 'stats'">
+      <div v-if="pageLoading && quizStore.knowledgeStats.total_quizzes === 0" class="space-y-6">
+        <SkeletonList variant="rows" :count="3" />
+      </div>
 
-        <div v-if="quizStore.knowledgeStats.total_quizzes === 0" class="text-center py-8">
-          <el-icon class="w-16 h-16 mx-auto mb-4 text-[var(--text-muted)]"><TrendCharts /></el-icon>
-          <p class="text-[var(--text-muted)] mb-4">暂无统计数据</p>
-          <p class="text-sm text-[var(--text-muted)]">完成一些练习后，这里会显示你的学习分析</p>
-          <el-button type="primary" @click="$router.push('/quiz')" class="mt-4">
-            开始练习
-          </el-button>
-        </div>
+      <template v-else>
+        <!-- Knowledge Stats -->
+        <div class="card p-6 mb-8">
+          <h2 class="font-semibold text-[var(--text-primary)] mb-4">整体掌握情况</h2>
+
+          <div v-if="quizStore.knowledgeStats.total_quizzes === 0" class="text-center py-8">
+            <el-icon class="w-16 h-16 mx-auto mb-4 text-[var(--text-muted)]"><TrendCharts /></el-icon>
+            <p class="text-[var(--text-muted)] mb-4">暂无统计数据</p>
+            <p class="text-sm text-[var(--text-muted)]">完成一些练习后，这里会显示你的学习分析</p>
+            <el-button type="primary" @click="$router.push('/quiz')" class="mt-4">
+              开始练习
+            </el-button>
+          </div>
 
         <!-- P3-8：移动端单列回退显式声明（§4.7） -->
         <div v-else class="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -159,16 +217,17 @@
         </div>
       </div>
 
-      <!-- Analyze Button -->
-      <div class="mt-8 text-center">
-        <el-button type="primary" :loading="quizStore.analyzing" @click="analyzeWeakness">
-          {{ quizStore.analyzing ? '分析中...' : '重新分析错题' }}
-        </el-button>
-      </div>
+        <!-- Analyze Button -->
+        <div class="mt-8 text-center">
+          <el-button type="primary" :loading="quizStore.analyzing" @click="analyzeWeakness">
+            {{ quizStore.analyzing ? '分析中...' : '重新分析错题' }}
+          </el-button>
+        </div>
+      </template>
     </div>
 
     <!-- Classroom Learning Tab（OpenMAIC 联动） -->
-    <div v-if="activeTab === 'classroom'">
+    <div v-else-if="activeTab === 'classroom'">
       <div v-if="classroomLoading" class="text-center py-12">
         <SkeletonList variant="blocks" :count="2" />
       </div>
@@ -189,10 +248,16 @@
               <el-icon class="text-[var(--color-primary)] text-xl"><VideoPlay /></el-icon>
             </div>
             <div class="flex-1 min-w-0">
-              <h3 class="font-medium text-[var(--text-primary)]">{{ c.title }}</h3>
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="font-medium text-[var(--text-primary)] truncate">{{ c.title }}</h3>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--color-success-light)] text-[var(--color-success)] font-medium flex-shrink-0">
+                  可进入
+                </span>
+              </div>
               <p class="text-xs text-[var(--text-muted)] mt-1">{{ formatDate(c.created_at) }}</p>
               <div class="flex gap-2 mt-3">
                 <el-button v-if="c.url" size="small" type="primary" @click="openUrl(c.url)">
+                  <el-icon class="mr-1"><Link /></el-icon>
                   进入课堂
                 </el-button>
                 <el-button v-if="c.url" size="small" @click="copyUrl(c.url)">
@@ -211,34 +276,34 @@
 // defineOptions 是编译器宏，无需导入
 defineOptions({ name: 'AnalysisView' })
 
-import { ref, computed, onMounted, onActivated, onUnmounted, watch } from 'vue'
-import gsap from 'gsap'
+import { ref, computed, onMounted, onActivated, watch } from 'vue'
 import { useQuizStore } from '../stores/quiz'
 import type { QuizHistoryItem } from '../stores/quiz'
+import { useDocumentStore } from '../stores/document'
+import { useChatStore } from '../stores/chat'
 import { useOpenMAICStore } from '../stores/openmaic'
-import { TrendCharts, Document, CircleCheck, VideoPlay } from '@/components/icons'
+import { TrendCharts, Document, CircleCheck, VideoPlay, Link } from '@/components/icons'
 import SkeletonList from '../components/common/SkeletonList.vue'
-import { useReducedMotion } from '../composables/useReducedMotion'
 import { useToastStore } from '../stores/toast'
 
 const toast = useToastStore()
 const openmaic = useOpenMAICStore()
+const documentStore = useDocumentStore()
+const chatStore = useChatStore()
 
 // P1-5：数据源统一收敛到 quiz store（原直连 3 个 api.get，
 // 且 quizStore.fetchQuizHistory 已存在却未使用）
 const quizStore = useQuizStore()
-// P1-1：GSAP 动画降级（prefers-reduced-motion）
-const { prefersReduced } = useReducedMotion()
 const activeTab = ref<'history' | 'stats' | 'classroom'>('history')
-const contentRef = ref<HTMLElement | null>(null)
+const pageLoading = ref(false)
 
 // OpenMAIC 课堂数据（通过 store 管理）
 const classroomLoading = computed(() => openmaic.loading)
 const classrooms = computed(() => openmaic.classrooms)
-let ctx: gsap.Context | null = null
 
 interface HistoryGroup {
   date: string
+  timestamp: number
   items: QuizHistoryItem[]
   count: number
   correct_rate: number
@@ -246,25 +311,32 @@ interface HistoryGroup {
 
 // 做题历史：从 store 的 quizResults 分组计算（视图只负责展示）
 const history = computed<HistoryGroup[]>(() => {
-  const results = quizStore.quizResults || []
-  const grouped: Record<string, { items: QuizHistoryItem[]; count: number; correct: number }> = {}
+  const results = Array.isArray(quizStore.quizResults) ? quizStore.quizResults : []
+  const grouped: Record<string, { items: QuizHistoryItem[]; count: number; correct: number; maxTimestamp: number }> = {}
   for (const r of results) {
-    const date = new Date(r.submitted_at).toLocaleDateString('zh-CN')
+    if (!r) continue
+    const rawDate = r.submitted_at ? new Date(r.submitted_at.replace(' ', 'T')) : new Date()
+    const ts = isNaN(rawDate.getTime()) ? 0 : rawDate.getTime()
+    const date = isNaN(rawDate.getTime()) ? '未知日期' : rawDate.toLocaleDateString('zh-CN')
     if (!grouped[date]) {
-      grouped[date] = { items: [], count: 0, correct: 0 }
+      grouped[date] = { items: [], count: 0, correct: 0, maxTimestamp: ts }
     }
     grouped[date].items.push(r)
     grouped[date].count++
+    if (ts > grouped[date].maxTimestamp) {
+      grouped[date].maxTimestamp = ts
+    }
     if (r.is_correct) grouped[date].correct++
   }
   return Object.entries(grouped)
     .map(([date, data]) => ({
       date,
+      timestamp: data.maxTimestamp,
       items: data.items,
       count: data.count,
       correct_rate: Math.round((data.correct / data.count) * 100)
     }))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort((a, b) => b.timestamp - a.timestamp)
 })
 
 async function analyzeWeakness(): Promise<void> {
@@ -319,30 +391,28 @@ watch(activeTab, (tab) => {
   }
 })
 
-onMounted(async () => {
-  await refreshData()
-  // P1-1：减少动态偏好下跳过入场动画
-  if (prefersReduced.value || !contentRef.value) return
-  ctx = gsap.context(() => {
-    gsap.from(contentRef.value!, { y: 20, opacity: 0, duration: 0.5, ease: 'power2.out' })
-  }, contentRef.value)
+onMounted(() => {
+  refreshData(true)
 })
 
-onActivated(async () => {
-  await refreshData()
+onActivated(() => {
+  refreshData(true)
 })
 
-onUnmounted(() => {
-  ctx?.revert()
-})
-
-async function refreshData(): Promise<void> {
-  // 三个数据源完全独立，并行加载；各自内部 catch，不会互相影响
-  await Promise.all([
-    quizStore.fetchQuizHistory().catch(() => {}),
-    quizStore.fetchKnowledgeStats().catch(() => {}),
-    quizStore.analyzeWrongAnswers().catch(() => {})
-  ])
+async function refreshData(force = false): Promise<void> {
+  pageLoading.value = true
+  try {
+    // 学习指标、做题历史与分析数据并行加载
+    await Promise.allSettled([
+      quizStore.fetchQuizHistory(force),
+      quizStore.fetchKnowledgeStats(),
+      quizStore.analyzeWrongAnswers(),
+      documentStore.fetchDocuments(),
+      chatStore.fetchSessions()
+    ])
+  } finally {
+    pageLoading.value = false
+  }
 }
 </script>
 

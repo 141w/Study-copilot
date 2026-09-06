@@ -8,9 +8,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db import Document, Note, User
 from app.services import document_service, note_service
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _ts(base: datetime, i: int) -> datetime:

@@ -26,6 +26,9 @@ vi.mock('@/services/api', () => ({
   },
 }))
 
+// Mock CSS imports in node/vitest environment
+vi.mock('element-plus/es/components/message/style/css', () => ({}))
+
 if (isDom) {
   // Mock localStorage
   const store = {}
@@ -42,6 +45,19 @@ if (isDom) {
     value: { href: '/', assign: vi.fn(), replace: vi.fn(), reload: vi.fn() },
     writable: true,
   })
+
+  if (!window.matchMedia) {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+  }
 
   beforeEach(() => {
     setActivePinia(createPinia())

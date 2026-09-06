@@ -8,6 +8,7 @@ from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
@@ -50,6 +51,18 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)
 ) -> User:
     return await auth_service.get_user_from_token(db, token)
+
+
+async def get_optional_user(
+    token: str | None = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    if not token:
+        return None
+    try:
+        return await auth_service.get_user_from_token(db, token)
+    except Exception:
+        return None
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────

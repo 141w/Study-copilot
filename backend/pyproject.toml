@@ -84,7 +84,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "backend/app/api/*.py" = ["B008"]
+"app/api/*.py" = ["B008"]
 "backend/tests/*.py" = ["N806", "N803", "N818", "F841"]
+"tests/*.py" = ["N806", "N803", "N818", "F841"]
+"tests/**/*.py" = ["N806", "N803", "N818", "F841"]
 
 [tool.ruff.format]
 quote-style = "double"

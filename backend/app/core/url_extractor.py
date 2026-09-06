@@ -1,19 +1,45 @@
-"""
-URL content extraction using trafilatura.
-
-Extracts clean text content from web pages for document ingestion.
-"""
-
 import asyncio
+import ipaddress
+import json
 import logging
-from datetime import datetime
+import socket
+from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import trafilatura
 
+from app.exceptions import ValidationError
+
 logger = logging.getLogger(__name__)
 
+_ALLOWED_SCHEMES = {"http", "https"}
+_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]", "::1"}
+_TUN_FAKE_IP_NET = ipaddress.ip_network("198.18.0.0/15")
 
-async def extract_from_url(url: str) -> dict:
+
+def _validate_url(url: str) -> None:
+    """Validate URL against SSRF and local file access."""
+    parsed = urlparse(url)
+    if not parsed.scheme or parsed.scheme.lower() not in _ALLOWED_SCHEMES:
+        raise ValidationError(f"不支持的 URL 协议: '{parsed.scheme}'，仅支持 http/https")
+
+    host = parsed.hostname or ""
+    if not host or host.lower() in _BLOCKED_HOSTS:
+        raise ValidationError("不允许访问内部或本地网络地址")
+
+    try:
+        resolved = socket.getaddrinfo(host, None)
+        for _, _, _, _, addr in resolved:
+            ip = ipaddress.ip_address(addr[0])
+            if ip in _TUN_FAKE_IP_NET:
+                continue  # 兼容 VPN / TUN 模式的 Fake-IP 地址池
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                raise ValidationError("不允许访问内部或私有网络地址")
+    except socket.gaierror:
+        pass
+
+
+async def extract_from_url(url: str, timeout: int = 15) -> dict:
     """
     Extract content from a URL using trafilatura.
 
@@ -21,6 +47,8 @@ async def extract_from_url(url: str) -> dict:
     ----------
     url : str
         The URL to extract content from.
+    timeout : int
+        Fetch timeout in seconds.
 
     Returns
     -------
@@ -29,15 +57,24 @@ async def extract_from_url(url: str) -> dict:
 
     Raises
     ------
-    ValueError
-        If extraction fails or returns no content.
+    ValidationError
+        If URL is invalid/disallowed or extraction fails.
     """
     logger.info("Extracting content from URL: %s", url)
+    _validate_url(url)
 
-    # trafilatura.fetch_url is synchronous, but fast enough for web scraping
-    downloaded = await asyncio.to_thread(trafilatura.fetch_url, url)
+    try:
+        downloaded = await asyncio.wait_for(
+            asyncio.to_thread(trafilatura.fetch_url, url),
+            timeout=timeout,
+        )
+    except TimeoutError:
+        raise ValidationError(f"访问 URL 超时: {url}") from None
+    except Exception as e:
+        raise ValidationError(f"无法访问该 URL: {e}") from e
+
     if not downloaded:
-        raise ValueError(f"无法访问该 URL: {url}")
+        raise ValidationError(f"无法访问该 URL 或内容为空: {url}")
 
     # Extract with metadata
     result = trafilatura.extract(
@@ -50,7 +87,7 @@ async def extract_from_url(url: str) -> dict:
     )
 
     if not result:
-        raise ValueError("无法从该 URL 中提取文本内容")
+        raise ValidationError("无法从该 URL 中提取文本内容")
 
     # Extract metadata separately
     metadata = trafilatura.extract(
@@ -64,8 +101,6 @@ async def extract_from_url(url: str) -> dict:
     text = result
 
     if metadata and isinstance(metadata, str):
-        import json
-
         try:
             meta = json.loads(metadata)
             title = meta.get("title", "")
@@ -75,8 +110,6 @@ async def extract_from_url(url: str) -> dict:
 
     # Fallback title from URL
     if not title:
-        from urllib.parse import urlparse
-
         parsed = urlparse(url)
         title = parsed.netloc + parsed.path[:50]
 
@@ -94,5 +127,5 @@ async def extract_from_url(url: str) -> dict:
         "title": title,
         "text": text,
         "url": url,
-        "date": date or datetime.now().isoformat(),
+        "date": date or datetime.now(UTC).isoformat(),
     }

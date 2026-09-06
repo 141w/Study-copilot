@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from app.core.rag_engine import RAGEngine, extract_source_indices
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
