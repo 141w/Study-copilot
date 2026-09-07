@@ -32,7 +32,7 @@ class FakePgVectorStore:
 
 def test_pgvector_results_survive_retrieve_filter():
     """PgVectorStore 批内归一结果必须通过 retrieve() 的相关性过滤。"""
-    with patch.object(rag_engine, '_get_pg_vector_store') as mock_get:
+    with patch.object(rag_engine, "_get_pg_vector_store") as mock_get:
         mock_get.return_value = FakePgVectorStore()
         got = asyncio.run(rag_engine.retrieve(["fake-doc"], "测试查询", top_k=5))
     # 两个结果的 relevance 经批内归一后均 > 1e-6，不应被误杀

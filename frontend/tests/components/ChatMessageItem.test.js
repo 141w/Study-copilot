@@ -21,18 +21,19 @@ import ChatMessageItem from '@/components/chat/ChatMessageItem.vue'
 import ChatDiscussionItem from '@/components/chat/ChatDiscussionItem.vue'
 
 describe('ChatMessageItem & ChatDiscussionItem', () => {
-  it('正确渲染用户角色消息', () => {
+  it('正确渲染用户角色消息并规范化裸露换行符', () => {
     const wrapper = mount(ChatMessageItem, {
       props: {
         message: {
           id: '1',
           role: 'user',
-          content: '请解释什么是 RAG？',
+          content: '请解释什么是 RAG？\\n第二行提问',
           created_at: new Date().toISOString()
         }
       }
     })
-    expect(wrapper.text()).toContain('请解释什么是 RAG？')
+    expect(wrapper.text()).toContain('请解释什么是 RAG？\n第二行提问')
+    expect(wrapper.text()).not.toContain('\\n')
     expect(wrapper.find('.msg-enter').exists()).toBe(true)
   })
 
@@ -76,6 +77,7 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.html()).toContain('RAG 即检索增强生成。')
     expect(wrapper.text()).toContain('rag_paper.pdf')
     expect(wrapper.text()).toContain('P3')
+    expect(wrapper.find('.sticky').exists()).toBe(true)
 
     // 复制按钮测试
     const copyBtn = wrapper.find('[data-test="btn"]')
@@ -88,6 +90,104 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     await sourceBtn.trigger('click')
     expect(wrapper.emitted('scrollToSource')).toBeTruthy()
     expect(wrapper.emitted('scrollToSource')?.[0][0]).toBe(1)
+  })
+
+  it('正确渲染原生 CoT 深度思考面板（Reasoning Box）与折叠交互', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'cot-1',
+          role: 'assistant',
+          content: '最终输出回答内容。',
+          reasoning: '首先分析题目已知条件，假设输入空间为欧氏空间...',
+          thinking: [
+            { step: 'intent_analysis', detail: '意图识别：文档问答' }
+          ],
+          isStreaming: false,
+          created_at: new Date().toISOString()
+        },
+        renderedMarkdown: '<p>最终输出回答内容。</p>',
+        renderedReasoning: '<p>首先分析题目已知条件，假设输入空间为欧氏空间...</p>'
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true
+        }
+      }
+    })
+
+    // 思考结束后：单行展示标题，不需要展示思考缩略内容
+    expect(wrapper.text()).toContain('已完成深度思考')
+    expect(wrapper.text()).toContain('Agentic 思考过程 (1 步)')
+    expect(wrapper.text()).not.toContain('· 首先分析题目已知条件')
+    expect(wrapper.text()).not.toContain('· 意图拆解')
+
+    // 两个思考过程右侧均不显示展开/收起按钮文本
+    const thinkingSummary = wrapper.find('.thinking-summary')
+    const reasoningSummary = wrapper.find('.reasoning-summary')
+    expect(thinkingSummary.text()).not.toContain('展开')
+    expect(thinkingSummary.text()).not.toContain('收起')
+    expect(reasoningSummary.text()).not.toContain('展开')
+    expect(reasoningSummary.text()).not.toContain('收起')
+
+    // 点击切换折叠展开
+    await reasoningSummary.trigger('click')
+    expect(wrapper.find('.reasoning-box').attributes('open')).toBeDefined()
+  })
+
+  it('思考过程中为双行，思考完成正文开始吐字时自动收起为单行且不展示缩略内容', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'stream-1',
+          role: 'assistant',
+          content: '',
+          reasoning: '正在推理中...',
+          thinking: [
+            { step: 'adaptive_retrieve', detail: '检索到 3 个切片' }
+          ],
+          isStreaming: true,
+          created_at: new Date().toISOString()
+        }
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true
+        }
+      }
+    })
+
+    // 思考过程中：展示第二行动态片段（双行）
+    expect(wrapper.text()).toContain('正在深度思考...')
+    expect(wrapper.text()).toContain('正在推理中...')
+
+    // 思考完成，正式回答正文开始到达
+    await wrapper.setProps({
+      message: {
+        id: 'stream-1',
+        role: 'assistant',
+        content: '这是正式回答的第一句',
+        reasoning: '正在推理中...',
+        thinking: [
+          { step: 'adaptive_retrieve', detail: '检索到 3 个切片' }
+        ],
+        isStreaming: true,
+        created_at: new Date().toISOString()
+      }
+    })
+
+    // 验证：自动收缩为折叠单行，且不需要展示思考缩略内容
+    expect(wrapper.find('.reasoning-box').attributes('open')).toBeUndefined()
+    expect(wrapper.find('.thinking-section').attributes('open')).toBeUndefined()
+    expect(wrapper.text()).toContain('已完成深度思考')
+    expect(wrapper.text()).toContain('Agentic 思考过程 (1 步)')
+    expect(wrapper.text()).not.toContain('· 知识检索')
   })
 
   it('正确渲染多角色讨论 ChatDiscussionItem', () => {

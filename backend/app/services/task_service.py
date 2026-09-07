@@ -93,9 +93,7 @@ async def update_task(
         if task.result:
             try:
                 existing_result = (
-                    json.loads(task.result)
-                    if isinstance(task.result, str)
-                    else dict(task.result)
+                    json.loads(task.result) if isinstance(task.result, str) else dict(task.result)
                 )
             except Exception:
                 existing_result = {}
@@ -188,9 +186,7 @@ async def recover_interrupted_tasks(db: AsyncSession) -> int:
     Returns:
         被标记的任务数量。
     """
-    result = await db.execute(
-        select(AsyncTask).where(AsyncTask.status == "running")
-    )
+    result = await db.execute(select(AsyncTask).where(AsyncTask.status == "running"))
     stale = list(result.scalars().all())
     if not stale:
         return 0

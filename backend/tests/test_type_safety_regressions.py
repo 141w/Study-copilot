@@ -47,9 +47,7 @@ async def test_router_without_llm_falls_back_to_rag_qa():
 async def test_quiz_generate_narrows_none_counts_to_defaults(client, monkeypatch):
     captured: dict[str, object] = {}
 
-    async def fake_generate(
-        db, user, document_ids, choice_count, short_answer_count, config=None
-    ):
+    async def fake_generate(db, user, document_ids, choice_count, short_answer_count, config=None):
         captured["choice_count"] = choice_count
         captured["short_answer_count"] = short_answer_count
         return []

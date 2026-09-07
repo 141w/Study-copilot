@@ -54,6 +54,7 @@ async def _get_fts_config(db: AsyncSession) -> str:
     _cached_fts_config = "simple"
     return "simple"
 
+
 class PgVectorStore:
     """PostgreSQL + pgvector 向量存储。
 
@@ -86,7 +87,9 @@ class PgVectorStore:
     # 写入
     # ------------------------------------------------------------------
 
-    async def add_chunks(self, chunks: list[dict], doc_id: str, db: AsyncSession | None = None) -> bool:
+    async def add_chunks(
+        self, chunks: list[dict], doc_id: str, db: AsyncSession | None = None
+    ) -> bool:
         """Embed + insert using raw SQL with vector cast."""
         if not chunks:
             return False
@@ -105,7 +108,9 @@ class PgVectorStore:
         # 22023 "expected 768 dimensions" —— 这里提前给出明确中文指引。
         if len(embeddings) > 0:
             sample = embeddings[0]
-            actual_dim = len(sample) if hasattr(sample, "__len__") else int(getattr(sample, "shape", [0])[0])
+            actual_dim = (
+                len(sample) if hasattr(sample, "__len__") else int(getattr(sample, "shape", [0])[0])
+            )
             if actual_dim != self.dimension:
                 raise ValidationError(
                     f"Embedding 维度不匹配：模型输出 {actual_dim} 维，"

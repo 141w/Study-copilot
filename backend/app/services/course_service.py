@@ -2,13 +2,14 @@
 Course space service — CRUD operations for course spaces and document associations.
 """
 
+import json
 import logging
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import CourseSpace, Document, User
+from app.db import CourseSpace, Document, Note, User
 from app.exceptions import NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -120,17 +121,79 @@ async def get_course_documents(
     user: User,
     course_id: str,
 ) -> list[Document]:
-    """Get documents in a course space."""
+    """Get documents in a course space (checks both Document.course_space_id and source_doc_ids in course description)."""
     # Verify course exists and belongs to user
-    await get_course_space(db, user, course_id)
+    course = await get_course_space(db, user, course_id)
+
+    # 提取课程大纲/剧本元数据中记录的 source_doc_ids
+    extra_doc_ids: list[str] = []
+    if course.description:
+        try:
+            desc_obj = json.loads(course.description)
+            if isinstance(desc_obj, dict):
+                ids = desc_obj.get("source_doc_ids") or desc_obj.get("doc_ids") or []
+                if isinstance(ids, list):
+                    extra_doc_ids = [str(i) for i in ids if i]
+        except Exception:
+            pass
+
+    conditions = [Document.course_space_id == course_id]
+    if extra_doc_ids:
+        conditions.append(Document.id.in_(extra_doc_ids))
 
     result = await db.execute(
-        select(Document).where(
-            Document.course_space_id == course_id,
+        select(Document)
+        .where(
             Document.user_id == user.id,
+            Document.deleted_at.is_(None),
+            or_(*conditions),
         )
+        .order_by(Document.created_at.desc())
     )
-    return list(result.scalars().all())
+    # 按 ID 去重并保持顺序
+    seen: set[str] = set()
+    unique_docs: list[Document] = []
+    for doc in result.scalars().all():
+        if doc.id not in seen:
+            seen.add(doc.id)
+            unique_docs.append(doc)
+    return unique_docs
+
+
+async def get_courses_counts(
+    db: AsyncSession,
+    user: User,
+    courses: list[CourseSpace],
+) -> dict[str, dict[str, int]]:
+    """Return {course_id: {'document_count': X, 'note_count': Y}} for given courses."""
+    if not courses:
+        return {}
+
+    course_ids = [c.id for c in courses]
+    counts: dict[str, dict[str, int]] = {
+        cid: {"document_count": 0, "note_count": 0} for cid in course_ids
+    }
+
+    # 1. 统计 notes
+    note_stmt = (
+        select(Note.course_space_id, func.count(Note.id))
+        .where(
+            Note.user_id == user.id,
+            Note.course_space_id.in_(course_ids),
+        )
+        .group_by(Note.course_space_id)
+    )
+    note_rows = (await db.execute(note_stmt)).all()
+    for cid, n_count in note_rows:
+        if cid in counts:
+            counts[cid]["note_count"] = n_count
+
+    # 2. 统计 documents (兼容直接归属与多文档引用)
+    for c in courses:
+        docs = await get_course_documents(db, user, c.id)
+        counts[c.id]["document_count"] = len(docs)
+
+    return counts
 
 
 async def add_document_to_course(

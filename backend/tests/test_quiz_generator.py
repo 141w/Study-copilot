@@ -460,6 +460,7 @@ class TestQuizGeneratorExtended:
     async def test_generate_quizzes_partial_failure(self, generator):
         """任一题型 LLM 调用失败必须整体上抛（修复：此前部分失败被吞，
         只返回另一题型，用户无从知晓故障）。"""
+
         async def fake_generate(prompt, **kwargs):
             if "选择题" in prompt:
                 raise RuntimeError("API error")

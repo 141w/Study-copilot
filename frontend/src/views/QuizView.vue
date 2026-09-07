@@ -37,7 +37,7 @@
           <label class="block text-sm text-[var(--text-secondary)] mb-2">选择题数量</label>
           <el-input-number
             v-model="config.choiceCount"
-            :min="1"
+            :min="0"
             :max="10"
             class="!w-full"
           />
@@ -47,7 +47,7 @@
           <label class="block text-sm text-[var(--text-secondary)] mb-2">简答题数量</label>
           <el-input-number
             v-model="config.shortAnswerCount"
-            :min="1"
+            :min="0"
             :max="5"
             class="!w-full"
           />
@@ -55,7 +55,7 @@
 
         <el-button
           @click="generateQuiz"
-          :disabled="generating || quizStore.loading || selectedDocs.length === 0"
+          :disabled="generating || quizStore.loading || selectedDocs.length === 0 || (config.choiceCount + config.shortAnswerCount === 0)"
           type="primary"
           class="!h-8"
         >

@@ -103,7 +103,7 @@ async def test_quiz_generate_task_full_chain(
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
     # ── 2. 上传文档（worker 未启动 → 同步回退，立即 ready）──
-    doc_text = ("Quiz 任务链路集成测试段落，用于生成题目上下文。\n" * 100)
+    doc_text = "Quiz 任务链路集成测试段落，用于生成题目上下文。\n" * 100
     up = await client.post(
         "/api/documents/upload",
         files={"file": (f"q_{suffix}.txt", doc_text.encode("utf-8"), "text/plain")},

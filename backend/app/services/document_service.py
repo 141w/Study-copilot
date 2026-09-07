@@ -123,7 +123,9 @@ async def upload_document(
         db, user.id, "document_process", {"doc_id": doc_id, "filename": filename}
     )
     try:
-        await enqueue(task.id, user.id, "document_process", {"doc_id": doc_id, "filename": filename})
+        await enqueue(
+            task.id, user.id, "document_process", {"doc_id": doc_id, "filename": filename}
+        )
         logger.info("Document %s queued for background processing", doc_id)
         return {
             "id": doc_id,
@@ -139,13 +141,14 @@ async def upload_document(
         try:
             chunk_count, method = await _do_process_document(db, user, doc_id)
             await task_service.update_task(
-                db, task.id, user.id, status="completed",
+                db,
+                task.id,
+                user.id,
+                status="completed",
                 result={"doc_id": doc_id, "chunk_count": chunk_count},
             )
         except Exception as e:
-            await task_service.update_task(
-                db, task.id, user.id, status="failed", error=str(e)
-            )
+            await task_service.update_task(db, task.id, user.id, status="failed", error=str(e))
             raise
         return {
             "id": doc_id,
@@ -279,9 +282,7 @@ async def reprocess_document(
         raise NotFoundError("原始文件不存在，请重新上传文件")
 
     # 清理该文档现存的 chunk 记录（防止残留脏数据）
-    await db.execute(
-        sa_delete(DocumentChunk).where(DocumentChunk.document_id == doc_id)
-    )
+    await db.execute(sa_delete(DocumentChunk).where(DocumentChunk.document_id == doc_id))
     doc.status = "processing"
     doc.chunk_count = 0
     await db.commit()
@@ -291,7 +292,9 @@ async def reprocess_document(
         db, user.id, "document_process", {"doc_id": doc_id, "filename": doc.filename}
     )
     try:
-        await enqueue(task.id, user.id, "document_process", {"doc_id": doc_id, "filename": doc.filename})
+        await enqueue(
+            task.id, user.id, "document_process", {"doc_id": doc_id, "filename": doc.filename}
+        )
         logger.info("Document %s re-queued for background processing", doc_id)
         return {
             "id": doc_id,
@@ -314,9 +317,7 @@ async def reprocess_document(
                 result={"doc_id": doc_id, "chunk_count": chunk_count},
             )
         except Exception as e:
-            await task_service.update_task(
-                db, task.id, user.id, status="failed", error=str(e)
-            )
+            await task_service.update_task(db, task.id, user.id, status="failed", error=str(e))
             raise
         return {
             "id": doc_id,
@@ -464,9 +465,7 @@ async def purge_deleted_documents(
     for doc in stale:
         # Delete associated chunks (cascading from documents FK is also fine,
         # but explicit DELETE is safer for bulk purge)
-        await db.execute(
-            sa_delete(DocumentChunk).where(DocumentChunk.document_id == doc.id)
-        )
+        await db.execute(sa_delete(DocumentChunk).where(DocumentChunk.document_id == doc.id))
         # Remove file
         if doc.file_path and os.path.exists(doc.file_path):
             os.remove(doc.file_path)

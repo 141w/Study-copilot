@@ -35,6 +35,7 @@ class UserResponse(BaseModel):
 
 class ProfileUpdate(BaseModel):
     """部分更新：未提供的字段（None）保持不变。"""
+
     username: str | None = None
     email: EmailStr | None = None
 
@@ -113,7 +114,8 @@ async def update_me(
 ):
     """更新当前用户资料（用户名/邮箱，未提交的字段不变）。"""
     updated = await auth_service.update_profile(
-        db, current_user,
+        db,
+        current_user,
         username=profile.username,
         email=profile.email,
     )
@@ -132,7 +134,5 @@ async def change_my_password(
     db: AsyncSession = Depends(get_db),
 ):
     """校验原密码后修改密码。"""
-    await auth_service.change_password(
-        db, current_user, payload.old_password, payload.new_password
-    )
+    await auth_service.change_password(db, current_user, payload.old_password, payload.new_password)
     return {"detail": "密码已更新"}

@@ -120,7 +120,9 @@ def test_choose_chunker_method_short_document():
 
 
 @pytest.mark.asyncio
-async def test_upload_document_cleans_file_on_db_error(db_session: AsyncSession, user: User, tmp_path):
+async def test_upload_document_cleans_file_on_db_error(
+    db_session: AsyncSession, user: User, tmp_path
+):
     """If db.commit fails during upload, newly written disk file must be deleted."""
     content = b"sample test content for orphan check"
     with patch("app.services.document_service.settings.upload_dir", str(tmp_path)):
@@ -175,10 +177,10 @@ async def test_reprocess_document_success(db_session: AsyncSession, user: User, 
 
     # Verify stale chunk was cleared and replaced
     chunks_in_db = (
-        await db_session.execute(
-            select(DocumentChunk).where(DocumentChunk.document_id == doc.id)
-        )
-    ).scalars().all()
+        (await db_session.execute(select(DocumentChunk).where(DocumentChunk.document_id == doc.id)))
+        .scalars()
+        .all()
+    )
     assert all(c.content != "stale chunk" for c in chunks_in_db)
 
 
@@ -200,7 +202,9 @@ async def test_reprocess_document_missing_file_raises_error(db_session: AsyncSes
 
 
 @pytest.mark.asyncio
-async def test_reprocess_document_api_endpoint(client, db_session: AsyncSession, user: User, tmp_path):
+async def test_reprocess_document_api_endpoint(
+    client, db_session: AsyncSession, user: User, tmp_path
+):
     """POST /api/documents/{doc_id}/reprocess endpoint should return 200."""
     file_path = tmp_path / "endpoint_doc.txt"
     file_path.write_text("API endpoint test content.")
@@ -234,7 +238,9 @@ async def test_reprocess_document_api_endpoint(client, db_session: AsyncSession,
 
 
 @pytest.mark.asyncio
-async def test_do_process_document_progress_callback(db_session: AsyncSession, user: User, tmp_path):
+async def test_do_process_document_progress_callback(
+    db_session: AsyncSession, user: User, tmp_path
+):
     """_do_process_document should trigger progress_callback at each phase."""
     file_path = tmp_path / "proc_test.txt"
     file_path.write_text("Line of text for process testing.")
@@ -279,6 +285,7 @@ async def test_fts_probe_fallback(db_session: AsyncSession):
     # Simulate SELECT 1 FROM pg_ts_config returning None/exception
     fake_db.execute.side_effect = Exception("No such table pg_ts_config")
     import app.core.pgvector_store as pvs
+
     pvs._cached_fts_config = None  # reset cache
 
     cfg = await _get_fts_config(fake_db)
@@ -307,7 +314,9 @@ async def test_add_chunks_batches_rows(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_config_endpoint_rejects_dimension_mismatch(client, db_session: AsyncSession, user: User):
+async def test_config_endpoint_rejects_dimension_mismatch(
+    client, db_session: AsyncSession, user: User
+):
     """PUT /api/config/llm should reject dimensions differing from settings.embedding_dimension (768)."""
     token = create_access_token(data={"sub": user.id, "type": "access"})
     headers = {"Authorization": f"Bearer {token}"}

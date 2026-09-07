@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.db import User, get_db
 from app.services import course_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/courses", tags=["课程空间"])
 
@@ -31,6 +35,8 @@ class CourseResponse(BaseModel):
     color: str | None
     created_at: str
     updated_at: str
+    document_count: int = 0
+    note_count: int = 0
 
 
 class AddDocRequest(BaseModel):
@@ -58,6 +64,7 @@ async def create_course(
     course = await course_service.create_course_space(
         db, current_user, data.name, data.description, data.color
     )
+    counts = await course_service.get_courses_counts(db, current_user, [course])
     return CourseResponse(
         id=course.id,
         name=course.name,
@@ -65,6 +72,8 @@ async def create_course(
         color=course.color,
         created_at=str(course.created_at),
         updated_at=str(course.updated_at),
+        document_count=counts.get(course.id, {}).get("document_count", 0),
+        note_count=counts.get(course.id, {}).get("note_count", 0),
     )
 
 
@@ -74,6 +83,7 @@ async def list_courses(
     current_user: User = Depends(get_current_user),
 ):
     courses = await course_service.list_course_spaces(db, current_user)
+    counts = await course_service.get_courses_counts(db, current_user, courses)
     return [
         CourseResponse(
             id=c.id,
@@ -82,6 +92,8 @@ async def list_courses(
             color=c.color,
             created_at=str(c.created_at),
             updated_at=str(c.updated_at),
+            document_count=counts.get(c.id, {}).get("document_count", 0),
+            note_count=counts.get(c.id, {}).get("note_count", 0),
         )
         for c in courses
     ]
@@ -94,6 +106,7 @@ async def get_course(
     current_user: User = Depends(get_current_user),
 ):
     course = await course_service.get_course_space(db, current_user, course_id)
+    counts = await course_service.get_courses_counts(db, current_user, [course])
     return CourseResponse(
         id=course.id,
         name=course.name,
@@ -101,6 +114,8 @@ async def get_course(
         color=course.color,
         created_at=str(course.created_at),
         updated_at=str(course.updated_at),
+        document_count=counts.get(course.id, {}).get("document_count", 0),
+        note_count=counts.get(course.id, {}).get("note_count", 0),
     )
 
 
@@ -114,6 +129,7 @@ async def update_course(
     course = await course_service.update_course_space(
         db, current_user, course_id, data.name, data.description, data.color
     )
+    counts = await course_service.get_courses_counts(db, current_user, [course])
     return CourseResponse(
         id=course.id,
         name=course.name,
@@ -121,6 +137,8 @@ async def update_course(
         color=course.color,
         created_at=str(course.created_at),
         updated_at=str(course.updated_at),
+        document_count=counts.get(course.id, {}).get("document_count", 0),
+        note_count=counts.get(course.id, {}).get("note_count", 0),
     )
 
 
@@ -166,9 +184,7 @@ async def add_document_to_course(
     current_user: User = Depends(get_current_user),
 ):
     """Add document to course."""
-    await course_service.add_document_to_course(
-        db, current_user, course_id, req.document_id
-    )
+    await course_service.add_document_to_course(db, current_user, course_id, req.document_id)
     return {"message": "Document added"}
 
 
@@ -180,9 +196,7 @@ async def remove_document_from_course(
     current_user: User = Depends(get_current_user),
 ):
     """Remove document from course."""
-    await course_service.remove_document_from_course(
-        db, current_user, course_id, doc_id
-    )
+    await course_service.remove_document_from_course(db, current_user, course_id, doc_id)
     return {"message": "Document removed"}
 
 
@@ -192,6 +206,7 @@ async def remove_document_from_course(
 class CourseGenRequest(BaseModel):
     doc_ids: list[str] = Field(..., max_length=5, description="源文档 ID 列表")
     requirement: str = Field(default="", max_length=500, description="课程主题/要求")
+    enable_image_generation: bool | None = Field(default=None, description="是否启用 AI 配图插画")
 
 
 class CourseGenResponse(BaseModel):
@@ -213,24 +228,62 @@ async def generate_course(
     from app.services.config_service import get_llm_config_with_secret
 
     llm_config = await get_llm_config_with_secret(db, current_user)
-    result = await _gen(db, current_user, req.doc_ids, req.requirement, llm_config)
+    cls_cfg = (llm_config or {}).get("classroom_config") or {}
+    should_gen_image = req.enable_image_generation
+    if should_gen_image is None:
+        should_gen_image = cls_cfg.get("image_enabled", True)
+
+    result = await _gen(
+        db,
+        current_user,
+        req.doc_ids,
+        req.requirement,
+        llm_config,
+        enable_image_generation=should_gen_image,
+    )
 
     outline = result["outline"]
     course = await course_service.create_course_space(
-        db, current_user,
+        db,
+        current_user,
         name=outline.get("title", "未命名课程"),
         description=outline.get("description", req.requirement),
         color="#409EFF",
     )
 
-    # 将大纲和测验存入 description（轻量实现：JSON）
+    # 关联参考文档到该课程空间
+    for doc_id in req.doc_ids:
+        try:
+            await course_service.add_document_to_course(db, current_user, course.id, doc_id)
+        except Exception as add_err:
+            logger.warning("Failed to link doc %s to course %s: %s", doc_id, course.id, add_err)
+
+    # 将大纲、测验与课件 DSL 存入 description 并落盘同步
     import json as _json
-    course.description = _json.dumps({
-        "outline": outline,
-        "quizzes": result["quizzes"][:50],
-        "source_doc_ids": result["source_doc_ids"],
-        "generated": True,
-    }, ensure_ascii=False)
+
+    classroom_data = result.get("classroom_data")
+    if classroom_data:
+        classroom_data["id"] = course.id
+        classroom_data["url"] = f"/courses/{course.id}/classroom"
+        from app.core.course_generator import save_classroom_dsl_to_disk
+
+        try:
+            save_classroom_dsl_to_disk(classroom_data)
+        except Exception as disk_err:
+            logger.warning("Failed to save classroom DSL to disk: %s", disk_err)
+
+    course.description = _json.dumps(
+        {
+            "classroom_url": f"/courses/{course.id}/classroom",
+            "classroom_id": course.id,
+            "outline": outline,
+            "quizzes": result["quizzes"][:50],
+            "source_doc_ids": result["source_doc_ids"],
+            "classroom_data": classroom_data,
+            "generated": True,
+        },
+        ensure_ascii=False,
+    )
     await db.commit()
 
     return CourseGenResponse(

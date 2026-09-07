@@ -40,8 +40,7 @@ async def validation_exception_handler(
     """Handle Pydantic / FastAPI request validation errors."""
     errors = exc.errors()
     error_msg = "; ".join(
-        f"{e['loc'][-1] if e.get('loc') else 'body'}: {e.get('msg', '')}"
-        for e in errors
+        f"{e['loc'][-1] if e.get('loc') else 'body'}: {e.get('msg', '')}" for e in errors
     )
     logger.warning("Validation error: %s", error_msg)
     return JSONResponse(

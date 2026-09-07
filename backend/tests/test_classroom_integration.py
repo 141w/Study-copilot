@@ -60,15 +60,17 @@ async def test_sync_quiz_results_with_null_document_id(db_session, local_user):
     )
 
     assert results == 2
-    quizzes = (await db_session.execute(
-        __import__("sqlalchemy").select(Quiz).order_by(Quiz.question)
-    )).scalars().all()
+    quizzes = (
+        (await db_session.execute(__import__("sqlalchemy").select(Quiz).order_by(Quiz.question)))
+        .scalars()
+        .all()
+    )
     assert len(quizzes) == 2
     assert all(q.document_id is None for q in quizzes)
 
-    quiz_results = (await db_session.execute(
-        __import__("sqlalchemy").select(QuizResult)
-    )).scalars().all()
+    quiz_results = (
+        (await db_session.execute(__import__("sqlalchemy").select(QuizResult))).scalars().all()
+    )
     assert len(quiz_results) == 2
     assert quiz_results[0].user_id == local_user.id
 
@@ -136,7 +138,9 @@ async def test_webhook_classroom_mode_requires_secret_in_prod(client, monkeypatc
     assert resp.status_code == 401
 
 
-async def test_webhook_signed_callback_updates_placeholder(db_session, local_user, client, monkeypatch):
+async def test_webhook_signed_callback_updates_placeholder(
+    db_session, local_user, client, monkeypatch
+):
     """完整闭环：提交占位课 → completed 回调原地更新同一门课（非重复建课）。"""
     from app.services import classroom_service as svc
     from app.services.course_service import create_course_space
@@ -147,7 +151,8 @@ async def test_webhook_signed_callback_updates_placeholder(db_session, local_use
 
     # 提交侧占位课
     placeholder = await create_course_space(
-        db_session, local_user,
+        db_session,
+        local_user,
         name="线代入门（生成中）",
         description=json.dumps({"classroom_pending": True, "classroom_id": "cls-create-1"}),
         color="#409EFF",
@@ -182,7 +187,9 @@ async def test_webhook_signed_callback_updates_placeholder(db_session, local_use
     assert data["result"]["quizzes_synced"] == 1
 
 
-async def test_webhook_fallback_creates_course_without_placeholder(db_session, local_user, client, monkeypatch):
+async def test_webhook_fallback_creates_course_without_placeholder(
+    db_session, local_user, client, monkeypatch
+):
     from app.services import classroom_service as svc
 
     secret = "whsec2"
@@ -235,15 +242,17 @@ async def test_get_classroom_status_in_progress(client, local_user, monkeypatch)
     monkeypatch.setattr(svc.settings, "classroom_base_url", "http://localhost:3001", raising=False)
     token = create_access_token({"sub": local_user.id, "username": local_user.username})
 
-    mock_poll = AsyncMock(return_value={
-        "status": "running",
-        "step": "generating_scenes",
-        "progress": 0.6,
-        "message": "正在生成场景课件...",
-        "scenes_generated": 3,
-        "total_scenes": 5,
-        "done": False,
-    })
+    mock_poll = AsyncMock(
+        return_value={
+            "status": "running",
+            "step": "generating_scenes",
+            "progress": 0.6,
+            "message": "正在生成场景课件...",
+            "scenes_generated": 3,
+            "total_scenes": 5,
+            "done": False,
+        }
+    )
     monkeypatch.setattr(svc, "poll_generation_status", mock_poll)
 
     resp = await client.get(
@@ -259,7 +268,9 @@ async def test_get_classroom_status_in_progress(client, local_user, monkeypatch)
     assert data["scenes_generated"] == 3
 
 
-async def test_get_classroom_status_auto_syncs_placeholder(db_session, local_user, client, monkeypatch):
+async def test_get_classroom_status_auto_syncs_placeholder(
+    db_session, local_user, client, monkeypatch
+):
     """验证当轮询发现任务完成时，双通道自愈逻辑会自动更新占位课并同步测验。"""
     from unittest.mock import AsyncMock
 
@@ -273,33 +284,38 @@ async def test_get_classroom_status_auto_syncs_placeholder(db_session, local_use
 
     job_id = "job-auto-sync-99"
     placeholder = await create_course_space(
-        db_session, local_user,
+        db_session,
+        local_user,
         name="离散数学（生成中）",
-        description=json.dumps({"classroom_pending": True, "job_id": job_id, "classroom_id": "cls-99"}),
+        description=json.dumps(
+            {"classroom_pending": True, "job_id": job_id, "classroom_id": "cls-99"}
+        ),
         color="#409EFF",
     )
     await db_session.commit()
 
-    mock_poll = AsyncMock(return_value={
-        "status": "succeeded",
-        "step": "completed",
-        "progress": 1.0,
-        "message": "生成完毕",
-        "done": True,
-        "result": {
-            "classroomId": "cls-99",
-            "url": "http://localhost:3001/classroom/cls-99",
-            "title": "离散数学：图论基础",
-            "quiz_results": [
-                {
-                    "question": "什么是欧拉图？",
-                    "user_answer": "存在欧拉回路",
-                    "correct_answer": "存在欧拉回路",
-                    "is_correct": True,
-                }
-            ],
-        },
-    })
+    mock_poll = AsyncMock(
+        return_value={
+            "status": "succeeded",
+            "step": "completed",
+            "progress": 1.0,
+            "message": "生成完毕",
+            "done": True,
+            "result": {
+                "classroomId": "cls-99",
+                "url": "http://localhost:3001/classroom/cls-99",
+                "title": "离散数学：图论基础",
+                "quiz_results": [
+                    {
+                        "question": "什么是欧拉图？",
+                        "user_answer": "存在欧拉回路",
+                        "correct_answer": "存在欧拉回路",
+                        "is_correct": True,
+                    }
+                ],
+            },
+        }
+    )
     monkeypatch.setattr(svc, "poll_generation_status", mock_poll)
 
     resp = await client.get(

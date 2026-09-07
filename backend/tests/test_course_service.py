@@ -20,22 +20,32 @@ async def user(db_session: AsyncSession) -> User:
 
 def _course(user_id: str, name: str = "Test Course"):
     return CourseSpace(
-        id=str(uuid.uuid4()), user_id=user_id, name=name, description="desc",
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        name=name,
+        description="desc",
     )
 
 
 def _doc(user_id: str, filename: str = "doc.pdf"):
     return Document(
-        id=str(uuid.uuid4()), user_id=user_id, filename=filename,
-        file_path=f"/tmp/{uuid.uuid4()}.pdf", status="ready", chunk_count=5,
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        filename=filename,
+        file_path=f"/tmp/{uuid.uuid4()}.pdf",
+        status="ready",
+        chunk_count=5,
     )
 
 
 # ── CRUD ────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_create_course_space(db_session: AsyncSession, user: User):
-    course = await course_service.create_course_space(db_session, user, name="Math", description="Algebra")
+    course = await course_service.create_course_space(
+        db_session, user, name="Math", description="Algebra"
+    )
     assert course.id is not None
     assert course.name == "Math"
     assert course.user_id == user.id
@@ -83,7 +93,11 @@ async def test_update_course_space(db_session: AsyncSession, user: User):
     await db_session.commit()
 
     updated = await course_service.update_course_space(
-        db_session, user, c.id, name="Updated Name", description="New desc",
+        db_session,
+        user,
+        c.id,
+        name="Updated Name",
+        description="New desc",
     )
     assert updated.name == "Updated Name"
     assert updated.description == "New desc"
@@ -103,6 +117,7 @@ async def test_delete_course_space(db_session: AsyncSession, user: User):
 
 
 # ── Document Associations ───────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_add_document_to_course(db_session: AsyncSession, user: User):
@@ -161,3 +176,55 @@ async def test_remove_document_from_course(db_session: AsyncSession, user: User)
     await course_service.remove_document_from_course(db_session, user, c.id, d.id)
     docs_after = await course_service.get_course_documents(db_session, user, c.id)
     assert len(docs_after) == 0
+
+
+@pytest.mark.asyncio
+async def test_get_course_documents_with_source_doc_ids(db_session: AsyncSession, user: User):
+    import json
+
+    d1 = _doc(user.id, "shared1.pdf")
+    d2 = _doc(user.id, "shared2.pdf")
+    db_session.add_all([d1, d2])
+    await db_session.commit()
+
+    # Course with source_doc_ids in description JSON
+    c = _course(user.id, "Shared Course")
+    c.description = json.dumps({"source_doc_ids": [d1.id, d2.id]})
+    db_session.add(c)
+    await db_session.commit()
+
+    docs = await course_service.get_course_documents(db_session, user, c.id)
+    assert len(docs) == 2
+    ids = {doc.id for doc in docs}
+    assert d1.id in ids and d2.id in ids
+
+
+@pytest.mark.asyncio
+async def test_get_courses_counts(db_session: AsyncSession, user: User):
+    import json
+    from app.db import Note
+
+    d1 = _doc(user.id, "count1.pdf")
+    db_session.add(d1)
+    await db_session.commit()
+
+    c = _course(user.id, "Counted Course")
+    c.description = json.dumps({"source_doc_ids": [d1.id]})
+    db_session.add(c)
+    await db_session.commit()
+
+    note = Note(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        course_space_id=c.id,
+        title="Note 1",
+        content="Note content",
+    )
+    db_session.add(note)
+    await db_session.commit()
+
+    counts = await course_service.get_courses_counts(db_session, user, [c])
+    assert c.id in counts
+    assert counts[c.id]["document_count"] == 1
+    assert counts[c.id]["note_count"] == 1
+

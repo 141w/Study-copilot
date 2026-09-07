@@ -54,7 +54,9 @@ _register(
         name_en="Key Points",
         description="Extract key points as bullet list",
         system_prompt=render_template("transformations/keypoints_system.jinja2"),
-        user_prompt_template=render_template("transformations/keypoints_user.jinja2", text="{text}"),
+        user_prompt_template=render_template(
+            "transformations/keypoints_user.jinja2", text="{text}"
+        ),
         max_tokens=2048,
         temperature=0.2,
     )
@@ -80,7 +82,9 @@ _register(
         name_en="Flashcards",
         description="Generate Anki-style Q&A flashcards",
         system_prompt=render_template("transformations/flashcards_system.jinja2"),
-        user_prompt_template=render_template("transformations/flashcards_user.jinja2", text="{text}"),
+        user_prompt_template=render_template(
+            "transformations/flashcards_user.jinja2", text="{text}"
+        ),
         max_tokens=3000,
         temperature=0.4,
     )
@@ -119,7 +123,9 @@ _register(
         name_en="Translate to English",
         description="Translate the content to English",
         system_prompt=render_template("transformations/translate_en_system.jinja2"),
-        user_prompt_template=render_template("transformations/translate_en_user.jinja2", text="{text}"),
+        user_prompt_template=render_template(
+            "transformations/translate_en_user.jinja2", text="{text}"
+        ),
         max_tokens=4096,
         temperature=0.3,
     )
@@ -132,7 +138,9 @@ _register(
         name_en="Translate to Chinese",
         description="Translate the content to Chinese",
         system_prompt=render_template("transformations/translate_zh_system.jinja2"),
-        user_prompt_template=render_template("transformations/translate_zh_user.jinja2", text="{text}"),
+        user_prompt_template=render_template(
+            "transformations/translate_zh_user.jinja2", text="{text}"
+        ),
         max_tokens=4096,
         temperature=0.3,
     )

@@ -22,7 +22,7 @@ from app.core.logger import setup_logging
 from app.db import ensure_current_schema, get_current_revision, run_migrations, stamp_head
 from app.exception_handlers import setup_exception_handlers
 
-setup_logging(debug=settings.debug)
+setup_logging(debug=settings.debug, level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 
@@ -45,8 +45,7 @@ async def lifespan(app: FastAPI):
             )
         if not settings.openai_api_key.strip():
             raise RuntimeError(
-                "OPENAI_API_KEY 未配置：生产环境拒绝启动。"
-                "请在 .env 中设置有效的 LLM API Key。"
+                "OPENAI_API_KEY 未配置：生产环境拒绝启动。请在 .env 中设置有效的 LLM API Key。"
             )
 
     # Run Alembic migrations on startup
@@ -69,11 +68,13 @@ async def lifespan(app: FastAPI):
 
     # Start background task worker
     from app.core.task_worker import start_worker
+
     await start_worker()
     yield
 
     # Stop background task worker
     from app.core.task_worker import stop_worker
+
     await stop_worker()
 
 

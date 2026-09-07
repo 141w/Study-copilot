@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
@@ -21,6 +21,16 @@ class QuizGenRequest(BaseModel):
     choice_count: int | None = 3
     short_answer_count: int | None = 2
     config: dict | None = None
+
+    @model_validator(mode="after")
+    def _check_total_positive(self):
+        cc = self.choice_count if self.choice_count is not None else 3
+        sa = self.short_answer_count if self.short_answer_count is not None else 2
+        if cc < 0 or sa < 0:
+            raise ValueError("题目数量不能为负数")
+        if cc + sa == 0:
+            raise ValueError("选择题和简答题的数量不能同时为 0，请至少选择一种题型")
+        return self
 
 
 class QuizResp(BaseModel):

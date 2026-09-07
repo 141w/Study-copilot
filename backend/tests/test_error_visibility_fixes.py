@@ -53,9 +53,7 @@ class TestDirectAnswerErrorWrapping:
 
         with patch("app.core.rag_engine.LLM") as MockLLM:
             MockLLM.from_config.return_value.chat = AsyncMock(
-                side_effect=RuntimeError(
-                    "Error code: 402 - {'message': 'balance is insufficient'}"
-                )
+                side_effect=RuntimeError("Error code: 402 - {'message': 'balance is insufficient'}")
             )
             with pytest.raises(ExternalServiceError):
                 await rag_engine._direct_answer("什么是Python", user_config={})
@@ -93,20 +91,30 @@ class TestQuizEmptyResultExplicitError:
         from app.db import Document, DocumentChunk, User
 
         user = User(
-            id=str(_uuid.uuid4()), username="probe_empty_quiz",
-            email="probe_empty_quiz@t.io", password_hash="x",
+            id=str(_uuid.uuid4()),
+            username="probe_empty_quiz",
+            email="probe_empty_quiz@t.io",
+            password_hash="x",
         )
         db_session.add(user)
         doc = Document(
-            id=str(_uuid.uuid4()), user_id=user.id, filename="bio.txt",
-            file_path="/tmp/x", status="ready", chunk_count=1, file_size=10,
+            id=str(_uuid.uuid4()),
+            user_id=user.id,
+            filename="bio.txt",
+            file_path="/tmp/x",
+            status="ready",
+            chunk_count=1,
+            file_size=10,
         )
         db_session.add(doc)
         # 需要至少一个 chunk 才能通过"文档内容不足"检查
         db_session.add(
             DocumentChunk(
-                id=str(_uuid.uuid4()), document_id=doc.id, content="光合作用",
-                chunk_index=0, chunk_metadata={},
+                id=str(_uuid.uuid4()),
+                document_id=doc.id,
+                content="光合作用",
+                chunk_index=0,
+                chunk_metadata={},
             )
         )
         await db_session.commit()
@@ -117,9 +125,7 @@ class TestQuizEmptyResultExplicitError:
         try:
             from app.core.quiz_generator import QuizGenerator
 
-            with patch.object(
-                QuizGenerator, "generate_quizzes", new=AsyncMock(return_value=[])
-            ):
+            with patch.object(QuizGenerator, "generate_quizzes", new=AsyncMock(return_value=[])):
                 resp = await client.post(
                     "/api/quiz/generate",
                     json={"document_ids": [doc.id], "choice_count": 1, "short_answer_count": 0},
@@ -140,8 +146,10 @@ class TestQuizEmptyResultExplicitError:
         from app.services import quiz_service, task_service
 
         user = User(
-            id=str(_uuid.uuid4()), username="probe_task_fail",
-            email="probe_task_fail@t.io", password_hash="x",
+            id=str(_uuid.uuid4()),
+            username="probe_task_fail",
+            email="probe_task_fail@t.io",
+            password_hash="x",
         )
         db_session.add(user)
         await db_session.commit()
@@ -162,9 +170,7 @@ class TestQuizEmptyResultExplicitError:
             patch.object(task_service, "update_task", new=spy_update),
         ):
             with pytest.raises(ExternalServiceError):
-                await quiz_service.generate_quizzes(
-                    db=db_session, user=user, document_ids=["d1"]
-                )
+                await quiz_service.generate_quizzes(db=db_session, user=user, document_ids=["d1"])
         assert "failed" in captured, f"任务应被标记为 failed，实际：{captured}"
 
 

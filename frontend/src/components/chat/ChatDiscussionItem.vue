@@ -233,7 +233,7 @@
                   <!-- 三级发言正文：流式逐字 Markdown 渲染 + 呼吸光标 -->
                   <div v-show="isTurnExpanded(turn.id, turn.isStreaming)">
                     <div
-                      class="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
+                      class="text-xs text-[var(--text-secondary)] leading-relaxed prose prose-sm max-w-none"
                       v-html="renderMarkdown(turn.content)"
                     ></div>
                     <span
@@ -269,7 +269,7 @@
       </div>
       <div
         v-if="summaryContent"
-        class="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
+        class="text-sm text-[var(--text-secondary)] leading-relaxed prose prose-sm max-w-none"
         v-html="renderMarkdown(summaryContent)"
       ></div>
       <span

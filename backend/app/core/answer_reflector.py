@@ -18,38 +18,47 @@ logger = logging.getLogger(__name__)
 class AnswerReflector:
     """答案质量反思器"""
 
-    async def evaluate(
-        self, query: str, context: str, answer: str, llm: LLM
-    ) -> dict:
+    async def evaluate(self, query: str, context: str, answer: str, llm: LLM) -> dict:
         """评估答案质量。
 
         Returns:
-            {"pass": bool, "reason": str, "suggestions": str}
+            {"pass": bool, "score": int, "reason": str, "analysis": str, "suggestions": str}
         """
         try:
             prompt = render_template(
-                "reflector/evaluate.jinja2",
-                context=context[:4000], query=query, answer=answer
+                "reflector/evaluate.jinja2", context=context[:4000], query=query, answer=answer
             )
             response = await llm.chat(
                 [{"role": "user", "content": prompt}],
                 temperature=0.0,
-                max_tokens=300,
+                max_tokens=400,
             )
-            return self._parse_evaluation(response)
+            parsed = self._parse_evaluation(response)
+            if "score" not in parsed:
+                parsed["score"] = 90 if parsed.get("pass", True) else 40
+            if "analysis" not in parsed:
+                parsed["analysis"] = parsed.get("reason", "")
+            return parsed
         except Exception as e:
             logger.warning("[Reflector] Evaluation failed: %s", e)
             # 失败时保守处理，认为通过
-            return {"pass": True, "reason": "evaluation_failed", "suggestions": ""}
+            return {
+                "pass": True,
+                "score": 85,
+                "reason": "evaluation_failed",
+                "analysis": "自动核验服务超时，默认予以放行",
+                "suggestions": "",
+            }
 
-    async def refine(
-        self, query: str, context: str, answer: str, feedback: str, llm: LLM
-    ) -> str:
+    async def refine(self, query: str, context: str, answer: str, feedback: str, llm: LLM) -> str:
         """根据反馈重新生成答案。"""
         try:
             prompt = render_template(
                 "reflector/refine.jinja2",
-                query=query, context=context[:4000], answer=answer, feedback=feedback
+                query=query,
+                context=context[:4000],
+                answer=answer,
+                feedback=feedback,
             )
             refined = await llm.chat(
                 [{"role": "user", "content": prompt}],

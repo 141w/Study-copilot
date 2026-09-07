@@ -18,6 +18,7 @@ from app.db import Document, DocumentChunk
 @dataclass
 class BundleResult:
     """多文档打包结果。"""
+
     text: str
     source_names: list[str]
     total_chars: int = 0
@@ -26,10 +27,10 @@ class BundleResult:
 
 # ── 常量 ─────────────────────────────────────────────────────────────────────
 MAX_FILES = 5
-MAX_BYTES = 150 * 1024 * 1024          # 150 MB
-MAX_TEXT_CHARS = 1_000_000             # CJK 字符预算
-BASE_BUDGET_PER_DOCUMENT = 1500        # 每篇文档保底预算
-RESERVED_BUDGET_RATIO = 0.4            # 保底预算总额占总上限比例
+MAX_BYTES = 150 * 1024 * 1024  # 150 MB
+MAX_TEXT_CHARS = 1_000_000  # CJK 字符预算
+BASE_BUDGET_PER_DOCUMENT = 1500  # 每篇文档保底预算
+RESERVED_BUDGET_RATIO = 0.4  # 保底预算总额占总上限比例
 SECTION_SEP = "\n\n---\n\n"
 
 
@@ -95,8 +96,8 @@ def _truncate_at_boundary(text: str, max_chars: int) -> str:
     sliced = text[:max_chars]
     # 回退到最近的空白/标点边界
     for i in range(len(sliced) - 1, max(0, len(sliced) - 200), -1):
-        if sliced[i] in ('\n', '。', '！', '？', '.', '!', '?', ' ', '，', '、', '；', ';'):
-            return sliced[:i + 1]
+        if sliced[i] in ("\n", "。", "！", "？", ".", "!", "?", " ", "，", "、", "；", ";"):
+            return sliced[: i + 1]
     return sliced
 
 
@@ -189,9 +190,7 @@ async def build_bundle_from_doc_ids(
         doc_chunks.setdefault(doc_id, []).append(row.content)
 
     # 获取文件名
-    doc_result = await db.execute(
-        Document.__table__.select().where(Document.id.in_(doc_ids))
-    )
+    doc_result = await db.execute(Document.__table__.select().where(Document.id.in_(doc_ids)))
     doc_names = {row.id: row.filename for row in doc_result.all()}
 
     documents = []

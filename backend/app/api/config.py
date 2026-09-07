@@ -85,6 +85,7 @@ async def detect_model_capabilities(
 
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=3.0, proxy=None) as client:
                 resp = await client.get(f"{clean_url}/models", headers=headers)
                 if resp.status_code == 200:
@@ -291,6 +292,7 @@ async def get_system_status(
     device_name = "CPU"
     try:
         import torch
+
         if torch.cuda.is_available():
             device_name = f"CUDA ({torch.cuda.get_device_name(0)})"
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -299,6 +301,7 @@ async def get_system_status(
         pass
 
     from app.core.embedder import embedder
+
     embedder_ready = embedder.model is not None
 
     db_info = {
@@ -362,7 +365,9 @@ async def detect_llm_endpoint(
         effective_key = secret_cfg.get("api_key")
 
     base_url = req.base_url.strip() if req.base_url else None
-    model_name = req.model_name.strip() if req.model_name else (settings.openai_model or "gpt-4o-mini")
+    model_name = (
+        req.model_name.strip() if req.model_name else (settings.openai_model or "gpt-4o-mini")
+    )
 
     start_time = time.time()
     caps = await detect_model_capabilities(
@@ -424,7 +429,9 @@ async def test_llm_connection(
         )
 
     base_url = req.base_url.strip() if req.base_url else None
-    model_name = req.model_name.strip() if req.model_name else (settings.openai_model or "gpt-4o-mini")
+    model_name = (
+        req.model_name.strip() if req.model_name else (settings.openai_model or "gpt-4o-mini")
+    )
 
     llm_inst = LLM(
         api_key=effective_key,
@@ -506,16 +513,61 @@ async def test_image_connection(
     if not effective_key:
         secret_cfg = await config_service.get_llm_config_with_secret(db, current_user)
         cls_cfg = secret_cfg.get("classroom_config") or {}
-        effective_key = cls_cfg.get("image_api_key")
+        effective_key = cls_cfg.get("image_api_key") or secret_cfg.get("api_key")
 
     from app.core.image_generator import test_image_connectivity
-    res = await test_image_connectivity({
-        "image_provider": req.image_provider,
-        "image_api_key": effective_key,
-        "image_base_url": req.image_base_url,
-        "image_model": req.image_model,
-    })
+
+    res = await test_image_connectivity(
+        {
+            "image_provider": req.image_provider,
+            "image_api_key": effective_key,
+            "image_base_url": req.image_base_url,
+            "image_model": req.image_model,
+        }
+    )
     return ImageTestResp(**res)
+
+
+class TTSTestReq(BaseModel):
+    tts_provider: str = "edge-tts"
+    tts_api_key: str | None = None
+    tts_base_url: str | None = None
+    tts_model: str = "tts-1"
+    voice_teacher: str | None = None
+
+
+class TTSTestResp(BaseModel):
+    success: bool
+    message: str
+    latency_ms: int = 0
+    audio_base64: str | None = None
+
+
+@router.post("/test-tts", response_model=TTSTestResp)
+async def test_tts_connection(
+    req: TTSTestReq,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """测试语音合成服务连通性与音色，返回试听音频。"""
+    effective_key = req.tts_api_key.strip() if req.tts_api_key else None
+    if not effective_key:
+        secret_cfg = await config_service.get_llm_config_with_secret(db, current_user)
+        cls_cfg = secret_cfg.get("classroom_config") or {}
+        effective_key = cls_cfg.get("tts_api_key") or secret_cfg.get("api_key")
+
+    from app.core.tts import test_tts_connectivity
+
+    res = await test_tts_connectivity(
+        {
+            "tts_provider": req.tts_provider,
+            "tts_api_key": effective_key,
+            "tts_base_url": req.tts_base_url,
+            "tts_model": req.tts_model,
+            "voice_teacher": req.voice_teacher,
+        }
+    )
+    return TTSTestResp(**res)
 
 
 # 安全修复（2026-08-19）：移除 GET /llm/with-secret 端点。

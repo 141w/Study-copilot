@@ -145,11 +145,18 @@ class LLM:
         temperature: float = 0.7,
         max_tokens: int | None = None,
         max_retries: int = 1,
-    ) -> AsyncGenerator[str, None]:
-        """流式聊天接口，逐 token 返回生成内容。支持重试（stream 创建阶段）。"""
+        include_reasoning: bool = False,
+    ) -> AsyncGenerator[Any, None]:
+        """流式聊天接口，逐 token 返回生成内容。支持重试（stream 创建阶段）。
+        
+        若 include_reasoning=True，返回字典流：
+          {"type": "reasoning" | "token", "content": str}
+        若 include_reasoning=False，返回纯字符串流（默认向后兼容）。
+        """
         last_err: Exception | None = None
         for attempt in range(max_retries + 1):
             has_yielded = False
+            in_think_tag = False
             try:
                 stream = await self.client.chat.completions.create(
                     model=self.model,
@@ -160,9 +167,50 @@ class LLM:
                 )
                 async for chunk in stream:
                     delta = chunk.choices[0].delta if chunk.choices else None
-                    if delta and delta.content:
+                    if not delta:
+                        continue
+
+                    # 1. 尝试提取 API 标准 reasoning_content (DeepSeek-R1 / SiliconFlow / StepFun 等)
+                    reasoning = getattr(delta, "reasoning_content", None)
+                    if not reasoning:
+                        model_extra = getattr(delta, "model_extra", None)
+                        if isinstance(model_extra, dict):
+                            reasoning = model_extra.get("reasoning_content")
+
+                    if reasoning:
                         has_yielded = True
-                        yield delta.content
+                        if include_reasoning:
+                            yield {"type": "reasoning", "content": reasoning}
+
+                    # 2. 提取 content 并做 <think> 标签容错流式解析
+                    content = delta.content
+                    if content:
+                        has_yielded = True
+                        if include_reasoning:
+                            text_to_process = content
+                            while text_to_process:
+                                if not in_think_tag:
+                                    if "<think>" in text_to_process:
+                                        before, _, after = text_to_process.partition("<think>")
+                                        if before:
+                                            yield {"type": "token", "content": before}
+                                        in_think_tag = True
+                                        text_to_process = after
+                                    else:
+                                        yield {"type": "token", "content": text_to_process}
+                                        break
+                                else:
+                                    if "</think>" in text_to_process:
+                                        think_text, _, after = text_to_process.partition("</think>")
+                                        if think_text:
+                                            yield {"type": "reasoning", "content": think_text}
+                                        in_think_tag = False
+                                        text_to_process = after
+                                    else:
+                                        yield {"type": "reasoning", "content": text_to_process}
+                                        break
+                        else:
+                            yield content
                 return  # 成功完成，退出重试循环
             except Exception as e:
                 if has_yielded:

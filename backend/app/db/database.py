@@ -51,6 +51,7 @@ def _utcnow_naive() -> datetime:
     """统一的时间默认值：UTC 当前时刻（去 tzinfo，与既有 NOT NULL 列语义一致）。"""
     return datetime.now(UTC).replace(tzinfo=None)
 
+
 class _Vector(TypeDecorator):
     """pgvector 兼容类型：PostgreSQL 渲染为 vector(N)，SQLite 回退为 JSON 存储。"""
 
@@ -76,6 +77,7 @@ class _Vector(TypeDecorator):
                 return "[" + ",".join(str(v) for v in value) + "]"
             return value
         import json as _json
+
         return _json.dumps(value)
 
     def process_result_value(self, value: Any, dialect: Any) -> Any:
@@ -85,6 +87,7 @@ class _Vector(TypeDecorator):
         if dialect.name == "postgresql":
             return value
         import json as _json
+
         return _json.loads(value)
 
 
@@ -148,9 +151,7 @@ class Quiz(Base):
     # sync_quiz_results 的 INSERT 直接 IntegrityError（测试 SQLite 不强制
     # FK 掩盖了该缺陷，生产 PostgreSQL 必炸）。analysis_service 已按
     # `r.document_id or ""` 防御空值，放开可空不影响既有查询
-    document_id: Mapped[str | None] = mapped_column(
-        ForeignKey("documents.id"), nullable=True
-    )
+    document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"), nullable=True)
     question_type: Mapped[str] = mapped_column(String)
     question: Mapped[str] = mapped_column(Text)
     options: Mapped[str | None] = mapped_column(Text)
@@ -174,9 +175,7 @@ class UserLLMConfig(Base):
     __tablename__ = "user_llm_configs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id"), unique=True, index=True
-    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
     provider: Mapped[str] = mapped_column(String, default="openrouter")
     api_key: Mapped[str | None] = mapped_column(String)
     base_url: Mapped[str | None] = mapped_column(String)
@@ -184,9 +183,7 @@ class UserLLMConfig(Base):
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
     max_tokens: Mapped[int] = mapped_column(Integer, default=2048)
     context_window: Mapped[int] = mapped_column(Integer, default=262144)
-    embedding_model: Mapped[str] = mapped_column(
-        String, default="shibing624/text2vec-base-chinese"
-    )
+    embedding_model: Mapped[str] = mapped_column(String, default="shibing624/text2vec-base-chinese")
     embedding_dimension: Mapped[int] = mapped_column(Integer, default=768)
     message_format: Mapped[str] = mapped_column(
         String, default="openai"
@@ -245,9 +242,7 @@ class Tag(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
 
     # relationships
-    notes: Mapped[list["Note"]] = relationship(
-        secondary=note_tags, back_populates="tags"
-    )
+    notes: Mapped[list["Note"]] = relationship(secondary=note_tags, back_populates="tags")
 
 
 class Note(Base):
@@ -257,9 +252,7 @@ class Note(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    course_space_id: Mapped[str | None] = mapped_column(
-        ForeignKey("course_spaces.id"), index=True
-    )
+    course_space_id: Mapped[str | None] = mapped_column(ForeignKey("course_spaces.id"), index=True)
     title: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text, default="")
     note_type: Mapped[str] = mapped_column(String, default="markdown")  # markdown / plain
@@ -286,7 +279,9 @@ class AsyncTask(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     task_type: Mapped[str] = mapped_column(String)  # e.g., "document_process", "quiz_generate"
-    status: Mapped[str] = mapped_column(String, default="pending")  # pending / running / completed / failed / cancelled
+    status: Mapped[str] = mapped_column(
+        String, default="pending"
+    )  # pending / running / completed / failed / cancelled
     progress: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 ~ 1.0
     result: Mapped[str | None] = mapped_column(Text)  # JSON-encoded result data
     error: Mapped[str | None] = mapped_column(Text)
@@ -319,9 +314,7 @@ class CustomPersona(Base):
     __tablename__ = "custom_personas"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(50))
     role: Mapped[str] = mapped_column(String(50), index=True)
     avatar: Mapped[str] = mapped_column(String(50), default="User")
@@ -333,7 +326,6 @@ class CustomPersona(Base):
         default=_utcnow_naive,
         onupdate=_utcnow_naive,
     )
-
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:

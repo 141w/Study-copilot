@@ -77,9 +77,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { VideoPlay } from '@/components/icons'
 import type { ClassroomItem } from '@/stores/classroom'
+
+const router = useRouter()
 
 const props = defineProps<{
   classrooms: ClassroomItem[]
@@ -101,7 +104,7 @@ function openClassroom(url: string): void {
   if (!url) return
   if (url.startsWith('/')) {
     // 站内路由
-    window.location.href = url
+    router.push(url)
   } else {
     window.open(url, '_blank')
   }

@@ -93,7 +93,9 @@ async def _insert_message(
             db.add(msg)
         await db.commit()
     except Exception as exc:
-        logger.warning("Failed to insert message with embedding: %s. Falling back to embedding=None.", exc)
+        logger.warning(
+            "Failed to insert message with embedding: %s. Falling back to embedding=None.", exc
+        )
         await db.rollback()
         if is_pg:
             await db.execute(
@@ -163,7 +165,9 @@ async def ask_question(
     q_emb = await _embed_text(question)
     a_emb = await _embed_text(result["answer"])
     await _insert_message(db, str(uuid.uuid4()), session_id, "user", question, None, q_emb)
-    await _insert_message(db, str(uuid.uuid4()), session_id, "assistant", result["answer"], sources_json, a_emb)
+    await _insert_message(
+        db, str(uuid.uuid4()), session_id, "assistant", result["answer"], sources_json, a_emb
+    )
 
     return {
         "answer": result["answer"],
@@ -201,6 +205,8 @@ async def ask_question_stream(
 
     answer_parts: list[str] = []
     collected_sources: list[dict] = []
+    collected_thinking: list[dict] = []
+    collected_reasoning: list[str] = []
     done_yielded = False
 
     try:
@@ -214,7 +220,22 @@ async def ask_question_stream(
                     "session_id": session_id,
                 }
             elif chunk["type"] == "thinking":
-                yield {"type": "thinking", "step": chunk.get("step", ""), "detail": chunk.get("detail", "")}
+                step_data = {
+                    "step": chunk.get("step", ""),
+                    "detail": chunk.get("detail", ""),
+                }
+                collected_thinking.append(step_data)
+                yield {
+                    "type": "thinking",
+                    **step_data,
+                }
+            elif chunk["type"] == "reasoning":
+                content = chunk.get("content", "")
+                collected_reasoning.append(content)
+                yield {
+                    "type": "reasoning",
+                    "content": content,
+                }
             elif chunk["type"] == "token":
                 answer_parts.append(chunk["content"])
                 yield {"type": "token", "content": chunk["content"]}
@@ -229,11 +250,24 @@ async def ask_question_stream(
     except GeneratorExit:
         full_answer = "".join(answer_parts)
         if full_answer:
-            sources_json = json.dumps(collected_sources, ensure_ascii=False)
+            if collected_thinking or collected_reasoning:
+                sources_payload = {
+                    "sources": collected_sources,
+                    "thinking": collected_thinking if collected_thinking else None,
+                    "reasoning": "".join(collected_reasoning) if collected_reasoning else None,
+                }
+                sources_json = json.dumps(sources_payload, ensure_ascii=False)
+            else:
+                sources_json = json.dumps(collected_sources, ensure_ascii=False)
             a_emb = await _embed_text(full_answer)
             await _insert_message(
-                db, str(uuid.uuid4()), session_id, "assistant", full_answer,
-                sources_json, a_emb,
+                db,
+                str(uuid.uuid4()),
+                session_id,
+                "assistant",
+                full_answer,
+                sources_json,
+                a_emb,
             )
         done_yielded = True
         return
@@ -241,11 +275,24 @@ async def ask_question_stream(
         if not done_yielded:
             full_answer = "".join(answer_parts)
             if full_answer:
-                sources_json = json.dumps(collected_sources, ensure_ascii=False)
+                if collected_thinking or collected_reasoning:
+                    sources_payload = {
+                        "sources": collected_sources,
+                        "thinking": collected_thinking if collected_thinking else None,
+                        "reasoning": "".join(collected_reasoning) if collected_reasoning else None,
+                    }
+                    sources_json = json.dumps(sources_payload, ensure_ascii=False)
+                else:
+                    sources_json = json.dumps(collected_sources, ensure_ascii=False)
                 a_emb = await _embed_text(full_answer)
                 await _insert_message(
-                    db, str(uuid.uuid4()), session_id, "assistant", full_answer,
-                    sources_json, a_emb,
+                    db,
+                    str(uuid.uuid4()),
+                    session_id,
+                    "assistant",
+                    full_answer,
+                    sources_json,
+                    a_emb,
                 )
             done_yielded = True
             yield {"type": "done"}

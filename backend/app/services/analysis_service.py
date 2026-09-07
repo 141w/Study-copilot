@@ -93,13 +93,10 @@ async def get_knowledge_stats(
     user: User,
 ) -> dict:
     """Return overall quiz accuracy stats. 优化：单条 SQL 聚合（H-1）。"""
-    stmt = (
-        select(
-            func.count(QuizResult.id).label("total"),
-            func.sum(case((QuizResult.is_correct == True, 1), else_=0)).label("correct"),
-        )
-        .where(QuizResult.user_id == user.id)
-    )
+    stmt = select(
+        func.count(QuizResult.id).label("total"),
+        func.sum(case((QuizResult.is_correct == True, 1), else_=0)).label("correct"),
+    ).where(QuizResult.user_id == user.id)
     result = await db.execute(stmt)
     row = result.one()
     total = int(row.total or 0)

@@ -7,6 +7,7 @@ from app.core.template_manager import render_template
 
 logger = logging.getLogger(__name__)
 
+
 class QuizGenerator:
     def __init__(self, llm_config=None):
         self.llm = LLM.from_config(llm_config)
@@ -23,7 +24,7 @@ class QuizGenerator:
         except Exception as e:
             # LLM 调用失败必须上抛：此前吞错返回 []，service 层把空列表
             # 当成功入库、任务标记 completed，用户看到"生成完成 0 题"无从知晓
-            logger.error(f"generate_choice LLM call failed: {e}")
+            logger.error("generate_choice LLM call failed: %s", e)
             raise
         try:
             match = re.search(r"\[[\s\S]+\]", resp)
@@ -38,7 +39,7 @@ class QuizGenerator:
                     d["answer"] = letter[0] if letter else ans
                 return data[:count]
         except Exception as e:
-            logger.error(f"generate_choice parse failed: {e}")
+            logger.error("generate_choice parse failed: %s", e)
         return []
 
     async def generate_short_answer(self, context, count=1):
@@ -52,7 +53,7 @@ class QuizGenerator:
             resp = await self.llm.generate(prompt) or ""
         except Exception as e:
             # 同 generate_choice：LLM 失败上抛，避免静默成功 0 题
-            logger.error(f"generate_short_answer LLM call failed: {e}")
+            logger.error("generate_short_answer LLM call failed: %s", e)
             raise
         try:
             match = re.search(r"\[[\s\S]+\]", resp)
@@ -66,16 +67,17 @@ class QuizGenerator:
                     d["answer"] = ans
                 return data[:count]
         except Exception as e:
-            logger.error(f"generate_short_answer parse failed: {e}")
+            logger.error("generate_short_answer parse failed: %s", e)
         return []
 
     async def generate_quizzes(self, context, choice_count=3, short_answer_count=2):
-        logger.debug(f"QuizGenerator using model: {self.llm.model}")
+        logger.debug("QuizGenerator using model: %s", self.llm.model)
         result = []
         result.extend(await self.generate_choice(context, choice_count))
-        logger.debug(f"choice result: {result}")
+        logger.debug("choice result: %s", result)
         result.extend(await self.generate_short_answer(context, short_answer_count))
-        logger.debug(f"short_answer result: {result}")
+        logger.debug("short_answer result: %s", result)
         return result
+
 
 quiz_generator = QuizGenerator()

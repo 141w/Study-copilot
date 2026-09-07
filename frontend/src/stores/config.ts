@@ -160,6 +160,35 @@ export const useConfigStore = defineStore('config', () => {
     }
   }
 
+  async function testTTSConfig(testData: {
+    tts_provider: string
+    tts_api_key?: string
+    tts_base_url?: string
+    tts_model?: string
+    voice_teacher?: string
+  }): Promise<{
+    success: boolean
+    message: string
+    latency_ms?: number
+    audio_base64?: string | null
+  }> {
+    try {
+      const response = await api.post<{
+        success: boolean
+        message: string
+        latency_ms?: number
+        audio_base64?: string | null
+      }>('/config/test-tts', testData)
+      return response.data
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || '语音服务连接异常',
+        audio_base64: null
+      }
+    }
+  }
+
   return {
     loading,
     fetchLLMConfig,
@@ -167,6 +196,7 @@ export const useConfigStore = defineStore('config', () => {
     syncToChatStore,
     testLLMConfig,
     testImageConfig,
+    testTTSConfig,
     getSystemStatus,
     detectLLMCapabilities
   }

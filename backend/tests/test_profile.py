@@ -33,9 +33,7 @@ async def _auth_client(client, user):
 async def test_update_profile_username(client, existing_user):
     await _auth_client(client, existing_user)
     try:
-        resp = await client.put(
-            "/api/auth/me", json={"username": "renamed", "email": None}
-        )
+        resp = await client.put("/api/auth/me", json={"username": "renamed", "email": None})
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 

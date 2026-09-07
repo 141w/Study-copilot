@@ -12,20 +12,18 @@
     <div class="flex items-start justify-between mb-2">
       <h3 class="font-semibold text-[var(--text-primary)] truncate flex-1 pr-2">{{ note.title || '未命名笔记' }}</h3>
       <div class="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity flex-shrink-0">
-        <button
+        <el-button
           @click.stop="$emit('edit', note)"
-          aria-label="编辑笔记"
-          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-info)] hover:bg-[var(--color-info-light)] rounded transition-colors"
+          title="编辑笔记"
         >
           <el-icon class="w-4 h-4"><Edit /></el-icon>
-        </button>
-        <button
+        </el-button>
+        <el-button
           @click.stop="$emit('delete', note)"
-          aria-label="删除笔记"
-          class="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-light)] rounded transition-colors"
+          title="删除笔记"
         >
           <el-icon class="w-4 h-4"><Delete /></el-icon>
-        </button>
+        </el-button>
       </div>
     </div>
 

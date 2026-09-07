@@ -179,6 +179,8 @@ async def get_llm_config_with_secret(
         decrypted_cls["image_api_key"] = enc.decrypt(raw_cls["image_api_key"])
     if raw_cls.get("classroom_llm_api_key"):
         decrypted_cls["classroom_llm_api_key"] = enc.decrypt(raw_cls["classroom_llm_api_key"])
+    if raw_cls.get("tts_api_key"):
+        decrypted_cls["tts_api_key"] = enc.decrypt(raw_cls["tts_api_key"])
 
     return {
         **_config_to_dict(config),
@@ -197,7 +199,7 @@ def _process_classroom_config(
     existing_classroom_cfg: dict | None,
     enc: Any,
 ) -> dict:
-    """处理课堂与多模态配置，对 image_api_key 和 classroom_llm_api_key 采用 Fernet 安全加密。"""
+    """处理课堂与多模态配置，对 image_api_key, classroom_llm_api_key, tts_api_key 采用 Fernet 安全加密。"""
     if not raw_classroom_cfg:
         return existing_classroom_cfg or {}
 
@@ -219,6 +221,13 @@ def _process_classroom_config(
     else:
         processed["classroom_llm_api_key"] = existing.get("classroom_llm_api_key")
 
+    # 处理语音 TTS API Key 加密
+    tts_key = raw_classroom_cfg.get("tts_api_key")
+    if tts_key:
+        processed["tts_api_key"] = enc.encrypt(tts_key)
+    else:
+        processed["tts_api_key"] = existing.get("tts_api_key")
+
     return processed
 
 
@@ -239,6 +248,16 @@ def _mask_classroom_config(cfg: dict | None, enc: Any) -> dict:
         "image_api_key_masked": None,
         "image_size": "1024x1024",
         "enable_tts": True,
+        "tts_enabled": True,
+        "tts_provider": "edge-tts",
+        "tts_model": "tts-1",
+        "tts_base_url": "https://api.openai.com/v1",
+        "has_tts_api_key": False,
+        "tts_api_key_masked": None,
+        "tts_speed": 1.0,
+        "voice_teacher": "zh-CN-YunxiNeural",
+        "voice_curious": "zh-CN-XiaoxiaoNeural",
+        "voice_thinker": "zh-CN-YunjianNeural",
         "tts_voice": "zh-CN-XiaoxiaoNeural",
         "enable_web_search": False,
     }
@@ -265,6 +284,16 @@ def _mask_classroom_config(cfg: dict | None, enc: Any) -> dict:
         masked["has_classroom_llm_api_key"] = False
         masked["classroom_llm_api_key_masked"] = None
     masked.pop("classroom_llm_api_key", None)
+
+    tts_enc = cfg.get("tts_api_key")
+    if tts_enc:
+        plain_tts = enc.decrypt(tts_enc)
+        masked["has_tts_api_key"] = bool(plain_tts)
+        masked["tts_api_key_masked"] = mask_api_key(plain_tts)
+    else:
+        masked["has_tts_api_key"] = False
+        masked["tts_api_key_masked"] = None
+    masked.pop("tts_api_key", None)
 
     return masked
 

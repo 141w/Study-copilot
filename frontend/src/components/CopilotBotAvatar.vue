@@ -73,6 +73,7 @@ const props = withDefaults(
 )
 
 const effectiveGaze = computed(() => {
+  if (props.isStreaming) return false
   return props.gaze !== undefined ? props.gaze : (prefs.value.botGaze ?? true)
 })
 
@@ -187,6 +188,7 @@ function moodBlocks(mood: BotMood): Block[] {
 
 /** 热插拔一次性子场景：覆盖 props.mood，到点恢复 */
 function playScene(mood: BotMood): void {
+  if (props.isStreaming) return
   if (sceneTimer) clearTimeout(sceneTimer)
   sceneOverride = moodBlocks(mood)
   clock = 0; currentBlock = 0; cycleComplete = false
@@ -210,6 +212,7 @@ const loopingMoods: BotMood[] = ['idle', 'thinking', 'answering', 'egg', 'sleep'
 const decorativeMoods: BotMood[] = ['arrive', 'burst', 'comet', 'done', 'acknowledge', 'exclaim', 'cancelled']
 
 function effectiveMood(): BotMood {
+  if (props.isStreaming) return 'thinking'
   if (prefersReduced() && decorativeMoods.includes(props.mood)) return 'idle'
   return props.mood
 }
@@ -232,7 +235,12 @@ function onPointerLeave(): void {
  * 混合交给引擎——只有它知道 t 时刻的 pose；这里补偿表情会重蹈眼睛跳变坑。
  */
 function aim(): void {
-  if (!effectiveGaze.value || prefersReduced() || !rootEl.value) return
+  if (!effectiveGaze.value || prefersReduced() || !rootEl.value) {
+    if (rootEl.value) {
+      engine.setLook(lookTarget({ nx: 0, ny: 0, pointer: false }), clock)
+    }
+    return
+  }
   const box = rootEl.value.getBoundingClientRect()
   if (!box || box.width === 0 || box.height === 0) return
   const demiW = Math.max(1, window.innerWidth / 2)
@@ -329,8 +337,20 @@ onBeforeUnmount(() => {
   if (sceneTimer) clearTimeout(sceneTimer)
 })
 
+watch(() => props.isStreaming, (streaming) => {
+  if (streaming) {
+    if (sceneTimer) {
+      clearTimeout(sceneTimer)
+      sceneTimer = null
+    }
+    sceneOverride = null
+    reset()
+  }
+})
+
 /** 触碰球体——优先点头承认，通知父组件也可以响应 */
 function onBotInteract(): void {
+  if (props.isStreaming) return
   playScene('acknowledge')
   emit('interact', 'acknowledge')
 }
@@ -363,7 +383,8 @@ function dotAttrs(dot: BotFrame['dots'][number]): Record<string, string | number
     :viewBox="'-' + VB + ' -' + VB + ' ' + (VB * 2) + ' ' + (VB * 2)"
     role="img"
     aria-label="Study Copilot"
-    class="flex-shrink-0 cursor-pointer"
+    class="flex-shrink-0"
+    :class="isStreaming ? 'cursor-default pointer-events-none' : 'cursor-pointer'"
     style="overflow: visible"
     @pointerenter="onBotInteract"
   >

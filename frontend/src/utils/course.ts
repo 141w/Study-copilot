@@ -23,6 +23,7 @@ export interface ParsedCourseInfo {
   isAiGenerated: boolean
   isPending: boolean
   coverImage?: string
+  sourceDocIds?: string[]
 }
 
 /**
@@ -55,6 +56,8 @@ export function parseCourseDescription(raw?: string | null): ParsedCourseInfo {
     const classroomUrl = data.classroom_url || ''
     const classroomId = data.classroom_id || data.job_id || ''
     const isPending = !!data.classroom_pending
+    const rawDocIds = data.source_doc_ids || data.doc_ids
+    const sourceDocIds = Array.isArray(rawDocIds) ? rawDocIds.map(String) : undefined
 
     let displayText = ''
     if (outline?.description) {
@@ -83,6 +86,7 @@ export function parseCourseDescription(raw?: string | null): ParsedCourseInfo {
       isAiGenerated: !!(outline || classroomUrl || data.generated || isPending),
       isPending,
       coverImage: coverImage || undefined,
+      sourceDocIds,
     }
   } catch {
     return {

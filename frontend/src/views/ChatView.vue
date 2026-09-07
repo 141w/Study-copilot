@@ -155,8 +155,10 @@
 
         <div v-else class="max-w-3xl mx-auto px-4 py-6 space-y-6">
           <!-- P7：assistant 尚未响应时（仅 user 消息），球暂驻顶部（FLIP 落点） -->
-          <div v-if="lastAssistantIdx === -1" class="flex items-center gap-2.5">
-            <CopilotBotAvatar class="bot-avatar-flip" :size="48" :mood="avatarMood" :expression="avatarExpr" />
+          <div v-if="lastAssistantIdx === -1" class="flex items-start gap-3 sm:gap-4">
+            <div class="flex-shrink-0 w-11 flex justify-center">
+              <CopilotBotAvatar class="bot-avatar-flip" :size="44" :mood="avatarMood" :expression="avatarExpr" />
+            </div>
           </div>
 
           <template v-for="(msg, idx) in chatStore.messages" :key="idx">
@@ -171,6 +173,7 @@
               v-else
               :message="msg"
               :rendered-markdown="renderMarkdown(msg.content, msg.isStreaming)"
+              :rendered-reasoning="msg.reasoning ? renderMarkdown(msg.reasoning, false) : undefined"
               :show-avatar="idx === lastAssistantIdx"
               :is-latest-assistant="msg === chatStore.messages[chatStore.messages.length - 1]"
               :avatar-mood="avatarMood"
@@ -184,8 +187,8 @@
       </div>
 
       <!-- Input Area -->
-      <div class="bg-[var(--surface-card)]">
-        <div class="max-w-3xl mx-auto px-4 pb-4 pt-2">
+      <div class="border-t border-[var(--border-default)] bg-[var(--bg-primary)]/80 backdrop-blur-md">
+        <div class="max-w-3xl mx-auto px-4 py-3 sm:py-4">
           <ChatInput
             @send="handleSend"
             @stop="handleStop"
@@ -604,6 +607,8 @@ async function handleDiscuss(content: string): Promise<void> {
   const controller = new AbortController()
   const token = localStorage.getItem('token')
 
+  chatStore.isStreaming = true
+
   // 添加用户消息
   chatStore.messages.push({
     id: Date.now(), role: 'user', content,
@@ -847,6 +852,9 @@ async function handleDiscuss(content: string): Promise<void> {
       }
     }
   }
+  finally {
+    chatStore.isStreaming = false
+  }
 }
 
 function handleStop(): void {
@@ -900,15 +908,16 @@ function scrollToBottom(): void {
 let gsapCtx: gsap.Context | null = null
 
 /**
- * P8：mood 从消息状态推导。egg = 流式已开始但无思考步骤也无内容
- * （等首 token 的蛋形收紧）；thinking = 有 Agentic 步骤（真版三点）。
+ * P8：mood 从消息状态推导。流式生成期间全心投入思考（thinking 真版三点），
+ * 生成完毕转为完成庆祝（done），空闲回归 idle。
  */
 function updateBotMood(msg: ChatStreamMessage, isLast: boolean): void {
   if (!isLast || msg.role !== 'assistant') { botMood.value = 'idle'; return }
-  if (!msg.isStreaming) botMood.value = 'done'
-  else if (msg.content) botMood.value = 'answering'
-  else if (Array.isArray(msg.thinking) && msg.thinking.length > 0) botMood.value = 'thinking'
-  else botMood.value = 'egg'
+  if (msg.isStreaming) {
+    botMood.value = 'thinking'
+  } else {
+    botMood.value = 'done'
+  }
 }
 
 /** P8：一次性场景 mood（orbit/burst/comet 等），到点回收优先权交还消息推导 */
@@ -930,8 +939,11 @@ function playScene(mood: BotMood): void {
   sceneTimer = setTimeout(() => { sceneMood.value = null }, SCENE_DURATION[mood] ?? 5000)
 }
 
-/** 渲染给球的 mood：一次性场景播放中优先，否则走消息推导 */
-const avatarMood = computed<BotMood>(() => sceneMood.value ?? botMood.value)
+/** 渲染给球的 mood：流式生成期间锁死 thinking 全神贯注思考，否则优先场景覆盖，再走消息推导 */
+const avatarMood = computed<BotMood>(() => {
+  if (chatStore.isStreaming) return 'thinking'
+  return sceneMood.value ?? botMood.value
+})
 
 /**
  * P8-4：表情随 mood 换脸（引擎内 morph，不重置时钟）。

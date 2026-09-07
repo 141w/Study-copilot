@@ -46,9 +46,9 @@ def test_resolve_persona_by_role_or_id():
 async def test_discuss_stream_lifecycle():
     """测试多角色讨论全生命周期流式事件。"""
     mock_responses = [
-        "从基向量展开看，这非常直观。",      # turn 1: 学霸
-        "可是如果维数无限该怎么理解呢？",    # turn 1: 求知同学
-        "这是本次讨论的核心要点总结：...",     # 主持人总结
+        "从基向量展开看，这非常直观。",  # turn 1: 学霸
+        "可是如果维数无限该怎么理解呢？",  # turn 1: 求知同学
+        "这是本次讨论的核心要点总结：...",  # 主持人总结
     ]
 
     with patch("app.core.persona_discussion.LLM") as mock_llm_cls:
@@ -139,6 +139,7 @@ async def test_discuss_error_graceful_handling():
 @pytest.mark.asyncio
 async def test_discuss_token_chunk_streaming():
     """测试多角色讨论逐 token 流式输出。"""
+
     async def mock_stream(messages, temperature=0.7):
         for token in ["代", "码", "示", "例"]:
             yield token
@@ -226,4 +227,3 @@ async def test_discuss_empty_stream_recovery():
         speak_ev = next(e for e in events if e["type"] == "persona_speak")
         assert speak_ev["content"] == "降级自愈成功论点"
         assert speak_ev["content"] != ""
-

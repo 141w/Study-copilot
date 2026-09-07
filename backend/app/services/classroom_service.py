@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import CourseSpace, DocumentChunk, Quiz, QuizResult, User
 from app.services import document_service
-from app.services.course_service import create_course_space
+from app.services.course_service import add_document_to_course, create_course_space
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +68,12 @@ async def build_classroom_request(
     for doc_id in doc_ids[:5]:
         doc = await document_service.get_document(db, user, doc_id)
         text = await _read_document_text(db, doc_id)
-        docs.append({
-            "text": text[:50_000],  # 单文档上限 50k 字符
-            "filename": doc["filename"],
-        })
+        docs.append(
+            {
+                "text": text[:50_000],  # 单文档上限 50k 字符
+                "filename": doc["filename"],
+            }
+        )
 
     return {
         "requirement": requirement or "请根据提供的材料生成课程",
@@ -106,13 +108,16 @@ async def submit_classroom_generation(
             logger.info("Classroom generation submitted: jobId=%s", data.get("jobId", "?"))
             return data
         except Exception as e:
-            logger.warning("Classroom engine request failed (%s), attempting local fallback: %s", url, e)
+            logger.warning(
+                "Classroom engine request failed (%s), attempting local fallback: %s", url, e
+            )
 
     # 本地保底生成
     if db is not None and user is not None:
         try:
-            from app.core.course_generator import generate_course
-            from app.services.course_service import create_course_space
+            from app.core.course_generator import generate_course, save_classroom_dsl_to_disk
+            from app.services.course_service import add_document_to_course, create_course_space
+
             doc_ids = payload.get("doc_ids", [])
             req_text = payload.get("requirement", "AI 互动课程")
             course_data = await generate_course(
@@ -127,28 +132,53 @@ async def submit_classroom_generation(
                 db=db,
                 user=user,
                 name=course_data.get("outline", {}).get("title") or req_text[:50] or "AI 互动课程",
-                description=json.dumps({
-                    "classroom_url": f"/courses/{job_id}",
-                    "classroom_id": job_id,
+                description="",
+                color="#409EFF",
+            )
+            # 关联参考文档至课程空间
+            for d_id in doc_ids:
+                try:
+                    await add_document_to_course(db, user, course_space.id, d_id)
+                except Exception as add_err:
+                    logger.warning("Failed to link doc %s to course %s: %s", d_id, course_space.id, add_err)
+
+            classroom_url = f"/courses/{course_space.id}/classroom"
+            classroom_data = course_data.get("classroom_data")
+            if classroom_data:
+                classroom_data["id"] = course_space.id
+                classroom_data["url"] = classroom_url
+                try:
+                    save_classroom_dsl_to_disk(classroom_data)
+                except Exception as disk_err:
+                    logger.warning("Failed to write classroom DSL to disk: %s", disk_err)
+
+            course_space.description = json.dumps(
+                {
+                    "classroom_url": classroom_url,
+                    "classroom_id": course_space.id,
+                    "job_id": job_id,
                     "event": "classroom_completed",
                     "outline": course_data.get("outline"),
-                }, ensure_ascii=False),
-                color="#409EFF",
+                    "classroom_data": classroom_data,
+                    "source_doc_ids": doc_ids,
+                },
+                ensure_ascii=False,
             )
             await db.commit()
             return {
                 "jobId": job_id,
                 "status": "succeeded",
                 "done": True,
-                "message": "已通过内置 AI 课程引擎完成大纲与测验生成",
+                "message": "已通过内置 AI 课程引擎完成大纲与课件生成",
                 "pollUrl": "",
                 "course_id": course_space.id,
-                "url": f"/courses/{course_space.id}",
+                "url": classroom_url,
+                "source_doc_ids": doc_ids,
                 "result": {
-                    "classroomId": job_id,
-                    "url": f"/courses/{course_space.id}",
+                    "classroomId": course_space.id,
+                    "url": classroom_url,
                     "title": course_space.name,
-                }
+                },
             }
         except Exception as fallback_err:
             logger.error("Local fallback course generation failed: %s", fallback_err, exc_info=True)
@@ -186,7 +216,9 @@ async def sync_completed_classroom_job(
 ) -> dict[str, Any] | None:
     """当轮询发现课堂任务完成时，就地更新占位课程并同步测验（双通道自愈）。"""
     raw_data = job_info.get("data") if isinstance(job_info, dict) else None
-    payload: dict[str, Any] = raw_data if isinstance(raw_data, dict) else (job_info if isinstance(job_info, dict) else {})
+    payload: dict[str, Any] = (
+        raw_data if isinstance(raw_data, dict) else (job_info if isinstance(job_info, dict) else {})
+    )
     status = payload.get("status", "")
     is_done = payload.get("done") is True or status in ("succeeded", "completed")
     if not is_done:
@@ -225,7 +257,8 @@ async def sync_completed_classroom_job(
     callback_payload = {
         "event": "classroom_completed",
         "classroom_id": classroom_id,
-        "title": title or (course_row.name.replace("（生成中）", "") if course_row else "AI 互动课堂"),
+        "title": title
+        or (course_row.name.replace("（生成中）", "") if course_row else "AI 互动课堂"),
         "url": url,
         "quiz_results": payload.get("quiz_results") or result.get("quiz_results") or [],
     }
@@ -239,13 +272,9 @@ def verify_webhook_signature(body: bytes, signature: str | None) -> bool:
     """验证课堂 webhook HMAC 签名。"""
     if not settings.classroom_webhook_secret:
         if settings.debug:
-            logger.warning(
-                "CLASSROOM_WEBHOOK_SECRET 未配置且 DEBUG=True：开发模式放行（生产必配）"
-            )
+            logger.warning("CLASSROOM_WEBHOOK_SECRET 未配置且 DEBUG=True：开发模式放行（生产必配）")
             return True
-        logger.error(
-            "CLASSROOM webhook 被拒绝：未配置 CLASSROOM_WEBHOOK_SECRET（fail-closed）"
-        )
+        logger.error("CLASSROOM webhook 被拒绝：未配置 CLASSROOM_WEBHOOK_SECRET（fail-closed）")
         return False
     if not signature:
         return False
@@ -268,23 +297,44 @@ async def handle_webhook_callback(
     logger.info("Classroom webhook: event=%s", event)
 
     if event == "classroom_completed":
+        existing_doc_ids = []
         if matched_course is not None:
             course_row = matched_course
             title = payload.get("title") or course_row.name
             course_row.name = title
+            if course_row.description:
+                try:
+                    desc_obj = json.loads(course_row.description)
+                    if isinstance(desc_obj, dict):
+                        existing_doc_ids = desc_obj.get("source_doc_ids", [])
+                except Exception:
+                    pass
         else:
             course_row = await create_course_space(
-                db, user,
+                db,
+                user,
                 name=payload.get("title", "未命名课堂"),
                 description=payload.get("description", ""),
                 color="#409EFF",
             )
-        course_row.description = json.dumps({
-            "classroom_url": payload.get("url", ""),
-            "classroom_id": payload.get("classroom_id", ""),
-            "description": payload.get("description", ""),
-            "event": event,
-        }, ensure_ascii=False)
+
+        doc_ids = payload.get("doc_ids") or payload.get("source_doc_ids") or existing_doc_ids
+        for d_id in doc_ids:
+            try:
+                await add_document_to_course(db, user, course_row.id, d_id)
+            except Exception as link_err:
+                logger.warning("Failed to link doc %s to course %s in webhook: %s", d_id, course_row.id, link_err)
+
+        course_row.description = json.dumps(
+            {
+                "classroom_url": payload.get("url", ""),
+                "classroom_id": payload.get("classroom_id", ""),
+                "description": payload.get("description", ""),
+                "event": event,
+                "source_doc_ids": doc_ids,
+            },
+            ensure_ascii=False,
+        )
         await db.commit()
 
         # 同步 quiz 结果
@@ -293,7 +343,8 @@ async def handle_webhook_callback(
 
         logger.info(
             "Classroom synced: course_id=%s, quizzes=%d",
-            course_row.id, synced,
+            course_row.id,
+            synced,
         )
         return {"course_id": course_row.id, "quizzes_synced": synced}
 

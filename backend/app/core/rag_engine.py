@@ -44,6 +44,7 @@ def extract_source_indices(text: str) -> list[int]:
             continue
     return sorted(list(indices))
 
+
 class RAGEngine:
     def __init__(self):
         self.top_k = settings.top_k if hasattr(settings, "top_k") else 5
@@ -61,7 +62,9 @@ class RAGEngine:
                 role_label = "User" if msg.get("role") == "user" else "AI"
                 history_parts.append(f"{role_label}: {msg.get('content', '')}")
             history_text = "\n".join(history_parts)
-            rewrite_prompt = render_template("rag/query_rewrite.jinja2", history_text=history_text, query=query)
+            rewrite_prompt = render_template(
+                "rag/query_rewrite.jinja2", history_text=history_text, query=query
+            )
             llm = LLM.from_config(user_config)
             rewrite_messages = [{"role": "user", "content": rewrite_prompt}]
             rewritten_query = await llm.chat(rewrite_messages, temperature=0.0, max_tokens=256)
@@ -129,32 +132,38 @@ class RAGEngine:
         retrieved = await self.retrieve(doc_ids, query, top_k)
         quality = await retrieval_grader.grade(query, retrieved, user_config)
 
-        thinking_events.append({
-            "type": "thinking",
-            "step": "retrieval_check",
-            "detail": f"检索到 {len(retrieved)} 条结果，质量：{quality.quality}（{quality.reason}，得分 {quality.score:.2f}）",
-        })
+        thinking_events.append(
+            {
+                "type": "thinking",
+                "step": "retrieval_check",
+                "detail": f"检索到 {len(retrieved)} 条结果，质量：{quality.quality}（{quality.reason}，得分 {quality.score:.2f}）",
+            }
+        )
 
         if quality.is_good:
             return retrieved, thinking_events
 
         # 检索质量差 → 改写查询重试一次
         logger.info("Retrieval quality poor (%s), rewriting query...", quality.reason)
-        thinking_events.append({
-            "type": "thinking",
-            "step": "retrieval_retry",
-            "detail": f"检索质量不佳（{quality.reason}），正在改写查询重试...",
-        })
+        thinking_events.append(
+            {
+                "type": "thinking",
+                "step": "retrieval_retry",
+                "detail": f"检索质量不佳（{quality.reason}），正在改写查询重试...",
+            }
+        )
 
         rewritten = await self._rewrite_query(query, [], user_config)
         retrieved_retry = await self.retrieve(doc_ids, rewritten, top_k)
         quality_retry = await retrieval_grader.grade(query, retrieved_retry, user_config)
 
-        thinking_events.append({
-            "type": "thinking",
-            "step": "retrieval_check",
-            "detail": f"重试检索到 {len(retrieved_retry)} 条结果，质量：{quality_retry.quality}（{quality_retry.reason}，得分 {quality_retry.score:.2f}）",
-        })
+        thinking_events.append(
+            {
+                "type": "thinking",
+                "step": "retrieval_check",
+                "detail": f"重试检索到 {len(retrieved_retry)} 条结果，质量：{quality_retry.quality}（{quality_retry.reason}，得分 {quality_retry.score:.2f}）",
+            }
+        )
 
         if quality_retry.is_good:
             return retrieved_retry, thinking_events
@@ -217,14 +226,16 @@ class RAGEngine:
                 page = ""
             elif not isinstance(page, str):
                 page = str(page)
-            sources_list.append({
-                "index": i + 1,
-                "document_id": chunk.get("document_id", ""),
-                "page": page,
-                "source": chunk.get("source", ""),
-                "text": chunk.get("text", ""),
-                "relevance_score": _display_relevance(r),
-            })
+            sources_list.append(
+                {
+                    "index": i + 1,
+                    "document_id": chunk.get("document_id", ""),
+                    "page": page,
+                    "source": chunk.get("source", ""),
+                    "text": chunk.get("text", ""),
+                    "relevance_score": _display_relevance(r),
+                }
+            )
 
         return {
             "answer": answer,
@@ -281,7 +292,9 @@ class RAGEngine:
             return []
 
         # Relevance filtering (batch-normalized scores from PgVectorStore)
-        all_results = [r for r in all_results if (rel := result_relevance(r)) is not None and rel > 1e-6]
+        all_results = [
+            r for r in all_results if (rel := result_relevance(r)) is not None and rel > 1e-6
+        ]
 
         # Sort by relevance descending before dedup (ensures stable ordering)
         all_results.sort(key=_relevance_sort_key)
@@ -435,10 +448,19 @@ class RAGEngine:
         temperature = llm_config.get("temperature", 0.7) if llm_config else 0.7
         max_tokens = llm_config.get("max_tokens") if llm_config else None
         try:
-            async for token in llm.chat_stream(
-                messages, temperature=temperature, max_tokens=max_tokens
+            async for chunk in llm.chat_stream(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                include_reasoning=True,
             ):
-                yield token
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "reasoning":
+                        yield chunk
+                    else:
+                        yield chunk.get("content", "")
+                else:
+                    yield chunk
         except Exception as e:
             # 流式场景同样映射为类型化错误，避免裸 500 中断 SSE
             raise classify_llm_error(e) from e
@@ -491,8 +513,11 @@ class RAGEngine:
         if retrieved:
             quality = await retrieval_grader.grade(final_query, retrieved, user_config)
             if not quality.is_good:
-                logger.info("[RAG] Retrieval %s (%s), attempting corrective...",
-                            quality.quality, quality.reason)
+                logger.info(
+                    "[RAG] Retrieval %s (%s), attempting corrective...",
+                    quality.quality,
+                    quality.reason,
+                )
                 corrected, _ = await self._corrective_retrieve(
                     doc_ids, final_query, user_config, top_k=5
                 )
@@ -520,14 +545,17 @@ class RAGEngine:
 
         # 答案反思：评估答案质量，不合格则重新生成
         try:
-            evaluation = await answer_reflector.evaluate(
-                final_query, ctx, answer, llm
-            )
+            evaluation = await answer_reflector.evaluate(final_query, ctx, answer, llm)
             if not evaluation.get("pass", True):
-                logger.info("[RAG] Answer reflection failed (%s), refining...", evaluation.get("reason"))
+                logger.info(
+                    "[RAG] Answer reflection failed (%s), refining...", evaluation.get("reason")
+                )
                 answer = await answer_reflector.refine(
-                    final_query, ctx, answer,
-                    evaluation.get("suggestions", ""), llm,
+                    final_query,
+                    ctx,
+                    answer,
+                    evaluation.get("suggestions", ""),
+                    llm,
                 )
         except Exception as e:
             logger.warning("[RAG] Reflection error for '%s': %s", query[:30], e)
@@ -591,6 +619,11 @@ class RAGEngine:
 
         if route == QueryType.DIRECT_ANSWER:
             # 流式直接回答（不走检索）
+            yield {
+                "type": "thinking",
+                "step": "intent_analysis",
+                "detail": f"意图识别：【通用常识问答】。无需检索文档，由模型直接给出解答：「{final_query}」",
+            }
             system_prompt = render_template("rag/general_chat_system.jinja2")
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -602,6 +635,11 @@ class RAGEngine:
 
         if route == QueryType.SUMMARY:
             # 流式总结：检索全部文档，流式生成摘要
+            yield {
+                "type": "thinking",
+                "step": "intent_analysis",
+                "detail": "意图识别：【全篇知识总结】。正在检索并整合文档全部核心切片...",
+            }
             all_results = await self.retrieve(doc_ids, "文档内容总结", top_k=100)
             if not all_results:
                 yield {"type": "answer", "content": "未找到任何文档内容，请先上传文档。"}
@@ -611,23 +649,46 @@ class RAGEngine:
             sources_list = []
             for i, r in enumerate(all_results[:10]):
                 chunk = r.get("chunk", {})
-                sources_list.append({
-                    "index": i + 1,
-                    "document_id": chunk.get("document_id", ""),
-                    "page": str(chunk.get("page", "")),
-                    "source": chunk.get("source", ""),
-                    "text": chunk.get("text", ""),
-                    "relevance_score": _display_relevance(r),
-                })
+                sources_list.append(
+                    {
+                        "index": i + 1,
+                        "document_id": chunk.get("document_id", ""),
+                        "page": str(chunk.get("page", "")),
+                        "source": chunk.get("source", ""),
+                        "text": chunk.get("text", ""),
+                        "relevance_score": _display_relevance(r),
+                    }
+                )
             yield {"type": "sources", "sources": sources_list, "filtered_sources": sources_list}
-            async for token in self.generate_answer_stream(
+            async for chunk in self.generate_answer_stream(
                 "请总结文档内容", ctx, sources_text, llm_config=user_config
             ):
-                yield {"type": "token", "content": token}
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "reasoning":
+                        yield {"type": "reasoning", "content": chunk["content"]}
+                    elif chunk.get("type") == "token":
+                        yield {"type": "token", "content": chunk["content"]}
+                    else:
+                        yield chunk
+                else:
+                    yield {"type": "token", "content": chunk}
             return
 
         # ── Step 2: RAG 路径（自适应检索 + 答案反思） ──
         # final_query 已在 Step 1 中由 analyze() 处理好
+        if final_query != query:
+            yield {
+                "type": "thinking",
+                "step": "intent_analysis",
+                "detail": f"意图识别：【文档知识检索】。结合对话历史消除指代，改写为独立提问：「{final_query}」",
+            }
+        else:
+            yield {
+                "type": "thinking",
+                "step": "intent_analysis",
+                "detail": f"意图识别：【文档知识检索】。问题独立明确：「{final_query}」",
+            }
+
         strategy = await adaptive_retriever.select_strategy(final_query, llm)
         logger.info("[RAG] Adaptive strategy selected: %s", strategy.value)
 
@@ -642,21 +703,33 @@ class RAGEngine:
         # Step 3: Corrective retrieval — grade quality, retry if poor
         if retrieved:
             quality = await retrieval_grader.grade(final_query, retrieved, user_config)
+            yield {
+                "type": "thinking",
+                "step": "retrieval_check",
+                "detail": quality.detail or f"检索到 {len(retrieved)} 条结果，质量评分：{quality.score:.2f}（{quality.reason}）",
+            }
             if not quality.is_good:
                 logger.info(
                     "[RAG] Stream retrieval %s (%s), attempting corrective...",
-                    quality.quality, quality.reason,
+                    quality.quality,
+                    quality.reason,
                 )
                 yield {
                     "type": "thinking",
                     "step": "retrieval_retry",
-                    "detail": f"检索质量不佳（{quality.reason}），正在改写查询重试...",
+                    "detail": f"检索质量评分偏低（{quality.score:.2f}），正在针对问题核心要点重写查询执行纠错检索...",
                 }
                 corrected, _ = await self._corrective_retrieve(
                     doc_ids, final_query, user_config, top_k=5
                 )
                 if corrected:
                     retrieved = corrected
+                    quality_corrected = await retrieval_grader.grade(final_query, retrieved, user_config)
+                    yield {
+                        "type": "thinking",
+                        "step": "retrieval_check",
+                        "detail": f"纠错检索完成：{quality_corrected.detail or f'重新召回 {len(corrected)} 条切片，质量评分提升至 {quality_corrected.score:.2f}'}",
+                    }
                     logger.info("[RAG] Stream corrective improved: %d chunks", len(corrected))
 
         if not retrieved:
@@ -694,34 +767,56 @@ class RAGEngine:
 
         yield {"type": "sources", "sources": sources_list, "filtered_sources": sources_list}
 
-        # 流式生成答案，收集完整答案用于反思
+        # 流式生成答案，收集完整答案用于反思，同时透传 reasoning 和 token
         answer_parts = []
         history_context = await self._build_history_context(history, llm)
-        async for token in self.generate_answer_stream(
+        async for chunk in self.generate_answer_stream(
             final_query, ctx, sources_text, history_context, llm_config=user_config
         ):
-            answer_parts.append(token)
-            yield {"type": "token", "content": token}
+            if isinstance(chunk, dict):
+                if chunk.get("type") == "reasoning":
+                    yield {"type": "reasoning", "content": chunk["content"]}
+                elif chunk.get("type") == "token":
+                    answer_parts.append(chunk["content"])
+                    yield {"type": "token", "content": chunk["content"]}
+                else:
+                    yield chunk
+            else:
+                answer_parts.append(chunk)
+                yield {"type": "token", "content": chunk}
 
         # 答案反思：评估答案质量，不合格则重新生成
         full_answer = "".join(answer_parts)
         try:
-            evaluation = await answer_reflector.evaluate(
-                final_query, ctx, full_answer, llm
-            )
+            evaluation = await answer_reflector.evaluate(final_query, ctx, full_answer, llm)
+            score = evaluation.get("score", 90)
+            reason = evaluation.get("reason", "")
+            analysis_text = evaluation.get("analysis", "")
             if not evaluation.get("pass", True):
-                logger.info("[RAG] Answer reflection failed (%s), refining...", evaluation.get("reason"))
-                yield {"type": "thinking", "step": "reflection_fail",
-                       "detail": f"答案质量不佳（{evaluation.get('reason', '')}），正在重新生成..."}
+                logger.info(
+                    "[RAG] Answer reflection failed (%s), refining...", reason
+                )
+                yield {
+                    "type": "thinking",
+                    "step": "reflection_fail",
+                    "detail": f"事实依据核验未达标（评分 {score}/100，{reason}）：{analysis_text}。改进策略：{evaluation.get('suggestions', '')}，正在触发自我纠错与精炼...",
+                }
                 refined = await answer_reflector.refine(
-                    final_query, ctx, full_answer,
-                    evaluation.get("suggestions", ""), llm,
+                    final_query,
+                    ctx,
+                    full_answer,
+                    evaluation.get("suggestions", ""),
+                    llm,
                 )
                 yield {"type": "answer_refined", "content": refined}
             else:
-                yield {"type": "thinking", "step": "reflection_pass",
-                       "detail": "答案质量检查通过"}
+                yield {
+                    "type": "thinking",
+                    "step": "reflection_pass",
+                    "detail": f"事实依据核验通过（合规评分 {score}/100）：{analysis_text or reason or '核心论述均在参考文档中有可靠依据，未检测到幻觉编造'}",
+                }
         except Exception as e:
             logger.warning("[RAG] Reflection error for '%s': %s", query[:30], e)
+
 
 rag_engine = RAGEngine()

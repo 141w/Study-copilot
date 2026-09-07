@@ -35,14 +35,22 @@ async def generate_quizzes(
     if not document_ids:
         raise ValidationError("请选择文档")
 
+    cc = max(int(choice_count), 0)
+    sa = max(int(short_answer_count), 0)
+    if cc + sa == 0:
+        raise ValidationError("选择题和简答题的数量不能同时为 0，请至少选择一种题型")
+
     from app.services import task_service
 
     task = await task_service.create_task(
         db,
         user.id,
         "quiz_generate",
-        {"document_ids": document_ids, "choice_count": choice_count,
-         "short_answer_count": short_answer_count},
+        {
+            "document_ids": document_ids,
+            "choice_count": choice_count,
+            "short_answer_count": short_answer_count,
+        },
     )
     await task_service.update_task(db, task.id, user.id, status="running")
 
@@ -51,14 +59,15 @@ async def generate_quizzes(
             db, user, document_ids, choice_count, short_answer_count, config
         )
         await task_service.update_task(
-            db, task.id, user.id, status="completed",
+            db,
+            task.id,
+            user.id,
+            status="completed",
             result={"quiz_count": len(saved)},
         )
         return saved
     except Exception as e:
-        await task_service.update_task(
-            db, task.id, user.id, status="failed", error=str(e)
-        )
+        await task_service.update_task(db, task.id, user.id, status="failed", error=str(e))
         raise
 
 
@@ -202,9 +211,7 @@ async def _judge_short_answer(
         # 旧代码据此构造 LLM 会 fallback 到 settings 的 dummy key 发起真实 HTTP 调用，
         # 导致无 LLM 配置的用户提交简答题时请求挂起超时。
         # 先查用户是否真实保存了配置（含 api_key），没有则直接走规则回退。
-        cfg_result = await db.execute(
-            select(UserLLMConfig).where(UserLLMConfig.user_id == user.id)
-        )
+        cfg_result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
         cfg_row = cfg_result.scalar_one_or_none()
         if not cfg_row or not cfg_row.api_key:
             logger.info("judge_short_answer: user has no LLM config, skip LLM judge")

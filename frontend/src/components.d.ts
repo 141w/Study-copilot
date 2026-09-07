@@ -26,6 +26,7 @@ declare module 'vue' {
     ElButton: typeof import('element-plus/es/components/button/index.mjs')['ElButton']
     ElCard: typeof import('element-plus/es/components/card/index.mjs')['ElCard']
     ElDialog: typeof import('element-plus/es/components/dialog/index.mjs')['ElDialog']
+    ElDrawer: typeof import('element-plus/es/components/drawer/index.mjs')['ElDrawer']
     ElDropdown: typeof import('element-plus/es/components/dropdown/index.mjs')['ElDropdown']
     ElDropdownItem: typeof import('element-plus/es/components/dropdown/index.mjs')['ElDropdownItem']
     ElDropdownMenu: typeof import('element-plus/es/components/dropdown/index.mjs')['ElDropdownMenu']

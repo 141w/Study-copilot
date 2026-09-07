@@ -185,8 +185,10 @@ async def list_notes(
 
     limit/offset 为可选分页参数：缺省返回全部（兼容既有前端）。
     """
-    query = select(Note).options(selectinload(Note.tags)).where(
-        Note.user_id == user.id, Note.deleted_at.is_(None)
+    query = (
+        select(Note)
+        .options(selectinload(Note.tags))
+        .where(Note.user_id == user.id, Note.deleted_at.is_(None))
     )
     if course_space_id:
         query = query.where(Note.course_space_id == course_space_id)
@@ -304,7 +306,6 @@ async def restore_note(db: AsyncSession, user: User, note_id: str) -> Note:
     return note
 
 
-
 async def search_notes(
     db: AsyncSession,
     user: User,
@@ -330,7 +331,9 @@ async def search_notes(
         return []
 
     q = await db.execute(
-        select(Note).options(selectinload(Note.tags)).where(
+        select(Note)
+        .options(selectinload(Note.tags))
+        .where(
             Note.id.in_(note_ids),
             Note.user_id == user.id,
             Note.deleted_at.is_(None),  # 索引陈旧时的双保险
@@ -343,14 +346,16 @@ async def search_notes(
         nid = r.get("chunk", {}).get("document_id", "")
         note = notes_map.get(nid)
         if note:
-            out.append({
-                "id": note.id,
-                "title": note.title,
-                "content": note.content[:300],
-                "course_space_id": note.course_space_id,
-                "tags": [t.name for t in note.tags],
-                "score": 1.0 - float(r.get("distance", 1)),
-            })
+            out.append(
+                {
+                    "id": note.id,
+                    "title": note.title,
+                    "content": note.content[:300],
+                    "course_space_id": note.course_space_id,
+                    "tags": [t.name for t in note.tags],
+                    "score": 1.0 - float(r.get("distance", 1)),
+                }
+            )
         if len(out) >= top_k:
             break
     return out

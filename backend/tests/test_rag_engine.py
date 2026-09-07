@@ -266,8 +266,11 @@ class TestRAGEngineAsync:
         # and batch-normalized relevance to survive post-filter.
         mock_store = AsyncMock()
         mock_store.search.return_value = [
-            {"chunk": {"text": f"distinct content number {i}" * 5, "document_id": "d"},
-             "relevance": 0.9, "retrieval_type": "pgvector_hybrid"}
+            {
+                "chunk": {"text": f"distinct content number {i}" * 5, "document_id": "d"},
+                "relevance": 0.9,
+                "retrieval_type": "pgvector_hybrid",
+            }
             for i in range(3)
         ]
         engine._pg_vector_store = mock_store
@@ -288,8 +291,11 @@ class TestRAGEngineAsync:
         # Use distinct chunks to survive dedup with batch-normalized relevance
         mock_store = AsyncMock()
         mock_store.search.return_value = [
-            {"chunk": {"text": f"fallback content number {i}" * 5, "document_id": "d"},
-             "relevance": 0.8, "retrieval_type": "pgvector_hybrid"}
+            {
+                "chunk": {"text": f"fallback content number {i}" * 5, "document_id": "d"},
+                "relevance": 0.8,
+                "retrieval_type": "pgvector_hybrid",
+            }
             for i in range(3)
         ]
         engine._pg_vector_store = mock_store
@@ -971,8 +977,11 @@ class TestRAGEngineExtended:
 
         mock_store = AsyncMock()
         mock_store.search.return_value = [
-            {"chunk": {"text": "t", "page": 1, "source": "s", "document_id": "d"},
-             "relevance": 0.667, "retrieval_type": "pgvector_hybrid"}
+            {
+                "chunk": {"text": "t", "page": 1, "source": "s", "document_id": "d"},
+                "relevance": 0.667,
+                "retrieval_type": "pgvector_hybrid",
+            }
         ]
         engine._pg_vector_store = mock_store
 

@@ -35,6 +35,7 @@ class TaskListResponse(BaseModel):
 
 # ── Endpoints ──
 
+
 @router.post("", response_model=TaskResponse, status_code=201)
 async def create_task_endpoint(
     task_type: str = Body(...),
@@ -44,6 +45,7 @@ async def create_task_endpoint(
 ):
     """Create and enqueue an async task."""
     from app.core.task_worker import enqueue
+
     task = await task_service.create_task(db, current_user.id, task_type, payload)
     await enqueue(task.id, current_user.id, task_type, payload)
     return TaskResponse(**task_service.format_task(task))

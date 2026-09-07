@@ -41,6 +41,7 @@ class TagResponse(BaseModel):
 
 class NoteSearchRequest(BaseModel):
     """Request for semantic note search."""
+
     query: str
     top_k: int = 5
 
@@ -194,8 +195,6 @@ async def restore_note(
     note = await note_service.restore_note(db, current_user, note_id)
     note = await note_service.get_note(db, current_user, note.id)
     return _note_to_response(note)
-
-
 
 
 @router.post("/search", response_model=list[dict])

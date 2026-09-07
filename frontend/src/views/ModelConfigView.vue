@@ -125,6 +125,348 @@
           </div>
         </transition>
 
+        <!-- AI 互动课堂配置 -->
+        <div class="mt-6 pt-5 border-t border-[var(--border-default)]">
+          <div class="flex items-center gap-2.5 mb-4">
+            <div class="w-7 h-7 rounded-lg bg-[var(--color-primary-light)] flex items-center justify-center text-[var(--color-primary)]">
+              <el-icon class="text-base"><MagicStick /></el-icon>
+            </div>
+            <h3 class="text-sm font-semibold text-[var(--text-primary)]">AI 互动课堂与多模态模型设置</h3>
+          </div>
+
+          <!-- 模块 1：专属图像生成模型 (解决主文本模型无法生图的问题) -->
+          <div class="mb-4 p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-sm text-[var(--text-primary)]">专属图像生成模型 (Image Generation)</span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+                  文生图能力
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-[var(--text-muted)]">开启课件自动配图</span>
+                <el-switch v-model="classroomForm.image_enabled" />
+              </div>
+            </div>
+
+            <div v-show="classroomForm.image_enabled" class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+                <!-- 图像模型名称 -->
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像模型名称 (Model)</label>
+                  <el-input v-model="classroomForm.image_model" placeholder="例如：black-forest-labs/FLUX.1-schnell 或 dall-e-3" />
+                </div>
+
+                <!-- 图像 API 地址 -->
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像接口地址 (Base URL)</label>
+                  <el-input v-model="classroomForm.image_base_url" placeholder="例如：https://api.siliconflow.cn/v1" />
+                </div>
+
+                <!-- 图像 API Key -->
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像 API 密钥 (API Key)</label>
+                  <el-input
+                    v-model="classroomForm.image_api_key"
+                    type="password"
+                    show-password
+                    :placeholder="savedImageKeyMasked ? `已保存: ${savedImageKeyMasked}` : '请输入文生图 API Key'"
+                  />
+                </div>
+
+                <!-- 配图画幅比例 -->
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">预设配图尺寸 (Size)</label>
+                  <el-select v-model="classroomForm.image_size" class="w-full">
+                    <el-option value="1024x1024" label="1024x1024 (1:1 正方形)" />
+                    <el-option value="1280x720" label="1280x720 (16:9 宽屏课件)" />
+                    <el-option value="768x1024" label="768x1024 (3:4 书籍封面)" />
+                  </el-select>
+                </div>
+              </div>
+
+              <!-- 图像测试反馈 -->
+              <transition name="el-fade-in">
+                <div
+                  v-if="imageTestResult"
+                  class="p-3 rounded-xl text-xs flex items-start justify-between gap-3 border"
+                  :class="imageTestResult.success ? 'bg-[var(--color-success-light)] border-[var(--color-success)] text-[var(--color-success)]' : 'bg-[var(--color-danger-light)] border-[var(--color-danger)] text-[var(--color-danger)]'"
+                >
+                  <div class="flex items-start gap-2">
+                    <el-icon class="mt-0.5 text-base">
+                      <CircleCheck v-if="imageTestResult.success" />
+                      <WarningFilled v-else />
+                    </el-icon>
+                    <div>
+                      <p class="font-medium">{{ imageTestResult.message }}</p>
+                      <p v-if="imageTestResult.latency_ms" class="mt-0.5 text-[11px] opacity-80 font-mono">
+                        响应延迟: {{ imageTestResult.latency_ms }}ms
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="opacity-60 hover:opacity-100 p-1"
+                    @click="imageTestResult = null"
+                  >
+                    <el-icon><Close /></el-icon>
+                  </button>
+                </div>
+              </transition>
+
+              <!-- 图像连通性测试按钮 -->
+              <div class="flex items-center gap-3 pt-1">
+                <el-button
+                  size="small"
+                  :loading="testingImage"
+                  @click="handleTestImage"
+                >
+                  <el-icon class="mr-1"><Promotion /></el-icon>测试生图接口
+                </el-button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模块 2：课堂教学设计大模型 (Classroom LLM) -->
+          <div class="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-sm text-[var(--text-primary)]">课堂教学大模型 (Teaching LLM)</span>
+                  <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+                    大纲与剧本编排
+                  </span>
+                </div>
+                <p class="text-xs text-[var(--text-muted)] mt-1">
+                  {{ classroomForm.use_custom_llm ? '使用独立自定义的教学设计大模型' : '默认复用上方的主问答大模型（省心免单独配置）' }}
+                </p>
+              </div>
+              <el-radio-group v-model="classroomForm.use_custom_llm" size="small">
+                <el-radio-button :value="false">复用主模型</el-radio-button>
+                <el-radio-button :value="true">自定义模型</el-radio-button>
+              </el-radio-group>
+            </div>
+
+            <div v-show="classroomForm.use_custom_llm" class="mt-4 pt-3 border-t border-[var(--border-default)] grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+              <div>
+                <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂模型名称 (Model)</label>
+                <el-input v-model="classroomForm.classroom_llm_model" placeholder="例如：deepseek-chat 或 claude-3-5-sonnet" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂 API 地址 (Base URL)</label>
+                <el-input v-model="classroomForm.classroom_llm_base_url" placeholder="https://api.deepseek.com/v1" />
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂 API 密钥 (API Key)</label>
+                <el-input
+                  v-model="classroomForm.classroom_llm_api_key"
+                  type="password"
+                  show-password
+                  :placeholder="savedClassroomLLMKeyMasked ? `已保存: ${savedClassroomLLMKeyMasked}` : '请输入专属课堂模型 API Key'"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 模块 3：语音合成模型 (TTS / Voice Model) -->
+          <div class="mt-4 p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-sm text-[var(--text-primary)]">语音合成模型 (TTS / Voice Model)</span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+                  多角色原声演播
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-[var(--text-muted)]">开启微课角色语音</span>
+                <el-switch v-model="classroomForm.tts_enabled" />
+              </div>
+            </div>
+
+            <div v-show="classroomForm.tts_enabled" class="space-y-4">
+              <!-- 快捷预设按钮组 -->
+              <div>
+                <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">语音服务商预设 (Provider)</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.tts_provider === 'edge-tts' ? 'bg-[var(--color-primary)] text-white border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectTTSPreset('edge-tts')"
+                  >
+                    Microsoft Edge (内置免密·推荐)
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.tts_provider === 'custom' ? 'bg-[var(--color-primary)] text-white border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectTTSPreset('custom')"
+                  >
+                    自定义兼容端点
+                  </button>
+                </div>
+              </div>
+
+              <!-- 参数表单 -->
+              <div v-if="classroomForm.tts_provider !== 'edge-tts'" class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4 pt-1">
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">语音模型名称 (Model)</label>
+                  <el-input v-model="classroomForm.tts_model" placeholder="例如：tts-1 或 FunAudioLLM/CosyVoice2-0.5B" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">语音 API 地址 (Base URL)</label>
+                  <el-input v-model="classroomForm.tts_base_url" placeholder="https://api.openai.com/v1" />
+                </div>
+
+                <div class="md:col-span-2">
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">语音 API 密钥 (API Key)</label>
+                  <el-input
+                    v-model="classroomForm.tts_api_key"
+                    type="password"
+                    show-password
+                    :placeholder="savedTTSKeyMasked ? `已保存: ${savedTTSKeyMasked}` : '留空将自动复用主模型或默认 API Key'"
+                  />
+                </div>
+              </div>
+
+              <!-- 三大角色音色指派 -->
+              <div class="pt-2 border-t border-[var(--border-default)]">
+                <div class="text-xs font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-1.5">
+                  <el-icon><Reading /></el-icon>
+                  <span>角色音色专属指派 (Character Voices)</span>
+                  <span v-if="voiceOptionsSource" class="text-[10px] px-1.5 py-0.5 rounded font-normal" :class="voiceOptionsSourceClass">
+                    {{ voiceOptionsSource }}
+                  </span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <!-- 苏老师 -->
+                  <div class="p-3 rounded-lg bg-[var(--surface-card)] border border-[var(--border-default)]">
+                    <div class="flex items-center gap-2 mb-1.5">
+                      <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                      <span class="text-xs font-medium text-[var(--text-primary)]">苏老师 (导师)</span>
+                    </div>
+                    <el-select
+                      v-model="classroomForm.voice_teacher"
+                      size="small"
+                      class="w-full"
+                      filterable
+                      allow-create
+                      default-first-option
+                    >
+                      <el-option
+                        v-for="opt in teacherVoiceOptions"
+                        :key="opt.value"
+                        :value="opt.value"
+                        :label="opt.label"
+                      />
+                    </el-select>
+                  </div>
+
+                  <!-- 求知同学 -->
+                  <div class="p-3 rounded-lg bg-[var(--surface-card)] border border-[var(--border-default)]">
+                    <div class="flex items-center gap-2 mb-1.5">
+                      <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                      <span class="text-xs font-medium text-[var(--text-primary)]">求知同学 (探索者)</span>
+                    </div>
+                    <el-select
+                      v-model="classroomForm.voice_curious"
+                      size="small"
+                      class="w-full"
+                      filterable
+                      allow-create
+                      default-first-option
+                    >
+                      <el-option
+                        v-for="opt in curiousVoiceOptions"
+                        :key="opt.value"
+                        :value="opt.value"
+                        :label="opt.label"
+                      />
+                    </el-select>
+                  </div>
+
+                  <!-- 学霸 -->
+                  <div class="p-3 rounded-lg bg-[var(--surface-card)] border border-[var(--border-default)]">
+                    <div class="flex items-center gap-2 mb-1.5">
+                      <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      <span class="text-xs font-medium text-[var(--text-primary)]">学霸 (思考者)</span>
+                    </div>
+                    <el-select
+                      v-model="classroomForm.voice_thinker"
+                      size="small"
+                      class="w-full"
+                      filterable
+                      allow-create
+                      default-first-option
+                    >
+                      <el-option
+                        v-for="opt in thinkerVoiceOptions"
+                        :key="opt.value"
+                        :value="opt.value"
+                        :label="opt.label"
+                      />
+                    </el-select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 语音测试反馈 -->
+              <transition name="el-fade-in">
+                <div
+                  v-if="ttsTestResult"
+                  class="p-3 rounded-xl text-xs flex items-start justify-between gap-3 border"
+                  :class="ttsTestResult.success ? 'bg-[var(--color-success-light)] border-[var(--color-success)] text-[var(--color-success)]' : 'bg-[var(--color-danger-light)] border-[var(--color-danger)] text-[var(--color-danger)]'"
+                >
+                  <div class="flex items-start gap-2">
+                    <el-icon class="mt-0.5 text-base">
+                      <CircleCheck v-if="ttsTestResult.success" />
+                      <WarningFilled v-else />
+                    </el-icon>
+                    <div>
+                      <p class="font-medium">{{ ttsTestResult.message }}</p>
+                      <p v-if="ttsTestResult.latency_ms" class="mt-0.5 text-[11px] opacity-80 font-mono">
+                        响应延迟: {{ ttsTestResult.latency_ms }}ms
+                      </p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <el-button
+                      v-if="ttsTestResult.audio_base64"
+                      size="small"
+                      type="success"
+                      plain
+                      @click="playPreviewAudio(ttsTestResult.audio_base64)"
+                    >
+                      <el-icon class="mr-1"><Reading /></el-icon>试听合成语音
+                    </el-button>
+                    <button
+                      type="button"
+                      class="opacity-60 hover:opacity-100 p-1"
+                      @click="ttsTestResult = null"
+                    >
+                      <el-icon><Close /></el-icon>
+                    </button>
+                  </div>
+                </div>
+              </transition>
+
+              <!-- 语音连通性测试按钮 -->
+              <div class="flex items-center gap-3 pt-1">
+                <el-button
+                  size="small"
+                  :loading="testingTTS"
+                  @click="handleTestTTS"
+                >
+                  <el-icon class="mr-1"><Promotion /></el-icon>测试语音接口与试听
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 按钮操作栏 -->
         <div class="mt-6 pt-5 border-t border-[var(--border-default)] flex items-center justify-between gap-3">
           <div class="flex items-center gap-3">
@@ -147,186 +489,6 @@
       </el-form>
     </div>
 
-    <!-- ── AI 互动课堂与多模态模型设置 ── -->
-    <div class="card p-6 mb-6">
-      <div class="flex items-center justify-between pb-4 mb-6 border-b border-[var(--border-default)]">
-        <div>
-          <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-lg bg-[var(--color-primary-light)] flex items-center justify-center text-[var(--color-primary)]">
-              <el-icon class="text-lg"><MagicStick /></el-icon>
-            </div>
-            <h2 class="text-base font-semibold text-[var(--text-primary)]">AI 互动课堂与多模态模型设置</h2>
-            <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-medium">
-              Classroom & Media
-            </span>
-          </div>
-          <p class="text-xs text-[var(--text-muted)] mt-1.5 pl-10.5">
-            为 AI 互动课堂、课件大纲与沉浸式场景提供专属的生图配图能力与教学设计大模型
-          </p>
-        </div>
-      </div>
-
-      <!-- 模块 1：专属图像生成模型 (解决主文本模型无法生图的问题) -->
-      <div class="mb-6 p-4.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center gap-2">
-            <span class="font-medium text-sm text-[var(--text-primary)]">专属图像生成模型 (Image Generation)</span>
-            <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
-              文生图能力
-            </span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-[var(--text-muted)]">开启课件自动配图</span>
-            <el-switch v-model="classroomForm.image_enabled" />
-          </div>
-        </div>
-
-        <div v-show="classroomForm.image_enabled" class="space-y-4">
-          <!-- 快捷服务商预设 -->
-          <div>
-            <label class="block text-xs font-medium text-[var(--text-muted)] mb-2">常用生图服务商预设</label>
-            <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                v-for="preset in imagePresets"
-                :key="preset.id"
-                class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border"
-                :class="classroomForm.image_provider === preset.id
-                  ? 'bg-[var(--color-primary)] text-white border-transparent shadow-sm'
-                  : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]/40'"
-                @click="applyImagePreset(preset)"
-              >
-                <span>{{ preset.name }}</span>
-                <span v-if="preset.tag" class="text-[10px] px-1.5 py-0.2 rounded-full" :class="classroomForm.image_provider === preset.id ? 'bg-white/20 text-white' : 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'">
-                  {{ preset.tag }}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
-            <!-- 图像模型名称 -->
-            <div>
-              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像模型名称 (Model)</label>
-              <el-input v-model="classroomForm.image_model" placeholder="例如：black-forest-labs/FLUX.1-schnell 或 dall-e-3" />
-            </div>
-
-            <!-- 图像 API 地址 -->
-            <div>
-              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像接口地址 (Base URL)</label>
-              <el-input v-model="classroomForm.image_base_url" placeholder="例如：https://api.siliconflow.cn/v1" />
-            </div>
-
-            <!-- 图像 API Key -->
-            <div>
-              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像 API 密钥 (API Key)</label>
-              <el-input
-                v-model="classroomForm.image_api_key"
-                type="password"
-                show-password
-                :placeholder="savedImageKeyMasked ? `已保存: ${savedImageKeyMasked}` : '请输入文生图 API Key'"
-              />
-            </div>
-
-            <!-- 配图画幅比例 -->
-            <div>
-              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">预设配图尺寸 (Size)</label>
-              <el-select v-model="classroomForm.image_size" class="w-full">
-                <el-option value="1024x1024" label="1024x1024 (1:1 正方形)" />
-                <el-option value="1280x720" label="1280x720 (16:9 宽屏课件)" />
-                <el-option value="768x1024" label="768x1024 (3:4 书籍封面)" />
-              </el-select>
-            </div>
-          </div>
-
-          <!-- 图像测试反馈 -->
-          <transition name="el-fade-in">
-            <div
-              v-if="imageTestResult"
-              class="p-3 rounded-xl text-xs flex items-start justify-between gap-3 border"
-              :class="imageTestResult.success ? 'bg-[var(--color-success-light)] border-[var(--color-success)] text-[var(--color-success)]' : 'bg-[var(--color-danger-light)] border-[var(--color-danger)] text-[var(--color-danger)]'"
-            >
-              <div class="flex items-start gap-2">
-                <el-icon class="mt-0.5 text-base">
-                  <CircleCheck v-if="imageTestResult.success" />
-                  <WarningFilled v-else />
-                </el-icon>
-                <div>
-                  <p class="font-medium">{{ imageTestResult.message }}</p>
-                  <p v-if="imageTestResult.latency_ms" class="mt-0.5 text-[11px] opacity-80 font-mono">
-                    响应延迟: {{ imageTestResult.latency_ms }}ms
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="opacity-60 hover:opacity-100 p-1"
-                @click="imageTestResult = null"
-              >
-                <el-icon><Close /></el-icon>
-              </button>
-            </div>
-          </transition>
-
-          <!-- 图像连通性测试按钮 -->
-          <div class="flex items-center gap-3 pt-1">
-            <el-button
-              size="small"
-              :loading="testingImage"
-              @click="handleTestImage"
-            >
-              <el-icon class="mr-1"><Promotion /></el-icon>测试生图接口
-            </el-button>
-            <span class="text-[11px] text-[var(--text-muted)]">
-              提示：生图接口测试将向 Base URL 发起轻量探针，验证密钥有效性与端点可达性
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 模块 2：课堂教学设计大模型 (Classroom LLM) -->
-      <div class="p-4.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
-        <div class="flex items-center justify-between mb-3">
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="font-medium text-sm text-[var(--text-primary)]">课堂教学大模型 (Teaching LLM)</span>
-              <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
-                大纲与剧本编排
-              </span>
-            </div>
-            <p class="text-xs text-[var(--text-muted)] mt-1">
-              {{ classroomForm.use_custom_llm ? '使用独立自定义的教学设计大模型' : '默认复用上方的主问答大模型（省心免单独配置）' }}
-            </p>
-          </div>
-          <el-radio-group v-model="classroomForm.use_custom_llm" size="small">
-            <el-radio-button :value="false">复用主模型</el-radio-button>
-            <el-radio-button :value="true">自定义模型</el-radio-button>
-          </el-radio-group>
-        </div>
-
-        <div v-show="classroomForm.use_custom_llm" class="mt-4 pt-3 border-t border-[var(--border-default)] grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
-          <div>
-            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂模型名称 (Model)</label>
-            <el-input v-model="classroomForm.classroom_llm_model" placeholder="例如：deepseek-chat 或 claude-3-5-sonnet" />
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂 API 地址 (Base URL)</label>
-            <el-input v-model="classroomForm.classroom_llm_base_url" placeholder="https://api.deepseek.com/v1" />
-          </div>
-
-          <div class="md:col-span-2">
-            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂 API 密钥 (API Key)</label>
-            <el-input
-              v-model="classroomForm.classroom_llm_api_key"
-              type="password"
-              show-password
-              :placeholder="savedClassroomLLMKeyMasked ? `已保存: ${savedClassroomLLMKeyMasked}` : '请输入专属课堂模型 API Key'"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- ── 底层状态与规格探测 ── -->
     <div class="card p-6 bg-[var(--surface-card)]">
@@ -423,11 +585,12 @@ import {
   CircleCheck,
   WarningFilled,
   Close,
-  MagicStick
+  MagicStick,
+  Reading
 } from '../components/icons'
 import { useConfigStore } from '../stores/config'
 import { useToastStore } from '../stores/toast'
-import type { SystemStatus, LLMCapabilities, ImageTestResult } from '../types/models'
+import type { SystemStatus, LLMCapabilities, ImageTestResult, TTSTestResult } from '../types/models'
 
 type MessageFormat = 'openai' | 'anthropic' | 'gemini' | 'ollama'
 
@@ -474,54 +637,183 @@ const classroomForm = ref({
   classroom_llm_base_url: '',
   classroom_llm_api_key: '',
   image_enabled: true,
-  image_provider: 'siliconflow',
-  image_model: 'black-forest-labs/FLUX.1-schnell',
-  image_base_url: 'https://api.siliconflow.cn/v1',
+  image_provider: '',
+  image_model: '',
+  image_base_url: '',
   image_api_key: '',
   image_size: '1024x1024',
+  tts_enabled: true,
+  tts_provider: 'edge-tts',
+  tts_model: 'tts-1',
+  tts_base_url: 'https://api.openai.com/v1',
+  tts_api_key: '',
+  tts_speed: 1.0,
+  voice_teacher: 'zh-CN-YunxiNeural',
+  voice_curious: 'zh-CN-XiaoxiaoNeural',
+  voice_thinker: 'zh-CN-YunjianNeural',
 })
 
 const savedImageKeyMasked = ref('')
 const savedClassroomLLMKeyMasked = ref('')
+const savedTTSKeyMasked = ref('')
 const testingImage = ref(false)
 const imageTestResult = ref<ImageTestResult | null>(null)
+const testingTTS = ref(false)
+const ttsTestResult = ref<TTSTestResult | null>(null)
 
-const imagePresets = [
-  {
-    id: 'siliconflow',
-    name: 'SiliconFlow 硅基流动',
-    tag: '推荐',
-    model: 'black-forest-labs/FLUX.1-schnell',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-  },
-  {
-    id: 'openai-image',
-    name: 'OpenAI (DALL-E 3)',
-    tag: '经典',
-    model: 'dall-e-3',
-    baseUrl: 'https://api.openai.com/v1',
-  },
-  {
-    id: 'qwen-image',
-    name: '阿里通义万相',
-    tag: '中文',
-    model: 'wanx-v1',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  },
-  {
-    id: 'custom',
-    name: '自定义生图接口',
-    tag: '',
-    model: 'black-forest-labs/FLUX.1-schnell',
-    baseUrl: '',
-  },
+function selectTTSPreset(provider: string): void {
+  classroomForm.value.tts_provider = provider
+  if (provider === 'edge-tts') {
+    classroomForm.value.tts_model = 'edge-tts'
+    classroomForm.value.tts_base_url = ''
+    classroomForm.value.voice_teacher = 'zh-CN-YunxiNeural'
+    classroomForm.value.voice_curious = 'zh-CN-XiaoxiaoNeural'
+    classroomForm.value.voice_thinker = 'zh-CN-YunjianNeural'
+  } else if (provider === 'custom') {
+    classroomForm.value.tts_model = ''
+    classroomForm.value.tts_base_url = ''
+    classroomForm.value.voice_teacher = ''
+    classroomForm.value.voice_curious = ''
+    classroomForm.value.voice_thinker = ''
+  }
+}
+
+// ── 音色选项（随服务商实时切换） ──
+interface VoiceOption {
+  value: string
+  label: string
+}
+
+const edgeTTSVoices: VoiceOption[] = [
+  { value: 'zh-CN-YunxiNeural',  label: 'zh-CN-YunxiNeural  (云希·男声·磁性)' },
+  { value: 'zh-CN-XiaoxiaoNeural', label: 'zh-CN-XiaoxiaoNeural  (晓晓·女声·温柔)' },
+  { value: 'zh-CN-YunjianNeural',  label: 'zh-CN-YunjianNeural  (云健·男声·沉稳)' },
+  { value: 'zh-CN-YunyangNeural',  label: 'zh-CN-YunyangNeural  (云扬·男声·新闻)' },
+  { value: 'zh-CN-XiaoyiNeural',   label: 'zh-CN-XiaoyiNeural  (晓伊·女声·亲切)' },
+  { value: 'zh-CN-XiaochenNeural', label: 'zh-CN-XiaochenNeural  (晓辰·女声·活力)' },
+  { value: 'zh-CN-XiaohanNeural',  label: 'zh-CN-XiaohanNeural  (晓涵·女声·甜美女)' },
+  { value: 'zh-CN-XiaomengNeural', label: 'zh-CN-XiaomengNeural  (晓梦·女声·童声)' },
+  { value: 'zh-CN-XiaomoNeural',   label: 'zh-CN-XiaomoNeural  (晓墨·女声·知性)' },
+  { value: 'zh-CN-XiaoqiuNeural',  label: 'zh-CN-XiaoqiuNeural  (晓秋·女声·成熟)' },
+  { value: 'zh-CN-XiaoruiNeural',  label: 'zh-CN-XiaoruiNeural  (晓睿·女声·理性)' },
+  { value: 'zh-CN-XiaoshuangNeural', label: 'zh-CN-XiaoshuangNeural  (晓双·女声·童声)' },
+  { value: 'zh-CN-XiaoxuanNeural', label: 'zh-CN-XiaoxuanNeural  (晓萱·女声·甜美女)' },
+  { value: 'zh-CN-XiaoyanNeural',  label: 'zh-CN-XiaoyanNeural  (晓颜·女声·温暖)' },
+  { value: 'zh-CN-XiaoyouNeural',  label: 'zh-CN-XiaoyouNeural  (晓悠·女声·闲聊)' },
+  { value: 'zh-CN-XiaozhenNeural', label: 'zh-CN-XiaozhenNeural  (晓甄·女声·自然)' },
+  { value: 'zh-CN-XiaochenMultilingual', label: 'zh-CN-XiaochenMultilingual  (晓辰·中英双语)' },
+  { value: 'zh-CN-XiaohanMultilingual', label: 'zh-CN-XiaohanMultilingual  (晓涵·中英双语)' },
+  { value: 'zh-CN-XiaomengMultilingual', label: 'zh-CN-XiaomengMultilingual  (晓梦·中英双语)' },
+  { value: 'zh-CN-XiaomoMultilingual', label: 'zh-CN-XiaomoMultilingual  (晓墨·中英双语)' },
+  { value: 'zh-CN-XiaoqiuMultilingual', label: 'zh-CN-XiaoqiuMultilingual  (晓秋·中英双语)' },
+  { value: 'zh-CN-XiaoruiMultilingual', label: 'zh-CN-XiaoruiMultilingual  (晓睿·中英双语)' },
+  { value: 'zh-CN-XiaoshuangMultilingual', label: 'zh-CN-XiaoshuangMultilingual  (晓双·中英双语)' },
+  { value: 'zh-CN-XiaoxuanMultilingual', label: 'zh-CN-XiaoxuanMultilingual  (晓萱·中英双语)' },
+  { value: 'zh-CN-XiaoyanMultilingual', label: 'zh-CN-XiaoyanMultilingual  (晓颜·中英双语)' },
 ]
 
-function applyImagePreset(preset: typeof imagePresets[0]) {
-  classroomForm.value.image_provider = preset.id
-  classroomForm.value.image_model = preset.model
-  if (preset.baseUrl) {
-    classroomForm.value.image_base_url = preset.baseUrl
+const openAIVoices: VoiceOption[] = [
+  { value: 'alloy', label: 'alloy  (中性·平衡)' },
+  { value: 'echo',  label: 'echo  (男声·沉稳)' },
+  { value: 'fable', label: 'fable  (英音·优雅)' },
+  { value: 'onyx',  label: 'onyx  (男声·深沉)' },
+  { value: 'nova',  label: 'nova  (女声·活力)' },
+  { value: 'shimmer', label: 'shimmer  (女声·柔和)' },
+]
+
+const siliconflowVoices: VoiceOption[] = [
+  { value: 'FunAudioLLM/CosyVoice2-0.5B:alex',    label: 'alex  (男声·英文)' },
+  { value: 'FunAudioLLM/CosyVoice2-0.5B:anna',   label: 'anna  (女声·英文)' },
+  { value: 'FunAudioLLM/CosyVoice2-0.5B:benjamin', label: 'benjamin  (男声·英文)' },
+  { value: 'FunAudioLLM/CosyVoice2-0.5B:charles', label: 'charles  (男声·英文)' },
+  { value: 'FunAudioLLM/CosyVoice2-0.5B:claire',  label: 'claire  (女声·英文)' },
+  { value: 'FunAudioLLM/CosyVoice2-0.5B:david',   label: 'david  (男声·英文)' },
+]
+
+// 当前服务商对应的选项池（用于实时更新下拉列表）
+const voiceOptionsSource = computed(() => {
+  switch (classroomForm.value.tts_provider) {
+    case 'edge-tts':      return 'Microsoft Edge TTS'
+    case 'openai':        return 'OpenAI TTS'
+    case 'siliconflow':   return 'SiliconFlow CosyVoice2'
+    default:              return ''
+  }
+})
+
+const voiceOptionsSourceClass = computed(() => {
+  switch (classroomForm.value.tts_provider) {
+    case 'edge-tts':      return 'bg-[var(--color-success-light)] text-[var(--color-success)]'
+    case 'openai':        return 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'
+    case 'siliconflow':   return 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'
+    default:              return 'bg-[var(--bg-primary)] text-[var(--text-muted)]'
+  }
+})
+
+const teacherVoiceOptions = computed((): VoiceOption[] => {
+  switch (classroomForm.value.tts_provider) {
+    case 'edge-tts':    return edgeTTSVoices
+    case 'openai':      return openAIVoices
+    case 'siliconflow': return siliconflowVoices
+    default:            return []
+  }
+})
+
+const curiousVoiceOptions = computed((): VoiceOption[] => {
+  switch (classroomForm.value.tts_provider) {
+    case 'edge-tts':    return edgeTTSVoices
+    case 'openai':      return openAIVoices
+    case 'siliconflow': return siliconflowVoices
+    default:            return []
+  }
+})
+
+const thinkerVoiceOptions = computed((): VoiceOption[] => {
+  switch (classroomForm.value.tts_provider) {
+    case 'edge-tts':    return edgeTTSVoices
+    case 'openai':      return openAIVoices
+    case 'siliconflow': return siliconflowVoices
+    default:            return []
+  }
+})
+
+function playPreviewAudio(b64: string): void {
+  try {
+    const audio = new Audio(b64)
+    audio.play().catch((e) => console.error('Audio preview play failed:', e))
+  } catch (e) {
+    console.error('Failed to create audio preview:', e)
+  }
+}
+
+async function handleTestTTS(): Promise<void> {
+  testingTTS.value = true
+  ttsTestResult.value = null
+  try {
+    const res = await configStore.testTTSConfig({
+      tts_provider: classroomForm.value.tts_provider,
+      tts_api_key: classroomForm.value.tts_api_key,
+      tts_base_url: classroomForm.value.tts_base_url,
+      tts_model: classroomForm.value.tts_model,
+      voice_teacher: classroomForm.value.voice_teacher,
+    })
+    ttsTestResult.value = res
+    if (res.success) {
+      toast.success(res.message)
+      if (res.audio_base64) {
+        playPreviewAudio(res.audio_base64)
+      }
+    } else {
+      toast.error(res.message || '语音接口测试失败')
+    }
+  } catch (err: any) {
+    ttsTestResult.value = {
+      success: false,
+      message: err.message || '网络连接异常',
+      audio_base64: null
+    }
+    toast.error(ttsTestResult.value.message)
+  } finally {
+    testingTTS.value = false
   }
 }
 
@@ -737,6 +1029,15 @@ async function saveConfig(): Promise<void> {
         image_base_url: classroomForm.value.image_base_url,
         image_api_key: classroomForm.value.image_api_key || undefined,
         image_size: classroomForm.value.image_size,
+        tts_enabled: classroomForm.value.tts_enabled,
+        tts_provider: classroomForm.value.tts_provider,
+        tts_model: classroomForm.value.tts_model,
+        tts_base_url: classroomForm.value.tts_base_url,
+        tts_api_key: classroomForm.value.tts_api_key || undefined,
+        tts_speed: classroomForm.value.tts_speed,
+        voice_teacher: classroomForm.value.voice_teacher,
+        voice_curious: classroomForm.value.voice_curious,
+        voice_thinker: classroomForm.value.voice_thinker,
       },
     })
     const latest = await configStore.fetchLLMConfig()
@@ -747,8 +1048,10 @@ async function saveConfig(): Promise<void> {
     if (latest?.classroom_config) {
       savedImageKeyMasked.value = latest.classroom_config.image_api_key_masked || ''
       savedClassroomLLMKeyMasked.value = latest.classroom_config.classroom_llm_api_key_masked || ''
+      savedTTSKeyMasked.value = latest.classroom_config.tts_api_key_masked || ''
       classroomForm.value.image_api_key = ''
       classroomForm.value.classroom_llm_api_key = ''
+      classroomForm.value.tts_api_key = ''
     }
 
     toast.success('配置已保存')
@@ -784,13 +1087,23 @@ function resetConfig(): void {
     classroom_llm_base_url: '',
     classroom_llm_api_key: '',
     image_enabled: true,
-    image_provider: 'siliconflow',
-    image_model: 'black-forest-labs/FLUX.1-schnell',
-    image_base_url: 'https://api.siliconflow.cn/v1',
+    image_provider: '',
+    image_model: '',
+    image_base_url: '',
     image_api_key: '',
     image_size: '1024x1024',
+    tts_enabled: true,
+    tts_provider: 'edge-tts',
+    tts_model: 'tts-1',
+    tts_base_url: 'https://api.openai.com/v1',
+    tts_api_key: '',
+    tts_speed: 1.0,
+    voice_teacher: 'zh-CN-YunxiNeural',
+    voice_curious: 'zh-CN-XiaoxiaoNeural',
+    voice_thinker: 'zh-CN-YunjianNeural',
   }
   imageTestResult.value = null
+  ttsTestResult.value = null
 
   toast.info('已重置为默认值（尚未保存）')
 }
@@ -820,12 +1133,22 @@ onMounted(async () => {
       classroomForm.value.classroom_llm_model = cc.classroom_llm_model || ''
       classroomForm.value.classroom_llm_base_url = cc.classroom_llm_base_url || ''
       classroomForm.value.image_enabled = cc.image_enabled !== false
-      classroomForm.value.image_provider = cc.image_provider || 'siliconflow'
-      classroomForm.value.image_model = cc.image_model || 'black-forest-labs/FLUX.1-schnell'
-      classroomForm.value.image_base_url = cc.image_base_url || 'https://api.siliconflow.cn/v1'
+      classroomForm.value.image_provider = cc.image_provider || ''
+      classroomForm.value.image_model = cc.image_model || ''
+      classroomForm.value.image_base_url = cc.image_base_url || ''
       classroomForm.value.image_size = cc.image_size || '1024x1024'
       savedImageKeyMasked.value = cc.image_api_key_masked || ''
       savedClassroomLLMKeyMasked.value = cc.classroom_llm_api_key_masked || ''
+
+      classroomForm.value.tts_enabled = cc.tts_enabled !== false
+      classroomForm.value.tts_provider = cc.tts_provider || 'edge-tts'
+      classroomForm.value.tts_model = cc.tts_model || 'tts-1'
+      classroomForm.value.tts_base_url = cc.tts_base_url || 'https://api.openai.com/v1'
+      classroomForm.value.tts_speed = cc.tts_speed || 1.0
+      classroomForm.value.voice_teacher = cc.voice_teacher || 'zh-CN-YunxiNeural'
+      classroomForm.value.voice_curious = cc.voice_curious || 'zh-CN-XiaoxiaoNeural'
+      classroomForm.value.voice_thinker = cc.voice_thinker || 'zh-CN-YunjianNeural'
+      savedTTSKeyMasked.value = cc.tts_api_key_masked || ''
     }
   } else {
     const defaults = formatDefaults.openai

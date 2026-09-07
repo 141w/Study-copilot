@@ -100,7 +100,6 @@ async def _seed_scenario(db: AsyncSession, user: User):
 
 
 class TestAnalyzeWrongQuestions:
-
     @pytest.mark.asyncio
     async def test_no_results_returns_empty(self, db_session: AsyncSession):
         u = _user("awq_empty")
@@ -175,6 +174,7 @@ class TestAnalyzeWrongQuestions:
         from sqlalchemy import select as sa_select
 
         from app.db import Document
+
         wrong_stmt2 = (
             sa_select(Document.filename, func.count(QuizResult.id).label("n"))
             .select_from(QuizResult)
@@ -258,7 +258,6 @@ class TestAnalyzeWrongQuestions:
 
 
 class TestGetKnowledgeStats:
-
     @pytest.mark.asyncio
     async def test_no_results_returns_zero(self, db_session: AsyncSession):
         u = _user("ks_zero")
@@ -351,7 +350,6 @@ class TestGetKnowledgeStats:
 
 
 class TestGetProgress:
-
     @pytest.mark.asyncio
     async def test_empty_returns_zero(self, db_session: AsyncSession):
         u = _user("gp_empty")
@@ -380,18 +378,27 @@ class TestGetProgress:
         yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
 
         r_today_a = QuizResult(
-            id=str(uuid.uuid4()), quiz_id=q.id, user_id=u.id,
-            user_answer="A", is_correct=True,
+            id=str(uuid.uuid4()),
+            quiz_id=q.id,
+            user_id=u.id,
+            user_answer="A",
+            is_correct=True,
             submitted_at=now,
         )
         r_today_b = QuizResult(
-            id=str(uuid.uuid4()), quiz_id=q.id, user_id=u.id,
-            user_answer="B", is_correct=False,
+            id=str(uuid.uuid4()),
+            quiz_id=q.id,
+            user_id=u.id,
+            user_answer="B",
+            is_correct=False,
             submitted_at=now,
         )
         r_yesterday = QuizResult(
-            id=str(uuid.uuid4()), quiz_id=q.id, user_id=u.id,
-            user_answer="A", is_correct=True,
+            id=str(uuid.uuid4()),
+            quiz_id=q.id,
+            user_id=u.id,
+            user_answer="A",
+            is_correct=True,
             submitted_at=now - timedelta(days=1),
         )
         db_session.add_all([r_today_a, r_today_b, r_yesterday])

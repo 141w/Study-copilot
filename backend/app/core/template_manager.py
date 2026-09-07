@@ -3,19 +3,20 @@ Template Manager for Jinja2 Prompt Templates
 
 Centralizes all LLM prompts into Jinja2 template files for better maintainability.
 """
+
 import os
 
 from jinja2 import Environment, FileSystemLoader
 
 # Template directory path
-_template_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
+_template_dir = os.path.join(os.path.dirname(__file__), "..", "templates")
 
 # Create Jinja2 environment
 _jinja_env = Environment(
     loader=FileSystemLoader(_template_dir),
     trim_blocks=True,
     lstrip_blocks=True,
-    keep_trailing_newline=True
+    keep_trailing_newline=True,
 )
 
 

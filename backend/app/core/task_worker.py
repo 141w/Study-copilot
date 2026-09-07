@@ -152,6 +152,7 @@ async def _execute_job(job):
                 doc_id = job.payload.get("doc_id")
                 if doc_id:
                     from app.db import Document
+
                     doc = await db.get(Document, doc_id)
                     if doc and doc.status in ("pending", "processing"):
                         doc.status = "error"
@@ -165,6 +166,7 @@ async def _execute_job(job):
                 doc_id = job.payload.get("doc_id")
                 if doc_id:
                     from app.db import Document
+
                     doc = await db.get(Document, doc_id)
                     if doc and doc.status in ("pending", "processing"):
                         doc.status = "error"

@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -402,3 +403,38 @@ async def test_image_connectivity_endpoint(client, db_session: AsyncSession):
         assert "图像服务连通正常" in data["message"]
 
 
+@pytest.mark.asyncio
+async def test_tts_connectivity_endpoint(client, db_session: AsyncSession):
+    user = User(
+        id=str(uuid.uuid4()),
+        username="tts_tester",
+        email="tts@example.com",
+        password_hash="fake",
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    token = create_access_token(data={"sub": user.id, "type": "access"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with patch("app.core.tts.test_tts_connectivity", new_callable=AsyncMock) as mock_test:
+        mock_test.return_value = {
+            "success": True,
+            "message": "内置 Edge TTS 服务正常！试听音色: zh-CN-YunxiNeural",
+            "latency_ms": 120,
+            "audio_base64": "data:audio/mp3;base64,AAAA",
+        }
+
+        resp = await client.post(
+            "/api/config/test-tts",
+            json={
+                "tts_provider": "edge-tts",
+                "voice_teacher": "zh-CN-YunxiNeural",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "Edge TTS" in data["message"]
+        assert data["audio_base64"] is not None

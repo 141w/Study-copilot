@@ -110,9 +110,7 @@ async def test_discuss_creates_session_and_persists_messages(
         assert session_id is not None
 
         # 检查数据库中的 ChatSession
-        sess_res = await db_session.execute(
-            select(ChatSession).where(ChatSession.id == session_id)
-        )
+        sess_res = await db_session.execute(select(ChatSession).where(ChatSession.id == session_id))
         session = sess_res.scalar_one_or_none()
         assert session is not None
         assert session.user_id == user.id
@@ -146,9 +144,7 @@ async def test_discuss_creates_session_and_persists_messages(
 
 
 @pytest.mark.asyncio
-async def test_get_history_reconstructs_discussion(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_get_history_reconstructs_discussion(client: AsyncClient, db_session: AsyncSession):
     """测试获取历史会话时，能够正确解析并还原 discussionTurns 和 summary。"""
     user = await create_test_user(db_session, "persist_user2")
     headers = auth_headers(user)
@@ -195,9 +191,7 @@ async def test_get_history_reconstructs_discussion(
 
 
 @pytest.mark.asyncio
-async def test_discuss_in_existing_session(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_discuss_in_existing_session(client: AsyncClient, db_session: AsyncSession):
     """测试指定 session_id 时，讨论追加到既有会话中而不重复创建会话。"""
     user = await create_test_user(db_session, "persist_user3")
     headers = auth_headers(user)
@@ -244,4 +238,3 @@ async def test_discuss_in_existing_session(
     assert len(hist_data["messages"]) == 4
     roles = [m["role"] for m in hist_data["messages"]]
     assert roles == ["user", "discussion", "user", "discussion"]
-

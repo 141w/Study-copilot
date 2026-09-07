@@ -32,16 +32,14 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False)
 
 
-def setup_logging(debug=True, level="INFO"):
+def setup_logging(debug=True, level="INFO", force=False):
     """Configure root logging once at startup.
 
     Args:
         debug: True -> dev text format; False -> production JSON lines.
-        level: Root logger level name.
+        level: Root logger level name (case-insensitive: "DEBUG", "info", etc.) or int.
+        force: If True, overwrite root.handlers even if already set.
     """
-    root = logging.getLogger()
-    root.setLevel(level)
-
     handler = logging.StreamHandler(sys.stdout)
     if debug:
         handler.setFormatter(
@@ -50,4 +48,11 @@ def setup_logging(debug=True, level="INFO"):
     else:
         handler.setFormatter(JsonFormatter())
 
-    root.handlers = [handler]
+    root = logging.getLogger()
+    # Only set handlers if none exist or force=True (avoid stomping pytest / uvicorn handlers).
+    if force or not root.handlers:
+        root.handlers = [handler]
+
+    if isinstance(level, str):
+        level = getattr(logging, level.strip().upper(), logging.INFO)
+    root.setLevel(level)

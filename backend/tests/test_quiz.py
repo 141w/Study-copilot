@@ -118,7 +118,9 @@ class TestJudgeShortAnswer:
         quiz = _make_quiz("线粒体")
 
         # 用户答案包含参考答案
-        is_correct, reason = await _judge_short_answer(db, user, quiz, "答案是线粒体，它是细胞的能量工厂")
+        is_correct, reason = await _judge_short_answer(
+            db, user, quiz, "答案是线粒体，它是细胞的能量工厂"
+        )
         assert is_correct is True
 
     @pytest.mark.asyncio
@@ -162,9 +164,7 @@ class TestJudgeShortAnswer:
         ):
             with patch("app.core.llm.LLM", return_value=mock_llm_instance) as mock_llm_cls:
                 mock_llm_cls.from_config.return_value = mock_llm_instance
-                is_correct, reason = await _judge_short_answer(
-                    db, user, quiz, "呼吸作用释放能量"
-                )
+                is_correct, reason = await _judge_short_answer(db, user, quiz, "呼吸作用释放能量")
 
         assert is_correct is False
 
@@ -183,9 +183,7 @@ class TestJudgeShortAnswer:
         ):
             with patch("app.core.llm.LLM", return_value=mock_llm_instance) as mock_llm_cls:
                 mock_llm_cls.from_config.return_value = mock_llm_instance
-                is_correct, reason = await _judge_short_answer(
-                    db, user, quiz, "完全不同的错误答案"
-                )
+                is_correct, reason = await _judge_short_answer(db, user, quiz, "完全不同的错误答案")
 
         # LLM 失败且规则不匹配 → 判错
         assert is_correct is False
@@ -205,9 +203,7 @@ class TestJudgeShortAnswer:
         ):
             with patch("app.core.llm.LLM", return_value=mock_llm_instance) as mock_llm_cls:
                 mock_llm_cls.from_config.return_value = mock_llm_instance
-                is_correct, reason = await _judge_short_answer(
-                    db, user, quiz, "另一个不同的答案"
-                )
+                is_correct, reason = await _judge_short_answer(db, user, quiz, "另一个不同的答案")
 
         assert is_correct is False
 

@@ -35,12 +35,18 @@ export interface Source {
   relevance_score?: number
 }
 
+export interface ThinkingStep {
+  step: string
+  detail: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   sources?: Source[]
-  thinking?: string
+  thinking?: string | ThinkingStep[]
+  reasoning?: string
   isStreaming?: boolean
   expandedSources?: boolean
   timestamp?: string
@@ -152,6 +158,17 @@ export interface ClassroomModelConfig {
   image_api_key_masked?: string
   image_size?: string
   enable_tts?: boolean
+  tts_enabled?: boolean
+  tts_provider?: string
+  tts_model?: string
+  tts_base_url?: string
+  tts_api_key?: string
+  has_tts_api_key?: boolean
+  tts_api_key_masked?: string
+  tts_speed?: number
+  voice_teacher?: string
+  voice_curious?: string
+  voice_thinker?: string
   tts_voice?: string
   enable_web_search?: boolean
 }
@@ -160,6 +177,13 @@ export interface ImageTestResult {
   success: boolean
   message: string
   latency_ms?: number
+}
+
+export interface TTSTestResult {
+  success: boolean
+  message: string
+  latency_ms?: number
+  audio_base64?: string | null
 }
 
 export interface SystemStatus {

@@ -75,9 +75,7 @@ async def test_update_note_reindexes_new_content(db_session, fake_store):
     user = await _make_user(db_session)
     note = await note_service.create_note(db_session, user, title="旧标题", content="旧内容")
 
-    await note_service.update_note(
-        db_session, user, note.id, content="全新的内容文本用于验证重建"
-    )
+    await note_service.update_note(db_session, user, note.id, content="全新的内容文本用于验证重建")
 
     last = fake_store.instances[-1]
     assert any("全新的内容文本" in c["text"] for c in last.chunks)

@@ -82,7 +82,8 @@ async def create_classroom(
 
     try:
         payload = await classroom_service.build_classroom_request(
-            db, current_user,
+            db,
+            current_user,
             doc_ids=req.doc_ids,
             requirement=req.requirement,
             enable_web_search=req.enable_web_search,
@@ -106,25 +107,38 @@ async def create_classroom(
     course_id = result.get("course_id")
     url = result.get("url")
 
-    # 如果非本地已建课，提交即落 pending 占位课（description 嵌 class_id）
+    # 如果非本地已建课，提交即落 pending 占位课（description 嵌 class_id 并关联文档）
     if class_id and not course_id:
         try:
-            from app.services.course_service import create_course_space
+            from app.services.course_service import add_document_to_course, create_course_space
+
             placeholder = await create_course_space(
-                db, current_user,
+                db,
+                current_user,
                 name=req.requirement.strip()[:60] or "AI 互动课堂（生成中）",
-                description=json.dumps({
-                    "classroom_pending": True,
-                    "classroom_id": class_id,
-                    "job_id": job_id,
-                    "requirement": req.requirement.strip(),
-                    "event": "classroom_submitted",
-                }, ensure_ascii=False),
+                description=json.dumps(
+                    {
+                        "classroom_pending": True,
+                        "classroom_id": class_id,
+                        "job_id": job_id,
+                        "requirement": req.requirement.strip(),
+                        "event": "classroom_submitted",
+                        "source_doc_ids": req.doc_ids,
+                    },
+                    ensure_ascii=False,
+                ),
                 color="#409EFF",
             )
+            # 关联参考文档至课程空间
+            for d_id in req.doc_ids:
+                try:
+                    await add_document_to_course(db, current_user, placeholder.id, d_id)
+                except Exception as add_err:
+                    logger.warning("Failed to link doc %s to placeholder %s: %s", d_id, placeholder.id, add_err)
+
             await db.commit()
             course_id = placeholder.id
-            logger.info("Classroom placeholder course: %s -> %s", class_id, course_id)
+            logger.info("Classroom placeholder course: %s -> %s (docs=%d)", class_id, course_id, len(req.doc_ids))
         except Exception as e:  # noqa: BLE001
             logger.warning("Placeholder course creation failed: %s", e)
 
@@ -211,12 +225,14 @@ async def list_classrooms(
         except (json.JSONDecodeError, TypeError):
             pass
 
-        classrooms.append({
-            "course_id": c.id,
-            "title": c.name,
-            "url": url,
-            "created_at": c.created_at.isoformat() if c.created_at else "",
-        })
+        classrooms.append(
+            {
+                "course_id": c.id,
+                "title": c.name,
+                "url": url,
+                "created_at": c.created_at.isoformat() if c.created_at else "",
+            }
+        )
 
     return ClassroomListResponse(
         classrooms=classrooms,
@@ -256,9 +272,7 @@ async def classroom_webhook(
 
     user: User | None = None
     if course_row:
-        user_res = await db.execute(
-            select(User).where(User.id == course_row.user_id)
-        )
+        user_res = await db.execute(select(User).where(User.id == course_row.user_id))
         user = user_res.scalar_one_or_none()
 
     if not user:
@@ -272,3 +286,126 @@ async def classroom_webhook(
         db, user, payload, matched_course=course_row
     )
     return {"status": "ok", "result": result}
+
+
+async def _fetch_classroom_payload(
+    target_id: str,
+    db: AsyncSession,
+    user: User,
+) -> dict[str, Any]:
+    if not settings.classroom_enabled:
+        raise HTTPException(status_code=403, detail="AI 互动课堂功能未启用")
+
+    escaped = target_id.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    result = await db.execute(
+        select(CourseSpace)
+        .where(
+            CourseSpace.user_id == user.id,
+            (CourseSpace.id == target_id) | (CourseSpace.description.like(f"%{escaped}%")),
+        )
+        .order_by(CourseSpace.created_at.desc())
+        .limit(1)
+    )
+    course = result.scalar_one_or_none()
+
+    classroom_data = None
+    if course and course.description:
+        try:
+            desc_obj = json.loads(course.description)
+            classroom_data = desc_obj.get("classroom_data")
+            if not classroom_data and desc_obj.get("outline"):
+                from app.core.course_generator import (
+                    build_classroom_dsl,
+                    save_classroom_dsl_to_disk,
+                )
+                from app.db import Quiz
+
+                q_res = await db.execute(select(Quiz).where(Quiz.user_id == user.id))
+                quizzes = [
+                    {
+                        "id": q.id,
+                        "question": q.question,
+                        "question_type": q.question_type,
+                        "options": q.options,
+                        "correct_answer": q.correct_answer,
+                        "explanation": q.explanation,
+                    }
+                    for q in q_res.scalars().all()[:10]
+                ]
+                classroom_data = build_classroom_dsl(
+                    stage_id=course.id,
+                    outline=desc_obj.get("outline", {}),
+                    quizzes=quizzes,
+                )
+                desc_obj["classroom_data"] = classroom_data
+                desc_obj["classroom_id"] = course.id
+                desc_obj["classroom_url"] = f"/courses/{course.id}/classroom"
+                course.description = json.dumps(desc_obj, ensure_ascii=False)
+                await db.commit()
+                try:
+                    save_classroom_dsl_to_disk(classroom_data)
+                except Exception as disk_err:
+                    logger.warning("Failed to write updated classroom DSL to disk: %s", disk_err)
+        except Exception as e:
+            logger.warning("Failed to parse classroom data from course %s: %s", course.id, e)
+
+    # 如果数据库未查到或无 DSL，尝试从磁盘文件读取
+    if not classroom_data:
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent.parent.parent
+        file_path = root / "classroom" / "data" / "classrooms" / f"{target_id}.json"
+        if file_path.exists():
+            try:
+                with open(file_path, encoding="utf-8") as f:
+                    classroom_data = json.load(f)
+            except Exception as fe:
+                logger.warning("Failed to read classroom DSL from disk for %s: %s", target_id, fe)
+
+    if not classroom_data:
+        raise HTTPException(status_code=404, detail="课堂不存在或已被删除")
+
+    # 丰富课件元数据：挂载当前课堂所引用的参考文档列表
+    if course and isinstance(classroom_data, dict):
+        try:
+            from app.services.course_service import get_course_documents
+
+            c_docs = await get_course_documents(db, user, course.id)
+            doc_items = [
+                {"id": d.id, "filename": d.filename, "file_size": d.file_size}
+                for d in c_docs
+            ]
+            classroom_data["sourceDocuments"] = doc_items
+            if "stage" in classroom_data and isinstance(classroom_data["stage"], dict):
+                classroom_data["stage"]["sourceDocuments"] = doc_items
+        except Exception as de:
+            logger.warning("Failed to append source documents to classroom: %s", de)
+
+    return {
+        "success": True,
+        "classroom": classroom_data,
+    }
+
+
+@router.get("/classroom/{classroom_id}")
+async def get_classroom_detail_by_path(
+    classroom_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取完整的 AI 互动课堂 DSL 课件数据 (PersistedClassroomData)。"""
+    return await _fetch_classroom_payload(classroom_id, db, current_user)
+
+
+@router.get("/classroom")
+async def get_classroom_detail_by_query(
+    id: str | None = None,
+    classroom_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """通过查询参数获取完整的 AI 互动课堂 DSL 课件数据（对齐 OpenMAIC /api/classroom?id=... 规范）。"""
+    target_id = id or classroom_id
+    if not target_id:
+        raise HTTPException(status_code=400, detail="缺少课堂 ID (id 或 classroom_id)")
+    return await _fetch_classroom_payload(target_id, db, current_user)

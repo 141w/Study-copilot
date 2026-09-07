@@ -91,14 +91,13 @@
             </p>
           </div>
           
-          <button
+          <el-button
             @click="confirmDeleteDoc(doc)"
-            class="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-light)] transition-all active:scale-95"
             :title="`删除 ${doc.filename}`"
             :aria-label="`删除文档 ${doc.filename}`"
           >
-            <el-icon class="w-5 h-5"><Delete /></el-icon>
-          </button>
+            <el-icon class="w-4 h-4"><Delete /></el-icon>
+          </el-button>
         </div>
       </div>
     </div>

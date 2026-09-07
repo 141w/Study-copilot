@@ -35,7 +35,22 @@ This file provides architectural guidance for contributors working on Study Copi
 - **可观测性**: 结构化 JSON 日志（生产）/ 文本（开发）+ X-Trace-ID 纯 ASGI 追踪中间件 + /health DB 探测
 - **Docker**: 多阶段构建、非 root 运行、healthcheck；.dockerignore 收敛构建上下文
 
-### Recent Changes (2026-08-17 ~ 2026-09-06)
+### Recent Changes (2026-08-17 ~ 2026-09-07)
+
+**2026-09-07 批次（双轨思考体系：微观原生 CoT 深度思考流 + 宏观 Agentic 决策反思全透明）：**
+1. **微观底层大模型原生 CoT 流式解析** (`llm.py` + `rag_engine.py` + `chat_service.py`)：
+   - 提取 OpenAI 兼容协议中的 `delta.reasoning_content` 及非标准 `<think>...</think>` 标签流，自动分流出 `reasoning` 流式事件；
+   - 保证向后兼容，普通问答 token 保持纯文本输出，非思考模型零额外开销。
+2. **宏观 Agentic 真实决策与反思透明化** (`retrieval_grader.py` + `answer_reflector.py` + `evaluate.jinja2`)：
+   - 升级质检器与自我反思器，不再输出干瘪枚举或静态模板，产出包含切片相关度深度判定分析、事实依据 (Faithfulness)、覆盖度与准确性评分维度的详细思考步骤；
+   - 实时推送 `intent_analysis`、`retrieval_check`、`retrieval_retry`、`reflection_pass` / `reflection_fail` 高信息量阶段事件。
+3. **前端多层次思考面板重塑与遮蔽缺陷根治** (`ChatMessageItem.vue` + `ChatView.vue` + `chat.ts`)：
+   - 彻底修复 `v-if="message.isStreaming && !message.content"` 导致首包文本前 Agentic 思考步骤被跳动圆点遮蔽的隐蔽缺陷；
+   - 构建「三层立体呈现体系」：① Agentic 决策流程折叠卡片（8 种决策徽章） + ② 原生 CoT 深度思考折叠面板（墨绿护眼、流式打字与折叠计数） + ③ 正式回答 Markdown 正文；
+   - `chatStore` 与会话持久化层打通 `thinking` 与 `reasoning`，实现历史会话无损复现与重载展示。
+4. **全链路测试门禁与质量保障**：
+   - 新增后端测试 `test_llm_reasoning.py`（4 个单测），后端测试扩充至 **538 passed**（覆盖率 71.13%）；
+   - 前端测试扩充至 **279 passed**，`vue-tsc` 0 errors，`npm run build` 成功。
 
 **2026-09-06 批次（AI 互动课堂多模态专属配置与课程乱码根治）：**
 1. **课程全链路乱码根治与大纲结构化重塑** (`classroom_service.py` + `classroom_api.py` + `courses.py` + `course.ts` + `CourseCard.vue` + `CourseDetailView.vue` + `CourseListView.vue`)：

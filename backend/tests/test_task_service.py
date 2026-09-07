@@ -19,11 +19,14 @@ async def user(db_session: AsyncSession) -> User:
     return u
 
 
-async def _create_task(db_session: AsyncSession, user_id: str, task_type: str = "document_process") -> AsyncTask:
+async def _create_task(
+    db_session: AsyncSession, user_id: str, task_type: str = "document_process"
+) -> AsyncTask:
     return await task_service.create_task(db_session, user_id, task_type, {"key": "value"})
 
 
 # ── create_task ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_create_task(db_session: AsyncSession, user: User):
@@ -44,6 +47,7 @@ async def test_create_task_stores_metadata(db_session: AsyncSession, user: User)
 
 # ── update_task ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_update_task_status(db_session: AsyncSession, user: User):
     task = await _create_task(db_session, user.id)
@@ -61,7 +65,9 @@ async def test_update_task_progress(db_session: AsyncSession, user: User):
 @pytest.mark.asyncio
 async def test_update_task_completes_and_sets_timestamp(db_session: AsyncSession, user: User):
     task = await _create_task(db_session, user.id)
-    updated = await task_service.update_task(db_session, task.id, user.id, status="completed", progress=1.0)
+    updated = await task_service.update_task(
+        db_session, task.id, user.id, status="completed", progress=1.0
+    )
     assert updated.status == "completed"
     assert updated.completed_at is not None
     assert updated.progress == 1.0
@@ -70,7 +76,9 @@ async def test_update_task_completes_and_sets_timestamp(db_session: AsyncSession
 @pytest.mark.asyncio
 async def test_update_task_failed_sets_error(db_session: AsyncSession, user: User):
     task = await _create_task(db_session, user.id)
-    updated = await task_service.update_task(db_session, task.id, user.id, status="failed", error="boom")
+    updated = await task_service.update_task(
+        db_session, task.id, user.id, status="failed", error="boom"
+    )
     assert updated.status == "failed"
     assert updated.error == "boom"
     assert updated.completed_at is not None
@@ -87,6 +95,7 @@ async def test_update_task_raises_for_wrong_user(db_session: AsyncSession, user:
 
 
 # ── cancel_task ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_cancel_pending_task(db_session: AsyncSession, user: User):
@@ -120,6 +129,7 @@ async def test_cancel_already_cancelled_raises(db_session: AsyncSession, user: U
 
 
 # ── get_task / get_user_tasks ───────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_get_task_returns_task(db_session: AsyncSession, user: User):
@@ -159,8 +169,11 @@ async def test_get_user_tasks_default_no_filter(db_session: AsyncSession, user: 
 
 # ── recover_interrupted_tasks ───────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
-async def test_recover_interrupted_tasks_marks_running_as_failed(db_session: AsyncSession, user: User):
+async def test_recover_interrupted_tasks_marks_running_as_failed(
+    db_session: AsyncSession, user: User
+):
     t1 = await _create_task(db_session, user.id)
     await task_service.update_task(db_session, t1.id, user.id, status="running")
     t2 = await _create_task(db_session, user.id)
@@ -184,6 +197,7 @@ async def test_recover_does_not_affect_completed(db_session: AsyncSession, user:
 
 
 # ── format_task ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_format_task_with_metadata(db_session: AsyncSession, user: User):

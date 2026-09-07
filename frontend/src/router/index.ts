@@ -6,6 +6,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     /** 该路由是否需要登录态 */
     requiresAuth?: boolean
+    /** 是否采用沉浸式全屏布局（隐藏全局顶栏与全局侧边栏） */
+    immersive?: boolean
   }
 }
 
@@ -72,6 +74,18 @@ const routes: RouteRecordRaw[] = [
     name: 'course-detail',
     component: () => import('../views/CourseDetailView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/courses/:id/classroom',
+    name: 'course-classroom',
+    component: () => import('../views/ClassroomPlayerView.vue'),
+    meta: { requiresAuth: true, immersive: true }
+  },
+  {
+    path: '/classroom/:id',
+    name: 'classroom-player',
+    component: () => import('../views/ClassroomPlayerView.vue'),
+    meta: { requiresAuth: true, immersive: true }
   },
   {
     path: '/notes',

@@ -283,9 +283,11 @@ class BM25VectorStore(BaseVectorStore):
     def _tokenize(text: str) -> list[str]:
         """Tokenize for BM25: jieba for Chinese, regex for English."""
         import re
+
         if any("一" <= c <= "鿿" for c in text):
             try:
                 import jieba
+
                 return list(jieba.cut(text))
             except ImportError:
                 pass
@@ -570,6 +572,7 @@ class DocumentVectorStore:
         if os.path.exists(f"{faiss_path}.index"):
             # 自动检测索引维度
             import faiss
+
             try:
                 temp_index = faiss.read_index(f"{faiss_path}.index")
                 detected_dim = temp_index.d
@@ -584,6 +587,7 @@ class DocumentVectorStore:
         if os.path.exists(f"{path}_faiss.index"):
             # 自动检测索引维度
             import faiss
+
             try:
                 temp_index = faiss.read_index(f"{path}_faiss.index")
                 detected_dim = temp_index.d

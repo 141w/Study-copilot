@@ -26,10 +26,11 @@ import AppSidebar from './components/common/AppSidebar.vue'
 const route = useRoute()
 const sidebarStore = useSidebarStore()
 
-// 登录/注册页沉浸式布局：隐藏顶部 header 与侧栏
+// 登录/注册页以及全屏沉浸式页面（如 AI 互动微课）：隐藏全局顶栏与侧栏
 const isAuthPage = computed(() => route.path === '/login' || route.path === '/register')
-const showHeader = computed(() => !isAuthPage.value)
-const showSidebar = computed(() => !isAuthPage.value)
+const isImmersive = computed(() => Boolean(route.meta.immersive) || isAuthPage.value)
+const showHeader = computed(() => !isImmersive.value)
+const showSidebar = computed(() => !isImmersive.value)
 
 // Close sidebar on route change (mobile UX)
 watch(

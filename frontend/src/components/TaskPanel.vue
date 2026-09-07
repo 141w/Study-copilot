@@ -78,18 +78,16 @@
     <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
       <!-- 状态筛选 Tab 胶囊 -->
       <div class="flex items-center gap-1.5 overflow-x-auto py-1">
-        <button
+        <el-button
           v-for="tab in statusTabs"
           :key="tab.value"
+          class="!h-auto !px-3 !py-1 text-xs"
+          :type="selectedStatus === tab.value ? 'primary' : 'default'"
+          :plain="selectedStatus !== tab.value"
           @click="selectedStatus = tab.value"
-          class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap"
-          :class="selectedStatus === tab.value
-            ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] font-semibold shadow-xs'
-            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)]'"
         >
-          {{ tab.label }}
-          <span class="ml-1 opacity-75">({{ tab.count }})</span>
-        </button>
+          {{ tab.label }} <span class="ml-0.5 opacity-75">({{ tab.count }})</span>
+        </el-button>
       </div>
 
       <!-- 搜索输入框 -->

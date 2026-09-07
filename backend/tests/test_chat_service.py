@@ -22,6 +22,7 @@ def _user(suffix: str = "") -> User:
 
 def _doc(user_id: str, deleted: bool = False) -> Document:
     from datetime import UTC, datetime
+
     return Document(
         id=str(uuid.uuid4()),
         user_id=user_id,
@@ -58,7 +59,9 @@ async def test_ensure_session_existing_and_idor_protection(db_session: AsyncSess
     sess_id, _ = await chat_service._ensure_session(db_session, u1.id, None, "User 1 Question")
 
     # User 1 accesses their own session -> succeeds
-    same_id, is_new = await chat_service._ensure_session(db_session, u1.id, sess_id, "User 1 Question")
+    same_id, is_new = await chat_service._ensure_session(
+        db_session, u1.id, sess_id, "User 1 Question"
+    )
     assert same_id == sess_id
     assert is_new is False
 
@@ -108,14 +111,14 @@ async def test_ask_question_non_streaming(db_session: AsyncSession):
         "context_used": True,
     }
 
-    with patch.object(chat_service, "get_llm_config_with_secret", return_value={}), \
-         patch.object(chat_service.rag_engine, "ask", new_callable=AsyncMock) as mock_ask, \
-         patch.object(chat_service, "_embed_text", return_value=None):
+    with (
+        patch.object(chat_service, "get_llm_config_with_secret", return_value={}),
+        patch.object(chat_service.rag_engine, "ask", new_callable=AsyncMock) as mock_ask,
+        patch.object(chat_service, "_embed_text", return_value=None),
+    ):
         mock_ask.return_value = mock_rag_result
 
-        result = await chat_service.ask_question(
-            db_session, u, "What is Python?", [d.id]
-        )
+        result = await chat_service.ask_question(db_session, u, "What is Python?", [d.id])
 
         assert result["answer"] == mock_rag_result["answer"]
         assert result["sources"] == mock_rag_result["sources"]
@@ -147,14 +150,13 @@ async def test_ask_question_stream_retains_sources(db_session: AsyncSession):
         yield {"type": "token", "content": "Hello "}
         yield {"type": "token", "content": "world!"}
 
-    with patch.object(chat_service, "get_llm_config_with_secret", return_value={}), \
-         patch.object(chat_service.rag_engine, "ask_stream", side_effect=mock_stream), \
-         patch.object(chat_service, "_embed_text", return_value=None):
-
+    with (
+        patch.object(chat_service, "get_llm_config_with_secret", return_value={}),
+        patch.object(chat_service.rag_engine, "ask_stream", side_effect=mock_stream),
+        patch.object(chat_service, "_embed_text", return_value=None),
+    ):
         chunks = []
-        async for item in chat_service.ask_question_stream(
-            db_session, u, "Say hello", []
-        ):
+        async for item in chat_service.ask_question_stream(db_session, u, "Say hello", []):
             chunks.append(item)
 
         assert any(c["type"] == "sources" for c in chunks)
@@ -233,9 +235,11 @@ async def test_ask_question_merges_user_config_with_runtime_config(db_session: A
         "context_used": True,
     }
 
-    with patch.object(chat_service, "get_llm_config_with_secret", return_value=fake_user_config), \
-         patch.object(chat_service.rag_engine, "ask", new_callable=AsyncMock) as mock_ask, \
-         patch.object(chat_service, "_embed_text", return_value=None):
+    with (
+        patch.object(chat_service, "get_llm_config_with_secret", return_value=fake_user_config),
+        patch.object(chat_service.rag_engine, "ask", new_callable=AsyncMock) as mock_ask,
+        patch.object(chat_service, "_embed_text", return_value=None),
+    ):
         mock_ask.return_value = mock_rag_result
 
         # Call ask_question with runtime config (e.g. ai_style)
@@ -254,10 +258,13 @@ async def test_ask_question_merges_user_config_with_runtime_config(db_session: A
     async def mock_stream(*args, **kwargs):
         yield {"type": "token", "content": "chunk"}
 
-    with patch.object(chat_service, "get_llm_config_with_secret", return_value=fake_user_config), \
-         patch.object(chat_service.rag_engine, "ask_stream", side_effect=mock_stream) as mock_stream_call, \
-         patch.object(chat_service, "_embed_text", return_value=None):
-
+    with (
+        patch.object(chat_service, "get_llm_config_with_secret", return_value=fake_user_config),
+        patch.object(
+            chat_service.rag_engine, "ask_stream", side_effect=mock_stream
+        ) as mock_stream_call,
+        patch.object(chat_service, "_embed_text", return_value=None),
+    ):
         chunks = []
         async for item in chat_service.ask_question_stream(
             db_session, u, "Question", [], config={"ai_style": "concise"}

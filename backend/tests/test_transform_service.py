@@ -50,7 +50,6 @@ def _note(user_id: str, course_id: str | None = None) -> Note:
 
 
 class TestGetAvailableTransformations:
-
     def test_returns_list(self):
         result = list_transformations()
         assert isinstance(result, list)
@@ -65,9 +64,17 @@ class TestGetAvailableTransformations:
 
     def test_includes_all_expected_types(self):
         keys = {t["key"] for t in list_transformations()}
-        expected = {"summary", "keypoints", "outline", "flashcards",
-                     "mindmap", "qa_pairs", "translate_en", "translate_zh",
-                     "explain"}
+        expected = {
+            "summary",
+            "keypoints",
+            "outline",
+            "flashcards",
+            "mindmap",
+            "qa_pairs",
+            "translate_en",
+            "translate_zh",
+            "explain",
+        }
         assert keys == expected
 
 
@@ -75,7 +82,6 @@ class TestGetAvailableTransformations:
 
 
 class TestTransformContent:
-
     @pytest.mark.asyncio
     async def test_unknown_type_raises_validation_error(self, db_session: AsyncSession):
         u = _user()
@@ -94,9 +100,7 @@ class TestTransformContent:
         await db_session.commit()
 
         with pytest.raises(ValidationError, match="源文本内容为空"):
-            await transform_service.transform_content(
-                db_session, u, "   ", "summary"
-            )
+            await transform_service.transform_content(db_session, u, "   ", "summary")
 
     @pytest.mark.asyncio
     async def test_empty_string_raises_validation_error(self, db_session: AsyncSession):
@@ -105,9 +109,7 @@ class TestTransformContent:
         await db_session.commit()
 
         with pytest.raises(ValidationError, match="源文本内容为空"):
-            await transform_service.transform_content(
-                db_session, u, "", "summary"
-            )
+            await transform_service.transform_content(db_session, u, "", "summary")
 
     @pytest.mark.asyncio
     async def test_long_text_truncated(self, db_session: AsyncSession):
@@ -120,12 +122,14 @@ class TestTransformContent:
         mock_llm.generate = AsyncMock(return_value="result")
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
-            await transform_service.transform_content(
-                db_session, u, long_text, "summary"
-            )
+            await transform_service.transform_content(db_session, u, long_text, "summary")
 
         call_kwargs = mock_llm.generate.call_args
-        prompt = call_kwargs.kwargs.get("prompt", call_kwargs[1].get("prompt", "")) if call_kwargs.kwargs else call_kwargs[1].get("prompt", "")
+        prompt = (
+            call_kwargs.kwargs.get("prompt", call_kwargs[1].get("prompt", ""))
+            if call_kwargs.kwargs
+            else call_kwargs[1].get("prompt", "")
+        )
         assert "[内容已截断...]" in prompt
 
     @pytest.mark.asyncio
@@ -174,9 +178,7 @@ class TestTransformContent:
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
             with pytest.raises(ExternalServiceError, match="AI 转换失败"):
-                await transform_service.transform_content(
-                    db_session, u, "Some text", "summary"
-                )
+                await transform_service.transform_content(db_session, u, "Some text", "summary")
 
     @pytest.mark.asyncio
     async def test_passes_correct_params_to_llm(self, db_session: AsyncSession):
@@ -204,7 +206,6 @@ class TestTransformContent:
 
 
 class TestTransformNote:
-
     @pytest.mark.asyncio
     async def test_note_not_found_raises(self, db_session: AsyncSession):
         u = _user()
@@ -212,9 +213,7 @@ class TestTransformNote:
         await db_session.commit()
 
         with pytest.raises(NotFoundError, match="笔记不存在"):
-            await transform_service.transform_note(
-                db_session, u, "nonexistent-id", "summary"
-            )
+            await transform_service.transform_note(db_session, u, "nonexistent-id", "summary")
 
     @pytest.mark.asyncio
     async def test_other_user_note_not_found(self, db_session: AsyncSession):
@@ -228,9 +227,7 @@ class TestTransformNote:
         await db_session.commit()
 
         with pytest.raises(NotFoundError, match="笔记不存在"):
-            await transform_service.transform_note(
-                db_session, u1, note.id, "summary"
-            )
+            await transform_service.transform_note(db_session, u1, note.id, "summary")
 
     @pytest.mark.asyncio
     async def test_successful_note_transform(self, db_session: AsyncSession):
@@ -246,9 +243,7 @@ class TestTransformNote:
         mock_llm.generate = AsyncMock(return_value="摘要结果")
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
-            result = await transform_service.transform_note(
-                db_session, u, note.id, "summary"
-            )
+            result = await transform_service.transform_note(db_session, u, note.id, "summary")
 
         assert result["note_id"] == note.id
         assert result["transform_type"] == "summary"
@@ -270,9 +265,7 @@ class TestTransformNote:
         mock_llm.generate = AsyncMock(return_value="摘要")
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
-            result = await transform_service.transform_note(
-                db_session, u, note.id, "keypoints"
-            )
+            result = await transform_service.transform_note(db_session, u, note.id, "keypoints")
 
         assert result["source_title"] == ""
         # text should be just content without title prefix
@@ -285,7 +278,6 @@ class TestTransformNote:
 
 
 class TestTransformDocumentChunks:
-
     @pytest.mark.asyncio
     async def test_document_not_found_raises(self, db_session: AsyncSession):
         u = _user()
@@ -309,9 +301,7 @@ class TestTransformDocumentChunks:
         await db_session.commit()
 
         with pytest.raises(NotFoundError, match="文档不存在"):
-            await transform_service.transform_document_chunks(
-                db_session, u1, doc.id, "summary"
-            )
+            await transform_service.transform_document_chunks(db_session, u1, doc.id, "summary")
 
     @pytest.mark.asyncio
     async def test_empty_document_raises(self, db_session: AsyncSession):
@@ -328,9 +318,7 @@ class TestTransformDocumentChunks:
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
             with pytest.raises(ValidationError, match="文档内容为空"):
-                await transform_service.transform_document_chunks(
-                    db_session, u, doc.id, "summary"
-                )
+                await transform_service.transform_document_chunks(db_session, u, doc.id, "summary")
 
     @pytest.mark.asyncio
     async def test_successful_document_transform(self, db_session: AsyncSession):
@@ -342,9 +330,15 @@ class TestTransformDocumentChunks:
         db_session.add(doc)
         await db_session.commit()
 
-        c1 = DocumentChunk(id=str(uuid.uuid4()), document_id=doc.id, content="Chapter 1 content", chunk_index=0)
-        c2 = DocumentChunk(id=str(uuid.uuid4()), document_id=doc.id, content="Chapter 2 content", chunk_index=1)
-        c3 = DocumentChunk(id=str(uuid.uuid4()), document_id=doc.id, content="   ", chunk_index=2)  # whitespace filtered out
+        c1 = DocumentChunk(
+            id=str(uuid.uuid4()), document_id=doc.id, content="Chapter 1 content", chunk_index=0
+        )
+        c2 = DocumentChunk(
+            id=str(uuid.uuid4()), document_id=doc.id, content="Chapter 2 content", chunk_index=1
+        )
+        c3 = DocumentChunk(
+            id=str(uuid.uuid4()), document_id=doc.id, content="   ", chunk_index=2
+        )  # whitespace filtered out
         db_session.add_all([c1, c2, c3])
         await db_session.commit()
 
@@ -373,7 +367,9 @@ class TestTransformDocumentChunks:
 
         # Create 35 chunks (>30 limit)
         chunks = [
-            DocumentChunk(id=str(uuid.uuid4()), document_id=doc.id, content=f"chunk {i}", chunk_index=i)
+            DocumentChunk(
+                id=str(uuid.uuid4()), document_id=doc.id, content=f"chunk {i}", chunk_index=i
+            )
             for i in range(35)
         ]
         db_session.add_all(chunks)
@@ -383,9 +379,7 @@ class TestTransformDocumentChunks:
         mock_llm.generate = AsyncMock(return_value="result")
 
         with patch.object(transform_service, "_build_llm", return_value=mock_llm):
-            await transform_service.transform_document_chunks(
-                db_session, u, doc.id, "summary"
-            )
+            await transform_service.transform_document_chunks(db_session, u, doc.id, "summary")
 
         # Verify only first 30 chunks were combined
         call_kwargs = mock_llm.generate.call_args.kwargs

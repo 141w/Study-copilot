@@ -35,6 +35,7 @@ The database layer manages **PostgreSQL connections, ORM models, and migrations*
 ```python
 from app.db.database import get_db
 
+
 # In API routes — use FastAPI dependency injection:
 @router.get("/")
 async def list_items(db: AsyncSession = Depends(get_db)):

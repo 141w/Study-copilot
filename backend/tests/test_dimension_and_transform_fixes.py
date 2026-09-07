@@ -25,16 +25,14 @@ class TestAddChunksDimensionPreflight:
         store = PgVectorStore(user_id="u1", dimension=768)
         fake_embeddings = [np.zeros(1024, dtype=np.float32).tolist()]
 
-        with patch.object(
-            store, attribute=None, side_effect=None
-        ) if False else patch(
-            "app.core.pgvector_store.embedder"
-        ) as mock_embedder:
+        with (
+            patch.object(store, attribute=None, side_effect=None)
+            if False
+            else patch("app.core.pgvector_store.embedder") as mock_embedder
+        ):
             mock_embedder.embed_texts = AsyncMock(return_value=fake_embeddings)
             with pytest.raises(ValidationError, match="维度不匹配"):
-                await store.add_chunks(
-                    [{"text": "内容"}], "doc-1", db=AsyncMock()
-                )
+                await store.add_chunks([{"text": "内容"}], "doc-1", db=AsyncMock())
 
     @pytest.mark.asyncio
     async def test_dimension_match_passes_preflight(self, db_session):
@@ -77,34 +75,38 @@ class TestTransformDocumentChunksReadsDB:
         from app.services import transform_service
 
         user = User(
-            id=str(_uuid.uuid4()), username="t_h2_probe",
-            email="t_h2@t.io", password_hash="x",
+            id=str(_uuid.uuid4()),
+            username="t_h2_probe",
+            email="t_h2@t.io",
+            password_hash="x",
         )
         db_session.add(user)
         doc = Document(
-            id=str(_uuid.uuid4()), user_id=user.id, filename="bio.txt",
-            file_path="/tmp/x", status="ready", chunk_count=1, file_size=10,
+            id=str(_uuid.uuid4()),
+            user_id=user.id,
+            filename="bio.txt",
+            file_path="/tmp/x",
+            status="ready",
+            chunk_count=1,
+            file_size=10,
         )
         db_session.add(doc)
         db_session.add(
             DocumentChunk(
-                id=str(_uuid.uuid4()), document_id=doc.id,
-                content="热力学第一定律：能量守恒", chunk_index=0, chunk_metadata={},
+                id=str(_uuid.uuid4()),
+                document_id=doc.id,
+                content="热力学第一定律：能量守恒",
+                chunk_index=0,
+                chunk_metadata={},
             )
         )
         await db_session.commit()
 
         # 直接调 service（绕开 API 层），mock LLM.generate 返回结果；
         # 同时监视 legacy DocumentVectorStore —— DB 有 chunk 时绝不应触发它
-        with patch(
-            "app.core.vector_store.DocumentVectorStore"
-        ) as MockLegacy:
-            MockLegacy.side_effect = AssertionError(
-                "DB 有 chunk 时不应触发 legacy FAISS 路径"
-            )
-            with patch.object(
-                transform_service, "_build_llm"
-            ) as mock_build:
+        with patch("app.core.vector_store.DocumentVectorStore") as MockLegacy:
+            MockLegacy.side_effect = AssertionError("DB 有 chunk 时不应触发 legacy FAISS 路径")
+            with patch.object(transform_service, "_build_llm") as mock_build:
                 mock_llm = AsyncMock()
                 mock_llm.generate = AsyncMock(return_value="转换结果文本")
                 mock_build.return_value = mock_llm
@@ -125,13 +127,20 @@ class TestTransformDocumentChunksReadsDB:
         from app.services import transform_service
 
         user = User(
-            id=str(_uuid.uuid4()), username="t_h2_empty",
-            email="t_h2e@t.io", password_hash="x",
+            id=str(_uuid.uuid4()),
+            username="t_h2_empty",
+            email="t_h2e@t.io",
+            password_hash="x",
         )
         db_session.add(user)
         doc = Document(
-            id=str(_uuid.uuid4()), user_id=user.id, filename="e.txt",
-            file_path="/tmp/e", status="ready", chunk_count=0, file_size=5,
+            id=str(_uuid.uuid4()),
+            user_id=user.id,
+            filename="e.txt",
+            file_path="/tmp/e",
+            status="ready",
+            chunk_count=0,
+            file_size=5,
         )
         db_session.add(doc)
         await db_session.commit()
@@ -139,7 +148,5 @@ class TestTransformDocumentChunksReadsDB:
         from app.exceptions import AppError
 
         with pytest.raises(AppError) as ei:
-            await transform_service.transform_document_chunks(
-                db_session, user, doc.id, "summary"
-            )
+            await transform_service.transform_document_chunks(db_session, user, doc.id, "summary")
         assert "文档内容为空" in str(ei.value.message)

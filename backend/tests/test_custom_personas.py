@@ -179,16 +179,29 @@ async def test_discuss_with_custom_persona(client: AsyncClient, db_session: Asyn
     # 模拟讨论调用，传入 custom_persona 的 role 与 id，不传 system_message
     # 后端应自动从 DB 查询并补齐 system_message
     mock_events = [
-        {"type": "persona_speak", "persona": "苏格拉底", "avatar": "Brain", "content": "你如何定义知识？"},
-        {"type": "summary", "persona": "主持人", "avatar": "ChatDotSquare", "content": "讨论总结完毕"},
+        {
+            "type": "persona_speak",
+            "persona": "苏格拉底",
+            "avatar": "Brain",
+            "content": "你如何定义知识？",
+        },
+        {
+            "type": "summary",
+            "persona": "主持人",
+            "avatar": "ChatDotSquare",
+            "content": "讨论总结完毕",
+        },
         {"type": "done", "total_turns": 1},
     ]
 
     with patch("app.core.persona_discussion.discuss") as mock_discuss:
+
         async def fake_stream(*args, **kwargs):
             # 校验传入 discuss 的 personas 是否成功获取了自定义人设
             personas = kwargs.get("personas") or args[1]
-            assert any(p["name"] == "苏格拉底" and "反问句" in p["system_message"] for p in personas)
+            assert any(
+                p["name"] == "苏格拉底" and "反问句" in p["system_message"] for p in personas
+            )
             for ev in mock_events:
                 yield ev
 

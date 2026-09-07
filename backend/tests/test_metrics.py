@@ -36,9 +36,7 @@ async def test_metrics_tasks_block_has_status_keys(client: AsyncClient):
     assert {"total", "by_status", "pending", "running", "completed", "failed", "cancelled"} <= keys
 
 
-async def test_metrics_reflects_inserted_tasks(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_metrics_reflects_inserted_tasks(client: AsyncClient, db_session: AsyncSession):
     """Metrics returned counts should reflect queued tasks."""
     user = User(
         id=f"metrics-u-{uuid.uuid4().hex[:6]}",
@@ -78,9 +76,7 @@ async def test_metrics_counts_are_global_across_users(
         )
     await db_session.commit()
 
-    rows = (
-        (await db_session.execute(select(func.count(AsyncTask.id)))).scalar_one(),
-    )
+    rows = ((await db_session.execute(select(func.count(AsyncTask.id)))).scalar_one(),)
     assert rows[0] >= len(statuses)
 
     resp = await client.get("/api/metrics")

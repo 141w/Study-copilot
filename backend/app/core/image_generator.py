@@ -32,8 +32,8 @@ def _normalize_base_url(url: str | None) -> str:
 
 async def test_image_connectivity(config: dict[str, Any]) -> dict[str, Any]:
     """测试图像生成服务的连通性与密钥有效性。"""
-    api_key = (config.get("image_api_key") or "").strip()
-    base_url = _normalize_base_url(config.get("image_base_url"))
+    api_key = (config.get("image_api_key") or config.get("api_key") or "").strip()
+    base_url = _normalize_base_url(config.get("image_base_url") or config.get("base_url"))
     model = (config.get("image_model") or DEFAULT_IMAGE_MODEL).strip()
     provider = config.get("image_provider", "siliconflow")
 
@@ -103,8 +103,8 @@ async def generate_image(
     size: str = "1024x1024",
 ) -> dict[str, Any]:
     """发起生图请求，返回图像 URL 或 Base64 数据。"""
-    api_key = (config.get("image_api_key") or "").strip()
-    base_url = _normalize_base_url(config.get("image_base_url"))
+    api_key = (config.get("image_api_key") or config.get("api_key") or "").strip()
+    base_url = _normalize_base_url(config.get("image_base_url") or config.get("base_url"))
     model = (config.get("image_model") or DEFAULT_IMAGE_MODEL).strip()
 
     if not api_key:

@@ -114,7 +114,10 @@ import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading, Check, WarningFilled } from '@/components/icons'
 import api from '../../services/api'
+import { useConfigStore } from '@/stores/config'
 import type { Document } from '../../types/models'
+
+const configStore = useConfigStore()
 
 const props = withDefaults(defineProps<{
   /** v-model 绑定可见性 */
@@ -146,7 +149,24 @@ const generated = ref(false)
 
 // ── 监听外部 v-model ─────────────────────────────────────────────────────────
 
-watch(() => props.modelValue, (v) => { localVisible.value = v })
+watch(() => props.modelValue, async (v) => {
+  localVisible.value = v
+  if (v) {
+    try {
+      const cfg = await configStore.fetchLLMConfig()
+      if (cfg?.classroom_config) {
+        if (cfg.classroom_config.image_enabled !== undefined) {
+          enableImageGeneration.value = !!cfg.classroom_config.image_enabled
+        }
+        if (cfg.classroom_config.tts_enabled !== undefined) {
+          enableTTS.value = !!cfg.classroom_config.tts_enabled
+        }
+      }
+    } catch {
+      // 忽略拉取错误
+    }
+  }
+})
 watch(localVisible, (v) => { emit('update:modelValue', v) })
 
 // ── 方法 ─────────────────────────────────────────────────────────────────────

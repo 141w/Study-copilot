@@ -18,32 +18,59 @@ from app.core.template_manager import render_template
 
 logger = logging.getLogger(__name__)
 
+
 class QueryType(str, Enum):
     RAG_QA = "rag_qa"
     DIRECT_ANSWER = "direct"
     SUMMARY = "summary"
     OUT_OF_SCOPE = "out_of_scope"
 
+
 # ── 关键词规则（优先级高于 LLM，节省一次调用） ──────────────────────
 
 _SUMMARY_KEYWORDS = [
-    "总结", "概述", "概要", "摘要", "大纲",
-    "总结一下", "帮我总结", "概括", "归纳",
-    "全文总结", "内容概要", "主要讲了什么",
-    "说了什么", "讲了什么", "主要内容",
+    "总结",
+    "概述",
+    "概要",
+    "摘要",
+    "大纲",
+    "总结一下",
+    "帮我总结",
+    "概括",
+    "归纳",
+    "全文总结",
+    "内容概要",
+    "主要讲了什么",
+    "说了什么",
+    "讲了什么",
+    "主要内容",
 ]
 
 _CHITCHAT_KEYWORDS = [
-    "你好", "你是谁", "谢谢", "再见", "哈哈",
-    "嗯嗯", "好的", "ok", "OK", "hi", "hello",
-    "早上好", "晚上好", "下午好",
+    "你好",
+    "你是谁",
+    "谢谢",
+    "再见",
+    "哈哈",
+    "嗯嗯",
+    "好的",
+    "ok",
+    "OK",
+    "hi",
+    "hello",
+    "早上好",
+    "晚上好",
+    "下午好",
 ]
+
 
 class QueryAnalysis:
     """查询分析结果"""
+
     def __init__(self, intent: QueryType, standalone_query: str):
         self.intent = intent
         self.standalone_query = standalone_query
+
 
 class QueryRouter:
     """查询路由器 — 规则优先 + LLM 兜底（同时输出意图和改写查询）"""
@@ -52,13 +79,13 @@ class QueryRouter:
         "你是一个查询分析器。根据用户问题和对话历史，完成两个任务：\n\n"
         "1. 判断问题类型：\n"
         "   - rag_qa: 基于文档内容的具体问答（需要检索相关段落）\n"
-        "   - direct: 通用概念解释，不需要文档（如\"什么是Python\"）\n"
+        '   - direct: 通用概念解释，不需要文档（如"什么是Python"）\n'
         "   - summary: 要求总结/概述整个文档\n"
         "   - out_of_scope: 闲聊或与学习无关的问题\n\n"
         "2. 如果问题依赖对话历史（含代词、省略、指代），改写为独立完整的问题。\n"
         "   如果不依赖历史，保持原样。\n\n"
         "输出 JSON 格式：\n"
-        "{{\"intent\": \"rag_qa\", \"standalone_query\": \"改写后的独立问题\"}}\n\n"
+        '{{"intent": "rag_qa", "standalone_query": "改写后的独立问题"}}\n\n'
         "{history_text}"
         "用户问题：{query}\n\n"
         "分析结果："
@@ -117,9 +144,7 @@ class QueryRouter:
                 history_parts.append(f"{role}: {content}")
             history_text = "对话历史：\n" + "\n".join(history_parts) + "\n\n"
 
-            prompt = self.ANALYZE_PROMPT.format(
-                history_text=history_text, query=query_stripped
-            )
+            prompt = self.ANALYZE_PROMPT.format(history_text=history_text, query=query_stripped)
             # 路由属轻量决策：15s 内未响应即降级为规则路径，避免拖死整条流
             response = await asyncio.wait_for(
                 llm.chat(
@@ -175,7 +200,11 @@ class QueryRouter:
             data = json.loads(response)
             intent_str = data.get("intent", "rag_qa")
             standalone = data.get("standalone_query", original_query)
-            intent = QueryType(intent_str) if intent_str in [e.value for e in QueryType] else QueryType.RAG_QA
+            intent = (
+                QueryType(intent_str)
+                if intent_str in [e.value for e in QueryType]
+                else QueryType.RAG_QA
+            )
             return QueryAnalysis(intent, standalone or original_query)
         except (json.JSONDecodeError, ValueError):
             pass
@@ -188,7 +217,11 @@ class QueryRouter:
                 data = json.loads(response[start:end])
                 intent_str = data.get("intent", "rag_qa")
                 standalone = data.get("standalone_query", original_query)
-                intent = QueryType(intent_str) if intent_str in [e.value for e in QueryType] else QueryType.RAG_QA
+                intent = (
+                    QueryType(intent_str)
+                    if intent_str in [e.value for e in QueryType]
+                    else QueryType.RAG_QA
+                )
                 return QueryAnalysis(intent, standalone or original_query)
             except (json.JSONDecodeError, ValueError):
                 pass
@@ -196,5 +229,6 @@ class QueryRouter:
         # 解析失败，用规则判断意图
         logger.warning("[Router] Failed to parse LLM response: %s", response[:100])
         return QueryAnalysis(QueryType.RAG_QA, original_query)
+
 
 query_router = QueryRouter()

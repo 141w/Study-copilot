@@ -96,6 +96,8 @@ class MessageResp(BaseModel):
     discussionTurns: list[dict] | None = None  # noqa: N815
     personas: list[dict] | None = None
     summary: str | None = None
+    thinking: list[dict] | None = None
+    reasoning: str | None = None
     created_at: str
 
 
@@ -210,8 +212,10 @@ async def get_history(
         discussion_turns = None
         personas = None
         summary = None
+        thinking = None
+        reasoning = None
         if not m.sources:
-            return sources, discussion_turns, personas, summary
+            return sources, discussion_turns, personas, summary, thinking, reasoning
         try:
             raw = json.loads(m.sources)
             if isinstance(raw, list):
@@ -224,13 +228,19 @@ async def get_history(
                     discussion_turns = turns
                 summary = raw.get("summary")
                 personas = raw.get("personas")
+                raw_thinking = raw.get("thinking")
+                if isinstance(raw_thinking, list):
+                    thinking = raw_thinking
+                raw_reasoning = raw.get("reasoning")
+                if isinstance(raw_reasoning, str):
+                    reasoning = raw_reasoning
         except Exception:
             pass
-        return sources, discussion_turns, personas, summary
+        return sources, discussion_turns, personas, summary, thinking, reasoning
 
     messages_resp = []
     for m in msgs:
-        sources, discussion_turns, personas, summary = parse_message_payload(m)
+        sources, discussion_turns, personas, summary, thinking, reasoning = parse_message_payload(m)
         messages_resp.append(
             MessageResp(
                 id=m.id,
@@ -241,6 +251,8 @@ async def get_history(
                 discussionTurns=discussion_turns,
                 personas=personas,
                 summary=summary,
+                thinking=thinking,
+                reasoning=reasoning,
                 created_at=str(m.created_at),
             )
         )
@@ -282,7 +294,9 @@ async def search_messages(
 ):
     if not req.query or not req.query.strip():
         return []
-    results = await chat_service.search_messages(db, current_user, req.query, req.session_id, req.top_k)
+    results = await chat_service.search_messages(
+        db, current_user, req.query, req.session_id, req.top_k
+    )
     return [SearchResult(**r) for r in results]
 
 
@@ -464,6 +478,7 @@ async def discuss(
     user_config = None
     if current_user:
         from app.services.config_service import get_llm_config_with_secret
+
         user_config = await get_llm_config_with_secret(db, current_user)
 
     # 可选上下文（批次10：接入 document_bundle，两种模式）
@@ -492,6 +507,7 @@ async def discuss(
         # docs/5-INTEGRATION §3.3 设计意图接入）
         try:
             from app.core.document_bundle import build_bundle_from_doc_ids
+
             bundle = await build_bundle_from_doc_ids(db, doc_ids)
             if bundle.text:
                 context = bundle.text
@@ -502,15 +518,14 @@ async def discuss(
     elif doc_ids:
         try:
             from app.core.rag_engine import rag_engine
+
             rag_result = await rag_engine.ask(
                 doc_ids=doc_ids,
                 query=req.question,
                 history=[],
                 user_config=user_config,
             )
-            context = "\n".join(
-                s.get("text", "") for s in rag_result.get("sources", [])[:5]
-            )
+            context = "\n".join(s.get("text", "") for s in rag_result.get("sources", [])[:5])
         except Exception as exc:
             logger.warning("RAG context fetch failed for discussion: %s", exc)
 
@@ -518,7 +533,7 @@ async def discuss(
     from app.core.persona_discussion import PERSONA_PRESETS
 
     needed_db_roles = set()
-    for p in (req.personas or []):
+    for p in req.personas or []:
         if not p.system_message:
             role_key = (p.role or p.name or "").lower()
             if role_key not in PERSONA_PRESETS:
@@ -547,7 +562,7 @@ async def discuss(
             db_persona_map[cp.name] = cp
 
     personas = []
-    for p in (req.personas or []):
+    for p in req.personas or []:
         p_name = p.name or ""
         p_sys = p.system_message or ""
         p_role = p.role or ""
@@ -648,6 +663,7 @@ async def discuss(
 
         try:
             from app.core.persona_discussion import discuss
+
             async for event in discuss(
                 topic=req.question,
                 personas=personas,
@@ -661,21 +677,25 @@ async def discuss(
                     active_persona_chunks[p_name] = ""
                 elif ev_type == "persona_chunk":
                     p_name = event.get("persona", "")
-                    active_persona_chunks[p_name] = active_persona_chunks.get(p_name, "") + (event.get("delta") or "")
+                    active_persona_chunks[p_name] = active_persona_chunks.get(p_name, "") + (
+                        event.get("delta") or ""
+                    )
                 elif ev_type == "persona_speak":
                     p_name = event.get("persona", "")
                     content = event.get("content") or active_persona_chunks.get(p_name, "")
                     turn_num = event.get("turn", 1)
-                    collected_turns.append({
-                        "id": f"turn-{len(collected_turns) + 1}",
-                        "persona": p_name,
-                        "avatar": event.get("avatar", "User"),
-                        "color": event.get("color", "#6366f1"),
-                        "content": content,
-                        "turn": turn_num,
-                    })
+                    collected_turns.append(
+                        {
+                            "id": f"turn-{len(collected_turns) + 1}",
+                            "persona": p_name,
+                            "avatar": event.get("avatar", "User"),
+                            "color": event.get("color", "#6366f1"),
+                            "content": content,
+                            "turn": turn_num,
+                        }
+                    )
                 elif ev_type == "summary_chunk":
-                    summary_text += (event.get("delta") or "")
+                    summary_text += event.get("delta") or ""
                 elif ev_type == "summary":
                     summary_text = event.get("content") or summary_text
                 elif ev_type == "error":

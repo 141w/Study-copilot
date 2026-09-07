@@ -45,6 +45,13 @@
                 >
                   {{ parsedInfo.isPending ? '课堂生成中' : (parsedInfo.classroomUrl ? 'AI 互动微课' : 'AI 课程') }}
                 </span>
+                <span
+                  v-if="effectiveDocCount > 0"
+                  class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-medium flex items-center gap-1"
+                >
+                  <el-icon class="w-3.5 h-3.5"><Tickets /></el-icon>
+                  引用 {{ effectiveDocCount }} 份文档
+                </span>
               </div>
               <p v-if="parsedInfo.displayText" class="text-sm text-[var(--text-muted)] mt-1.5 max-w-2xl leading-relaxed">
                 {{ parsedInfo.displayText }}
@@ -52,7 +59,12 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <a v-if="parsedInfo.classroomUrl" :href="parsedInfo.classroomUrl" target="_blank">
+            <router-link v-if="parsedInfo.classroomUrl && parsedInfo.classroomUrl.startsWith('/')" :to="parsedInfo.classroomUrl">
+              <el-button type="success" size="small">
+                <el-icon class="mr-1"><VideoPlay /></el-icon>进入 AI 课堂
+              </el-button>
+            </router-link>
+            <a v-else-if="parsedInfo.classroomUrl" :href="parsedInfo.classroomUrl" target="_blank">
               <el-button type="success" size="small">
                 <el-icon class="mr-1"><VideoPlay /></el-icon>进入 AI 课堂
               </el-button>
@@ -101,7 +113,12 @@
               </p>
             </div>
 
-            <a v-if="parsedInfo.classroomUrl" :href="parsedInfo.classroomUrl" target="_blank" class="flex-shrink-0">
+            <router-link v-if="parsedInfo.classroomUrl && parsedInfo.classroomUrl.startsWith('/')" :to="parsedInfo.classroomUrl" class="flex-shrink-0">
+              <el-button type="primary">
+                <el-icon class="mr-1.5"><VideoPlay /></el-icon>进入 AI 互动课堂
+              </el-button>
+            </router-link>
+            <a v-else-if="parsedInfo.classroomUrl" :href="parsedInfo.classroomUrl" target="_blank" class="flex-shrink-0">
               <el-button type="primary">
                 <el-icon class="mr-1.5"><VideoPlay /></el-icon>进入 AI 互动课堂
               </el-button>
@@ -177,11 +194,10 @@
             </div>
             <el-button
               @click="removeDoc(doc.id)"
-              class="text-[var(--text-muted)] hover:text-[var(--color-error)] transition-colors"
               title="从课程移除"
               aria-label="从课程移除"
             >
-              <el-icon class="w-5 h-5"><Delete /></el-icon>
+              <el-icon class="w-4 h-4"><Delete /></el-icon>
             </el-button>
           </div>
         </div>
@@ -294,7 +310,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
 import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import { useReducedMotion } from '../composables/useReducedMotion'
-import { Reading, EditPen, Document, Delete, WarningFilled, DocumentAdd, ArrowLeft, VideoPlay } from '@/components/icons'
+import { Reading, EditPen, Document, Delete, WarningFilled, DocumentAdd, ArrowLeft, VideoPlay, Tickets } from '@/components/icons'
 import gsap from 'gsap'
 
 import { parseCourseDescription } from '../utils/course'
@@ -346,6 +362,13 @@ const courseId = computed(() => route.params.id as string)
 const course = computed(() => courseStore.currentCourse)
 const parsedInfo = computed(() => parseCourseDescription(course.value?.description))
 const loading = computed(() => courseStore.loading)
+const effectiveDocCount = computed(() => {
+  if (courseDocuments.value.length > 0) return courseDocuments.value.length
+  if (parsedInfo.value.sourceDocIds && parsedInfo.value.sourceDocIds.length > 0) {
+    return parsedInfo.value.sourceDocIds.length
+  }
+  return course.value?.document_count || 0
+})
 const courseNotes = computed<NoteDetail[]>(() =>
   noteStore.notes.filter(n => n.course_space_id === courseId.value)
 )
@@ -367,7 +390,20 @@ async function loadCourseData(): Promise<void> {
 
 async function loadCourseDocuments(): Promise<void> {
   try {
-    courseDocuments.value = await courseStore.fetchCourseDocuments(courseId.value)
+    const docs = await courseStore.fetchCourseDocuments(courseId.value)
+    if (docs && docs.length > 0) {
+      courseDocuments.value = docs
+    } else if (parsedInfo.value.sourceDocIds && parsedInfo.value.sourceDocIds.length > 0) {
+      if (documentStore.documents.length === 0) {
+        await documentStore.fetchDocuments()
+      }
+      const matched = documentStore.documents.filter(d =>
+        parsedInfo.value.sourceDocIds?.includes(d.id)
+      )
+      courseDocuments.value = matched
+    } else {
+      courseDocuments.value = []
+    }
   } catch (_e) {
     courseDocuments.value = []
   }

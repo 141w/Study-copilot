@@ -26,6 +26,7 @@ class RetrievalStrategy(str, Enum):
     MULTI_HOP = "multi_hop"
     COMPARE = "compare"
 
+
 class AdaptiveRetriever:
     """根据查询复杂度选择检索策略"""
 
@@ -72,35 +73,45 @@ class AdaptiveRetriever:
         """
         thinking_events: list[dict] = []
 
-        thinking_events.append({
-            "type": "thinking",
-            "step": "strategy_select",
-            "detail": f"检索策略：{strategy.value}",
-        })
+        thinking_events.append(
+            {
+                "type": "thinking",
+                "step": "strategy_select",
+                "detail": f"检索策略：{strategy.value}",
+            }
+        )
 
         if strategy == RetrievalStrategy.SINGLE:
             results = await rag_engine.retrieve(doc_ids, query, top_k=1)
-            thinking_events.append({
-                "type": "thinking",
-                "step": "adaptive_retrieve",
-                "detail": f"单次检索，获取 {len(results)} 条结果",
-            })
+            thinking_events.append(
+                {
+                    "type": "thinking",
+                    "step": "adaptive_retrieve",
+                    "detail": f"单次检索，获取 {len(results)} 条结果",
+                }
+            )
             return results, thinking_events
 
         elif strategy == RetrievalStrategy.STANDARD:
             results = await rag_engine.retrieve(doc_ids, query, top_k=5)
-            thinking_events.append({
-                "type": "thinking",
-                "step": "adaptive_retrieve",
-                "detail": f"标准检索，获取 {len(results)} 条结果",
-            })
+            thinking_events.append(
+                {
+                    "type": "thinking",
+                    "step": "adaptive_retrieve",
+                    "detail": f"标准检索，获取 {len(results)} 条结果",
+                }
+            )
             return results, thinking_events
 
         elif strategy == RetrievalStrategy.MULTI_HOP:
-            return await self._multi_hop_retrieve(doc_ids, query, rag_engine, user_config, thinking_events)
+            return await self._multi_hop_retrieve(
+                doc_ids, query, rag_engine, user_config, thinking_events
+            )
 
         elif strategy == RetrievalStrategy.COMPARE:
-            return await self._compare_retrieve(doc_ids, query, rag_engine, user_config, thinking_events)
+            return await self._compare_retrieve(
+                doc_ids, query, rag_engine, user_config, thinking_events
+            )
 
         # 兜底
         results = await rag_engine.retrieve(doc_ids, query, top_k=5)
@@ -124,11 +135,13 @@ class AdaptiveRetriever:
         sub_queries = await query_decomposer.decompose(query, llm)
         logger.info("[Adaptive] MULTI_HOP: decomposed into %d sub-queries", len(sub_queries))
 
-        thinking_events.append({
-            "type": "thinking",
-            "step": "query_decompose",
-            "detail": f"分解为 {len(sub_queries)} 个子问题：" + "；".join(sub_queries),
-        })
+        thinking_events.append(
+            {
+                "type": "thinking",
+                "step": "query_decompose",
+                "detail": f"分解为 {len(sub_queries)} 个子问题：" + "；".join(sub_queries),
+            }
+        )
 
         all_results = []
         for sq in sub_queries:
@@ -140,11 +153,13 @@ class AdaptiveRetriever:
         merged.sort(key=_relevance_sort_key)  # 相关度降序（兼容旧距离）
         merged = merged[:5]
 
-        thinking_events.append({
-            "type": "thinking",
-            "step": "adaptive_retrieve",
-            "detail": f"多跳检索完成，合并后 {len(merged)} 条结果",
-        })
+        thinking_events.append(
+            {
+                "type": "thinking",
+                "step": "adaptive_retrieve",
+                "detail": f"多跳检索完成，合并后 {len(merged)} 条结果",
+            }
+        )
 
         return merged, thinking_events
 
@@ -168,21 +183,25 @@ class AdaptiveRetriever:
         if not entities:
             # 提取失败，降级为标准检索
             logger.warning("[Adaptive] COMPARE: entity extraction failed, falling back to STANDARD")
-            thinking_events.append({
-                "type": "thinking",
-                "step": "compare_fallback",
-                "detail": "实体提取失败，降级为标准检索",
-            })
+            thinking_events.append(
+                {
+                    "type": "thinking",
+                    "step": "compare_fallback",
+                    "detail": "实体提取失败，降级为标准检索",
+                }
+            )
             results = await rag_engine.retrieve(doc_ids, query, top_k=5)
             return results, thinking_events
 
         logger.info("[Adaptive] COMPARE: extracted entities: %s", entities)
 
-        thinking_events.append({
-            "type": "thinking",
-            "step": "compare_entities",
-            "detail": f"提取对比实体：{'、'.join(entities)}",
-        })
+        thinking_events.append(
+            {
+                "type": "thinking",
+                "step": "compare_entities",
+                "detail": f"提取对比实体：{'、'.join(entities)}",
+            }
+        )
 
         all_results = []
         for entity in entities:
@@ -195,12 +214,15 @@ class AdaptiveRetriever:
         merged.sort(key=_relevance_sort_key)  # 相关度降序（兼容旧距离）
         merged = merged[:5]
 
-        thinking_events.append({
-            "type": "thinking",
-            "step": "adaptive_retrieve",
-            "detail": f"对比检索完成，合并后 {len(merged)} 条结果",
-        })
+        thinking_events.append(
+            {
+                "type": "thinking",
+                "step": "adaptive_retrieve",
+                "detail": f"对比检索完成，合并后 {len(merged)} 条结果",
+            }
+        )
 
         return merged, thinking_events
+
 
 adaptive_retriever = AdaptiveRetriever()

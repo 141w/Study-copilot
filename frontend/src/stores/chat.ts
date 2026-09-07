@@ -54,6 +54,7 @@ export interface ChatStreamMessage {
   created_at?: string
   isStreaming?: boolean
   thinking?: string | ThinkingStep[]
+  reasoning?: string
   /** Discussion mode: per-persona content (legacy compatibility) */
   personas?: DiscussionPersona[]
   /** Discussion mode: chronological timeline turns */
@@ -244,6 +245,8 @@ export const useChatStore = defineStore('chat', () => {
       used_source_indices: [],
       filtered_sources: [],
       expandedSources: false,
+      thinking: [],
+      reasoning: '',
       created_at: new Date().toISOString(),
       isStreaming: true // 标记为流式加载中
     })
@@ -339,6 +342,13 @@ export const useChatStore = defineStore('chat', () => {
                 const m = messages.value[msgIdx]
                 if (!Array.isArray(m.thinking)) m.thinking = []
                 m.thinking.push({ step: data.step!, detail: data.detail! })
+              }
+            } else if (data.type === 'reasoning') {
+              // 模型原生 CoT 深度思考流 (DeepSeek-R1 / o1 / QwQ 等)
+              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+              if (msgIdx !== -1) {
+                const m = messages.value[msgIdx]
+                m.reasoning = (m.reasoning || '') + (data.content || '')
               }
             } else if (data.type === 'answer_refined') {
               // 答案反思后修正（替换已流式输出的内容）

@@ -34,8 +34,9 @@ class TraceIdMiddleware:
             await self.app(scope, receive, send)
             return
 
-        req_headers = {k.decode("latin-1").lower(): v.decode("latin-1")
-                       for k, v in scope.get("headers") or []}
+        req_headers = {
+            k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers") or []
+        }
         trace_id = req_headers.get("x-trace-id") or uuid.uuid4().hex
 
         token = trace_id_var.set(trace_id)

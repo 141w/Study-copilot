@@ -126,6 +126,11 @@ api.interceptors.response.use(
       return api(originalRequest)
     }
 
+    // Skip toast for intentional cancellations (cancelAll / AbortController)
+    if (error.name === 'CanceledError' || error.message === 'canceled') {
+      return Promise.reject(error)
+    }
+
     if (error.response?.data?.detail) {
       toast.error(error.response.data.detail)
     } else if (error.message) {

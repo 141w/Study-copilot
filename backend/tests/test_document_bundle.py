@@ -19,10 +19,12 @@ from app.db import Document, DocumentChunk
 
 
 async def test_build_bundle_multi_document_with_source_headers():
-    result = await build_bundle([
-        ("线性代数.pdf", "向量空间的内容"),
-        ("概率论.pdf", "概率密度的内容"),
-    ])
+    result = await build_bundle(
+        [
+            ("线性代数.pdf", "向量空间的内容"),
+            ("概率论.pdf", "概率密度的内容"),
+        ]
+    )
 
     assert result.source_names == ["线性代数.pdf", "概率论.pdf"]
     assert "【来源 1】线性代数.pdf" in result.text
@@ -49,6 +51,7 @@ async def test_build_bundle_respects_max_files():
 async def test_build_bundle_truncation_at_cjk_boundary():
     # 单文档超 1M 预算 → 截断且 truncated=True
     from app.core.document_bundle import MAX_TEXT_CHARS
+
     long_text = "这是很长的内容。" * (MAX_TEXT_CHARS // 7 + 10)  # 约 1M+ 字符
     result = await build_bundle([("大文档.txt", long_text)])
     assert result.truncated is True
@@ -102,10 +105,12 @@ async def test_build_bundle_multi_docs_no_starvation():
     """多文档打包时，短文档即使排在超大文档后面也依然被包含在输出中。"""
     huge_text = "核心概念。" * 200_000  # 约 1M+ 字符
     short_text = "这是重要的第二篇小文档结论。"
-    result = await build_bundle([
-        ("大文档.txt", huge_text),
-        ("小文档.txt", short_text),
-    ])
+    result = await build_bundle(
+        [
+            ("大文档.txt", huge_text),
+            ("小文档.txt", short_text),
+        ]
+    )
 
     assert result.truncated is True
     assert "【来源 1】大文档.txt" in result.text
@@ -135,11 +140,13 @@ async def seeded_docs(db_session):
     d2 = Document(id="bd2", user_id=user.id, filename="概率.pdf", file_path="/y", status="ready")
     db_session.add_all([d1, d2])
     await db_session.flush()
-    db_session.add_all([
-        DocumentChunk(id="bc11", document_id="bd1", content="线度独立", chunk_index=0),
-        DocumentChunk(id="bc12", document_id="bd1", content="基与坐标", chunk_index=1),
-        DocumentChunk(id="bc21", document_id="bd2", content="贝叶斯公式", chunk_index=0),
-    ])
+    db_session.add_all(
+        [
+            DocumentChunk(id="bc11", document_id="bd1", content="线度独立", chunk_index=0),
+            DocumentChunk(id="bc12", document_id="bd1", content="基与坐标", chunk_index=1),
+            DocumentChunk(id="bc21", document_id="bd2", content="贝叶斯公式", chunk_index=0),
+        ]
+    )
     await db_session.commit()
     return user
 
@@ -186,7 +193,9 @@ async def test_discuss_drops_non_owned_doc_ids(client, seeded_docs, db_session, 
         status="ready",
     )
     db_session.add(secret_doc)
-    db_session.add(DocumentChunk(id="sc1", document_id="secret-doc", content="机密内容不得外泄", chunk_index=0))
+    db_session.add(
+        DocumentChunk(id="sc1", document_id="secret-doc", content="机密内容不得外泄", chunk_index=0)
+    )
     await db_session.commit()
 
     captured: dict = {}

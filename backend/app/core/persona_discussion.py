@@ -108,6 +108,7 @@ def resolve_persona(p: dict[str, str]) -> dict[str, str]:
         "system_message": p.get("system_message", "你是课程讨论的参与者。请就主题发表见解。"),
     }
 
+
 _MAX_RETRIES = 2
 
 
@@ -166,7 +167,7 @@ def build_peer_context_section(
         speaker = h.get("speaker")
         content = h.get("content", "")
         if not speaker and content.startswith("【") and "】" in content:
-            speaker = content[1:content.index("】")]
+            speaker = content[1 : content.index("】")]
         if speaker != current_persona_name:
             peer_turns.append({"speaker": speaker or "同伴", "content": content})
 
@@ -194,11 +195,7 @@ def build_peer_context_section(
             "3. 保持思辨的深度与锐度，推动研讨向本质机理深入。"
         )
 
-    return (
-        "\n\n【前序研讨现场与同伴发言观点】\n"
-        f"{peer_summary}\n\n"
-        f"{round_instruction}"
-    )
+    return f"\n\n【前序研讨现场与同伴发言观点】\n{peer_summary}\n\n{round_instruction}"
 
 
 async def _stream_llm_response(
@@ -216,6 +213,7 @@ async def _stream_llm_response(
         cs = llm.chat_stream
         try:
             from unittest.mock import MagicMock
+
             if isinstance(cs, MagicMock):
                 # 只有当测试用例显式 mock 了 chat_stream 时才使用它
                 if cs.side_effect is not None or "return_value" in cs.__dict__:
@@ -289,7 +287,9 @@ async def discuss(
             for persona in resolved_personas:
                 # 注入同伴互辩提示词与结构化研讨历史
                 transcript = format_discussion_transcript(discussion_history)
-                peer_context = build_peer_context_section(discussion_history, persona["name"], current_round_num)
+                peer_context = build_peer_context_section(
+                    discussion_history, persona["name"], current_round_num
+                )
 
                 user_prompt = base_user_content
                 if transcript:
@@ -364,11 +364,13 @@ async def discuss(
                     }
 
                 # 记录到讨论历史（包含轮次、发言人和内容）
-                discussion_history.append({
-                    "turn": current_round_num,
-                    "speaker": persona["name"],
-                    "content": response,
-                })
+                discussion_history.append(
+                    {
+                        "turn": current_round_num,
+                        "speaker": persona["name"],
+                        "content": response,
+                    }
+                )
 
                 # 3. 触发角色发言结束事件
                 yield {

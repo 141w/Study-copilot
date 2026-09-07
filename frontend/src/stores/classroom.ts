@@ -60,5 +60,18 @@ export const useClassroomStore = defineStore('classroom', () => {
     return data
   }
 
-  return { classrooms, loading, activeJobs, fetchClassrooms, getClassroom, pollJobStatus }
+  async function fetchClassroomDetail(classroomId: string): Promise<any> {
+    const { data } = await api.get(`/classroom/${classroomId}`)
+    return data?.classroom
+  }
+
+  return {
+    classrooms,
+    loading,
+    activeJobs,
+    fetchClassrooms,
+    getClassroom,
+    pollJobStatus,
+    fetchClassroomDetail,
+  }
 })

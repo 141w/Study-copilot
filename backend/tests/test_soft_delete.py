@@ -3,6 +3,7 @@
 语义：DELETE → deleted_at 打标（文件与索引保留），列表/详情不可见；
 restore 恢复；purge 物理清除超期项。
 """
+
 import uuid
 
 import pytest
@@ -29,21 +30,21 @@ async def _make_user(db_session: AsyncSession) -> User:
 @pytest.mark.asyncio
 async def test_document_soft_delete_and_restore(db_session: AsyncSession):
     user = await _make_user(db_session)
-    db_session.add(Document(
-        id="doc-sd-1",
-        user_id=user.id,
-        filename="讲义.pdf",
-        file_path="/tmp/nonexistent-doc-sd-1.pdf",  # 软删除不触达文件
-        status="ready",
-        chunk_count=3,
-        file_size=100,
-    ))
+    db_session.add(
+        Document(
+            id="doc-sd-1",
+            user_id=user.id,
+            filename="讲义.pdf",
+            file_path="/tmp/nonexistent-doc-sd-1.pdf",  # 软删除不触达文件
+            status="ready",
+            chunk_count=3,
+            file_size=100,
+        )
+    )
     await db_session.commit()
 
     await document_service.delete_document(db_session, user, "doc-sd-1")
-    assert all(
-        d.id != "doc-sd-1" for d in await document_service.list_documents(db_session, user)
-    )
+    assert all(d.id != "doc-sd-1" for d in await document_service.list_documents(db_session, user))
     with pytest.raises(NotFoundError):
         await document_service.get_document(db_session, user, "doc-sd-1")
 
@@ -56,7 +57,8 @@ async def test_document_soft_delete_and_restore(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_note_soft_delete_restore_and_reindex_filter(
-    db_session: AsyncSession, monkeypatch,
+    db_session: AsyncSession,
+    monkeypatch,
 ):
     """删除笔记后 reindex 不应再为已删笔记产出 chunk。"""
     captured = {}
@@ -104,31 +106,41 @@ async def test_purge_removes_only_old_deleted_docs(db_session: AsyncSession):
     old_del = now - timedelta(days=40)
     recent_del = now - timedelta(days=1)
 
-    db_session.add(Document(
-        id="doc-purge-old-" + uuid.uuid4().hex[:6],
-        user_id=user.id, filename="old.pdf",
-        file_path="/tmp/definitely-missing-old.pdf", status="ready", deleted_at=old_del,
-    ))
-    db_session.add(Document(
-        id="doc-purge-recent-" + uuid.uuid4().hex[:6],
-        user_id=user.id, filename="new.pdf",
-        file_path="/tmp/definitely-missing-new.pdf", status="ready", deleted_at=recent_del,
-    ))
-    db_session.add(Document(
-        id="doc-alive-" + uuid.uuid4().hex[:6],
-        user_id=user.id, filename="alive.pdf",
-        file_path="/tmp/definitely-missing-alive.pdf", status="ready",
-    ))
+    db_session.add(
+        Document(
+            id="doc-purge-old-" + uuid.uuid4().hex[:6],
+            user_id=user.id,
+            filename="old.pdf",
+            file_path="/tmp/definitely-missing-old.pdf",
+            status="ready",
+            deleted_at=old_del,
+        )
+    )
+    db_session.add(
+        Document(
+            id="doc-purge-recent-" + uuid.uuid4().hex[:6],
+            user_id=user.id,
+            filename="new.pdf",
+            file_path="/tmp/definitely-missing-new.pdf",
+            status="ready",
+            deleted_at=recent_del,
+        )
+    )
+    db_session.add(
+        Document(
+            id="doc-alive-" + uuid.uuid4().hex[:6],
+            user_id=user.id,
+            filename="alive.pdf",
+            file_path="/tmp/definitely-missing-alive.pdf",
+            status="ready",
+        )
+    )
     await db_session.commit()
 
-    purged = await document_service.purge_deleted_documents(
-        db_session, user, older_than_days=30
-    )
+    purged = await document_service.purge_deleted_documents(db_session, user, older_than_days=30)
     assert purged == 1
 
-    remaining = {
-        d.id: d for d in await document_service.list_documents(db_session, user)
-    }
+    remaining = {d.id: d for d in await document_service.list_documents(db_session, user)}
     assert len(remaining) == 1  # recent-deleted 在回收站不可见但未被物理清除
     alive_id = list(remaining)[0]
     assert alive_id.startswith("doc-alive-")

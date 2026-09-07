@@ -28,8 +28,9 @@ async def get_metrics(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
 
     rows = (
         await db.execute(
-            select(AsyncTask.status, func.count(AsyncTask.id).label("cnt"))
-            .group_by(AsyncTask.status)
+            select(AsyncTask.status, func.count(AsyncTask.id).label("cnt")).group_by(
+                AsyncTask.status
+            )
         )
     ).all()
 

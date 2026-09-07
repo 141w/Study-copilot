@@ -21,6 +21,7 @@ def _user(suffix: str = "") -> User:
 
 def _doc(user_id: str, deleted: bool = False) -> Document:
     from datetime import UTC, datetime
+
     return Document(
         id=str(uuid.uuid4()),
         user_id=user_id,
@@ -160,8 +161,14 @@ async def test_generate_course_full_flow(db_session: AsyncSession):
         }
     ]
 
-    with patch.object(course_generator, "generate_outline", new_callable=AsyncMock) as mock_outline_fn, \
-         patch("app.core.quiz_generator.QuizGenerator.generate_quizzes", new_callable=AsyncMock) as mock_quiz_fn:
+    with (
+        patch.object(
+            course_generator, "generate_outline", new_callable=AsyncMock
+        ) as mock_outline_fn,
+        patch(
+            "app.core.quiz_generator.QuizGenerator.generate_quizzes", new_callable=AsyncMock
+        ) as mock_quiz_fn,
+    ):
         mock_outline_fn.return_value = mock_outline
         mock_quiz_fn.return_value = mock_quiz
 
@@ -173,3 +180,25 @@ async def test_generate_course_full_flow(db_session: AsyncSession):
         assert len(course["quizzes"]) == 1
         assert course["quizzes"][0]["section_id"] == "sec-1"
         assert course["quizzes"][0]["section_title"] == "Neural Networks"
+
+
+def test_build_refined_image_prompt():
+    prompt_cover = course_generator.build_refined_image_prompt(
+        title="深度学习实战",
+        context_details="神经网络反向传播与梯度下降",
+        is_cover=True,
+    )
+    assert "深度学习实战" in prompt_cover
+    assert "isometric 3D" in prompt_cover
+    assert "strictly no text" in prompt_cover
+
+    # Custom prompt wrapping
+    custom = "A floating robotic arm assembling glowing neural circuits"
+    prompt_custom = course_generator.build_refined_image_prompt(
+        title="机器人学",
+        is_cover=False,
+        custom_prompt=custom,
+    )
+    assert custom in prompt_custom
+    assert "strictly no text" in prompt_custom
+
