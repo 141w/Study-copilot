@@ -123,7 +123,7 @@ async def upload_document(
         db, user.id, "document_process", {"doc_id": doc_id, "filename": filename}
     )
     try:
-        await enqueue(task.id, user.id, "document_process", {"doc_id": doc_id})
+        await enqueue(task.id, user.id, "document_process", {"doc_id": doc_id, "filename": filename})
         logger.info("Document %s queued for background processing", doc_id)
         return {
             "id": doc_id,
@@ -291,7 +291,7 @@ async def reprocess_document(
         db, user.id, "document_process", {"doc_id": doc_id, "filename": doc.filename}
     )
     try:
-        await enqueue(task.id, user.id, "document_process", {"doc_id": doc_id})
+        await enqueue(task.id, user.id, "document_process", {"doc_id": doc_id, "filename": doc.filename})
         logger.info("Document %s re-queued for background processing", doc_id)
         return {
             "id": doc_id,

@@ -258,9 +258,9 @@
               <div class="grid grid-cols-3 gap-3.5">
                 <!-- 亮色 -->
                 <div
-                  class="card p-3 cursor-pointer border-2 transition-all text-center flex flex-col items-center gap-2"
+                  class="card p-3 cursor-pointer border-2 transition-all text-center flex flex-col items-center gap-1.5"
                   :class="themeStore.theme === 'light' ? 'border-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)] hover:border-[var(--border-hover)]'"
-                  @click="themeStore.setTheme('light')"
+                  @click="onSelectTheme('light')"
                 >
                   <div class="w-full h-12 rounded-lg bg-[#f0f0fa] border border-[#e0e0e8] flex items-center justify-center shadow-inner">
                     <span class="w-4 h-4 rounded-full bg-[#000000]"></span>
@@ -272,9 +272,9 @@
 
                 <!-- 暗色 -->
                 <div
-                  class="card p-3 cursor-pointer border-2 transition-all text-center flex flex-col items-center gap-2"
+                  class="card p-3 cursor-pointer border-2 transition-all text-center flex flex-col items-center gap-1.5"
                   :class="themeStore.theme === 'dark' ? 'border-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)] hover:border-[var(--border-hover)]'"
-                  @click="themeStore.setTheme('dark')"
+                  @click="onSelectTheme('dark')"
                 >
                   <div class="w-full h-12 rounded-lg bg-[#000000] border border-[#3a3a3f] flex items-center justify-center shadow-inner">
                     <span class="w-4 h-4 rounded-full bg-[#ffffff]"></span>
@@ -286,9 +286,9 @@
 
                 <!-- 跟随系统 -->
                 <div
-                  class="card p-3 cursor-pointer border-2 transition-all text-center flex flex-col items-center gap-2"
+                  class="card p-3 cursor-pointer border-2 transition-all text-center flex flex-col items-center gap-1.5"
                   :class="themeStore.theme === 'system' ? 'border-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)] hover:border-[var(--border-hover)]'"
-                  @click="themeStore.setTheme('system')"
+                  @click="onSelectTheme('system')"
                 >
                   <div class="w-full h-12 rounded-lg bg-gradient-to-r from-[#f0f0fa] to-[#000000] border border-[var(--border-default)] flex items-center justify-center shadow-inner">
                     <el-icon class="text-[var(--text-primary)]"><Setting /></el-icon>
@@ -296,6 +296,9 @@
                   <div class="flex items-center gap-1.5 text-xs font-medium text-[var(--text-primary)]">
                     跟随系统
                   </div>
+                  <span class="text-[10px] text-[var(--text-muted)]">
+                    当前匹配: {{ themeStore.systemTheme === 'dark' ? '暗色' : '亮色' }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -544,6 +547,17 @@ const activeTab = ref('profile')
 const llmModelName = computed(() => chatStore.config.modelName || '默认推理模型')
 const embeddingModelName = ref('shibing624/text2vec-base-chinese (768维)')
 const messageFormat = computed(() => chatStore.config.messageFormat || 'openai')
+
+// ── 主题外观选择 ──
+function onSelectTheme(value: 'light' | 'dark' | 'system'): void {
+  themeStore.setTheme(value)
+  if (value === 'system') {
+    const sysState = themeStore.systemTheme === 'dark' ? '暗色' : '亮色'
+    toast.success(`已切换为跟随系统（当前系统匹配：${sysState}）`)
+  } else {
+    toast.success(value === 'dark' ? '已切换为暗色模式' : '已切换为亮色模式')
+  }
+}
 
 // ── 头像上传与控制 ──
 const avatarInputRef = ref<HTMLInputElement | null>(null)

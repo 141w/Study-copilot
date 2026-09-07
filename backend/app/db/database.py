@@ -144,7 +144,7 @@ class Quiz(Base):
     __tablename__ = "quizzes"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    # 批次9修复：课堂来源测验（OpenMAIC 导入）无关联文档，原 NOT NULL 会让
+    # 批次9修复：课堂来源测验（AI 互动课堂导入）无关联文档，原 NOT NULL 会让
     # sync_quiz_results 的 INSERT 直接 IntegrityError（测试 SQLite 不强制
     # FK 掩盖了该缺陷，生产 PostgreSQL 必炸）。analysis_service 已按
     # `r.document_id or ""` 防御空值，放开可空不影响既有查询
@@ -191,6 +191,7 @@ class UserLLMConfig(Base):
     message_format: Mapped[str] = mapped_column(
         String, default="openai"
     )  # openai | anthropic | gemini | ollama
+    extra_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,

@@ -17,7 +17,7 @@ backend/
 │   │   ├── document.py                # POST /upload, GET /, DELETE /{id}
 │   │   ├── metrics.py                 # Operational metrics (task counts)
 │   │   ├── notes.py                   # CRUD notes + tags + semantic search
-│   │   ├── openmaic_bridge.py         # OpenMAIC classroom platform REST bridge
+│   │   ├── classroom_api.py           # AI interactive classroom REST endpoints
 │   │   ├── quiz.py                    # POST /generate, /submit, GET /wrong-questions
 │   │   ├── tasks.py                   # Async task management
 │   │   ├── transform.py               # Content transformation endpoints (8 types)
@@ -65,7 +65,7 @@ backend/
 │   │   ├── course_service.py          # Course space management + document associations
 │   │   ├── document_service.py        # upload_document, delete_document, list_documents
 │   │   ├── note_service.py            # Note CRUD + tagging + semantic search
-│   │   ├── openmaic_service.py        # OpenMAIC classroom platform integration
+│   │   ├── classroom_service.py       # AI interactive classroom platform integration
 │   │   ├── quiz_service.py            # generate_quiz, submit_quiz, get_wrong_questions
 │   │   ├── task_service.py            # Async task queue (create, get_status, list, cancel)
 │   │   └── transform_service.py       # Content transformations orchestration
@@ -104,7 +104,7 @@ backend/
 │   ├── test_logging_config.py
 │   ├── test_metrics.py
 │   ├── test_note_indexing.py
-│   ├── test_openmaic_integration.py
+│   ├── test_classroom_integration.py
 │   ├── test_persona_discussion.py
 │   ├── test_profile.py
 │   ├── test_quiz.py
@@ -357,13 +357,10 @@ pytest tests/ -v           # Run tests
 | GET | `/api/tasks/{id}` | Get task status |
 | DELETE | `/api/tasks/{id}` | Cancel task |
 | GET | `/api/config/llm` | Get user's LLM config |
-| POST | `/api/config/llm` | Update user's LLM config |
-| PUT | `/api/config/llm` | Update user's LLM config |
-| POST | `/api/integrations/openmaic/classroom` | Initiate OpenMAIC classroom generation (with image gen flag) |
-| GET | `/api/integrations/openmaic/classroom/{job_id}/status` | Get classroom generation status & dual-channel auto-sync |
-| GET | `/api/integrations/openmaic/classrooms` | List generated classrooms |
-| POST | `/api/integrations/openmaic/webhook` | OpenMAIC callback endpoint |
-| POST | `/api/integrations/openmaic/quiz/import` | Import OpenMAIC quiz results into error book |
+| POST | `/api/classroom/generate` | Initiate AI interactive classroom generation |
+| GET | `/api/classroom/{job_id}/status` | Get classroom generation status & dual-channel auto-sync |
+| GET | `/api/classroom/list` | List generated classrooms |
+| POST | `/api/classroom/webhook` | Classroom callback endpoint |
 | GET | `/` | App info |
 | GET | `/health` | Health check |
 | GET | `/api/metrics` | Operational metrics (task counts by status) |

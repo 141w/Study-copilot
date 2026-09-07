@@ -294,3 +294,111 @@ async def test_detect_llm_specs_endpoint(client, db_session: AsyncSession):
     assert data2["context_window"] == 262144  # 256k default
     assert data2["source"] == "default_256k"
 
+
+@pytest.mark.asyncio
+async def test_classroom_config_roundtrip_and_encryption(db_session: AsyncSession):
+    """验证 AI 互动课堂专属多模态配置的存储、Fernet 加密与掩码回显。"""
+    user = User(
+        id="user-classroom-cfg-test",
+        username="cls_user",
+        email="cls@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    # 1. 首次创建带有课堂图像模型配置
+    cls_input = {
+        "use_custom_llm": False,
+        "image_enabled": True,
+        "image_provider": "siliconflow",
+        "image_model": "black-forest-labs/FLUX.1-schnell",
+        "image_base_url": "https://api.siliconflow.cn/v1",
+        "image_api_key": "sk-siliconflow-secret-12345",
+        "image_size": "1024x1024",
+    }
+    created = await config_service.create_or_update_llm_config(
+        db_session,
+        user,
+        provider="openai",
+        api_key="sk-main-key",
+        base_url="https://api.openai.com/v1",
+        model_name="step-3.7-flash",
+        temperature=0.7,
+        max_tokens=2048,
+        embedding_model="shibing624/text2vec-base-chinese",
+        embedding_dimension=768,
+        classroom_config=cls_input,
+    )
+
+    cls_out = created.get("classroom_config") or {}
+    assert cls_out["image_enabled"] is True
+    assert cls_out["has_image_api_key"] is True
+    assert cls_out["image_api_key_masked"] == "sk-***2345"
+    assert "image_api_key" not in cls_out or cls_out.get("image_api_key") is None
+
+    # 2. 内部解密服务能正确获取明文
+    secret_cfg = await config_service.get_llm_config_with_secret(db_session, user)
+    sec_cls = secret_cfg.get("classroom_config") or {}
+    assert sec_cls["image_api_key"] == "sk-siliconflow-secret-12345"
+
+    # 3. 更新时不传 image_api_key 应安全保留原有加密 key
+    updated = await config_service.update_llm_config(
+        db_session,
+        user,
+        provider="openai",
+        api_key=None,
+        base_url="https://api.openai.com/v1",
+        model_name="step-3.7-flash",
+        temperature=0.7,
+        max_tokens=2048,
+        embedding_model="shibing624/text2vec-base-chinese",
+        embedding_dimension=768,
+        classroom_config={"image_enabled": True, "image_size": "1280x720"},
+    )
+    up_cls = updated.get("classroom_config") or {}
+    assert up_cls["image_size"] == "1280x720"
+    assert up_cls["has_image_api_key"] is True
+    assert up_cls["image_api_key_masked"] == "sk-***2345"
+
+    secret_cfg2 = await config_service.get_llm_config_with_secret(db_session, user)
+    assert secret_cfg2["classroom_config"]["image_api_key"] == "sk-siliconflow-secret-12345"
+
+
+@pytest.mark.asyncio
+async def test_image_connectivity_endpoint(client, db_session: AsyncSession):
+    """测试 POST /api/config/test-image 连通性测试接口。"""
+    user = User(
+        id="user-img-test",
+        username="img_user",
+        email="img@t.com",
+        password_hash="x" * 60,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    token = create_access_token(data={"sub": user.id, "type": "access"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 模拟 mock 连通性测试
+    with patch("app.core.image_generator.httpx.AsyncClient.get") as mock_get:
+        mock_resp = AsyncMock()
+        mock_resp.status_code = 200
+        mock_get.return_value = mock_resp
+
+        resp = await client.post(
+            "/api/config/test-image",
+            json={
+                "image_provider": "siliconflow",
+                "image_api_key": "sk-test-img",
+                "image_base_url": "https://api.siliconflow.cn/v1",
+                "image_model": "black-forest-labs/FLUX.1-schnell",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "图像服务连通正常" in data["message"]
+
+

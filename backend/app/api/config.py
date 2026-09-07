@@ -150,6 +150,7 @@ class LLMConfigReq(BaseModel):
     embedding_model: str = "shibing624/text2vec-base-chinese"
     embedding_dimension: int = 768
     message_format: str = "openai"
+    classroom_config: dict[str, Any] | None = None
 
 
 class LLMConfigResp(BaseModel):
@@ -165,6 +166,7 @@ class LLMConfigResp(BaseModel):
     message_format: str = "openai"
     has_api_key: bool = False
     api_key_masked: str | None = None
+    classroom_config: dict[str, Any] | None = None
     created_at: str
     updated_at: str
 
@@ -221,6 +223,7 @@ async def create_llm_config(
         req.embedding_dimension,
         message_format=req.message_format,
         context_window=effective_ctx,
+        classroom_config=req.classroom_config,
     )
     return LLMConfigResp(**data)
 
@@ -265,6 +268,7 @@ async def update_llm_config(
         req.embedding_dimension,
         message_format=req.message_format,
         context_window=effective_ctx,
+        classroom_config=req.classroom_config,
     )
     return LLMConfigResp(**data)
 
@@ -476,6 +480,42 @@ async def test_llm_connection(
             success=False,
             message=f"连接失败: {str(e)}",
         )
+
+
+class ImageTestReq(BaseModel):
+    image_provider: str = "siliconflow"
+    image_api_key: str | None = None
+    image_base_url: str | None = None
+    image_model: str = "black-forest-labs/FLUX.1-schnell"
+
+
+class ImageTestResp(BaseModel):
+    success: bool
+    message: str
+    latency_ms: int = 0
+
+
+@router.post("/test-image", response_model=ImageTestResp)
+async def test_image_connection(
+    req: ImageTestReq,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """测试 AI 互动课堂专属生图服务连通性与模型有效性。"""
+    effective_key = req.image_api_key.strip() if req.image_api_key else None
+    if not effective_key:
+        secret_cfg = await config_service.get_llm_config_with_secret(db, current_user)
+        cls_cfg = secret_cfg.get("classroom_config") or {}
+        effective_key = cls_cfg.get("image_api_key")
+
+    from app.core.image_generator import test_image_connectivity
+    res = await test_image_connectivity({
+        "image_provider": req.image_provider,
+        "image_api_key": effective_key,
+        "image_base_url": req.image_base_url,
+        "image_model": req.image_model,
+    })
+    return ImageTestResp(**res)
 
 
 # 安全修复（2026-08-19）：移除 GET /llm/with-secret 端点。

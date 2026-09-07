@@ -89,7 +89,21 @@ async def update_task(
     if progress is not None:
         task.progress = min(max(progress, 0.0), 1.0)
     if result is not None:
-        task.result = json.dumps(result, ensure_ascii=False)
+        existing_result = {}
+        if task.result:
+            try:
+                existing_result = (
+                    json.loads(task.result)
+                    if isinstance(task.result, str)
+                    else dict(task.result)
+                )
+            except Exception:
+                existing_result = {}
+        if isinstance(result, dict) and isinstance(existing_result, dict):
+            merged = {**existing_result, **result}
+            task.result = json.dumps(merged, ensure_ascii=False)
+        else:
+            task.result = json.dumps(result, ensure_ascii=False)
     if error is not None:
         task.error = error
 

@@ -4,9 +4,9 @@ Revision ID: b9a8c7d6e5f4
 Revises: c8e2c0c3c258
 Create Date: 2026-09-05
 
-Opens quizzes.document_id to NULL: OpenMAIC classroom-imported quizzes
+Opens quizzes.document_id to NULL: AI classroom-imported quizzes
 have no associated document. The NOT NULL constraint made
-openmaic_service.sync_quiz_results fail with IntegrityError on
+classroom_service.sync_quiz_results fail with IntegrityError on
 PostgreSQL (SQLite test runs don't enforce FKs, masking the bug).
 """
 

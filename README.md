@@ -64,7 +64,7 @@
 | Prompt 模板化 | Jinja2 模板管理 28 个 LLM prompt | ✅ v3 |
 | 设计系统 | CSS 变量系统（间距、字体、颜色、样式） | ✅ v3 |
 | 对话历史语义搜索 | 基于 pgvector 的消息 embedding，支持跨对话语义检索 | ✅ 新增 |
-| OpenMAIC 联动 | 一键生成 AI 课堂（接入清华 OpenMAIC 平台，支持配图）+ 4人设多智能体讨论模式 + 双通道自愈轮询 | ✅ v3.2 |
+| AI 互动课堂 | 内置 AI 互动微课引擎，一键从文档生成交互式微课（支持配图）+ 多智能体讨论模式 + 双通道自愈轮询 | ✅ v3.2 |
 | AI 课程生成 | 基于文档自动生成课程大纲 + 测验题（本地引擎） | ✅ v3.2 |
 | 多文档问答 | 多文档 CJK 布包，跨文档 RAG 检索 | ✅ v3.2 |
 
@@ -84,8 +84,8 @@
 │                         前端 (Vue3 + Vite)                        │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐ │
 │  │ 登录/注册  │ │ 文档管理  │ │ 智能问答  │ │ 在线做题  │ │ 学习  │ │
-│  │          │ │ (OpenMAIC│ │ (讨论模式)│ │ (AI生成) │ │ 分析  │ │
-│  │          │ │  课堂生成)│ │          │ │          │ │(课堂) │ │
+│  │          │ │(互动课堂)│ │ (讨论模式)│ │ (AI生成) │ │ 分析  │ │
+│  │          │ │          │ │          │ │          │ │(课堂) │ │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └───────┘ │
 │                              │                                    │
 │                         Pinia 状态管理                            │
@@ -98,8 +98,8 @@
 ┌──────────────────────────────┼───────────────────────────────────┐
 │                         后端 (FastAPI)                            │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────┐ │
-│  │ 认证系统   │ │ 文档API  │ │ 问答API  │ │ 出题API  │ │OpenMAIC│ │
-│  │          │ │          │ │(讨论模式)│ │(课程生成)│ │ Bridge │ │
+│  │ 认证系统   │ │ 文档API  │ │ 问答API  │ │ 出题API  │ │课堂引擎│ │
+│  │          │ │          │ │(讨论模式)│ │(课程生成)│ │Classroom│ │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └───┬───┘ │
 │       └───────────┴────────────┴────────────┴─────────────┘     │
 │                              │                                    │
@@ -124,12 +124,11 @@
         │                                         │
         │  REST API + Webhook                     │  optional
         ▼                                         ▼
-┌─────────────────────┐               ┌──────────────────────────┐
-│   OpenMAIC 平台      │               │  AI 课堂（多智能体编排）  │
-│  (THU OpenMAIC)     │               │  教师 / 同学 / 助教角色  │
-│  LangGraph 编排      │               │  交互实验 + 测验 + TTS   │
-│  generate-classroom  │               └──────────────────────────┘
-└─────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                 内置 AI 互动课堂引擎 (classroom/)             │
+│        多智能体课堂编排 + 交互课件幻灯片 + 嵌入式随堂测验        │
+│        教师 / 助教 / 学霸角色协同 + 智能配图 + 双通道自愈同步     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -206,7 +205,7 @@ study-copilot/
 │   │   │   ├── tasks.py           # 异步任务管理接口
 │   │   │   ├── config.py          # LLM 配置存储
 │   │   │   ├── metrics.py         # 运营指标端点
-│   │   │   └── openmaic_bridge.py # OpenMAIC 课堂联动（清华平台集成）
+│   │   │   └── classroom_api.py   # AI 互动课堂引擎接口
 │   │   │
 │   │   ├── core/                   # 核心业务逻辑
 │   │   │   ├── document_parser.py # 统一文档解析（PDF/DOCX/PPTX/TXT）
@@ -244,7 +243,7 @@ study-copilot/
 │   │   │   ├── transform_service.py # 内容转换服务
 │   │   │   ├── task_service.py     # 异步任务服务
 │   │   │   ├── config_service.py   # 配置服务
-│   │   │   └── openmaic_service.py # OpenMAIC 联动服务
+│   │   │   └── classroom_service.py # AI 互动课堂引擎服务
 │   │   │
 │   │   ├── db/                     # 数据库层
 │   │   │   ├── database.py        # SQLAlchemy 异步配置 + ORM 模型
@@ -328,9 +327,9 @@ study-copilot/
 │   │   │   │   ├── EmptyState.vue        # 空状态占位
 │   │   │   │   ├── PageHeader.vue        # 页面头部+面包屑
 │   │   │   │   └── SkeletonList.vue      # 骨架屏加载
-│   │   │   ├── integrations/      # 集成组件
-│   │   │   │   ├── ClassroomBridgeDialog.vue # 课堂平台集成
-│   │   │   │   └── OpenMAICLinkCard.vue       # OpenMAIC 内容卡片
+│   │   │   ├── classroom/         # AI 互动课堂组件
+│   │   │   │   ├── GenerateClassroomDialog.vue # 课堂生成弹窗
+│   │   │   │   └── ClassroomCard.vue          # 互动课堂卡片
 │   │   │   └── chat/              # 聊天组件
 │   │   │       ├── ChatInput.vue  # 消息输入
 │   │   │       └── ChatHistoryPanel.vue # 聊天历史面板
@@ -338,12 +337,12 @@ study-copilot/
 │   │   ├── stores/                 # 11 个 Pinia store（全部 TypeScript）
 │   │   │   ├── auth.ts            # 认证状态
 │   │   │   ├── chat.ts            # 问答状态（SSE 流式 + abort）
+│   │   │   ├── classroom.ts       # AI 互动课堂状态
 │   │   │   ├── config.ts          # LLM 配置状态
 │   │   │   ├── course.ts          # 课程空间状态（30s 缓存）
 │   │   │   ├── document.ts        # 文档状态（30s 缓存 + 去重）
 │   │   │   ├── note.ts            # 笔记状态（30s 缓存）
 │   │   │   ├── quiz.ts            # 做题状态（30s 缓存）
-│   │   │   ├── openmaic.ts        # OpenMAIC 联动状态
 │   │   │   ├── sidebar.ts         # 侧边栏状态
 │   │   │   ├── theme.ts           # 主题状态
 │   │   │   └── toast.ts           # 提示状态
@@ -678,15 +677,14 @@ cd frontend && npm run dev
 | `/api/tasks/{id}` | GET | 获取任务状态和结果 | JWT |
 | `/api/tasks/{id}` | DELETE | 取消任务 | JWT |
 
-### OpenMAIC 联动接口
+### AI 互动课堂接口
 
 | 接口 | 方法 | 功能 | 认证 |
 |------|------|------|------|
-| `/api/integrations/openmaic/classroom` | POST | 发起课堂生成（接入清华 OpenMAIC，支持配图开关） | JWT |
-| `/api/integrations/openmaic/classroom/{job_id}/status` | GET | 查询课堂生成状态并自动双通道自愈同步课程与测验 | JWT |
-| `/api/integrations/openmaic/classrooms` | GET | 列出已生成课堂 | JWT |
-| `/api/integrations/openmaic/webhook` | POST | OpenMAIC 回调端点 | 否 |
-| `/api/integrations/openmaic/quiz/import` | POST | 导入 OpenMAIC 课堂测验结果到本地错题系统 | JWT |
+| `/api/classroom/generate` | POST | 发起 AI 互动课堂生成（支持配图开关） | JWT |
+| `/api/classroom/{job_id}/status` | GET | 查询课堂生成状态并自动双通道自愈同步课程与测验 | JWT |
+| `/api/classroom/list` | GET | 列出当前用户的 AI 互动课堂 | JWT |
+| `/api/classroom/webhook` | POST | 课堂引擎回调端点 | 签名 |
 
 ---
 
@@ -1230,20 +1228,20 @@ docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn
 
 ## 更新日志
 
-### v3.2.0 — OpenMAIC 联动 & 本地课程生成 & 讨论模式
+### v3.2.0 — AI 互动课堂 & 本地课程生成 & 讨论模式
 
 #### 新增功能
-- **OpenMAIC 课堂生成**：接入清华 OpenMAIC 平台，一键创建 AI 课堂，含瑞格 pg肚子里根节点生成逻辑
+- **AI 互动课堂生成**：内置微课引擎，一键从文档创建结构化交互课堂课件，智能关联大纲与测验
 - **多智能体讨论模式**：基于 `persona_discussion.py` 引擎，支持教师/同学/助教角色，自动交互讨论
 - **AI 课程生成**：基于 `course_generator.py` 本地引擎，从文档自动生成课程大纲 + 测验题
 - **多文档 CJK 布包**：`document_bundle.py` 实现跨文档 CJK token 预算打包，优化多文档 RAG 检索
-- **OpenMAIC 联动 UI**：`ClassroomBridgeDialog.vue` + `OpenMAICLinkCard.vue` 组件，`openmaic.ts` store 管理状态
+- **AI 互动课堂 UI**：`GenerateClassroomDialog.vue` + `ClassroomCard.vue` 组件，`classroom.ts` store 管理状态
 - **Bot 形象引擎**：`CopilotBotAvatar.vue` 组件 + 运行时主题模板系统
 - **用户资料页**：`ProfileView.vue`（`/profile`）支持查看和编辑个人资料
 - **通用基础组件**：`ConfirmDialog`、`DocumentPicker`、`EmptyState`、`PageHeader`、`SkeletonList`
 
 #### 技术细节
-- `openmaic_bridge.py`：REST 端点 + OpenMAIC 回调 webhook
+- `classroom_api.py`：REST 端点 + 课堂引擎回调 webhook
 - `CLAUDE.md`：前端、后端、核心模块三份独立架构文档
 - Markdown-it 类型声明：`markdown-it.d.ts`
 
@@ -1377,4 +1375,4 @@ MIT License - 欢迎开源贡献！
 - [集成指南](docs/5-INTEGRATION/index.md) — 外部系统集成
 - [Agentic RAG 方案](docs/AGENTIC_RAG_PLAN.md) — RAG 架构演进计划
 - [上下文优化计划](docs/CONTEXT_OPTIMIZATION_PLAN.md) — 上下文窗口优化
-- [OpenMAIC 对比](docs/comparison-with-open-notebook.md) — 平台特性对比
+- [AI 互动课堂架构](docs/5-INTEGRATION/ai-classroom-engine.md) — 内置 AI 互动课堂引擎架构与指南

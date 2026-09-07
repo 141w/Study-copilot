@@ -93,7 +93,7 @@ async def test_discuss_stream_lifecycle():
 
 
 def test_build_peer_context_section():
-    """测试 OpenMAIC peer-context 算法提取与互辩提示生成。"""
+    """测试 peer-context 算法提取与互辩提示生成。"""
     from app.core.persona_discussion import build_peer_context_section
 
     # 空历史返回空字符串

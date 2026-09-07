@@ -135,12 +135,38 @@ export const useConfigStore = defineStore('config', () => {
     }
   }
 
+  async function testImageConfig(testData: {
+    image_provider: string
+    image_api_key?: string
+    image_base_url?: string
+    image_model: string
+  }): Promise<{
+    success: boolean
+    message: string
+    latency_ms?: number
+  }> {
+    try {
+      const response = await api.post<{
+        success: boolean
+        message: string
+        latency_ms?: number
+      }>('/config/test-image', testData)
+      return response.data
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || '网络连接异常'
+      }
+    }
+  }
+
   return {
     loading,
     fetchLLMConfig,
     saveLLMConfig,
     syncToChatStore,
     testLLMConfig,
+    testImageConfig,
     getSystemStatus,
     detectLLMCapabilities
   }

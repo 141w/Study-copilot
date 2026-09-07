@@ -175,7 +175,7 @@ async def _run_document_process(job, db):
     """Parse -> chunk -> index a document in background."""
     from sqlalchemy import select
 
-    from app.db import User
+    from app.db import Document, User
     from app.services.document_service import _do_process_document
 
     doc_id = job.payload.get("doc_id")
@@ -183,6 +183,9 @@ async def _run_document_process(job, db):
     user = result.scalar_one_or_none()
     if not user:
         raise ValueError("User not found")
+
+    doc = await db.get(Document, doc_id)
+    filename = doc.filename if doc else job.payload.get("filename", "")
 
     async def progress_cb(p: float, msg: str) -> None:
         try:
@@ -194,14 +197,14 @@ async def _run_document_process(job, db):
     chunk_count, method = await _do_process_document(
         db, user, doc_id, progress_callback=progress_cb
     )
-    return {"doc_id": doc_id, "chunk_count": chunk_count, "method": method}
+    return {"doc_id": doc_id, "filename": filename, "chunk_count": chunk_count, "method": method}
 
 
 async def _run_quiz_generate(job, db):
     """Generate quizzes in background."""
     from sqlalchemy import select
 
-    from app.db import User
+    from app.db import Document, User
     from app.services.quiz_service import _do_generate_quiz
 
     doc_ids = job.payload.get("document_ids", [])
@@ -212,5 +215,17 @@ async def _run_quiz_generate(job, db):
     if not user:
         raise ValueError("User not found")
 
+    doc_titles = []
+    for d_id in doc_ids:
+        doc_obj = await db.get(Document, d_id)
+        if doc_obj and doc_obj.filename:
+            doc_titles.append(doc_obj.filename)
+
     quizzes = await _do_generate_quiz(db, user, doc_ids, choice_cnt, short_cnt)
-    return {"quiz_count": len(quizzes)}
+    return {
+        "quiz_count": len(quizzes),
+        "document_ids": doc_ids,
+        "document_names": doc_titles,
+        "choice_count": choice_cnt,
+        "short_answer_count": short_cnt,
+    }

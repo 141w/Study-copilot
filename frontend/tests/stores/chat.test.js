@@ -93,4 +93,33 @@ describe('Chat Store', () => {
     expect(store.sessions).toHaveLength(1)
     expect(store.sessions[0].session_id).toBe('sess-2')
   })
+
+  it('fetchHistory loads and normalizes discussion messages', async () => {
+    const mockHistory = {
+      messages: [
+        { id: '1', role: 'user', content: 'Discuss AI ethics' },
+        {
+          id: '2',
+          role: 'discussion',
+          content: 'Full summary',
+          discussion_turns: [
+            { id: 't-1', persona: '苏老师', content: '道德优先', turn: 1 }
+          ],
+          summary: '总结结论',
+        },
+      ],
+    }
+    api.get.mockResolvedValue({ data: mockHistory })
+
+    await store.fetchHistory('sess-1')
+
+    expect(api.get).toHaveBeenCalledWith('/chat/history/sess-1')
+    expect(store.currentSession).toBe('sess-1')
+    expect(store.messages).toHaveLength(2)
+    expect(store.messages[1].role).toBe('discussion')
+    expect(store.messages[1].discussionTurns).toBeDefined()
+    expect(store.messages[1].discussionTurns).toHaveLength(1)
+    expect(store.messages[1].discussionTurns[0].persona).toBe('苏老师')
+    expect(store.messages[1].summary).toBe('总结结论')
+  })
 })

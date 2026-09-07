@@ -230,13 +230,13 @@ async def generate_course(
         "quizzes": result["quizzes"][:50],
         "source_doc_ids": result["source_doc_ids"],
         "generated": True,
-    })
+    }, ensure_ascii=False)
     await db.commit()
 
     return CourseGenResponse(
         course_id=course.id,
         title=course.name,
-        description=course.description[:200],
+        description=(outline.get("description") or outline.get("title") or course.name)[:200],
         section_count=len(outline.get("sections", [])),
         quiz_count=len(result["quizzes"]),
     )

@@ -61,7 +61,7 @@ backend/
 │   │   ├── tasks.py             # Async task queue
 │   │   ├── config.py            # LLM provider configuration
 │   │   ├── metrics.py            # Operational metrics
-│   │   └── openmaic_bridge.py    # Classroom platform integration & status self-healing
+│   │   └── classroom_api.py      # AI classroom integration & status self-healing
 │   ├── core/                    # Business logic (no HTTP concerns — 24 modules)
 │   │   ├── llm.py               # OpenAI SDK wrapper with retry/backoff
 │   │   ├── embedder.py          # sentence-transformers wrapper (async + caching)
@@ -98,7 +98,7 @@ backend/
 │   │   ├── config_service.py
 │   │   ├── transform_service.py
 │   │   ├── task_service.py
-│   │   └── openmaic_service.py
+│   │   └── classroom_service.py
 │   ├── db/                      # SQLAlchemy async engine, ORM models, Alembic
 │   ├── utils/                   # Auth helpers (password hashing, JWT)
 │   ├── config.py                # Pydantic Settings (env vars)
@@ -136,7 +136,7 @@ frontend/
 │   ├── components/              # Reusable UI
 │   │   ├── chat/                # ChatHistoryPanel, ChatInput
 │   │   ├── common/              # AppHeader, AppSidebar, DocumentPicker, EmptyState
-│   │   ├── integrations/        # ClassroomBridgeDialog, OpenMAICLinkCard
+│   │   ├── classroom/           # GenerateClassroomDialog, ClassroomCard
 │   │   ├── CopilotBotAvatar.vue
 │   │   ├── CourseCard.vue
 │   │   ├── NoteCard.vue
@@ -147,7 +147,7 @@ frontend/
 │   │   └── UrlImportDialog.vue
 │   ├── stores/                 # 11 Pinia stores (TypeScript)
 │   │   ├── auth.ts, chat.ts, config.ts, course.ts, document.ts,
-│   │   ├── note.ts, openmaic.ts, quiz.ts, sidebar.ts, theme.ts, toast.ts
+│   │   ├── note.ts, classroom.ts, quiz.ts, sidebar.ts, theme.ts, toast.ts
 │   ├── services/               # Axios API client + token refresh
 │   │   ├── api.ts
 │   │   └── authRefresh.ts

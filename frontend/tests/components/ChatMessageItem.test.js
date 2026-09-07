@@ -259,7 +259,6 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
 
     // 验证一级菜单标题与轮次统计
     expect(wrapper.text()).toContain('多角色研讨过程')
-    expect(wrapper.text()).toContain('一级菜单')
     expect(wrapper.text()).toContain('共 2 轮交锋')
     expect(wrapper.text()).toContain('第 1 轮 · 初始立论与破题')
     expect(wrapper.text()).toContain('第 2 轮 · 深度互辩与交锋')
@@ -267,14 +266,58 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.text()).toContain('第二轮论点：边界与陷阱。')
 
     // 点击一级菜单顶栏折叠
-    const collapseBtn = wrapper.find('button')
-    expect(collapseBtn.text()).toBe('收起研讨过程')
-    await collapseBtn.trigger('click')
-    expect(wrapper.text()).toContain('展开研讨过程')
+    const collapseHeader = wrapper.find('.cursor-pointer')
+    expect(collapseHeader.exists()).toBe(true)
+    await collapseHeader.trigger('click')
 
     // 即使折叠了一级讨论过程，主持人总结依然醒目可见
     expect(wrapper.text()).toContain('讨论总结')
     expect(wrapper.text()).toContain('两轮讨论核心共识总结')
+  })
+
+  it('ChatDiscussionItem 支持三级角色单条发言正文的折叠与展开', async () => {
+    const wrapper = mount(ChatDiscussionItem, {
+      props: {
+        message: {
+          id: 'disc-turn-collapse',
+          role: 'discussion',
+          content: '【学霸】：这是详尽的论述正文。',
+          discussionTurns: [
+            {
+              id: 't-collapse-1',
+              persona: '学霸',
+              avatar: 'GraduationCap',
+              color: '#10b981',
+              content: '这是详尽的论述正文。',
+              turn: 1,
+              isStreaming: false
+            }
+          ],
+          summary: '结论',
+          isStreaming: false,
+          created_at: new Date().toISOString()
+        }
+      }
+    })
+
+    // 初始状态：三级发言默认展开，显示正文与“收起”操作
+    expect(wrapper.text()).toContain('这是详尽的论述正文。')
+    expect(wrapper.text()).toContain('收起')
+
+    // 查找三级发言卡片的折叠顶栏并触发点击
+    const turnHeaders = wrapper.findAll('.cursor-pointer')
+    // turnHeaders[0] 是一级研讨容器, turnHeaders[1] 是二级轮次面板, turnHeaders[2] 是三级发言卡片顶栏
+    const turnCardHeader = turnHeaders[2]
+    expect(turnCardHeader).toBeDefined()
+    await turnCardHeader.trigger('click')
+
+    // 折叠后：显示“展开”，且包含单行文本缩略预览
+    expect(wrapper.text()).toContain('展开')
+    expect(wrapper.text()).toContain('这是详尽的论述正文。')
+
+    // 再次点击：展开恢复“收起”
+    await turnCardHeader.trigger('click')
+    expect(wrapper.text()).toContain('收起')
   })
 })
 

@@ -1,12 +1,12 @@
 """
-Document Bundle — 多文档打包为 LLM 可消费的文本。
+Document bundle — 多文档打包与文本预算分配算法。
 
-参考 OpenMAIC 的 `lib/document/bundle.ts`，做 Python 移植：
-- CJK 字符预算控制（中文环境下 1 字符 ≈ 1 token）
-- 多文档合并（最多 5 篇，150MB 上限）
-- 按章节分隔 + 来源标记
+基于两阶段公平预算控制：
+  1. 每篇文档保证基础预算（默认 1500 字符）
+  2. 剩余预算按各文档需求比例分配
+  3. 安全标点截断（句子/换行边界，避免切断中文字词）
 
-仅用于 RAG 引擎的多文档上下文增强（ask / discuss 模式）。
+仅用于 AI 课堂引擎的多文档上下文增强（ask / discuss 模式）。
 """
 
 from dataclasses import dataclass, field
@@ -34,7 +34,7 @@ SECTION_SEP = "\n\n---\n\n"
 
 
 def allocate_document_text_budgets(lengths: list[int], max_chars: int) -> list[int]:
-    """移植自 OpenMAIC lib/document/bundle.ts: allocateDocumentTextBudgets
+    """文档文本公平预算分配算法：
 
     两阶段字符预算分配：
     1. 为每篇文档预留保底预算（最多 1500 字符或总预算的 40% / N），确保多文档时不被长文档完全挤占
@@ -105,7 +105,7 @@ async def build_bundle(
 ) -> BundleResult:
     """将多个文档打包为单个文本。
 
-    采用 OpenMAIC 两阶段公平预算控制：
+    采用两阶段公平预算控制：
     - 保底预算防止长文档挤占短文档
     - 剩余预算按比例分配
     - 边界安全截断

@@ -65,7 +65,7 @@ describe('DocumentView Component', () => {
           },
           SkeletonList: true,
           TransformDialog: true,
-          ClassroomBridgeDialog: true,
+          GenerateClassroomDialog: true,
           Transition: {
             template: '<div><slot /></div>',
           },

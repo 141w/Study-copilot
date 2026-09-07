@@ -109,7 +109,7 @@ backups/
 # Agent process artifacts (not deployable)
 archive_docs/
 
-# External project references
+# External project references (not part of this codebase)
 bloub/
 
 # Design comparison reports

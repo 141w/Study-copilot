@@ -35,10 +35,10 @@ class Settings(BaseSettings):
     debug: bool = False
     encryption_key: str = ""
 
-    # OpenMAIC 联动配置
-    openmaic_base_url: str = ""            # OpenMAIC 实例地址（空 = 禁用）
-    openmaic_webhook_secret: str = ""      # webhook HMAC 签名密钥
-    openmaic_enabled: bool = False         # 联动总开关
+    # AI 互动课堂配置
+    classroom_base_url: str = "http://localhost:3001"  # AI 互动课堂服务地址
+    classroom_webhook_secret: str = ""                 # 课堂 webhook HMAC 签名密钥
+    classroom_enabled: bool = True                     # 互动课堂功能开关（默认开启）
 
     # CORS：逗号分隔的允许来源；部署到域名后必须在 .env 覆盖
     cors_origins: str = (

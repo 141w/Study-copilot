@@ -15,7 +15,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - **主题系统**: Light/Dark 主题切换，CSS 变量驱动
 - **响应式布局**: 移动端适配，自适应侧边栏，用户菜单
 - **通用组件**: AppHeader、AppSidebar、ConfirmDialog、PageHeader、SkeletonList、EmptyState、DocumentPicker
-- **功能组件**: CopilotBotAvatar、CourseCard、NoteCard、NoteEditor、TaskPanel、TransformDialog、TTSPlayer、UrlImportDialog、ChatHistoryPanel、ChatInput、ChatDiscussionItem、ChatMessageItem、ChatSourceCards、ClassroomBridgeDialog、OpenMAICLinkCard、IconSet
+- **功能组件**: CopilotBotAvatar、CourseCard、NoteCard、NoteEditor、TaskPanel、TransformDialog、TTSPlayer、UrlImportDialog、ChatHistoryPanel、ChatInput、ChatDiscussionItem、ChatMessageItem、ChatSourceCards、GenerateClassroomDialog、ClassroomCard、IconSet
 
 ### v2 / v3 Features
 - **Agentic RAG**: 查询路由、上下文感知改写、自适应检索（4种策略）、纠错检索、会话摘要、答案自我反思
@@ -27,8 +27,8 @@ This file provides architectural guidance for contributors working on Study Copi
 - **TTS 语音**: Edge TTS 朗读答案和笔记
 - **异步任务**: 批量操作，后台任务队列
 - **凭证加密**: Fernet 加密存储 API Key
-- **OpenMAIC 深度融合**: 课程文档自动生成（course_generator）, 4人设多智能体讨论（persona_discussion）, 多文档公平预算布包（document_bundle）, 双通道状态轮询与自愈（openmaic_bridge / openmaic_service）
-- **课堂桥接与配图**: ClassroomBridge 对话框（支持 AI 图像生成开关）和 OpenMAICLinkCard 前端组件
+- **AI 互动课堂原生引擎**: 内置交互微课引擎（classroom/），课程文档自动生成（course_generator），多角色研讨模式（persona_discussion），多文档公平预算布包（document_bundle），双通道状态轮询与自愈（classroom_api / classroom_service）
+- **课堂交互与配图**: GenerateClassroomDialog 对话框（支持 AI 图像生成开关）和 ClassroomCard 前端展示组件
 - **数据库迁移**: Alembic
 - **代码质量**: Ruff linter + mypy + vue-tsc
 
@@ -54,12 +54,12 @@ This file provides architectural guidance for contributors working on Study Copi
 │          Backend (FastAPI)                   │
 │          backend/ @ port 8000                │
 ├──────────────────────────────────────────────┤
-│ - 13 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis/openmaic_bridge)
+│ - 13 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis/classroom_api)
 │ - Agentic RAG (Router + Adaptive + Corrective + Reflection)
 │ - Vector search via PostgreSQL+pgvector (production)
 │ - Multi-provider LLM abstraction (OpenAI SDK)
 │ - JWT authentication (access + refresh)
-│ - 11 service orchestration modules (analysis, auth, chat, config, course, document, note, openmaic, quiz, task, transform) │
+│ - 11 service orchestration modules (analysis, auth, chat, config, course, document, note, classroom, quiz, task, transform) │
                    │
 ┌──────────────────▼───────────────────────────┐
 │          Data Layer                          │
@@ -144,7 +144,7 @@ This file provides architectural guidance for contributors working on Study Copi
 | `course_service.py` | Course CRUD, document associations, auto-generation |
 | `document_service.py` | Upload, delete, list, get documents, document bundling |
 | `note_service.py` | Notes CRUD, tagging, semantic search |
-| `openmaic_service.py` | OpenMAIC integration, course broadcasting, status polling & self-healing |
+| `classroom_service.py` | AI classroom integration, course broadcasting, status polling & self-healing |
 | `quiz_service.py` | Quiz generation, submission, history |
 | `task_service.py` | Async task CRUD, cancel, recover interrupted |
 | `transform_service.py` | Content transformation orchestration |
@@ -153,7 +153,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Middleware**: `trace.py` — TraceIdMiddleware (X-Trace-ID propagation, structured logs via ContextVar)
 - **Utils**: `auth.py` — Password hashing (bcrypt), JWT create/decode, get_current_user
 - **Templates**: 30 .jinja2 prompt files across 7 directories (rag/, quiz/, reflector/, retriever/, router/, decomposer/, transformations/)
-- **Additional API**: `openmaic_bridge.py` — OpenMAIC/classroom integration endpoints
+- **Additional API**: `classroom_api.py` — AI interactive classroom endpoints
 - **No `schemas/` directory**: Pydantic schemas defined inline in each router
 - **No `models/` directory**: ORM models defined in `app/db/database.py`
 
@@ -169,7 +169,7 @@ This file provides architectural guidance for contributors working on Study Copi
 
 #### Frontend Components
 - **Common**: `AppHeader.vue` (theme toggle, mobile menu, user dropdown), `AppSidebar.vue` (responsive nav, doc list), `ConfirmDialog.vue`, `PageHeader.vue`, `SkeletonList.vue`, `EmptyState.vue`, `DocumentPicker.vue`
-- **Feature**: `CopilotBotAvatar.vue`, `CourseCard.vue`, `NoteCard.vue`, `NoteEditor.vue`, `TaskPanel.vue`, `TransformDialog.vue`, `TTSPlayer.vue`, `UrlImportDialog.vue`, `ChatHistoryPanel.vue`, `ChatInput.vue`, `ChatDiscussionItem.vue`, `ChatMessageItem.vue`, `ChatSourceCards.vue`, `ClassroomBridgeDialog.vue`, `OpenMAICLinkCard.vue`, `IconSet` (icon registry)
+- **Feature**: `CopilotBotAvatar.vue`, `CourseCard.vue`, `NoteCard.vue`, `NoteEditor.vue`, `TaskPanel.vue`, `TransformDialog.vue`, `TTSPlayer.vue`, `UrlImportDialog.vue`, `ChatHistoryPanel.vue`, `ChatInput.vue`, `ChatDiscussionItem.vue`, `ChatMessageItem.vue`, `ChatSourceCards.vue`, `GenerateClassroomDialog.vue`, `ClassroomCard.vue`, `IconSet` (icon registry)
 - **Note**: Base 通用组件（BaseDialog, BaseButton, BaseInput 等）使用 Element Plus 直接实现，无需自建。
 
 ---
@@ -190,7 +190,7 @@ This file provides architectural guidance for contributors working on Study Copi
 | UI Library | Element Plus | Consistent UX, low maintenance, no custom base components |
 | Theme System | CSS Variables + Dark mode | UX, system adaptation, easy extension |
 | Responsive | Mobile-first + breakpoint adaptation | Mobile experience, adaptive layout |
-| OpenMAIC | REST bridge service | Classroom/course broadcasting integration |
+| AI Classroom | Built-in Next.js engine | Interactive slide classroom with multi-agent roles |
 
 ---
 

@@ -226,7 +226,7 @@
       </template>
     </div>
 
-    <!-- Classroom Learning Tab（OpenMAIC 联动） -->
+    <!-- Classroom Learning Tab（AI 互动课堂） -->
     <div v-else-if="activeTab === 'classroom'">
       <div v-if="classroomLoading" class="text-center py-12">
         <SkeletonList variant="blocks" :count="2" />
@@ -281,13 +281,13 @@ import { useQuizStore } from '../stores/quiz'
 import type { QuizHistoryItem } from '../stores/quiz'
 import { useDocumentStore } from '../stores/document'
 import { useChatStore } from '../stores/chat'
-import { useOpenMAICStore } from '../stores/openmaic'
+import { useClassroomStore } from '../stores/classroom'
 import { TrendCharts, Document, CircleCheck, VideoPlay, Link } from '@/components/icons'
 import SkeletonList from '../components/common/SkeletonList.vue'
 import { useToastStore } from '../stores/toast'
 
 const toast = useToastStore()
-const openmaic = useOpenMAICStore()
+const classroomStore = useClassroomStore()
 const documentStore = useDocumentStore()
 const chatStore = useChatStore()
 
@@ -297,9 +297,9 @@ const quizStore = useQuizStore()
 const activeTab = ref<'history' | 'stats' | 'classroom'>('history')
 const pageLoading = ref(false)
 
-// OpenMAIC 课堂数据（通过 store 管理）
-const classroomLoading = computed(() => openmaic.loading)
-const classrooms = computed(() => openmaic.classrooms)
+// AI 互动课堂数据（通过 store 管理）
+const classroomLoading = computed(() => classroomStore.loading)
+const classrooms = computed(() => classroomStore.classrooms)
 
 interface HistoryGroup {
   date: string
@@ -353,10 +353,10 @@ function accuracyColor(rate: number): string {
   return 'text-[var(--color-success)]'
 }
 
-// ── OpenMAIC 课堂数据 ─────────────────────────────────────────────────────────
+// ── AI 互动课堂数据 ─────────────────────────────────────────────────────────
 
 async function loadClassrooms(): Promise<void> {
-  await openmaic.fetchClassrooms()
+  await classroomStore.fetchClassrooms()
 }
 
 function formatDate(iso: string): string {

@@ -161,7 +161,7 @@ async def test_generate_course_full_flow(db_session: AsyncSession):
     ]
 
     with patch.object(course_generator, "generate_outline", new_callable=AsyncMock) as mock_outline_fn, \
-         patch.object(course_generator.quiz_generator, "generate_quizzes", new_callable=AsyncMock) as mock_quiz_fn:
+         patch("app.core.quiz_generator.QuizGenerator.generate_quizzes", new_callable=AsyncMock) as mock_quiz_fn:
         mock_outline_fn.return_value = mock_outline
         mock_quiz_fn.return_value = mock_quiz
 

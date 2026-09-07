@@ -61,7 +61,7 @@ pytest tests/ --cov-report=html
 | `tests/test_logging_config.py` | Structured JSON/text logging and trace context |
 | `tests/test_metrics.py` | `/api/metrics` operational task counts snapshot |
 | `tests/test_note_indexing.py` | Note-vector-store indexing and semantic search |
-| `tests/test_openmaic_integration.py` | OpenMAIC bridge, classroom status, webhook, self-healing |
+| `tests/test_classroom_integration.py` | AI classroom integration, status polling, webhook, self-healing |
 | `tests/test_persona_discussion.py` | Multi-persona discussion presets and sequential chain |
 | `tests/test_profile.py` | User profile and password update endpoints |
 | `tests/test_quiz.py` | Quiz generation and submission API endpoints |
@@ -190,7 +190,7 @@ Both share `tests/setup.js`, which auto-detects `window` availability:
 | `stores/config.test.js` | LLM config store |
 | `stores/document.test.js` | Document store: CRUD, SWR cache |
 | `stores/note.test.js` | Note store: filters, SWR cache |
-| `stores/openmaic.test.ts` | OpenMAIC store: job polling, auto-invalidation |
+| `stores/classroom.test.ts` | AI Classroom store: job polling, auto-invalidation |
 | `stores/quiz.test.js` | Quiz store: generation, submission |
 | `views/AnalysisView.test.js` | Learning analytics dashboard rendering |
 | `views/ProfileView.test.js` | User profile and settings view rendering |

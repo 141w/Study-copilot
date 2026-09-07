@@ -16,7 +16,7 @@ Core modules contain **pure business logic** with no HTTP or framework dependenc
 | `answer_reflector.py` | Answer quality self-reflection | Hallucination and alignment check with refinement |
 | `document_parser.py` | Document parsing factory | PDF (Docling/PyMuPDF), DOCX (python-docx), PPTX (python-pptx) |
 | `chunker.py` | Text chunking strategies | `FixedChunker` (512 tokens), `SemanticChunker`, `HierarchicalChunker` |
-| `document_bundle.py` | Multi-doc budget allocation | OpenMAIC proportional fair text budget algorithm |
+| `document_bundle.py` | Multi-doc budget allocation | Proportional fair text budget algorithm |
 | `course_generator.py` | Local course & quiz generator | Auto-generate course outline and quizzes from docs |
 | `persona_discussion.py` | Multi-agent persona discussion | 4 standard presets (苏老师, 学霸, 求知同学, 归纳助手) + sequential chain |
 | `quiz_generator.py` | LLM-based quiz creation | Generates MCQ/short-answer with difficulty and explanations |

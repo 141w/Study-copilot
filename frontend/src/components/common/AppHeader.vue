@@ -22,11 +22,11 @@
           size="small"
           aria-label="切换主题"
           @click="themeStore.toggleTheme()"
-          :title="themeStore.isDark ? '切换到亮色模式' : '切换到暗色模式'"
         >
           <el-icon class="w-5 h-5">
-            <Sunny v-if="themeStore.isDark" />
-            <Moon v-else />
+            <Setting v-if="themeStore.isSystem" />
+            <Moon v-else-if="themeStore.isDark" />
+            <Sunny v-else />
           </el-icon>
         </el-button>
 
@@ -86,7 +86,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useSidebarStore } from '../../stores/sidebar'
 import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
-import { User, Sunny, Moon, Fold } from '@/components/icons'
+import { User, Sunny, Moon, Setting, Fold } from '@/components/icons'
 import CopilotBotAvatar, { type BotMood } from '@/components/CopilotBotAvatar.vue'
 import { useUserPrefs } from '@/composables/useUserPrefs'
 

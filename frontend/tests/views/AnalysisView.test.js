@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import AnalysisView from '@/views/AnalysisView.vue'
 import { useQuizStore } from '@/stores/quiz'
-import { useOpenMAICStore } from '@/stores/openmaic'
+import { useClassroomStore } from '@/stores/classroom'
 
 vi.mock('@/stores/toast', () => ({
   useToastStore: () => ({
@@ -120,8 +120,8 @@ describe('AnalysisView Component', () => {
   })
 
   it('switches to classroom tab and renders classroom exclusively', async () => {
-    const openmaic = useOpenMAICStore()
-    openmaic.classrooms = [
+    const classroomStore = useClassroomStore()
+    classroomStore.classrooms = [
       {
         course_id: 'c1',
         title: '深度学习课堂',

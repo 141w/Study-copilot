@@ -26,7 +26,7 @@ This file provides architectural guidance for contributors working on Study Copi
 ## Current State (2026-09-06)
 
 - **Git**: `master` 分支（全部优化落地，未 push 远端）
-- **Tests**: 后端 519 passed (40 测试文件) / 前端 241 passed (25 测试文件) / 覆盖率 72.10% (门禁 65%) / vue-tsc exit 0
+- **Tests**: 后端 527 passed (41 测试文件) / 前端 258 passed (28 测试文件) / 覆盖率 72.43% (门禁 65%) / vue-tsc exit 0
 - **Ports**: 前端 3000，后端 8000
 - **Frontend**: Vue3 + Vite + TypeScript + Pinia + TailwindCSS + GSAP + Element Plus
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL 16+ + pgvector + sentence-transformers
@@ -37,6 +37,62 @@ This file provides architectural guidance for contributors working on Study Copi
 
 ### Recent Changes (2026-08-17 ~ 2026-09-06)
 
+**2026-09-06 批次（AI 互动课堂多模态专属配置与课程乱码根治）：**
+1. **课程全链路乱码根治与大纲结构化重塑** (`classroom_service.py` + `classroom_api.py` + `courses.py` + `course.ts` + `CourseCard.vue` + `CourseDetailView.vue` + `CourseListView.vue`)：
+   - 后端全部 `json.dumps` 补齐 `ensure_ascii=False`，彻底根除存入 PostgreSQL 数据库的 `\uXXXX` Unicode 转义字符；
+   - 修复创建/生成课程接口，`description` 返回大纲纯文本概述（而非 raw 截断 JSON）；
+   - 前端新增 `parseCourseDescription` 健壮容错工具函数，解耦大纲 JSON 与简介，展示动态状态徽章；
+   - `CourseDetailView.vue` 新增大纲章节目录卡片 Tab，结构化展现学习目标、难度、建议时长与重点标签；编辑弹窗反序列化显示纯文本。
+2. **模型设置专属区域（AI 互动课堂与多模态模型设置）** (`ModelConfigView.vue` + `config_service.py` + `config.py` + `image_generator.py`)：
+   - **独立图像生成配置**：内置 SiliconFlow (FLUX.1-schnell)、OpenAI DALL-E 3、阿里通义万相 (Wanx) 与自定义 4 种预设；支持 Base URL、Model、画幅比例选择与 Fernet 密文存储；
+   - **一键连通性测试**：提供「测试生图接口」按钮（`POST /api/config/test-image`），实时检测画图模型可用性与延迟；
+   - **独立课堂教学模型配置**：支持自由切换「复用主模型」或「自定义专属模型」，独立配置专属 Base URL、Model 和 API Key；
+   - 数据库模型 `UserLLMConfig` 增设 `extra_config` JSON 字段，实现多模态配置安全落库与掩码脱敏。
+3. **微课生成配图链路贯通** (`course_generator.py`)：
+   - 课程生成逻辑无缝集成 `image_generator.py`，根据用户配置的生图模型或系统默认配置，自动为生成课程设计封面图。
+4. **全量测试与门禁验证**：
+   - 后端新增 `test_classroom_config_roundtrip_and_encryption` 与 `test_image_connectivity_endpoint`；后端测试全通 **527 passed**（覆盖率 72.43%）；前端测试扩充至 **258 passed**，`vue-tsc` 0 errors，`npm run build` 构建成功。
+
+**2026-09-06 批次（后台任务全屏宽屏控制台与差异化任务名称重塑）：**
+1. **彻底破除旧版 256px 矮盒与狭窄容器限制** (`TasksView.vue` + `TaskPanel.vue`)：
+   - 容器由固定 `max-w-4xl` 升级为现代宽屏自适应布局（`w-full max-w-7xl`），垂直方向破除 `max-h-64` 内部滚动局限，实现全尺寸平铺；
+   - 移除 `TasksView.vue` 中冗余重复的标题与底部冲突的 Skeleton/EmptyState，统一由高内聚的 `TaskPanel.vue` 控制台管理。
+2. **全功能控制台与状态看板** (`TaskPanel.vue`)：
+   - 顶栏增设「全部、进行中、已完成、失败/异常」4 维指标统计卡片，支持一键点击筛选；
+   - 增设胶囊式状态筛选 Tab 与实时防抖关键词搜索框（支持匹配文件名、业务标题、任务ID与任务类型）；
+   - 增设任务完成态快捷联动动作（文档解析完成支持“查看文档”，测验生成完成支持“前往测验”）。
+3. **差异化任务命名与全链路元数据透传安全** (`task_service.py` + `task_worker.py` + `document_service.py` + `TaskPanel.vue`)：
+   - **后端元数据字典合并保全**：`update_task` 采用安全合并（`{**existing_result, **result}`），彻底根绝异步完成时冲刷掉初始任务入队时的 `filename`、`doc_id`；
+   - **Worker 结果丰富回传**：文档处理任务回传真实文件名，测验生成任务回传关联文档名称列表（`document_names`）；
+   - **前端智能多级回退解析**（`getTaskInfo`）：彻底废除千篇一律的枚举类型名，动态组装为《深度学习导论.pdf》· 文档解析与向量化、《现代操作系统》· 智能测验生成；历史数据通过关联文档 Store 自动补充对齐；动态展示切片段数、分块策略、真实耗时与起止时间戳。
+4. **全链路自动化测试与类型门禁**：
+   - 新增前端单元测试 `frontend/tests/views/TasksView.test.js`（5 passed）；
+   - 后端测试通过 **524 passed**（覆盖率 72.95%），前端测试扩充至 **258 passed**，`vue-tsc` 0 errors，`npm run build` 成功。
+
+**2026-09-06 批次（多角色研讨三级菜单发言正文折叠与单行缩略预览）：**
+1. **三级菜单（各角色发言实际内容）折叠交互** (`ChatDiscussionItem.vue`)：
+   - 角色发言卡片顶栏支持点击折叠/展开，带平滑旋转箭头矢量图标与「收起 / 展开」状态切换；
+   - 折叠状态下自动展示单行极简文本缩略预览（自动过滤 Markdown 标记），点击预览亦可快速恢复展开；
+   - 流式生成过程中发言气泡强制保持实时展开状态，确保逐字打字动画与脉冲光标完全可见；
+   - 一键复制单条发言保持冒泡阻断，互不干扰；
+   - 扩充单元测试 `ChatMessageItem.test.js`，前端通过 **253 passed**，`vue-tsc` 0 errors。
+
+**2026-09-06 批次（多角色研讨全链路会话持久化与历史无损复现）：**
+1. **多角色研讨全链路会话持久化** (`backend/app/api/chat.py` + `backend/app/services/chat_service.py`)：
+   - `DiscussRequest` 增加 `session_id: str | None = None`，支持绑定既有会话或自动生成会话；
+   - 用户提问消息即时落库（`role="user"`，计算 embedding 向量化索引支持全局语义搜索）；
+   - SSE 讨论流首包即时下发 `{"type": "session", "session_id": "..."}`，对齐常规问答体验；
+   - 研讨成果落库（`role="discussion"`）：在 `done` 及异常/客户端断开退出的 `finally` 阶段，将结构化交锋轮次（`discussion_turns`）、发言角色元数据（`personas`）、主持人总结（`summary`）序列化保存于 `messages.sources` 字段中，`content` 存储人类可读 Markdown 纪要兼顾向量检索；
+   - `GET /api/chat/history/{session_id}` 接口深度反序列化，提取并返回 `discussionTurns` 与 `summary` 元数据。
+2. **前端无缝会话绑定与历史反序列化呈现** (`ChatView.vue` + `chat.ts` + `ChatDiscussionItem.vue`)：
+   - `handleDiscuss` 请求透传 `currentSession`，接收 `session` 事件自动绑定会话状态，流式完成触发侧边栏会话列表智能无感刷新；
+   - `chatStore.fetchHistory` 在加载历史消息时自动归一化映射 `discussionTurns`；
+   - 历史消息以 `role="discussion"` 渲染时，完整复现三级折叠菜单与独立主持人总结卡片。
+3. **全链路测试套件扩充与类型门禁**：
+   - 新增后端测试 `backend/tests/test_discuss_persistence.py`（3 个测试用例，全通）；
+   - 扩充前端 `chat.test.js` 与 `ChatMessageItem.test.js`；
+   - 后端测试通过 **524 passed**（覆盖率 72.97%），前端通过 **252 passed**，`vue-tsc` 0 errors。
+
 **2026-09-06 批次（多角色研讨三级可折叠流式菜单与第二轮空内容根因自愈修复）：**
 1. **彻底消除连续 Assistant 协议冲突与 API 早停** (`persona_discussion.py` + `llm.py`)：重构多轮多角色 Prompt 结构为标准的单轮 `system`（人设）+ `user`（包含结构化的【圆桌研讨历史记录】与当前轮次互辩任务），彻底摒弃先前堆叠连续 `assistant` 消息导致的大模型 API 早停与第二轮偶发空内容漏洞；增设空流自动降级重试与保底见解机制。
 2. **三级可折叠流式菜单交互体系** (`ChatDiscussionItem.vue`)：
@@ -46,8 +102,8 @@ This file provides architectural guidance for contributors working on Study Copi
    - **独立主持人总结成果卡片**：沉淀于一级讨论容器下方，即使折叠研讨过程，核心共识与学习建议依然醒目可见。
 3. **真实端到端验证与测试全绿**：通过阶跃星辰（StepFun）`step-3.7-flash` 模型实测 2 轮（4 次发言 + 1 次总结，10,000+ 字）流式输出，第二轮零空内容；前端 245 passed（26 个测试文件），后端单测 8 passed，`vue-tsc` 0 errors。
 
-**2026-09-06 批次（多角色研讨 OpenMAIC 深度互辩与逐字流式时序流升级）：**
-1. **移植 OpenMAIC Peer Context 互辩机制** (`persona_discussion.py`)：新增 `build_peer_context_section()`，提取前序同伴发言核心论点，强制要求后续角色从自身人设视角进行深度回应、反驳、举反例或痛点追问，彻底消除各自作答的割裂感。
+**2026-09-06 批次（多角色研讨 Peer Context 深度互辩与逐字流式时序流升级）：**
+1. **实现 Peer Context 互辩机制** (`persona_discussion.py`)：新增 `build_peer_context_section()`，提取前序同伴发言核心论点，强制要求后续角色从自身人设视角进行深度回应、反驳、举反例或痛点追问，彻底消除各自作答的割裂感。
 2. **逐 Token 打字流式推进** (`persona_discussion.py` + `llm.py`)：实现 `_stream_llm_response()` 与 `llm.chat_stream()` 逐 token 产出，扩展 SSE 细粒度事件流（`persona_start` ➔ `persona_chunk` ➔ `persona_speak` ➔ `summary_start` ➔ `summary_chunk` ➔ `summary` ➔ `done`），全过程字字可见、打字机动效呈现。
 3. **会议时序流视图（Timeline Round Flow）** (`ChatDiscussionItem.vue` + `ChatView.vue` + `chat.ts`)：
    - 彻底废除按角色静态聚合的旧模式，重构为按发言发生时序自然排列的圆桌会议流，标注「第 N 轮 · 初始立论 / 互辩交锋」；
@@ -76,14 +132,14 @@ This file provides architectural guidance for contributors working on Study Copi
 2. **角色完整 CRUD API 与流式讨论接入** (`chat.py` + `auth.py`)：实现 `GET/POST/PUT/DELETE /api/chat/personas`，`GET` 智能合并官方预置与用户自定义角色；`POST /api/chat/discuss` 自动根据 `id`/`role` 查询数据库补全未传的自定义人设提示词。
 3. **前端交互与管理弹窗** (`PersonaManageDialog.vue` + `ChatView.vue`)：在讨论模式顶栏增加「管理研讨角色」入口与下拉树快捷项；提供预置与自定义双列表、快捷图标选择器、调色板点选器与 3 款快速人设灵感模板；创建后自动选中参与研讨。
 
-**2026-09-05 批次（OpenMAIC 深度融合与完善）：**
-1. **多文档布包公平预算** (`document_bundle.py`)：完整移植 OpenMAIC 的 `allocateDocumentTextBudgets` 算法，两阶段分配（基础 1500 字符 + 按未满足需求比例分配剩余预算 + 标点/换行边界安全截断）。
-2. **多智能体讨论模式** (`persona_discussion.py` + `chat.py`)：内置 4 套标准角色预设（🧑‍🏫 苏老师 `teacher`、🎓 学霸 `thinker`、🌱 求知同学 `curious`、📝 归纳助手 `notetaker`），新增 `GET /api/chat/personas`，`POST /api/chat/discuss` 支持动态人设配置与 `rag_snippets` / `full_docs` 上下文模式。
-3. **双通道状态轮询与自愈** (`openmaic_bridge.py` + `openmaic_service.py`)：新增 `GET /api/integrations/openmaic/classroom/{job_id}/status`，在轮询发现任务完成时主动从 OpenMAIC 拉取课堂产物并同步占位课程与测验，杜绝单纯依赖 Webhook 造成的单点失效。
+**2026-09-05 批次（AI 互动课堂原生架构与多文档布包融合）：**
+1. **多文档布包公平预算** (`document_bundle.py`)：实现 `allocateDocumentTextBudgets` 算法，两阶段分配（基础 1500 字符 + 按未满足需求比例分配剩余预算 + 标点/换行边界安全截断）。
+2. **多智能体讨论模式** (`persona_discussion.py` + `chat.py`)：内置 4 套标准角色预设（苏老师 `teacher`、学霸 `thinker`、求知同学 `curious`、归纳助手 `notetaker`），新增 `GET /api/chat/personas`，`POST /api/chat/discuss` 支持动态人设配置与 `rag_snippets` / `full_docs` 上下文模式。
+3. **双通道状态轮询与自愈** (`classroom_api.py` + `classroom_service.py`)：新增 `GET /api/classroom/{job_id}/status`，在轮询发现任务完成时主动从课堂引擎拉取产物并同步占位课程与测验，杜绝单纯依赖 Webhook 造成的单点失效。
 4. **配图开关与课程生成**：课堂创建请求与前端弹窗支持 `enable_image_generation`（AI 图像生成配图），`POST /api/courses/generate` 支持本地大纲与测验生成。
 5. **数据库模式演进**：Alembic 迁移 `b9a8c7d6e5f4_quiz_document_id_nullable.py` 将 `quizzes.document_id` 设为可空，支持课程级跨文档测验沉淀。
-6. **前端体验增强**：ChatView 增加多智能体讨论人设多选下拉与上下文切换；ClassroomBridgeDialog 增加配图开关；`openmaic.ts` 增加 `pollJobStatus` 轮询与自动缓存失效机制。
-7. **测试与类型安全**：后端新增 `test_persona_discussion.py`、`test_document_bundle.py`、`test_openmaic_integration.py`、`test_course_generator.py`，全量测试扩充至 490 passed（覆盖率 72.52%）；前端全量 227 passed（24 测试文件），`vue-tsc` 0 errors。
+6. **前端体验增强**：ChatView 增加多智能体讨论人设多选下拉与上下文切换；GenerateClassroomDialog 增加配图开关；`classroom.ts` 增加 `pollJobStatus` 轮询与自动缓存失效机制。
+7. **测试与类型安全**：后端新增 `test_persona_discussion.py`、`test_document_bundle.py`、`test_classroom_integration.py`、`test_course_generator.py`，全量测试扩充至 490 passed（覆盖率 72.52%）；前端全量 227 passed（24 测试文件），`vue-tsc` 0 errors。
 
 **2026-08-30 批次：**
 1. 测试扩展：`test_analysis_service.py`（+15）+ `test_transform_service.py`（+20），覆盖率 71.76%

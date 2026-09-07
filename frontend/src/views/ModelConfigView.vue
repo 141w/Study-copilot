@@ -147,6 +147,187 @@
       </el-form>
     </div>
 
+    <!-- ── AI 互动课堂与多模态模型设置 ── -->
+    <div class="card p-6 mb-6">
+      <div class="flex items-center justify-between pb-4 mb-6 border-b border-[var(--border-default)]">
+        <div>
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-[var(--color-primary-light)] flex items-center justify-center text-[var(--color-primary)]">
+              <el-icon class="text-lg"><MagicStick /></el-icon>
+            </div>
+            <h2 class="text-base font-semibold text-[var(--text-primary)]">AI 互动课堂与多模态模型设置</h2>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-medium">
+              Classroom & Media
+            </span>
+          </div>
+          <p class="text-xs text-[var(--text-muted)] mt-1.5 pl-10.5">
+            为 AI 互动课堂、课件大纲与沉浸式场景提供专属的生图配图能力与教学设计大模型
+          </p>
+        </div>
+      </div>
+
+      <!-- 模块 1：专属图像生成模型 (解决主文本模型无法生图的问题) -->
+      <div class="mb-6 p-4.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-sm text-[var(--text-primary)]">专属图像生成模型 (Image Generation)</span>
+            <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+              文生图能力
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-[var(--text-muted)]">开启课件自动配图</span>
+            <el-switch v-model="classroomForm.image_enabled" />
+          </div>
+        </div>
+
+        <div v-show="classroomForm.image_enabled" class="space-y-4">
+          <!-- 快捷服务商预设 -->
+          <div>
+            <label class="block text-xs font-medium text-[var(--text-muted)] mb-2">常用生图服务商预设</label>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                v-for="preset in imagePresets"
+                :key="preset.id"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border"
+                :class="classroomForm.image_provider === preset.id
+                  ? 'bg-[var(--color-primary)] text-white border-transparent shadow-sm'
+                  : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]/40'"
+                @click="applyImagePreset(preset)"
+              >
+                <span>{{ preset.name }}</span>
+                <span v-if="preset.tag" class="text-[10px] px-1.5 py-0.2 rounded-full" :class="classroomForm.image_provider === preset.id ? 'bg-white/20 text-white' : 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'">
+                  {{ preset.tag }}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+            <!-- 图像模型名称 -->
+            <div>
+              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像模型名称 (Model)</label>
+              <el-input v-model="classroomForm.image_model" placeholder="例如：black-forest-labs/FLUX.1-schnell 或 dall-e-3" />
+            </div>
+
+            <!-- 图像 API 地址 -->
+            <div>
+              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像接口地址 (Base URL)</label>
+              <el-input v-model="classroomForm.image_base_url" placeholder="例如：https://api.siliconflow.cn/v1" />
+            </div>
+
+            <!-- 图像 API Key -->
+            <div>
+              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">图像 API 密钥 (API Key)</label>
+              <el-input
+                v-model="classroomForm.image_api_key"
+                type="password"
+                show-password
+                :placeholder="savedImageKeyMasked ? `已保存: ${savedImageKeyMasked}` : '请输入文生图 API Key'"
+              />
+            </div>
+
+            <!-- 配图画幅比例 -->
+            <div>
+              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">预设配图尺寸 (Size)</label>
+              <el-select v-model="classroomForm.image_size" class="w-full">
+                <el-option value="1024x1024" label="1024x1024 (1:1 正方形)" />
+                <el-option value="1280x720" label="1280x720 (16:9 宽屏课件)" />
+                <el-option value="768x1024" label="768x1024 (3:4 书籍封面)" />
+              </el-select>
+            </div>
+          </div>
+
+          <!-- 图像测试反馈 -->
+          <transition name="el-fade-in">
+            <div
+              v-if="imageTestResult"
+              class="p-3 rounded-xl text-xs flex items-start justify-between gap-3 border"
+              :class="imageTestResult.success ? 'bg-[var(--color-success-light)] border-[var(--color-success)] text-[var(--color-success)]' : 'bg-[var(--color-danger-light)] border-[var(--color-danger)] text-[var(--color-danger)]'"
+            >
+              <div class="flex items-start gap-2">
+                <el-icon class="mt-0.5 text-base">
+                  <CircleCheck v-if="imageTestResult.success" />
+                  <WarningFilled v-else />
+                </el-icon>
+                <div>
+                  <p class="font-medium">{{ imageTestResult.message }}</p>
+                  <p v-if="imageTestResult.latency_ms" class="mt-0.5 text-[11px] opacity-80 font-mono">
+                    响应延迟: {{ imageTestResult.latency_ms }}ms
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="opacity-60 hover:opacity-100 p-1"
+                @click="imageTestResult = null"
+              >
+                <el-icon><Close /></el-icon>
+              </button>
+            </div>
+          </transition>
+
+          <!-- 图像连通性测试按钮 -->
+          <div class="flex items-center gap-3 pt-1">
+            <el-button
+              size="small"
+              :loading="testingImage"
+              @click="handleTestImage"
+            >
+              <el-icon class="mr-1"><Promotion /></el-icon>测试生图接口
+            </el-button>
+            <span class="text-[11px] text-[var(--text-muted)]">
+              提示：生图接口测试将向 Base URL 发起轻量探针，验证密钥有效性与端点可达性
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 模块 2：课堂教学设计大模型 (Classroom LLM) -->
+      <div class="p-4.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-sm text-[var(--text-primary)]">课堂教学大模型 (Teaching LLM)</span>
+              <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+                大纲与剧本编排
+              </span>
+            </div>
+            <p class="text-xs text-[var(--text-muted)] mt-1">
+              {{ classroomForm.use_custom_llm ? '使用独立自定义的教学设计大模型' : '默认复用上方的主问答大模型（省心免单独配置）' }}
+            </p>
+          </div>
+          <el-radio-group v-model="classroomForm.use_custom_llm" size="small">
+            <el-radio-button :value="false">复用主模型</el-radio-button>
+            <el-radio-button :value="true">自定义模型</el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <div v-show="classroomForm.use_custom_llm" class="mt-4 pt-3 border-t border-[var(--border-default)] grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+          <div>
+            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂模型名称 (Model)</label>
+            <el-input v-model="classroomForm.classroom_llm_model" placeholder="例如：deepseek-chat 或 claude-3-5-sonnet" />
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂 API 地址 (Base URL)</label>
+            <el-input v-model="classroomForm.classroom_llm_base_url" placeholder="https://api.deepseek.com/v1" />
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">课堂 API 密钥 (API Key)</label>
+            <el-input
+              v-model="classroomForm.classroom_llm_api_key"
+              type="password"
+              show-password
+              :placeholder="savedClassroomLLMKeyMasked ? `已保存: ${savedClassroomLLMKeyMasked}` : '请输入专属课堂模型 API Key'"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── 底层状态与规格探测 ── -->
     <div class="card p-6 bg-[var(--surface-card)]">
       <div class="flex items-center justify-between pb-4 mb-5 border-b border-[var(--border-default)]">
@@ -241,11 +422,12 @@ import {
   Switch,
   CircleCheck,
   WarningFilled,
-  Close
+  Close,
+  MagicStick
 } from '../components/icons'
 import { useConfigStore } from '../stores/config'
 import { useToastStore } from '../stores/toast'
-import type { SystemStatus, LLMCapabilities } from '../types/models'
+import type { SystemStatus, LLMCapabilities, ImageTestResult } from '../types/models'
 
 type MessageFormat = 'openai' | 'anthropic' | 'gemini' | 'ollama'
 
@@ -283,6 +465,92 @@ const config = ref<ModelConfigForm>({
   maxTokens: '',
   contextWindow: '',
 })
+
+// ── AI 互动课堂与多模态模型专属状态 ──
+const classroomForm = ref({
+  use_custom_llm: false,
+  classroom_llm_provider: 'openai',
+  classroom_llm_model: '',
+  classroom_llm_base_url: '',
+  classroom_llm_api_key: '',
+  image_enabled: true,
+  image_provider: 'siliconflow',
+  image_model: 'black-forest-labs/FLUX.1-schnell',
+  image_base_url: 'https://api.siliconflow.cn/v1',
+  image_api_key: '',
+  image_size: '1024x1024',
+})
+
+const savedImageKeyMasked = ref('')
+const savedClassroomLLMKeyMasked = ref('')
+const testingImage = ref(false)
+const imageTestResult = ref<ImageTestResult | null>(null)
+
+const imagePresets = [
+  {
+    id: 'siliconflow',
+    name: 'SiliconFlow 硅基流动',
+    tag: '推荐',
+    model: 'black-forest-labs/FLUX.1-schnell',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+  },
+  {
+    id: 'openai-image',
+    name: 'OpenAI (DALL-E 3)',
+    tag: '经典',
+    model: 'dall-e-3',
+    baseUrl: 'https://api.openai.com/v1',
+  },
+  {
+    id: 'qwen-image',
+    name: '阿里通义万相',
+    tag: '中文',
+    model: 'wanx-v1',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  },
+  {
+    id: 'custom',
+    name: '自定义生图接口',
+    tag: '',
+    model: 'black-forest-labs/FLUX.1-schnell',
+    baseUrl: '',
+  },
+]
+
+function applyImagePreset(preset: typeof imagePresets[0]) {
+  classroomForm.value.image_provider = preset.id
+  classroomForm.value.image_model = preset.model
+  if (preset.baseUrl) {
+    classroomForm.value.image_base_url = preset.baseUrl
+  }
+}
+
+async function handleTestImage(): Promise<void> {
+  testingImage.value = true
+  imageTestResult.value = null
+  try {
+    const res = await configStore.testImageConfig({
+      image_provider: classroomForm.value.image_provider,
+      image_api_key: classroomForm.value.image_api_key,
+      image_base_url: classroomForm.value.image_base_url,
+      image_model: classroomForm.value.image_model,
+    })
+    imageTestResult.value = res
+    if (res.success) {
+      toast.success(res.message)
+    } else {
+      toast.error(res.message || '生图接口测试失败')
+    }
+  } catch (err: any) {
+    imageTestResult.value = {
+      success: false,
+      message: err.message || '网络连接异常'
+    }
+    toast.error(imageTestResult.value.message)
+  } finally {
+    testingImage.value = false
+  }
+}
 
 // 表单校验规则
 const formRules: FormRules = {
@@ -457,11 +725,32 @@ async function saveConfig(): Promise<void> {
       embedding_model: 'shibing624/text2vec-base-chinese',
       embedding_dimension: 768,
       message_format: config.value.messageFormat,
+      classroom_config: {
+        use_custom_llm: classroomForm.value.use_custom_llm,
+        classroom_llm_provider: classroomForm.value.classroom_llm_provider,
+        classroom_llm_model: classroomForm.value.classroom_llm_model,
+        classroom_llm_base_url: classroomForm.value.classroom_llm_base_url,
+        classroom_llm_api_key: classroomForm.value.classroom_llm_api_key || undefined,
+        image_enabled: classroomForm.value.image_enabled,
+        image_provider: classroomForm.value.image_provider,
+        image_model: classroomForm.value.image_model,
+        image_base_url: classroomForm.value.image_base_url,
+        image_api_key: classroomForm.value.image_api_key || undefined,
+        image_size: classroomForm.value.image_size,
+      },
     })
     const latest = await configStore.fetchLLMConfig()
     savedKeyMasked.value = latest?.api_key_masked || ''
     config.value.apiKey = ''
     savedKeyOverwritten.value = false
+
+    if (latest?.classroom_config) {
+      savedImageKeyMasked.value = latest.classroom_config.image_api_key_masked || ''
+      savedClassroomLLMKeyMasked.value = latest.classroom_config.classroom_llm_api_key_masked || ''
+      classroomForm.value.image_api_key = ''
+      classroomForm.value.classroom_llm_api_key = ''
+    }
+
     toast.success('配置已保存')
   } catch (error) {
     toast.error('保存失败：' + ((error as Error).message || '未知错误'))
@@ -486,6 +775,23 @@ function resetConfig(): void {
   detectedCaps.value = null
   llmLatency.value = null
   formRef.value?.clearValidate()
+
+  // 重置 AI 互动课堂表单
+  classroomForm.value = {
+    use_custom_llm: false,
+    classroom_llm_provider: 'openai',
+    classroom_llm_model: '',
+    classroom_llm_base_url: '',
+    classroom_llm_api_key: '',
+    image_enabled: true,
+    image_provider: 'siliconflow',
+    image_model: 'black-forest-labs/FLUX.1-schnell',
+    image_base_url: 'https://api.siliconflow.cn/v1',
+    image_api_key: '',
+    image_size: '1024x1024',
+  }
+  imageTestResult.value = null
+
   toast.info('已重置为默认值（尚未保存）')
 }
 
@@ -505,6 +811,21 @@ onMounted(async () => {
       temperature: dbConfig.temperature ?? 0.7,
       maxTokens: dbConfig.max_tokens ?? '',
       contextWindow: dbConfig.context_window ?? '',
+    }
+
+    if (dbConfig.classroom_config) {
+      const cc = dbConfig.classroom_config
+      classroomForm.value.use_custom_llm = !!cc.use_custom_llm
+      classroomForm.value.classroom_llm_provider = cc.classroom_llm_provider || 'openai'
+      classroomForm.value.classroom_llm_model = cc.classroom_llm_model || ''
+      classroomForm.value.classroom_llm_base_url = cc.classroom_llm_base_url || ''
+      classroomForm.value.image_enabled = cc.image_enabled !== false
+      classroomForm.value.image_provider = cc.image_provider || 'siliconflow'
+      classroomForm.value.image_model = cc.image_model || 'black-forest-labs/FLUX.1-schnell'
+      classroomForm.value.image_base_url = cc.image_base_url || 'https://api.siliconflow.cn/v1'
+      classroomForm.value.image_size = cc.image_size || '1024x1024'
+      savedImageKeyMasked.value = cc.image_api_key_masked || ''
+      savedClassroomLLMKeyMasked.value = cc.classroom_llm_api_key_masked || ''
     }
   } else {
     const defaults = formatDefaults.openai

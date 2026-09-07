@@ -28,8 +28,8 @@
 │  │ Notes   │ │ Courses │ │Transform│ │  TTS    │ │ Tasks   │   │
 │  │  API    │ │  API    │ │  API    │ │  API    │ │  API    │   │
 │  ├─────────┤ ├─────────┤ ├─────────┴─────────┴─────────┘   │
-│  │ Metrics │ │OpenMAIC │ │                                         │
-│  │  API    │ │ Bridge  │ │                                         │
+│  │ Metrics │ │Classroom│ │                                         │
+│  │  API    │ │  API    │ │                                         │
 │  └────┬────┘ └────┬────┘ └─────────────────────────────────────────┘
 │       └───────────┴─────────────────────────────────────────────────┐
 │                            │                                        │
@@ -161,18 +161,18 @@ User selects topic, personas & context mode (ChatView)
     → Summary synthesized and appended to conversation history
 ```
 
-### OpenMAIC Classroom Integration & Self-Healing Flow
+### AI Classroom Integration & Self-Healing Flow
 
 ```
 User triggers classroom generation (DocumentView / CourseDetailView)
-    → ClassroomBridgeDialog (select requirement, TTS, Web search, AI Image Generation)
-    → POST /api/integrations/openmaic/classroom
-    → OpenMAIC backend queues generation job (job_id returned)
+    → GenerateClassroomDialog (select requirement, TTS, Web search, AI Image Generation)
+    → POST /api/classroom/generate
+    → AI Classroom engine queues generation job (job_id returned)
     → Study Copilot creates placeholder CourseSpace
     → Dual-Channel Synchronization:
-        Channel 1 (Active Polling): Frontend polls GET /api/integrations/openmaic/classroom/{job_id}/status
-            → If completed: backend automatically pulls OpenMAIC classroom assets and syncs course & quizzes
-        Channel 2 (Webhook): OpenMAIC pushes completion webhook to POST /api/integrations/openmaic/webhook
+        Channel 1 (Active Polling): Frontend polls GET /api/classroom/{job_id}/status
+            → If completed: backend automatically pulls classroom assets and syncs course & quizzes
+        Channel 2 (Webhook): Classroom engine pushes completion webhook to POST /api/classroom/webhook
             → HMAC signature verified, course & quizzes synced
     → Quizzes integrated into Study Copilot error book and learning analytics
 ```
@@ -239,9 +239,8 @@ User uploads document / generates quiz
 | Auth | JWT tokens | Stateless, standard |
 | Async Tasks | In-process asyncio queue | Simple deployment, no Redis dependency |
 | Templates | Jinja2 | 30 prompt files across 7 subdirectories (rag/quiz/reflector/retriever/router/decomposer/transformations) |
-| Frontend TS | TypeScript + vue-tsc | Type safety, better IDE support |
-| Document Budgets | Proportional fair budget allocation | Ported from OpenMAIC: 1500 char base + proportional surplus distribution |
-| OpenMAIC Integration | REST Bridge + Webhook + Status Polling | Dual-channel self-healing; independent lifecycle and deployment |
+| Document Budgets | Proportional fair budget allocation | 1500 char base + proportional surplus distribution |
+| AI Classroom Integration | REST Engine + Webhook + Status Polling | Dual-channel self-healing; local course outline fallback |
 
 ## Project Structure
 

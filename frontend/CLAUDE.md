@@ -33,13 +33,12 @@ frontend/
 │   │   │   ├── AppHeader.vue         # Top navigation bar (el-dropdown + theme toggle)
 │   │   │   ├── AppSidebar.vue        # Side navigation (el-menu with router)
 │   │   │   ├── ConfirmDialog.vue     # Reusable confirmation dialog
-│   │   │   ├── DocumentPicker.vue    # Document selection dropdown
 │   │   │   ├── EmptyState.vue        # Empty/placeholder state display
 │   │   │   ├── PageHeader.vue        # Page-level header with breadcrumb
 │   │   │   ├── SkeletonList.vue      # Skeleton loading for list views
-│   │   ├── integrations/
-│   │   │   ├── ClassroomBridgeDialog.vue  # Classroom platform integration (with image gen toggle)
-│   │   │   ├── OpenMAICLinkCard.vue        # OpenMAIC content link card
+│   │   ├── classroom/
+│   │   │   ├── GenerateClassroomDialog.vue # AI interactive classroom generation dialog
+│   │   │   ├── ClassroomCard.vue           # Classroom card with inline preview
 │   │   ├── CopilotBotAvatar.vue     # Bot persona/avatar engine
 │   │   ├── CourseCard.vue           # Course space preview card (TypeScript)
 │   │   ├── NoteCard.vue             # Note preview card (TypeScript)
@@ -48,6 +47,8 @@ frontend/
 │   │   ├── TransformDialog.vue      # Content transformation dialog
 │   │   ├── TTSPlayer.vue            # Audio playback controls
 │   │   ├── UrlImportDialog.vue      # URL import dialog
+│   │   ├── DocumentPicker.vue       # Document selection dropdown
+│   │   ├── ConfirmDialog.vue        # Reusable confirmation dialog
 │   ├── stores/               # Pinia stores (TypeScript)
 │   │   ├── auth.ts           # Login state, tokens, user info
 │   │   ├── chat.ts           # Messages, streaming, conversations
@@ -55,7 +56,7 @@ frontend/
 │   │   ├── course.ts         # Course spaces, document associations
 │   │   ├── document.ts       # Document list, upload state
 │   │   ├── note.ts           # Notes list, tags, search, filters
-│   │   ├── openmaic.ts       # OpenMAIC integration, job status polling & auto-sync
+│   │   ├── classroom.ts      # AI Classroom store: job polling & auto-sync
 │   │   ├── quiz.ts           # Quiz state, answers, results
 │   │   ├── sidebar.ts        # Sidebar navigation state
 │   │   ├── theme.ts          # Light/dark theme state
@@ -102,7 +103,7 @@ frontend/
 │   │   ├── config.test.js
 │   │   ├── document.test.js
 │   │   ├── note.test.js
-│   │   ├── openmaic.test.ts
+│   │   ├── classroom.test.ts
 │   │   └── quiz.test.js
 │   └── views/
 │       ├── AnalysisView.test.js
@@ -153,7 +154,7 @@ export const useChatStore = defineStore('chat', () => {
 })
 ```
 
-Stores index (11 total): auth, chat, config, course, document, note, openmaic, quiz, sidebar, theme, toast.
+Stores index (11 total): auth, chat, config, course, document, note, classroom, quiz, sidebar, theme, toast.
 
 ### API Client
 `services/api.ts` exports an Axios instance with:

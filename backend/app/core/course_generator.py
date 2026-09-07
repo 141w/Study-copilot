@@ -121,9 +121,11 @@ async def generate_outline(
             cleaned = re.sub(r"```\s*$", "", cleaned, flags=re.MULTILINE).strip()
             match = re.search(r"\{[\s\S]+\}", cleaned)
             if match:
-                return json.loads(match.group())
+                json_str = match.group()
+                json_str = re.sub(r",\s*([\]}])", r"\1", json_str)
+                return json.loads(json_str)
     except Exception as e:
-        logger.error("Failed to generate outline: %s", e)
+        logger.warning("Failed to parse generated outline JSON: %s", e)
 
     # Fallback
     return {
@@ -152,6 +154,7 @@ async def generate_course(
     doc_ids: list[str],
     requirement: str = "",
     llm_config: dict[str, Any] | None = None,
+    enable_image_generation: bool = False,
 ) -> dict[str, Any]:
     """完整的课程生成流程。
 
@@ -163,6 +166,8 @@ async def generate_course(
         用户对课程主题/风格的要求（可选）。
     llm_config : dict | None
         LLM 配置，None 则使用用户的默认配置。
+    enable_image_generation : bool
+        是否为课程生成 AI 配图封面。
 
     返回
     ----
@@ -177,23 +182,71 @@ async def generate_course(
     if requirement:
         context = f"用户课程要求：{requirement}\n\n文档内容：\n{context}"
 
+    # 2.5 获取用户自定 LLM 配置
+    if llm_config is None and user is not None:
+        try:
+            from app.services.config_service import get_llm_config_with_secret
+            llm_config = await get_llm_config_with_secret(db, user)
+        except Exception as e:
+            logger.warning("Failed to fetch user LLM config: %s", e)
+
     # 3. 生成大纲
     outline = await generate_outline(context, llm_config)
 
-    # 4. 为每个章节生成测验
-    quizzes: list[dict[str, Any]] = []
-    for section in outline.get("sections", [])[:5]:  # 最多 5 个章节
+    # 4. 为每个章节并发生成测验（使用用户自定模型配置）
+    import asyncio
+
+    from app.core.quiz_generator import QuizGenerator
+    q_gen = QuizGenerator(llm_config) if llm_config else quiz_generator
+
+    async def _gen_section_quizzes(section: dict[str, Any]) -> list[dict[str, Any]]:
         title = section.get("title", "")
         sec_id = section.get("id", str(uuid.uuid4()))
         key_points = section.get("key_points", [])
         section_context = f"{title}: {', '.join(key_points)}\n\n{context[:3000]}"
-        section_quizzes = await quiz_generator.generate_quizzes(
-            section_context, choice_count=2, short_answer_count=1
-        )
-        for q in section_quizzes:
+        try:
+            sec_qs = await q_gen.generate_quizzes(
+                section_context, choice_count=2, short_answer_count=1
+            )
+        except Exception as qe:
+            logger.warning("Quiz generation failed for section %s: %s", title, qe)
+            sec_qs = []
+        for q in sec_qs:
             q["section_id"] = sec_id
             q["section_title"] = title
-        quizzes.extend(section_quizzes)
+        return sec_qs
+
+    section_tasks = [_gen_section_quizzes(sec) for sec in outline.get("sections", [])[:5]]
+    section_results = await asyncio.gather(*section_tasks, return_exceptions=True)
+    quizzes: list[dict[str, Any]] = []
+    for res in section_results:
+        if isinstance(res, list):
+            quizzes.extend(res)
+
+    # 5. 若配置了专属生图模型或开启了生图，异步为课程生成配图封面
+    cls_cfg = (llm_config or {}).get("classroom_config") or {}
+    should_gen_image = enable_image_generation or cls_cfg.get("image_enabled", False)
+    if should_gen_image and cls_cfg.get("image_api_key"):
+        try:
+            from app.core.image_generator import generate_image
+            course_title = outline.get("title") or "AI Course"
+            course_desc = outline.get("description") or ""
+            img_prompt = (
+                f"Educational course cover illustration for '{course_title}', {course_desc[:120]}, "
+                "minimalist modern academic style, vector art, high aesthetic, clean composition"
+            )
+            img_res = await generate_image(
+                prompt=img_prompt,
+                config=cls_cfg,
+                size=cls_cfg.get("image_size") or "1024x1024",
+            )
+            if img_res.get("url"):
+                outline["cover_image"] = img_res["url"]
+            elif img_res.get("b64_json"):
+                outline["cover_image"] = f"data:image/png;base64,{img_res['b64_json']}"
+            logger.info("Course cover image generated successfully for: %s", course_title)
+        except Exception as ie:
+            logger.warning("Optional course cover image generation skipped/failed: %s", ie)
 
     logger.info(
         "Course generated: %d sections, %d quizzes",

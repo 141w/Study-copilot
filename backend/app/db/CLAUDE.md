@@ -59,4 +59,4 @@ Migration files live in `backend/alembic/versions/`.
 - **Single file for models**: All models in `database.py` for simplicity (could split later)
 - **UUID primary keys**: All models use `uuid.uuid4` as default PK
 - **Soft deletes (2026-08-24)**: documents.deleted_at / notes.deleted_at 标记回收站；DELETE 端点软删可恢复，物理清除走 purge_deleted_* 服务函数（运维脚本用）
-- **Course-wide Quizzes (2026-09-05)**: `quizzes.document_id` nullable migration（`b9a8c7d6e5f4`），允许课程级大纲生成与 OpenMAIC 跨文档测验沉淀入库
+- **Course-wide Quizzes (2026-09-05)**: `quizzes.document_id` nullable migration（`b9a8c7d6e5f4`），允许课程级大纲生成与 AI 互动课堂跨文档测验沉淀入库

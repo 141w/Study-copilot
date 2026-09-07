@@ -181,6 +181,7 @@ import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
 import api from '../services/api'
 import type { Course } from '../types/models'
+import { parseCourseDescription } from '../utils/course'
 import CourseCard from '../components/CourseCard.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import EmptyState from '../components/common/EmptyState.vue'
@@ -290,9 +291,10 @@ async function generateCourse(): Promise<void> {
 
 function openEditModal(course: Course): void {
   editingCourse.value = course
+  const parsed = parseCourseDescription(course.description)
   form.value = {
     name: course.name,
-    description: course.description || '',
+    description: parsed.displayText || '',
     color: course.color || '#000000'
   }
   showModal.value = true

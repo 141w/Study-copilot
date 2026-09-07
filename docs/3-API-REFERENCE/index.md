@@ -1,7 +1,7 @@
 # API Reference
 
 All endpoints are prefixed with `/api`. Authentication uses JWT Bearer tokens unless noted.
-Unauthenticated endpoints: `/`, `/health`, `/api/metrics`, `/api/integrations/openmaic/webhook`.
+Unauthenticated endpoints: `/`, `/health`, `/api/metrics`, `/api/classroom/webhook`.
 
 ---
 
@@ -19,7 +19,7 @@ Unauthenticated endpoints: `/`, `/health`, `/api/metrics`, `/api/integrations/op
 - [TTS](#tts)
 - [Tasks](#tasks)
 - [Metrics](#metrics)
-- [OpenMAIC Integration](#openmaic-integration)
+- [AI Classroom Integration](#ai-classroom-integration)
 - [Error Responses](#error-responses)
 
 ---
@@ -1070,13 +1070,13 @@ Unrestricted endpoint. Prometheus-style JSON snapshot.
 
 ---
 
-## OpenMAIC Integration
+## AI Classroom Integration
 
 ### Create Classroom
 ```
-POST /api/integrations/openmaic/classroom
+POST /api/classroom/generate
 ```
-Trigger OpenMAIC classroom generation from selected documents. Requires OpenMAIC to be enabled on the server.
+Trigger AI interactive classroom generation from selected documents.
 
 **Headers:** `Authorization: Bearer ***`
 **Request Body:**
@@ -1096,7 +1096,7 @@ Trigger OpenMAIC classroom generation from selected documents. Requires OpenMAIC
   "class_id": "string",
   "job_id": "string",
   "status": "queued",
-  "poll_url": "https://openmaic.example.com/poll/...",
+  "poll_url": "http://localhost:3001/api/generate-classroom/...",
   "course_id": "uuid",
   "message": "课堂生成已排队"
 }
@@ -1106,9 +1106,9 @@ Trigger OpenMAIC classroom generation from selected documents. Requires OpenMAIC
 
 ### Get Classroom Status & Auto-Sync
 ```
-GET /api/integrations/openmaic/classroom/{job_id}/status
+GET /api/classroom/{job_id}/status
 ```
-Query the generation progress and status of an OpenMAIC classroom job. Provides **dual-channel self-healing**: if the job is completed in OpenMAIC, this endpoint automatically pulls generated outlines/scenes and synchronizes the course space and quizzes into Study Copilot without relying exclusively on webhook callbacks.
+Query the generation progress and status of a classroom job. Provides **dual-channel self-healing**: if the job is completed in the classroom engine, this endpoint automatically pulls generated outlines/scenes and synchronizes the course space and quizzes into Study Copilot without relying exclusively on webhook callbacks.
 
 **Headers:** `Authorization: Bearer ***`  
 **Response:** `200 OK`
@@ -1117,9 +1117,14 @@ Query the generation progress and status of an OpenMAIC classroom job. Provides 
   "job_id": "job-12345",
   "status": "completed",
   "progress": 100,
-  "stage": "persisting",
-  "classroom_url": "https://openmaic.example.com/classroom/cls-123",
-  "synced": true
+  "step": "completed",
+  "message": "课堂生成完毕",
+  "done": true,
+  "result": {
+    "classroomId": "cls-123",
+    "url": "http://localhost:3001/classroom/cls-123",
+    "title": "课堂标题"
+  }
 }
 ```
 
@@ -1127,7 +1132,7 @@ Query the generation progress and status of an OpenMAIC classroom job. Provides 
 
 ### List Classrooms
 ```
-GET /api/integrations/openmaic/classrooms
+GET /api/classroom/list
 ```
 **Headers:** `Authorization: Bearer ***`
 **Response:** `200 OK`
@@ -1137,7 +1142,7 @@ GET /api/integrations/openmaic/classrooms
     {
       "course_id": "uuid",
       "title": "Classroom Name",
-      "url": "https://openmaic.example.com/classroom/...",
+      "url": "http://localhost:3001/classroom/...",
       "created_at": "2025-01-01T00:00:00"
     }
   ],
@@ -1147,39 +1152,13 @@ GET /api/integrations/openmaic/classrooms
 
 ---
 
-### Import Quiz Results
-```
-POST /api/integrations/openmaic/quiz/import
-```
-Sync OpenMAIC quiz results into Study Copilot's quiz system.
-
-**Headers:** `Authorization: Bearer ***`
-**Request Body:**
-```json
-{
-  "course_id": "uuid (optional)",
-  "quiz_results": [
-    { "question_id": "uuid", "user_answer": "A", "is_correct": true }
-  ]
-}
-```
-**Response:** `200 OK`
-```json
-{
-  "synced": 5,
-  "skipped": 2
-}
-```
-
----
-
 ### Webhook (no auth)
 ```
-POST /api/integrations/openmaic/webhook
+POST /api/classroom/webhook
 ```
-OpenMAIC callback endpoint. Validates HMAC signature (`X-OpenMAIC-Signature` header). No JWT required.
+Classroom callback endpoint. Validates HMAC signature (`X-Classroom-Signature` header). No JWT required.
 
-**Request Body:** JSON payload sent by OpenMAIC.
+**Request Body:** JSON payload sent by the classroom engine.
 
 ---
 

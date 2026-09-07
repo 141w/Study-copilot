@@ -7,9 +7,6 @@
           <el-icon :size="15"><ChatDotSquare /></el-icon>
         </div>
         <span class="text-sm font-semibold text-[var(--text-primary)]">多角色讨论</span>
-        <span class="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-medium shrink-0">
-          OpenMAIC 深度互辩
-        </span>
       </div>
 
       <div class="flex items-center gap-2 text-xs text-[var(--text-muted)] shrink-0">
@@ -62,9 +59,6 @@
             <ArrowRight />
           </el-icon>
           <span class="text-xs font-semibold text-[var(--text-primary)]">多角色研讨过程</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-secondary)] font-medium">
-            一级菜单
-          </span>
           <span v-if="message.isStreaming" class="flex items-center gap-1 text-[10px] text-[var(--color-primary)] ml-1">
             <span class="inline-block w-1.5 h-1.5 rounded-full bg-current animate-ping"></span>
             <span>实时推进中</span>
@@ -73,12 +67,6 @@
 
         <div class="flex items-center gap-2 text-[11px] text-[var(--text-muted)] shrink-0">
           <span>共 {{ totalRounds }} 轮交锋</span>
-          <button
-            class="text-[11px] text-[var(--color-primary)] hover:underline font-medium ml-1"
-            @click.stop="toggleProcessCollapse"
-          >
-            {{ isProcessExpanded ? '收起研讨过程' : '展开研讨过程' }}
-          </button>
         </div>
       </div>
 
@@ -183,10 +171,22 @@
                   </el-icon>
                 </div>
 
-                <!-- 三级发言气泡卡片 -->
+                <!-- 三级发言气泡卡片（支持发言正文折叠/展开） -->
                 <div class="flex-1 min-w-0 card p-3 transition-all relative">
-                  <div class="flex items-center justify-between gap-2 mb-1.5">
-                    <div class="flex items-center gap-1.5">
+                  <!-- 三级卡片可点击顶栏：支持折叠/展开具体角色发言正文 -->
+                  <div
+                    class="flex items-center justify-between gap-2 cursor-pointer select-none"
+                    :class="{ 'mb-1.5': isTurnExpanded(turn.id, turn.isStreaming) }"
+                    @click="toggleTurnCollapse(turn.id)"
+                  >
+                    <div class="flex items-center gap-1.5 min-w-0">
+                      <el-icon
+                        :size="10"
+                        class="text-[var(--text-muted)] transition-transform duration-200 shrink-0"
+                        :class="{ 'rotate-90': isTurnExpanded(turn.id, turn.isStreaming) }"
+                      >
+                        <ArrowRight />
+                      </el-icon>
                       <span class="text-xs font-semibold text-[var(--text-primary)]">{{ turn.persona }}</span>
                       <span
                         class="text-[9px] px-1.5 py-0.5 rounded font-medium"
@@ -199,11 +199,14 @@
                       </span>
                     </div>
 
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 shrink-0">
                       <div v-if="turn.isStreaming" class="flex items-center gap-1 text-[9px] text-[var(--color-primary)]">
                         <span class="inline-block w-1.5 h-1.5 rounded-full bg-current animate-ping"></span>
                         <span>发言中…</span>
                       </div>
+                      <span class="text-[10px] text-[var(--text-muted)] hover:text-[var(--color-primary)] transition-colors">
+                        {{ isTurnExpanded(turn.id, turn.isStreaming) ? '收起' : '展开' }}
+                      </span>
                       <!-- 一键复制单条发言 -->
                       <button
                         class="opacity-0 group-hover:opacity-100 text-[10px] text-[var(--text-muted)] hover:text-[var(--color-primary)] transition-opacity p-0.5 rounded hover:bg-[var(--bg-secondary)]"
@@ -218,15 +221,26 @@
                     </div>
                   </div>
 
-                  <!-- 三级发言正文：流式逐字 Markdown 渲染 + 呼吸光标 -->
+                  <!-- 折叠时的单行文本缩略预览 -->
                   <div
-                    class="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
-                    v-html="renderMarkdown(turn.content)"
-                  ></div>
-                  <span
-                    v-if="turn.isStreaming"
-                    class="inline-block w-1.5 h-3.5 bg-[var(--color-primary)] ml-0.5 animate-pulse align-middle"
-                  ></span>
+                    v-if="!isTurnExpanded(turn.id, turn.isStreaming) && turn.content"
+                    class="text-[11px] text-[var(--text-muted)] truncate mt-0.5 cursor-pointer"
+                    @click="toggleTurnCollapse(turn.id)"
+                  >
+                    {{ turn.content.replace(/[#*`\n]/g, ' ').trim() }}
+                  </div>
+
+                  <!-- 三级发言正文：流式逐字 Markdown 渲染 + 呼吸光标 -->
+                  <div v-show="isTurnExpanded(turn.id, turn.isStreaming)">
+                    <div
+                      class="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
+                      v-html="renderMarkdown(turn.content)"
+                    ></div>
+                    <span
+                      v-if="turn.isStreaming"
+                      class="inline-block w-1.5 h-3.5 bg-[var(--color-primary)] ml-0.5 animate-pulse align-middle"
+                    ></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -414,6 +428,24 @@ function isRoundExpanded(roundNum: number): boolean {
 function toggleRoundCollapse(roundNum: number) {
   const current = isRoundExpanded(roundNum)
   expandedRounds[roundNum] = !current
+}
+
+/** 三级菜单：各角色单条发言正文的展开/折叠状态表 */
+const expandedTurns = reactive<Record<string, boolean>>({})
+
+function isTurnExpanded(turnId: string, isStreaming?: boolean): boolean {
+  // 流式输出中的发言保持展开，字字可见
+  if (isStreaming) return true
+  if (expandedTurns[turnId] !== undefined) {
+    return expandedTurns[turnId]
+  }
+  // 默认全部展开，方便用户直接查阅，亦可随时单独收起
+  return true
+}
+
+function toggleTurnCollapse(turnId: string) {
+  const current = isTurnExpanded(turnId)
+  expandedTurns[turnId] = !current
 }
 
 // 监听流式状态：当有新轮次正在流式生成时，确保一级容器和该轮次自动处于展开状态

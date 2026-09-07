@@ -36,17 +36,33 @@
               <el-icon class="w-7 h-7" :style="{ color: course.color || '#000000' }"><Reading /></el-icon>
             </div>
             <div>
-              <h1 class="text-2xl font-semibold text-[var(--text-primary)]">{{ course.name }}</h1>
-              <p v-if="course.description" class="text-sm text-[var(--text-muted)] mt-1">{{ course.description }}</p>
+              <div class="flex items-center gap-2">
+                <h1 class="text-2xl font-semibold text-[var(--text-primary)]">{{ course.name }}</h1>
+                <span
+                  v-if="parsedInfo.isAiGenerated"
+                  class="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                  :class="parsedInfo.isPending ? 'bg-amber-500/10 text-amber-600 animate-pulse' : 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'"
+                >
+                  {{ parsedInfo.isPending ? '课堂生成中' : (parsedInfo.classroomUrl ? 'AI 互动微课' : 'AI 课程') }}
+                </span>
+              </div>
+              <p v-if="parsedInfo.displayText" class="text-sm text-[var(--text-muted)] mt-1.5 max-w-2xl leading-relaxed">
+                {{ parsedInfo.displayText }}
+              </p>
             </div>
           </div>
           <div class="flex items-center gap-2">
+            <a v-if="parsedInfo.classroomUrl" :href="parsedInfo.classroomUrl" target="_blank">
+              <el-button type="success" size="small">
+                <el-icon class="mr-1"><VideoPlay /></el-icon>进入 AI 课堂
+              </el-button>
+            </a>
             <el-button
+              size="small"
               type="default"
-              class="flex items-center gap-2 text-sm"
-              @click="showClassroomBridge = true"
-            >
-              <el-icon class="w-4 h-4"><VideoPlay /></el-icon>
+              @click="showClassroomDialog = true"
+              :disabled="courseDocuments.length === 0"
+            ><el-icon class="w-4 h-4"><VideoPlay /></el-icon>
               生成课堂
             </el-button>
             <el-button v-if="activeTab === 'notes'" @click="showNewNote = true" type="default" class="flex items-center gap-2 text-sm">
@@ -62,9 +78,74 @@
 
       <!-- Tabs（P2-5：el-tabs 替换手写按钮） -->
       <el-tabs v-model="activeTab" class="mb-6">
+        <el-tab-pane v-if="parsedInfo.outline?.sections?.length" :label="`课程大纲 (${parsedInfo.outline.sections.length} 章节)`" name="outline" />
         <el-tab-pane :label="`课程文档 (${courseDocuments.length})`" name="documents" />
         <el-tab-pane :label="`课程笔记 (${courseNotes.length})`" name="notes" />
       </el-tabs>
+
+      <!-- Outline Tab -->
+      <div v-if="activeTab === 'outline' && parsedInfo.outline" class="space-y-6">
+        <div class="card p-6">
+          <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5 pb-5 border-b border-[var(--border-default)]">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-[var(--text-primary)]">
+                  {{ parsedInfo.outline.title || course?.name }}
+                </h2>
+                <span v-if="parsedInfo.outline.difficulty" class="text-xs px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium">
+                  {{ parsedInfo.outline.difficulty }}
+                </span>
+              </div>
+              <p v-if="parsedInfo.displayText" class="text-sm text-[var(--text-muted)] mt-2 leading-relaxed max-w-3xl">
+                {{ parsedInfo.displayText }}
+              </p>
+            </div>
+
+            <a v-if="parsedInfo.classroomUrl" :href="parsedInfo.classroomUrl" target="_blank" class="flex-shrink-0">
+              <el-button type="primary">
+                <el-icon class="mr-1.5"><VideoPlay /></el-icon>进入 AI 互动课堂
+              </el-button>
+            </a>
+          </div>
+
+          <!-- 章节列表 -->
+          <div class="space-y-4">
+            <div
+              v-for="(section, idx) in parsedInfo.outline.sections"
+              :key="section.id || idx"
+              class="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)] hover:border-[var(--color-primary)]/40 transition-colors"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-[var(--color-primary-light)] text-[var(--color-primary)] text-xs font-bold flex items-center justify-center">
+                    {{ idx + 1 }}
+                  </span>
+                  <h3 class="font-semibold text-sm text-[var(--text-primary)]">
+                    {{ section.title }}
+                  </h3>
+                </div>
+                <span v-if="section.difficulty" class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+                  {{ section.difficulty }}
+                </span>
+              </div>
+
+              <p v-if="section.objective" class="text-xs text-[var(--text-muted)] mb-3 pl-8">
+                目标：{{ section.objective }}
+              </p>
+
+              <div v-if="section.key_points && section.key_points.length > 0" class="pl-8 flex flex-wrap gap-1.5">
+                <span
+                  v-for="(point, pIdx) in section.key_points"
+                  :key="pIdx"
+                  class="text-[11px] px-2 py-0.5 rounded-md bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-default)]"
+                >
+                  # {{ point }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Documents Tab -->
       <div v-if="activeTab === 'documents'">
@@ -185,9 +266,9 @@
       @confirm="doDeleteNote"
     />
 
-    <!-- OpenMAIC 课堂生成桥接 -->
-    <ClassroomBridgeDialog
-      v-model="showClassroomBridge"
+    <!-- AI 互动课堂生成 -->
+    <GenerateClassroomDialog
+      v-model="showClassroomDialog"
       :documents="courseDocuments"
       @generated="onClassroomGenerated"
     />
@@ -211,10 +292,12 @@ import EmptyState from '../components/common/EmptyState.vue'
 import SkeletonList from '../components/common/SkeletonList.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
-import ClassroomBridgeDialog from '../components/integrations/ClassroomBridgeDialog.vue'
+import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import { useReducedMotion } from '../composables/useReducedMotion'
 import { Reading, EditPen, Document, Delete, WarningFilled, DocumentAdd, ArrowLeft, VideoPlay } from '@/components/icons'
 import gsap from 'gsap'
+
+import { parseCourseDescription } from '../utils/course'
 
 interface NoteFormState {
   title: string
@@ -233,7 +316,7 @@ const { prefersReduced } = useReducedMotion()
 
 const pageContainer = ref<HTMLElement | null>(null)
 const courseHeader = ref<HTMLElement | null>(null)
-const activeTab = ref<'documents' | 'notes'>('documents')
+const activeTab = ref<'documents' | 'notes' | 'outline'>('documents')
 const showNewNote = ref(false)
 const editingNoteId = ref<string | null>(null)
 
@@ -241,7 +324,7 @@ const editingNoteId = ref<string | null>(null)
 const courseDocuments = ref<DocumentModel[]>([])
 const showAddDocDialog = ref(false)
 const selectedDocId = ref<string | null>(null)
-const showClassroomBridge = ref(false)
+const showClassroomDialog = ref(false)
 
 // New note form
 const newNote = ref<NoteFormState>({ title: '', content: '', tags: [] })
@@ -261,6 +344,7 @@ let editDraftTimer: ReturnType<typeof setTimeout> | null = null
 
 const courseId = computed(() => route.params.id as string)
 const course = computed(() => courseStore.currentCourse)
+const parsedInfo = computed(() => parseCourseDescription(course.value?.description))
 const loading = computed(() => courseStore.loading)
 const courseNotes = computed<NoteDetail[]>(() =>
   noteStore.notes.filter(n => n.course_space_id === courseId.value)
@@ -273,6 +357,9 @@ const availableDocs = computed<DocumentModel[]>(() => {
 async function loadCourseData(): Promise<void> {
   try {
     await courseStore.fetchCourse(courseId.value)
+    if (parsedInfo.value.outline?.sections && parsedInfo.value.outline.sections.length > 0) {
+      activeTab.value = 'outline'
+    }
   } catch (_e) {
     toast.error('加载课程数据失败')
   }
@@ -415,7 +502,7 @@ async function doDeleteNote(): Promise<void> {
   deletingNote.value = null
 }
 
-// OpenMAIC 联动：课堂生成完成回调
+// AI 互动课堂：课堂生成完成回调
 function onClassroomGenerated(result: { jobId: string; courseId?: string }): void {
   toast.success(`课堂生成已提交！Job: ${result.jobId.slice(0, 8)}…`)
   // 刷新课程数据以同步可能的 course 更新

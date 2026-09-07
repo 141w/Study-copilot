@@ -127,10 +127,13 @@ export const useChatStore = defineStore('chat', () => {
   async function fetchHistory(sessionId: string): Promise<void> {
     loading.value = true
     try {
-      const response = await api.get<{ messages: ChatStreamMessage[] }>(
+      const response = await api.get<{ messages: (ChatStreamMessage & { discussion_turns?: DiscussionTurn[] })[] }>(
         `/chat/history/${sessionId}`
       )
-      messages.value = response.data.messages
+      messages.value = (response.data.messages || []).map(m => ({
+        ...m,
+        discussionTurns: m.discussionTurns || (m as any).discussion_turns || undefined,
+      }))
       currentSession.value = sessionId
       lastFetched.value = Date.now()
     } catch (error) {

@@ -16,6 +16,7 @@ NC='\033[0m' # No Color
 # 配置
 BACKEND_PORT=8000
 FRONTEND_PORT=3000
+CLASSROOM_PORT=3001
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONDA_ENV="study-c"
 CONDA_BASE="$HOME/miniconda3"
@@ -137,6 +138,7 @@ kill_port() {
 
 kill_port $BACKEND_PORT
 kill_port $FRONTEND_PORT
+kill_port $CLASSROOM_PORT
 ok "端口检查完成"
 
 # ----------------------------------------------------------
@@ -197,6 +199,22 @@ while [ $RETRIES -lt $MAX_RETRIES ]; do
 done
 
 # ----------------------------------------------------------
+# 5.5 启动 AI 互动课堂引擎（可选微服务，端口 $CLASSROOM_PORT）
+# ----------------------------------------------------------
+CLASSROOM_PID=""
+if [ -d "$SCRIPT_DIR/classroom/node_modules" ]; then
+    info "启动 AI 互动课堂引擎 (端口 $CLASSROOM_PORT)..."
+    cd "$SCRIPT_DIR/classroom"
+    nohup npx pnpm dev -p $CLASSROOM_PORT > /tmp/study-copilot-classroom.log 2>&1 &
+    CLASSROOM_PID=$!
+    cd "$SCRIPT_DIR"
+    ok "AI 互动课堂引擎已在后台启动 (PID: $CLASSROOM_PID)"
+else
+    info "AI 互动课堂引擎：已启用后端原生大纲与测验智能生成保底模式。"
+    info "（如需全功能互动课件渲染，可随时进入 classroom/ 执行 npx pnpm install && npx pnpm dev -p $CLASSROOM_PORT）"
+fi
+
+# ----------------------------------------------------------
 # 6. 打开浏览器
 # ----------------------------------------------------------
 echo ""
@@ -205,9 +223,15 @@ echo -e "  ${GREEN}所有服务已启动！${NC}"
 echo ""
 echo "  前端: http://localhost:$FRONTEND_PORT"
 echo "  后端: http://localhost:$BACKEND_PORT/docs"
+if [ -n "$CLASSROOM_PID" ]; then
+    echo "  课堂: http://localhost:$CLASSROOM_PORT"
+fi
 echo ""
 echo "  后端日志: /tmp/study-copilot-backend.log"
 echo "  前端日志: /tmp/study-copilot-frontend.log"
+if [ -n "$CLASSROOM_PID" ]; then
+    echo "  课堂日志: /tmp/study-copilot-classroom.log"
+fi
 echo ""
 echo "  停止服务: ./stop.sh 或 Ctrl+C"
 echo "======================================"
@@ -221,9 +245,13 @@ cleanup() {
     warn "正在停止服务..."
     kill $BACKEND_PID 2>/dev/null || true
     kill $FRONTEND_PID 2>/dev/null || true
+    if [ -n "$CLASSROOM_PID" ]; then
+        kill $CLASSROOM_PID 2>/dev/null || true
+    fi
     # 清理残留进程
     kill_port $BACKEND_PORT
     kill_port $FRONTEND_PORT
+    kill_port $CLASSROOM_PORT
     ok "服务已停止"
     exit 0
 }

@@ -208,4 +208,23 @@ describe('Config Store', () => {
     })
     expect(res).toEqual(mockCaps)
   })
+
+  it('testImageConfig calls POST /config/test-image', async () => {
+    const mockRes = {
+      success: true,
+      message: '生图接口探测成功，支持图像生成',
+      latency_ms: 210.5
+    }
+    api.post.mockResolvedValue({ data: mockRes })
+
+    const payload = {
+      image_provider: 'siliconflow',
+      image_api_key: 'sk-test',
+      image_base_url: 'https://api.siliconflow.cn/v1',
+      image_model: 'black-forest-labs/FLUX.1-schnell'
+    }
+    const res = await store.testImageConfig(payload)
+    expect(api.post).toHaveBeenCalledWith('/config/test-image', payload)
+    expect(res).toEqual(mockRes)
+  })
 })

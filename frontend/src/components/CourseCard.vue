@@ -33,8 +33,17 @@
       </div>
     </div>
 
-    <h3 class="font-semibold text-[var(--text-primary)] mb-1 truncate">{{ course.name }}</h3>
-    <p v-if="course.description" class="text-sm text-[var(--text-muted)] line-clamp-2 mb-3">{{ course.description }}</p>
+    <div class="flex items-center gap-2 mb-1">
+      <h3 class="font-semibold text-[var(--text-primary)] truncate flex-1">{{ course.name }}</h3>
+      <span
+        v-if="parsed.isAiGenerated"
+        class="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+        :class="parsed.isPending ? 'bg-amber-500/10 text-amber-600 animate-pulse' : 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'"
+      >
+        {{ parsed.isPending ? '课堂生成中' : (parsed.classroomUrl ? 'AI 互动课堂' : 'AI 生成大纲') }}
+      </span>
+    </div>
+    <p v-if="parsed.displayText" class="text-sm text-[var(--text-muted)] line-clamp-2 mb-3">{{ parsed.displayText }}</p>
 
     <div class="flex items-center gap-3 mt-auto text-xs text-[var(--text-muted)]">
       <span class="flex items-center gap-1">
@@ -53,12 +62,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Reading, Edit, Delete, Tickets } from '@/components/icons'
 import type { Course } from '../types/models'
+import { parseCourseDescription } from '../utils/course'
 
-defineProps<{
+const props = defineProps<{
   course: Course
 }>()
+
+const parsed = computed(() => parseCourseDescription(props.course.description))
 
 defineEmits<{
   click: [course: Course]

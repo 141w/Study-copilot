@@ -131,6 +131,35 @@ export interface LLMConfig {
   /** GET /config/llm 返回：是否已保存 Key + 掩码展示值 */
   has_api_key?: boolean
   api_key_masked?: string
+  /** AI 互动课堂与多模态模型专属配置 */
+  classroom_config?: ClassroomModelConfig
+}
+
+export interface ClassroomModelConfig {
+  use_custom_llm?: boolean
+  classroom_llm_provider?: string
+  classroom_llm_model?: string
+  classroom_llm_base_url?: string
+  classroom_llm_api_key?: string
+  has_classroom_llm_api_key?: boolean
+  classroom_llm_api_key_masked?: string
+  image_enabled?: boolean
+  image_provider?: string
+  image_model?: string
+  image_base_url?: string
+  image_api_key?: string
+  has_image_api_key?: boolean
+  image_api_key_masked?: string
+  image_size?: string
+  enable_tts?: boolean
+  tts_voice?: string
+  enable_web_search?: boolean
+}
+
+export interface ImageTestResult {
+  success: boolean
+  message: string
+  latency_ms?: number
 }
 
 export interface SystemStatus {

@@ -6,10 +6,15 @@ import './styles/element-plus-theme.css'
 import App from './App.vue'
 import router from './router'
 import './styles/global.css'
+import { useThemeStore } from './stores/theme'
 
 const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
 app.use(router)
+
+// 全局前置初始化主题及系统媒体查询监听，确保 /login、/register 等无 Header 页面一致生效
+useThemeStore()
+
 app.mount('#app')

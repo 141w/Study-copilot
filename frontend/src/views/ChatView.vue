@@ -270,7 +270,7 @@ const chatMode = ref<'qa' | 'discuss'>('qa')
 const discussContextMode = ref<'rag_snippets' | 'full_docs'>('rag_snippets')
 const discussMaxTurns = ref<number>(2)
 
-// OpenMAIC 风格多 Agent 讨论角色库
+// AI 研讨多 Agent 讨论角色库
 interface AvailablePersona {
   id?: string
   role: string
@@ -652,6 +652,7 @@ async function handleDiscuss(content: string): Promise<void> {
           : null,
         max_turns: discussMaxTurns.value || 2,
         context_mode: discussContextMode.value,
+        session_id: chatStore.currentSession || null,
       }),
       signal: controller.signal,
     })
@@ -679,7 +680,15 @@ async function handleDiscuss(content: string): Promise<void> {
           const event = JSON.parse(payload)
           const _msg = msg!
 
-          if (event.type === 'persona_start') {
+          if (event.type === 'session') {
+            if (event.session_id) {
+              chatStore.currentSession = event.session_id
+              if (!chatStore.currentSessionTitle) {
+                chatStore.currentSessionTitle = content.slice(0, 50)
+              }
+            }
+          }
+          else if (event.type === 'persona_start') {
             const p = event.persona
             const matchedP = availablePersonas.value.find(item => item.name === p || item.role === p)
             const avatar = event.avatar || matchedP?.avatar || 'User'
@@ -812,6 +821,13 @@ async function handleDiscuss(content: string): Promise<void> {
               _msg.discussionTurns.forEach(t => { t.isStreaming = false })
             }
             _msg.summaryStreaming = false
+            // 新会话研讨完成后，刷新历史列表让侧边栏能看到它
+            if (
+              chatStore.currentSession &&
+              !chatStore.sessions.some(s => s.session_id === chatStore.currentSession)
+            ) {
+              chatStore.fetchSessions(true).catch(() => {})
+            }
           }
         }
         catch { /* skip malformed */ }

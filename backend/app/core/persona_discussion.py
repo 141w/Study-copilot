@@ -1,8 +1,7 @@
 """
 Persona Discussion — 多智能体讨论模式（轻量版）。
 
-与 OpenMAIC 的 Director Graph 区别：固定 Sequential persona chain，
-不做动态编排。每条 persona 收到完整上下文后发言，最终汇总。
+特点：固定 Sequential persona chain，每条 persona 收到完整上下文后发言，最终汇总。
 
 使用方式：
     from app.core.persona_discussion import persona_discussion
@@ -29,7 +28,7 @@ from app.core.llm import LLM
 
 logger = logging.getLogger(__name__)
 
-# ── OpenMAIC 风格多 Agent 预置角色库 ─────────────────────────────────────────
+# ── 多 Agent 预置角色库 ─────────────────────────────────────────────────────────
 PERSONA_PRESETS: dict[str, dict[str, str]] = {
     "teacher": {
         "id": "teacher",
@@ -156,7 +155,7 @@ def build_peer_context_section(
     current_persona_name: str,
     turn: int = 1,
 ) -> str:
-    """移植 OpenMAIC peer-context 互辩机制：
+    """Peer-context 互辩机制：
     提取前序同伴发言观点，施加严谨的互辩约束，引导当前角色进行追问、质疑、回应或补充。
     """
     if not discussion_history:
@@ -214,7 +213,7 @@ async def _stream_llm_response(
     """
     use_chat_stream = False
     if hasattr(llm, "chat_stream"):
-        cs = getattr(llm, "chat_stream")
+        cs = llm.chat_stream
         try:
             from unittest.mock import MagicMock
             if isinstance(cs, MagicMock):
@@ -288,7 +287,7 @@ async def discuss(
         for turn in range(max_turns):
             current_round_num = turn + 1
             for persona in resolved_personas:
-                # 注入 OpenMAIC 同伴互辩提示词与结构化研讨历史
+                # 注入同伴互辩提示词与结构化研讨历史
                 transcript = format_discussion_transcript(discussion_history)
                 peer_context = build_peer_context_section(discussion_history, persona["name"], current_round_num)
 

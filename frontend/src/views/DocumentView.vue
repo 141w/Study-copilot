@@ -17,7 +17,7 @@
             <el-button
               size="small"
               type="default"
-              @click="showClassroomBridge = true"
+              @click="showClassroomDialog = true"
               :disabled="documentStore.documents.length === 0"
             >
               <el-icon class="w-4 h-4 mr-1"><VideoPlay /></el-icon>
@@ -214,9 +214,9 @@
       :document-id="selectedDoc?.id"
     />
 
-    <!-- OpenMAIC 课堂生成 -->
-    <ClassroomBridgeDialog
-      v-model="showClassroomBridge"
+    <!-- AI 互动课堂生成 -->
+    <GenerateClassroomDialog
+      v-model="showClassroomDialog"
       :documents="documentStore.documents"
       @generated="onClassroomGenerated"
     />
@@ -233,7 +233,7 @@ import { useToastStore } from '../stores/toast'
 import { formatSize, cleanPdfText } from '../composables/useFormat'
 import type { Document as DocumentModel } from '../types/models'
 import TransformDialog from '../components/TransformDialog.vue'
-import ClassroomBridgeDialog from '../components/integrations/ClassroomBridgeDialog.vue'
+import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import SkeletonList from '../components/common/SkeletonList.vue'
 import api from '../services/api'
 
@@ -271,8 +271,8 @@ const showTransformDialog = ref(false)
 const transformDocText = ref('')
 const transformDocTitle = ref('')
 
-// OpenMAIC bridge dialog
-const showClassroomBridge = ref(false)
+// AI 互动课堂弹窗
+const showClassroomDialog = ref(false)
 
 const filteredChunks = computed<DocChunk[]>(() => {
   if (!searchQuery.value.trim()) {
@@ -425,7 +425,7 @@ function openTransform(): void {
   showTransformDialog.value = true
 }
 
-// OpenMAIC 联动：课堂生成完成回调
+// AI 互动课堂：课堂生成完成回调
 function onClassroomGenerated(_result: { jobId: string; courseId?: string }): void {
   toast.success('课堂生成任务已提交！')
 }

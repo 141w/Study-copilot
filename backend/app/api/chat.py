@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user, get_optional_user
 from app.core.rate_limit import IPRateLimiter
-from app.db import CustomPersona, Document, User, get_db
+from app.db import CustomPersona, Document, Message, User, get_db
 from app.exceptions import NotFoundError, RateLimitError, ValidationError
 from app.services import chat_service
 
@@ -84,6 +84,7 @@ class DiscussRequest(BaseModel):
     # full_docs = document_bundle 全文打包（CJK 1M 预算，多文档带来源头），
     # 适合短文档/材料整体讨论而非事实问答
     context_mode: Literal["rag_snippets", "full_docs"] = "rag_snippets"
+    session_id: str | None = None
 
 
 class MessageResp(BaseModel):
@@ -91,6 +92,10 @@ class MessageResp(BaseModel):
     role: str
     content: str
     sources: list[Source] | None = None
+    discussion_turns: list[dict] | None = None
+    discussionTurns: list[dict] | None = None  # noqa: N815
+    personas: list[dict] | None = None
+    summary: str | None = None
     created_at: str
 
 
@@ -200,27 +205,50 @@ async def get_history(
 ):
     session, msgs = await chat_service.get_session_history(db, current_user, session_id)
 
-    def parse_sources(sources_str):
-        if not sources_str:
-            return None
+    def parse_message_payload(m: Message):
+        sources = None
+        discussion_turns = None
+        personas = None
+        summary = None
+        if not m.sources:
+            return sources, discussion_turns, personas, summary
         try:
-            return [Source(**s) for s in json.loads(sources_str)]
+            raw = json.loads(m.sources)
+            if isinstance(raw, list):
+                sources = [Source(**s) for s in raw]
+            elif isinstance(raw, dict):
+                if "sources" in raw and isinstance(raw["sources"], list):
+                    sources = [Source(**s) for s in raw["sources"]]
+                turns = raw.get("discussion_turns") or raw.get("discussionTurns")
+                if isinstance(turns, list):
+                    discussion_turns = turns
+                summary = raw.get("summary")
+                personas = raw.get("personas")
         except Exception:
-            return None
+            pass
+        return sources, discussion_turns, personas, summary
 
-    return ChatHistoryResp(
-        session_id=session.id,
-        title=session.title or "新对话",
-        messages=[
+    messages_resp = []
+    for m in msgs:
+        sources, discussion_turns, personas, summary = parse_message_payload(m)
+        messages_resp.append(
             MessageResp(
                 id=m.id,
                 role=m.role,
                 content=m.content,
-                sources=parse_sources(m.sources),
+                sources=sources,
+                discussion_turns=discussion_turns,
+                discussionTurns=discussion_turns,
+                personas=personas,
+                summary=summary,
                 created_at=str(m.created_at),
             )
-            for m in msgs
-        ],
+        )
+
+    return ChatHistoryResp(
+        session_id=session.id,
+        title=session.title or "新对话",
+        messages=messages_resp,
         created_at=str(session.created_at),
     )
 
@@ -559,7 +587,65 @@ async def discuss(
             }
         )
 
+    # 确保会话存在并落库用户提问
+    session_id, _ = await chat_service._ensure_session(
+        db, current_user.id, req.session_id, req.question
+    )
+    q_emb = await chat_service._embed_text(req.question)
+    user_msg_id = str(uuid.uuid4())
+    await chat_service._insert_message(
+        db, user_msg_id, session_id, "user", req.question, None, q_emb
+    )
+
     async def generate_stream():
+        # 首包下发会话 ID，支持前端会话绑定与历史同步
+        yield f"data: {json.dumps({'type': 'session', 'session_id': session_id}, ensure_ascii=False)}\n\n"
+
+        collected_turns: list[dict] = []
+        summary_text = ""
+        error_msg = ""
+        active_persona_chunks: dict[str, str] = {}
+        saved_to_db = False
+
+        async def _save_discussion_record():
+            nonlocal saved_to_db
+            if saved_to_db:
+                return
+            saved_to_db = True
+            content_parts = []
+            for t in collected_turns:
+                content_parts.append(f"【{t['persona']}】：{t['content']}")
+            if summary_text:
+                content_parts.append(f"\n\n---\n\n**讨论总结**\n\n{summary_text}")
+            elif error_msg:
+                content_parts.append(f"\n\n---\n\n{error_msg}")
+
+            full_content = "\n\n".join(content_parts).strip()
+            if not full_content:
+                full_content = error_msg or "研讨结束"
+
+            meta = {
+                "type": "discussion",
+                "discussion_turns": collected_turns,
+                "summary": summary_text,
+                "personas": [
+                    {"name": p["name"], "avatar": p["avatar"], "color": p.get("color")}
+                    for p in personas
+                ],
+            }
+            if error_msg:
+                meta["error"] = error_msg
+
+            meta_json = json.dumps(meta, ensure_ascii=False)
+            try:
+                disc_emb = await chat_service._embed_text(full_content)
+                disc_msg_id = str(uuid.uuid4())
+                await chat_service._insert_message(
+                    db, disc_msg_id, session_id, "discussion", full_content, meta_json, disc_emb
+                )
+            except Exception as save_err:
+                logger.warning("Failed to save discussion message to DB: %s", save_err)
+
         try:
             from app.core.persona_discussion import discuss
             async for event in discuss(
@@ -569,10 +655,41 @@ async def discuss(
                 llm_config=user_config,
                 max_turns=req.max_turns,
             ):
+                ev_type = event.get("type")
+                if ev_type == "persona_start":
+                    p_name = event.get("persona", "")
+                    active_persona_chunks[p_name] = ""
+                elif ev_type == "persona_chunk":
+                    p_name = event.get("persona", "")
+                    active_persona_chunks[p_name] = active_persona_chunks.get(p_name, "") + (event.get("delta") or "")
+                elif ev_type == "persona_speak":
+                    p_name = event.get("persona", "")
+                    content = event.get("content") or active_persona_chunks.get(p_name, "")
+                    turn_num = event.get("turn", 1)
+                    collected_turns.append({
+                        "id": f"turn-{len(collected_turns) + 1}",
+                        "persona": p_name,
+                        "avatar": event.get("avatar", "User"),
+                        "color": event.get("color", "#6366f1"),
+                        "content": content,
+                        "turn": turn_num,
+                    })
+                elif ev_type == "summary_chunk":
+                    summary_text += (event.get("delta") or "")
+                elif ev_type == "summary":
+                    summary_text = event.get("content") or summary_text
+                elif ev_type == "error":
+                    error_msg = str(event.get("message") or "")
+                elif ev_type == "done":
+                    await _save_discussion_record()
+
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': f'讨论服务暂时不可用：{e}'}, ensure_ascii=False)}\n\n"
+            error_msg = f"讨论服务暂时不可用：{e}"
+            yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        finally:
+            await _save_discussion_record()
 
     return StreamingResponse(
         generate_stream(),
