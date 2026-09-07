@@ -1,0 +1,68 @@
+name: OpenMAIC Upstream Check
+
+# Vendored 上游漂移哨兵：classroom/ 是 THU-MAIC/OpenMAIC 的快照拷贝
+# （基线见 classroom/VENDORED.md），上游安全修复不会自动到达本仓库。
+# 本工作流每周比对上游 HEAD 与钉住的基线 commit，漂移即失败提醒评审。
+
+on:
+  schedule:
+    - cron: "0 2 * * 1" # 每周一 02:00 UTC
+  workflow_dispatch: {} # 支持手动触发
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openmaic-check
+  cancel-in-progress: true
+
+env:
+  UPSTREAM_REPO: https://github.com/THU-MAIC/OpenMAIC.git
+  VENDORED_BASELINE_FILE: classroom/VENDORED.md
+
+jobs:
+  check-upstream-drift:
+    name: Detect upstream drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (read VENDORED.md baseline)
+        uses: actions/checkout@v4
+
+      - name: Extract pinned baseline commit
+        id: baseline
+        run: |
+          BASELINE=$(grep -oE '[0-9a-f]{40}' "$VENDORED_BASELINE_FILE" | head -n 1)
+          if [ -z "$BASELINE" ]; then
+            echo "ERROR: VENDORED.md 中未找到 40 位基线 commit，请先补录档案。"
+            exit 1
+          fi
+          echo "commit=$BASELINE" >> "$GITHUB_OUTPUT"
+          echo "钉住基线: $BASELINE"
+
+      - name: Fetch upstream HEAD
+        id: upstream
+        run: |
+          UPSTREAM=$(git ls-remote "$UPSTREAM_REPO" HEAD | awk '{print $1}')
+          if [ -z "$UPSTREAM" ]; then
+            echo "ERROR: 无法获取上游 HEAD（网络/仓库变更？），请人工核查。"
+            exit 1
+          fi
+          echo "commit=$UPSTREAM" >> "$GITHUB_OUTPUT"
+          echo "上游 HEAD: $UPSTREAM"
+
+      - name: Compare
+        run: |
+          BASE="${{ steps.baseline.outputs.commit }}"
+          UP="${{ steps.upstream.outputs.commit }}"
+          if [ "$BASE" = "$UP" ]; then
+            echo "✅ 上游无漂移（基线 $BASE 仍为 HEAD）"
+          else
+            echo "⚠️ 上游已漂移！"
+            echo "  基线: $BASE"
+            echo "  HEAD:  $UP"
+            echo ""
+            echo "处置：按 classroom/VENDORED.md 第 4 节升级 SOP 执行评审，"
+            echo "重点核对上游 SECURITY.md 与 CHANGELOG；确认无高危披露后"
+            echo "可排入常规升级，随后更新 VENDORED.md 基线表。"
+            exit 1
+          fi
