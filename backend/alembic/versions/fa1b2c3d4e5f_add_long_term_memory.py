@@ -1,7 +1,7 @@
 """add_long_term_memory
 
 Revision ID: fa1b2c3d4e5f
-Revises: e8f9a0b1c2d3
+Revises: c1d2e3f4a5b6
 Create Date: 2026-09-08
 
 Adds memory_items and memory_subjects tables for five-category long-term memory.
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "fa1b2c3d4e5f"
-down_revision: str | None = "e8f9a0b1c2d3"
+down_revision: str | None = "c1d2e3f4a5b6"
 branch_labels: str | None = None
 depends_on: str | None = None
 

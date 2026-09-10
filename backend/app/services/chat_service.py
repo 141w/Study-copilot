@@ -269,6 +269,7 @@ async def ask_question_stream(
             user_id=user.id,
         )
     elif getattr(settings, "pipeline_v2_enabled", False):
+        logger.info("[ChatService] Routing stream via onion pipeline V2")
         stream_generator = execute_chat_pipeline_stream(
             doc_ids=valid_doc_ids,
             query=question,

@@ -150,6 +150,11 @@ async def execute_chat_pipeline_stream(
     builder.add(EventType.GENERATE)
     builder.add(EventType.ANSWER_REFLECT)
     stages = builder.build()
+    logger.info(
+        "[Pipeline] Streaming pipeline assembled (%d stages): %s",
+        len(stages),
+        [s.value for s in stages],
+    )
 
     async def _run() -> None:
         try:
