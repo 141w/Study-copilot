@@ -2,21 +2,25 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
-from app.core.rag_engine import _display_relevance, rag_engine
+from app.core.rag_engine import rag_engine
 from app.pipeline.base import EventType, PipelineState, Plugin, PluginError
 from app.pipeline.builder import PipelineBuilder
 from app.pipeline.manager import EventManager
 from app.pipeline.plugins.adaptive_retrieve import AdaptiveRetrievePlugin
 from app.pipeline.plugins.answer_reflect import AnswerReflectPlugin
-from app.pipeline.plugins.build_context import BuildContextPlugin
+from app.pipeline.plugins.build_context import BuildContextPlugin, build_sources_list
 from app.pipeline.plugins.corrective_grade import CorrectiveGradePlugin
 from app.pipeline.plugins.generate import GeneratePlugin
 from app.pipeline.plugins.load_history import LoadHistoryPlugin
 from app.pipeline.plugins.memory_recall import MemoryRecallPlugin
 from app.pipeline.plugins.query_understand import QueryUnderstandPlugin
+
+_PIPELINE_DONE = "__pipeline_done__"
 
 logger = logging.getLogger(__name__)
 
@@ -80,25 +84,7 @@ async def execute_chat_pipeline(
         return state.short_circuit_result
 
     # Format sources list matching legacy rag_engine contract
-    sources_list = []
-    for i, r in enumerate(state.retrieved_chunks[:10]):
-        chunk = r.get("chunk", {})
-        chunk_text = chunk.get("text", "")
-        page = chunk.get("page", "")
-        if page is None:
-            page = ""
-        elif not isinstance(page, str):
-            page = str(page)
-        sources_list.append(
-            {
-                "index": i + 1,
-                "document_id": chunk.get("document_id", ""),
-                "page": page,
-                "source": chunk.get("source", ""),
-                "text": chunk_text,
-                "relevance_score": _display_relevance(r),
-            }
-        )
+    sources_list = build_sources_list(state.retrieved_chunks)
 
     if state.used_source_indices:
         filtered_sources = [s for s in sources_list if s["index"] in state.used_source_indices]
@@ -125,4 +111,67 @@ __all__ = [
     "PipelineBuilder",
     "default_event_manager",
     "execute_chat_pipeline",
+    "execute_chat_pipeline_stream",
 ]
+
+
+async def execute_chat_pipeline_stream(
+    doc_ids: list[str],
+    query: str,
+    history: list[dict[str, Any]] | None = None,
+    user_config: dict[str, Any] | None = None,
+    user_id: str | None = None,
+    event_manager: EventManager | None = None,
+) -> AsyncIterator[dict[str, Any]]:
+    """Execute the onion pipeline in streaming mode, yielding SSE-compatible events.
+
+    Events match the legacy ``rag_engine.ask_stream`` protocol:
+    ``thinking`` / ``reasoning`` / ``token`` / ``sources`` / ``answer`` / ``answer_refined``.
+    """
+    mgr = event_manager or default_event_manager
+    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    state = PipelineState(
+        query=query,
+        doc_ids=doc_ids,
+        history=history or [],
+        user_config=user_config or {},
+        user_id=user_id or (user_config.get("user_id") if user_config else None),
+        stream_mode=True,
+        event_queue=queue,
+    )
+
+    builder = PipelineBuilder()
+    builder.add_if(bool(state.history), EventType.LOAD_HISTORY)
+    builder.add(EventType.MEMORY_RECALL)
+    builder.add(EventType.QUERY_UNDERSTAND)
+    builder.add(EventType.ADAPTIVE_RETRIEVE)
+    builder.add(EventType.CORRECTIVE_GRADE)
+    builder.add(EventType.BUILD_CONTEXT)
+    builder.add(EventType.GENERATE)
+    builder.add(EventType.ANSWER_REFLECT)
+    stages = builder.build()
+
+    async def _run() -> None:
+        try:
+            for stage in stages:
+                if state.short_circuited:
+                    break
+                await mgr.trigger(stage, state)
+        finally:
+            await queue.put({"type": _PIPELINE_DONE})
+
+    task = asyncio.create_task(_run())
+    try:
+        while True:
+            event = await queue.get()
+            if event.get("type") == _PIPELINE_DONE:
+                break
+            yield event
+    finally:
+        # Surface plugin exceptions to the consumer and avoid orphaned tasks
+        try:
+            await task
+        except PluginError:
+            raise
+        except Exception as e:
+            raise PluginError(str(e)) from e

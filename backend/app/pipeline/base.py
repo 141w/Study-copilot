@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -46,6 +47,18 @@ class PipelineState:
     # Short-circuit flag (e.g. out of scope or direct answer)
     short_circuited: bool = False
     short_circuit_result: dict[str, Any] | None = None
+
+    # Streaming mode: plugins push SSE events onto event_queue for progressive UI
+    stream_mode: bool = False
+    event_queue: asyncio.Queue[dict[str, Any]] | None = None
+
+
+async def emit_event(state: PipelineState, event: dict[str, Any]) -> None:
+    """Record a thinking event and forward it to the stream queue when streaming."""
+    if event.get("type") == "thinking":
+        state.thinking_events.append(event)
+    if state.event_queue is not None:
+        await state.event_queue.put(event)
 
 
 class PluginError(Exception):

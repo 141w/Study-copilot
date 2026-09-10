@@ -20,7 +20,7 @@ from app.core.note_synthesizer import extract_note_metadata
 from app.core.rag_engine import rag_engine
 from app.db import ChatSession, Document, Message, Note, User
 from app.exceptions import NotFoundError
-from app.pipeline import execute_chat_pipeline
+from app.pipeline import execute_chat_pipeline, execute_chat_pipeline_stream
 from app.services import note_service
 from app.services.config_service import get_llm_config_with_secret
 
@@ -259,17 +259,25 @@ async def ask_question_stream(
     saved_note_data: dict | None = None
     done_yielded = False
 
-    stream_generator = (
-        default_agent_engine.execute_stream(
+    stream_generator: AsyncIterator[dict[str, Any]]
+    if mode == "deep_research":
+        stream_generator = default_agent_engine.execute_stream(
             query=question,
             doc_ids=valid_doc_ids,
             history=history,
             user_config=llm_config,
             user_id=user.id,
         )
-        if mode == "deep_research"
-        else rag_engine.ask_stream(valid_doc_ids, question, history, llm_config)
-    )
+    elif getattr(settings, "pipeline_v2_enabled", False):
+        stream_generator = execute_chat_pipeline_stream(
+            doc_ids=valid_doc_ids,
+            query=question,
+            history=history,
+            user_config=llm_config,
+            user_id=user.id,
+        )
+    else:
+        stream_generator = rag_engine.ask_stream(valid_doc_ids, question, history, llm_config)
 
     try:
         async for chunk in stream_generator:

@@ -6,7 +6,7 @@ import logging
 
 from app.core.answer_reflector import answer_reflector
 from app.core.llm import LLM
-from app.pipeline.base import EventType, NextFn, PipelineState, Plugin
+from app.pipeline.base import EventType, NextFn, PipelineState, Plugin, emit_event
 
 logger = logging.getLogger(__name__)
 
@@ -43,24 +43,29 @@ class AnswerReflectPlugin(Plugin):
                     "[Pipeline] Answer reflection failed (%s), refining...",
                     reason,
                 )
-                state.thinking_events.append({
+                fail_event = {
                     "type": "thinking",
                     "step": "reflection_fail",
                     "detail": f"事实依据核验未达标（评分 {score}/100，{reason}）：{analysis_text}。改进策略：{evaluation.get('suggestions', '')}，正在触发自我纠错与精炼...",
-                })
-                state.answer = await answer_reflector.refine(
+                }
+                await emit_event(state, fail_event)
+                refined = await answer_reflector.refine(
                     target_query,
                     state.context_text,
                     state.answer,
                     evaluation.get("suggestions", ""),
                     llm,
                 )
+                state.answer = refined
+                if state.stream_mode:
+                    await emit_event(state, {"type": "answer_refined", "content": refined})
             else:
-                state.thinking_events.append({
+                pass_event = {
                     "type": "thinking",
                     "step": "reflection_pass",
                     "detail": f"事实依据核验通过（合规评分 {score}/100）：{analysis_text or reason or '核心论述均在参考文档中有可靠依据，未检测到幻觉编造'}",
-                })
+                }
+                await emit_event(state, pass_event)
         except Exception as e:
             logger.warning("[Pipeline] Reflection error for '%s': %s", target_query[:30], e)
 

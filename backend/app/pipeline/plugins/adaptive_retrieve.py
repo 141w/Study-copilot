@@ -7,7 +7,7 @@ import logging
 from app.core.adaptive_retriever import adaptive_retriever
 from app.core.llm import LLM
 from app.core.rag_engine import rag_engine
-from app.pipeline.base import EventType, NextFn, PipelineState, Plugin
+from app.pipeline.base import EventType, NextFn, PipelineState, Plugin, emit_event
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ class AdaptiveRetrievePlugin(Plugin):
             state.doc_ids, target_query, strategy, rag_engine, state.user_config
         )
         state.retrieved_chunks = retrieved
-        state.thinking_events.extend(thinking_events)
+        for event in thinking_events:
+            await emit_event(state, event)
 
         await next_fn()
