@@ -24,13 +24,9 @@ depends_on: str | None = None
 def upgrade() -> None:
     """Backfill: divide existing multiplied temperatures by 10."""
     # Only rows where temperature > 1 are the old multiplied form; actual decimals (< 1) are correct.
-    op.execute(
-        "UPDATE user_llm_configs SET temperature = temperature / 10.0 WHERE temperature > 1"
-    )
+    op.execute("UPDATE user_llm_configs SET temperature = temperature / 10.0 WHERE temperature > 1")
 
 
 def downgrade() -> None:
     """Restore multiplied form (only if rows were backfilled)."""
-    op.execute(
-        "UPDATE user_llm_configs SET temperature = temperature * 10 WHERE temperature < 1"
-    )
+    op.execute("UPDATE user_llm_configs SET temperature = temperature * 10 WHERE temperature < 1")

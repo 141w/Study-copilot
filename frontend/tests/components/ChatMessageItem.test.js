@@ -9,6 +9,16 @@ vi.mock('@/stores/toast', () => ({
   }),
 }))
 
+const mockPush = vi.fn()
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+  useRoute: () => ({
+    query: {},
+  }),
+}))
+
 vi.mock('@/components/TTSPlayer.vue', () => ({
   default: {
     name: 'TTSPlayer',
@@ -418,6 +428,78 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     // 再次点击：展开恢复“收起”
     await turnCardHeader.trigger('click')
     expect(wrapper.text()).toContain('收起')
+  })
+
+  it('正确渲染已保存至笔记卡片与标签', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'note-msg-1',
+          role: 'assistant',
+          content: '这是一份整理好的笔记正文',
+          savedNote: {
+            id: 'note-999',
+            title: 'Transformer 架构详解笔记',
+            tags: ['AI', '架构', 'Transformer']
+          },
+          created_at: new Date().toISOString()
+        }
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': {
+            template: '<button class="test-btn" @click="$emit(\'click\')"><slot /></button>',
+            emits: ['click']
+          }
+        }
+      }
+    })
+
+    expect(wrapper.find('.saved-note-card').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Transformer 架构详解笔记')
+    expect(wrapper.text()).toContain('已存入笔记')
+    expect(wrapper.text()).toContain('#Transformer')
+    expect(wrapper.text()).toContain('查看笔记')
+    expect(wrapper.text()).toContain('已存笔记')
+
+    const viewNoteBtn = wrapper.find('.saved-note-card .test-btn')
+    await viewNoteBtn.trigger('click')
+    expect(mockPush).toHaveBeenCalledWith({ path: '/notes', query: { id: 'note-999' } })
+  })
+
+  it('在无 savedNote 时渲染“存为笔记”按钮并触发保存', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'msg-to-save',
+          role: 'assistant',
+          content: '可被提炼为笔记的内容',
+          created_at: new Date().toISOString()
+        }
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': {
+            template: '<button class="test-btn" @click="$emit(\'click\')"><slot /></button>',
+            emits: ['click']
+          }
+        }
+      }
+    })
+
+    expect(wrapper.text()).toContain('存为笔记')
+    const buttons = wrapper.findAll('.test-btn')
+    const saveBtn = buttons.find(b => b.text().includes('存为笔记'))
+    expect(saveBtn).toBeDefined()
+    await saveBtn.trigger('click')
+    expect(wrapper.emitted('saveNote')).toBeTruthy()
+    expect(wrapper.emitted('saveNote')?.[0][0].id).toBe('msg-to-save')
   })
 })
 

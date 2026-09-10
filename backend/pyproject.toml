@@ -37,6 +37,7 @@ dependencies = [
     "jieba>=0.42.1",
     "trafilatura>=1.6.0",
     "alembic>=1.12.0",
+    "langfuse>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -148,6 +149,8 @@ module = [
     "cryptography.*",
     "openai",
     "aiofiles",
+    "langfuse",
+    "langfuse.*",
 ]
 ignore_missing_imports = true
 

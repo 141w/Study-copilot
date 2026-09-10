@@ -1,60 +1,54 @@
 <template>
   <div class="chat-input-wrapper w-full">
-    <div
-      class="chat-input-card relative bg-[var(--surface-card)] border border-[var(--border-default)] hover:border-[var(--color-primary-light)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/15 rounded-2xl p-2.5 sm:p-3 shadow-xs transition-all duration-200"
-    >
-      <!-- Multi-line auto-resizing textarea -->
-      <textarea
-        ref="textareaRef"
-        v-model="inputText"
-        :placeholder="placeholder"
-        :disabled="disabled"
-        rows="1"
-        class="chat-textarea w-full bg-transparent resize-none border-0 outline-none text-sm leading-relaxed text-[var(--text-primary)] placeholder-[var(--text-muted)] max-h-36 overflow-y-auto px-1.5 pt-0.5 pb-1 focus:ring-0 focus:outline-none"
-        @keydown="handleKeyDown"
-        @input="adjustHeight"
-      ></textarea>
-
-      <!-- Bottom toolbar: Hint on the left, Action button on the right -->
-      <div class="flex items-center justify-between pt-2 border-t border-[var(--border-default)]/40 mt-1 px-1">
-        <!-- Keyboard hint -->
-        <div class="flex items-center gap-2 text-[11px] text-[var(--text-muted)] select-none">
-          <span class="sm:hidden">Enter 发送</span>
-        </div>
-
-        <!-- Action Button (Stop when streaming, Send when idle) -->
-        <div class="flex items-center gap-1.5">
-          <button
-            v-if="loading"
-            type="button"
-            class="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:bg-rose-950/40 dark:hover:bg-rose-950/60 border border-rose-200 dark:border-rose-800/40 transition-colors shadow-xs cursor-pointer active:scale-95"
-            title="停止生成"
-            aria-label="停止生成"
-            @click="stopStream"
-          >
-            <span class="w-2 h-2 rounded-xs bg-rose-500 animate-pulse"></span>
-            <span>停止生成</span>
-          </button>
-
-          <button
-            v-else
-            type="button"
-            class="flex items-center justify-center w-8 h-8 rounded-full text-white bg-[var(--color-primary)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer active:scale-95"
-            :disabled="disabled || !inputText.trim()"
-            title="发送消息"
-            aria-label="发送消息"
-            @click="sendMessage"
-          >
-            <el-icon :size="15"><Promotion /></el-icon>
-          </button>
-        </div>
+    <div class="flex gap-2.5 sm:gap-3 items-center w-full">
+      <!-- Input container (standard clean rounded-lg rectangle, not capsule) -->
+      <div
+        class="flex-1 bg-[var(--surface-card)] border border-[var(--border-default)] hover:border-[var(--color-primary-light)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/15 rounded-lg px-3 py-2 shadow-xs transition-all duration-200 flex items-center"
+      >
+        <textarea
+          ref="textareaRef"
+          v-model="inputText"
+          :placeholder="placeholder"
+          :disabled="disabled"
+          rows="1"
+          class="chat-textarea w-full bg-transparent resize-none border-0 outline-none text-sm leading-normal text-[var(--text-primary)] placeholder-[var(--text-muted)] max-h-32 overflow-y-auto p-0 focus:ring-0 focus:outline-none"
+          style="min-height: 20px; height: 20px;"
+          @keydown="handleKeyDown"
+          @input="adjustHeight"
+        ></textarea>
       </div>
+
+      <!-- Action Button (Stop when streaming, Send when idle) -->
+      <button
+        v-if="loading"
+        type="button"
+        class="flex items-center justify-center w-9 h-9 rounded-lg text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-xs cursor-pointer active:scale-95 flex-shrink-0"
+        title="停止回答"
+        aria-label="停止生成"
+        @click="stopStream"
+      >
+        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+        </svg>
+      </button>
+
+      <button
+        v-else
+        type="button"
+        class="flex items-center justify-center w-9 h-9 rounded-lg text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer active:scale-95 flex-shrink-0"
+        :disabled="disabled || !inputText.trim()"
+        title="发送消息"
+        aria-label="发送消息"
+        @click="sendMessage"
+      >
+        <el-icon :size="16"><Promotion /></el-icon>
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { Promotion } from '@/components/icons'
 
 const props = withDefaults(defineProps<{
@@ -75,11 +69,23 @@ const emit = defineEmits<{
 const inputText = ref('')
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
+const MIN_HEIGHT_PX = 20
+const MAX_HEIGHT_PX = 120
+let rafId: number | null = null
+
 function adjustHeight(): void {
   const el = textareaRef.value
   if (!el) return
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 144) + 'px'
+  if (rafId) cancelAnimationFrame(rafId)
+  rafId = requestAnimationFrame(() => {
+    const cur = textareaRef.value
+    if (!cur) return
+    cur.style.height = 'auto'
+    const target = Math.min(Math.max(cur.scrollHeight, MIN_HEIGHT_PX), MAX_HEIGHT_PX)
+    if (Math.abs(cur.clientHeight - target) <= 1) return
+    cur.style.height = target + 'px'
+    rafId = null
+  })
 }
 
 function handleKeyDown(event: KeyboardEvent): void {
@@ -100,11 +106,21 @@ function sendMessage(): void {
   if (inputText.value.trim() && !props.disabled && !props.loading) {
     emit('send', inputText.value.trim())
     inputText.value = ''
-    nextTick(adjustHeight)
+    nextTick(() => {
+      if (textareaRef.value) {
+        textareaRef.value.style.height = '20px'
+      }
+    })
   }
 }
 
 function stopStream(): void {
   emit('stop')
 }
+
+onMounted(() => {
+  if (textareaRef.value) {
+    textareaRef.value.style.height = '20px'
+  }
+})
 </script>

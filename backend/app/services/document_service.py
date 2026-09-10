@@ -18,6 +18,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.chunk_strategy import (
+    enrich_chunk_breadcrumbs,
+    profile_document,
+    select_chunking_chain,
+    validate_chunks,
+)
 from app.core.chunker import (
     create_chunker,
     deduplicate_chunks,
@@ -199,35 +205,73 @@ async def _do_process_document(
         if progress_callback:
             await progress_callback(0.3, f"文档解析完成，共提取 {len(pages)} 页内容")
 
-        # Choose chunking strategy
-        total_text_len = sum(len(p.get("text", "")) for p in pages)
-        rough_sentences = sum(
-            len(re.split(r"(?<=[.!?。！？;；])\s+", p.get("text", ""))) for p in pages
-        )
-        method = _choose_chunker_method(total_text_len, rough_sentences, doc.filename or "")
-        logger.debug(
-            "Auto-selected chunking method: %s (len=%d, sentences=%d)",
-            method,
+        # Document profiling and adaptive strategy chain selection
+        all_text = "\n".join(p.get("text", "") for p in pages)
+        total_text_len = len(all_text)
+        profile = profile_document(all_text)
+        chain = select_chunking_chain(profile, filename=doc.filename or "")
+        logger.info(
+            "Adaptive chunker selected chain %s for doc '%s' (chars=%d, headings=%d, dominant_level=%d)",
+            chain,
+            doc.filename,
             total_text_len,
-            rough_sentences,
+            profile.md_heading_total,
+            profile.dominant_heading_level(),
         )
 
-        # Chunk
-        if progress_callback:
-            await progress_callback(0.5, f"开始以 {method} 策略分块...")
-        try:
-            logger.info("Starting chunking with %s strategy...", method)
-            chunker = create_chunker(method=method)
-            chunks = await chunker.chunk_document(pages, doc_id)
-            chunks = deduplicate_chunks(chunks, similarity_threshold=0.85)
-            logger.info("Chunking complete, %d chunks created", len(chunks))
-            if not chunks:
-                raise ValidationError("文档内容不足，无法生成知识块")
-        except ValidationError:
-            raise
-        except Exception as e:
-            logger.error("Failed to chunk document: %s", e)
-            raise ExternalServiceError(f"文档分块失败: {str(e)}")
+        chunks = []
+        selected_method = chain[-1]
+        for idx, method in enumerate(chain):
+            if progress_callback:
+                await progress_callback(
+                    0.5, f"尝试以 {method} 策略分块（第 {idx + 1}/{len(chain)} 层）..."
+                )
+            try:
+                logger.info("Attempting chunking with %s strategy (tier %d)...", method, idx + 1)
+                chunker = create_chunker(method=method)
+                candidate_chunks = await chunker.chunk_document(pages, doc_id)
+                candidate_chunks = deduplicate_chunks(candidate_chunks, similarity_threshold=0.85)
+
+                target_size = getattr(chunker, "chunk_size", 500)
+                is_valid, reason = validate_chunks(
+                    candidate_chunks, total_chars=total_text_len, chunk_size=target_size
+                )
+                if is_valid:
+                    chunks = candidate_chunks
+                    selected_method = method
+                    logger.info(
+                        "Chunking succeeded with %s strategy: %d chunks", method, len(chunks)
+                    )
+                    break
+                else:
+                    logger.warning(
+                        "Tier %s output rejected by validator: %s. Falling to next tier.",
+                        method,
+                        reason,
+                    )
+            except Exception as e:
+                logger.warning("Tier %s execution error: %s. Falling to next tier.", method, e)
+
+        # Final safety net: if chain exhausted without valid chunks, fallback to fixed
+        if not chunks:
+            logger.warning("All chain tiers rejected; running final fixed chunker safety fallback.")
+            try:
+                chunker = create_chunker(method="fixed")
+                chunks = await chunker.chunk_document(pages, doc_id)
+                chunks = deduplicate_chunks(chunks, similarity_threshold=0.85)
+                selected_method = "fixed"
+            except Exception as e:
+                logger.error("Failed to chunk document with fallback: %s", e)
+                raise ExternalServiceError(f"文档分块失败: {str(e)}")
+
+        if not chunks:
+            raise ValidationError("文档内容不足，无法生成知识块")
+
+        # Enrich context headers / breadcrumbs
+        chunks = enrich_chunk_breadcrumbs(chunks, profile)
+        logger.info(
+            "Adaptive chunking complete using %s, %d chunks created", selected_method, len(chunks)
+        )
 
         # Build vector store (pgvector SQL-backed)
         if progress_callback:

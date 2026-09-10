@@ -201,4 +201,3 @@ def test_build_refined_image_prompt():
     )
     assert custom in prompt_custom
     assert "strictly no text" in prompt_custom
-

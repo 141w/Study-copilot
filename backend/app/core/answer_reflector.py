@@ -11,6 +11,7 @@ import logging
 
 from app.core.llm import LLM
 from app.core.template_manager import render_template
+from app.core.tracing import observe_span
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 class AnswerReflector:
     """答案质量反思器"""
 
+    @observe_span(name="rag.answer_reflector.evaluate")
     async def evaluate(self, query: str, context: str, answer: str, llm: LLM) -> dict:
         """评估答案质量。
 
@@ -50,6 +52,7 @@ class AnswerReflector:
                 "suggestions": "",
             }
 
+    @observe_span(name="rag.answer_reflector.refine")
     async def refine(self, query: str, context: str, answer: str, feedback: str, llm: LLM) -> str:
         """根据反馈重新生成答案。"""
         try:

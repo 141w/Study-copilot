@@ -76,9 +76,7 @@ def test_backend_consumes_fields_exist_in_engine(field: str):
     """
     route = ENGINE_ROOT / "app" / "api" / "generate-classroom" / "[jobId]" / "route.ts"
     body = route.read_text(encoding="utf-8")
-    assert f"{field}:" in body or f"{field}," in body, (
-        f"上游响应构造中不再包含字段 {field}"
-    )
+    assert f"{field}:" in body or f"{field}," in body, f"上游响应构造中不再包含字段 {field}"
 
 
 def test_job_status_enum_contract():
@@ -107,8 +105,27 @@ def test_result_contract_fields():
 # ── 耦合面 3：DSL schema 同构锁定 ────────────────────────────────────────
 
 DSL_TOP_KEYS = {"id", "url", "stage", "scenes", "scenesCount", "createdAt"}
-STAGE_KEYS = {"id", "name", "description", "createdAt", "updatedAt", "style", "languageDirective", "generatedAgentConfigs"}
-SCENE_KEYS = {"id", "stageId", "title", "order", "type", "content", "actions", "createdAt", "updatedAt"}
+STAGE_KEYS = {
+    "id",
+    "name",
+    "description",
+    "createdAt",
+    "updatedAt",
+    "style",
+    "languageDirective",
+    "generatedAgentConfigs",
+}
+SCENE_KEYS = {
+    "id",
+    "stageId",
+    "title",
+    "order",
+    "type",
+    "content",
+    "actions",
+    "createdAt",
+    "updatedAt",
+}
 
 
 def _load_engine_dsl_sample() -> dict:
@@ -190,5 +207,9 @@ def test_backend_only_talks_to_engine_via_two_endpoints():
     svc = (BACKEND_ROOT / "app" / "services" / "classroom_service.py").read_text(encoding="utf-8")
     occurrences = [ln for ln in svc.splitlines() if "/api/generate-classroom" in ln]
     assert occurrences, "classroom_service 不再调用引擎端点？"
-    bad = [ln for ln in svc.splitlines() if "classroom_base_url" in ln and "/api/" in ln and "/api/generate-classroom" not in ln]
+    bad = [
+        ln
+        for ln in svc.splitlines()
+        if "classroom_base_url" in ln and "/api/" in ln and "/api/generate-classroom" not in ln
+    ]
     assert not bad, f"主系统试图直连引擎非契约端点（扩耦合面）: {bad}"

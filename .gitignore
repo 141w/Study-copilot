@@ -111,6 +111,7 @@ archive_docs/
 
 # External project references (not part of this codebase)
 bloub/
+WeKnora/
 
 # Design comparison reports
 icon-*-report.html

@@ -8,14 +8,20 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent import default_agent_engine
+from app.config import settings
 from app.core.embedder import embedder
+from app.core.note_synthesizer import extract_note_metadata
 from app.core.rag_engine import rag_engine
-from app.db import ChatSession, Document, Message, User
+from app.db import ChatSession, Document, Message, Note, User
 from app.exceptions import NotFoundError
+from app.pipeline import execute_chat_pipeline
+from app.services import note_service
 from app.services.config_service import get_llm_config_with_secret
 
 logger = logging.getLogger(__name__)
@@ -125,7 +131,7 @@ async def _insert_message(
 
 
 async def _validate_document_ids(
-    db: AsyncSession, user_id: str, document_ids: list[str]
+    db: AsyncSession, user_id: str, document_ids: list[str] | None
 ) -> list[str]:
     """Filter document_ids to ensure they belong to the user and are not soft-deleted."""
     if not document_ids:
@@ -151,6 +157,7 @@ async def ask_question(
     """Non-streaming RAG ask. Returns {answer, sources, used_source_indices, filtered_sources, session_id}."""
     user_config = await get_llm_config_with_secret(db, user)
     llm_config = dict(user_config)
+    llm_config["user_id"] = user.id
     if config:
         llm_config.update({k: v for k, v in config.items() if v is not None})
 
@@ -158,10 +165,48 @@ async def ask_question(
     session_id, _ = await _ensure_session(db, user.id, session_id, question)
     history = await _get_history(db, session_id)
 
-    result = await rag_engine.ask(valid_doc_ids, question, history, llm_config)
+    if getattr(settings, "pipeline_v2_enabled", False):
+        result = await execute_chat_pipeline(
+            doc_ids=valid_doc_ids,
+            query=question,
+            history=history,
+            user_config=llm_config,
+            user_id=user.id,
+        )
+    else:
+        result = await rag_engine.ask(valid_doc_ids, question, history, llm_config)
+
+    saved_note_data = None
+    if result.get("intent") == "note_taking" and result.get("answer"):
+        try:
+            title, clean_content, tags = extract_note_metadata(
+                result["answer"], fallback_title=question[:30]
+            )
+            note = await note_service.create_note(
+                db=db,
+                user=user,
+                title=title,
+                content=clean_content,
+                tag_names=tags,
+            )
+            saved_note_data = {
+                "id": note.id,
+                "title": note.title,
+                "tags": [t.name for t in (note.tags or [])],
+            }
+        except Exception as e:
+            logger.warning("[ChatService] Failed to auto-create note in ask: %s", e)
 
     # Persist messages with embeddings (non-blocking: embedding failure doesn't break the flow)
-    sources_json = json.dumps(result.get("sources", []), ensure_ascii=False)
+    if saved_note_data:
+        sources_payload = {
+            "sources": result.get("sources", []),
+            "saved_note": saved_note_data,
+        }
+        sources_json = json.dumps(sources_payload, ensure_ascii=False)
+    else:
+        sources_json = json.dumps(result.get("sources", []), ensure_ascii=False)
+
     q_emb = await _embed_text(question)
     a_emb = await _embed_text(result["answer"])
     await _insert_message(db, str(uuid.uuid4()), session_id, "user", question, None, q_emb)
@@ -175,6 +220,7 @@ async def ask_question(
         "used_source_indices": result.get("used_source_indices", []),
         "filtered_sources": result.get("filtered_sources", []),
         "session_id": session_id,
+        "saved_note": saved_note_data,
     }
 
 
@@ -182,13 +228,15 @@ async def ask_question_stream(
     db: AsyncSession,
     user: User,
     question: str,
-    document_ids: list[str],
+    document_ids: list[str] | None = None,
     session_id: str | None = None,
     config: dict | None = None,
+    mode: str = "fast",
 ) -> AsyncIterator[dict]:
     """Streaming RAG ask. Yields dicts with 'type' key: sources / token / answer / done."""
     user_config = await get_llm_config_with_secret(db, user)
     llm_config = dict(user_config)
+    llm_config["user_id"] = user.id
     if config:
         llm_config.update({k: v for k, v in config.items() if v is not None})
 
@@ -207,10 +255,24 @@ async def ask_question_stream(
     collected_sources: list[dict] = []
     collected_thinking: list[dict] = []
     collected_reasoning: list[str] = []
+    detected_intent: str | None = None
+    saved_note_data: dict | None = None
     done_yielded = False
 
+    stream_generator = (
+        default_agent_engine.execute_stream(
+            query=question,
+            doc_ids=valid_doc_ids,
+            history=history,
+            user_config=llm_config,
+            user_id=user.id,
+        )
+        if mode == "deep_research"
+        else rag_engine.ask_stream(valid_doc_ids, question, history, llm_config)
+    )
+
     try:
-        async for chunk in rag_engine.ask_stream(valid_doc_ids, question, history, llm_config):
+        async for chunk in stream_generator:
             if chunk["type"] == "sources":
                 collected_sources = chunk.get("sources", [])
                 yield {
@@ -219,6 +281,8 @@ async def ask_question_stream(
                     "filtered_sources": chunk["filtered_sources"],
                     "session_id": session_id,
                 }
+            elif chunk["type"] == "intent":
+                detected_intent = chunk.get("intent")
             elif chunk["type"] == "thinking":
                 step_data = {
                     "step": chunk.get("step", ""),
@@ -250,11 +314,34 @@ async def ask_question_stream(
     except GeneratorExit:
         full_answer = "".join(answer_parts)
         if full_answer:
-            if collected_thinking or collected_reasoning:
+            if detected_intent == "note_taking" and not saved_note_data:
+                try:
+                    title, clean_content, tags = extract_note_metadata(
+                        full_answer, fallback_title=question[:30]
+                    )
+                    note = await note_service.create_note(
+                        db=db,
+                        user=user,
+                        title=title,
+                        content=clean_content,
+                        tag_names=tags,
+                    )
+                    saved_note_data = {
+                        "id": note.id,
+                        "title": note.title,
+                        "tags": [t.name for t in (note.tags or [])],
+                    }
+                except Exception as e:
+                    logger.warning(
+                        "[ChatService] Failed to auto-create note in GeneratorExit: %s", e
+                    )
+
+            if collected_thinking or collected_reasoning or saved_note_data:
                 sources_payload = {
                     "sources": collected_sources,
                     "thinking": collected_thinking if collected_thinking else None,
                     "reasoning": "".join(collected_reasoning) if collected_reasoning else None,
+                    "saved_note": saved_note_data,
                 }
                 sources_json = json.dumps(sources_payload, ensure_ascii=False)
             else:
@@ -275,11 +362,36 @@ async def ask_question_stream(
         if not done_yielded:
             full_answer = "".join(answer_parts)
             if full_answer:
-                if collected_thinking or collected_reasoning:
+                if detected_intent == "note_taking" and not saved_note_data:
+                    try:
+                        title, clean_content, tags = extract_note_metadata(
+                            full_answer, fallback_title=question[:30]
+                        )
+                        note = await note_service.create_note(
+                            db=db,
+                            user=user,
+                            title=title,
+                            content=clean_content,
+                            tag_names=tags,
+                        )
+                        saved_note_data = {
+                            "id": note.id,
+                            "title": note.title,
+                            "tags": [t.name for t in (note.tags or [])],
+                        }
+                        yield {
+                            "type": "note_saved",
+                            "note": saved_note_data,
+                        }
+                    except Exception as e:
+                        logger.warning("[ChatService] Failed to auto-create note: %s", e)
+
+                if collected_thinking or collected_reasoning or saved_note_data:
                     sources_payload = {
                         "sources": collected_sources,
                         "thinking": collected_thinking if collected_thinking else None,
                         "reasoning": "".join(collected_reasoning) if collected_reasoning else None,
+                        "saved_note": saved_note_data,
                     }
                     sources_json = json.dumps(sources_payload, ensure_ascii=False)
                 else:
@@ -295,7 +407,62 @@ async def ask_question_stream(
                     a_emb,
                 )
             done_yielded = True
-            yield {"type": "done"}
+            done_payload: dict[str, Any] = {"type": "done"}
+            if saved_note_data:
+                done_payload["saved_note"] = saved_note_data
+            yield done_payload
+
+
+async def save_message_as_note(
+    db: AsyncSession,
+    user: User,
+    message_id: str,
+) -> Note:
+    """把一条已有的消息（通常是 assistant 消息）提炼并保存为用户的笔记。"""
+    result = await db.execute(
+        select(Message, ChatSession)
+        .join(ChatSession, Message.session_id == ChatSession.id)
+        .where(Message.id == message_id, ChatSession.user_id == user.id)
+    )
+    row = result.first()
+    if not row:
+        raise NotFoundError("消息不存在或无权操作")
+
+    msg, _session = row
+    title, clean_content, tags = extract_note_metadata(msg.content, fallback_title="问答学习笔记")
+
+    note = await note_service.create_note(
+        db=db,
+        user=user,
+        title=title,
+        content=clean_content,
+        tag_names=tags,
+    )
+
+    saved_note_data = {
+        "id": note.id,
+        "title": note.title,
+        "tags": [t.name for t in (note.tags or [])],
+    }
+
+    # 回写到消息 sources 元数据中，确保历史记录也能看到已存笔记卡片
+    sources_payload: dict = {}
+    if msg.sources:
+        try:
+            raw = json.loads(msg.sources)
+            if isinstance(raw, list):
+                sources_payload["sources"] = raw
+            elif isinstance(raw, dict):
+                sources_payload = raw
+        except Exception:
+            pass
+
+    sources_payload["saved_note"] = saved_note_data
+    sources_json = json.dumps(sources_payload, ensure_ascii=False)
+    await db.execute(update(Message).where(Message.id == message_id).values(sources=sources_json))
+    await db.commit()
+
+    return note
 
 
 async def list_sessions(

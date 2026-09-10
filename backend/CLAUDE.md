@@ -144,9 +144,9 @@ Use FastAPI's `Depends()` for auth and database sessions:
 ```python
 from app.utils.auth import get_current_user
 
+
 @router.get("/")
-async def list_items(user = Depends(get_current_user)):
-    ...
+async def list_items(user=Depends(get_current_user)): ...
 ```
 
 ### RAG Pipeline Flow (Agentic)

@@ -38,6 +38,26 @@
             </el-radio-group>
           </div>
 
+          <!-- 问答模式子项：快速问答 / 深度研究 (ReAct) -->
+          <Transition name="fade">
+            <div v-if="chatMode === 'qa'" class="flex items-center gap-1.5 shrink-0">
+              <el-radio-group v-model="researchMode" size="small" class="agent-mode-radios">
+                <el-radio-button label="fast">
+                  <span class="flex items-center gap-1">
+                    <el-icon :size="12"><Lightning /></el-icon>
+                    <span>快速</span>
+                  </span>
+                </el-radio-button>
+                <el-radio-button label="deep_research">
+                  <span class="flex items-center gap-1">
+                    <el-icon :size="12"><Brain /></el-icon>
+                    <span>深度研究</span>
+                  </span>
+                </el-radio-button>
+              </el-radio-group>
+            </div>
+          </Transition>
+
           <!-- 讨论模式树形下拉配置框（整合讨论角色、上下文模式、研讨深度，节约横向空间） -->
           <Transition name="fade">
             <div v-if="chatMode === 'discuss'" class="flex items-center gap-1.5 shrink-0">
@@ -188,12 +208,12 @@
 
       <!-- Input Area -->
       <div class="border-t border-[var(--border-default)] bg-[var(--bg-primary)]/80 backdrop-blur-md">
-        <div class="max-w-3xl mx-auto px-4 py-3 sm:py-4">
+        <div class="max-w-3xl mx-auto px-4 py-2.5 sm:py-3">
           <ChatInput
             @send="handleSend"
             @stop="handleStop"
             :loading="chatStore.isStreaming"
-            placeholder="输入问题，按 Enter 发送..."
+            placeholder="输入您的问题..."
           />
         </div>
       </div>
@@ -269,6 +289,7 @@ const botMood = ref<BotMood>('idle')
 const messagesRef = ref<HTMLElement | null>(null)
 const route = useRoute()
 const chatMode = ref<'qa' | 'discuss'>('qa')
+const researchMode = ref<'fast' | 'deep_research'>('fast')
 // 讨论上下文模式（rag_snippets=检索片段 / full_docs=全文打包）
 const discussContextMode = ref<'rag_snippets' | 'full_docs'>('rag_snippets')
 const discussMaxTurns = ref<number>(2)
@@ -592,7 +613,7 @@ async function handleSend(content: string): Promise<void> {
     return
   }
   try {
-    await chatStore.askQuestionStream(content, selectedDocs.value)
+    await chatStore.askQuestionStream(content, selectedDocs.value, null, researchMode.value)
   }
   catch (_e) {
     playScene('exclaim')

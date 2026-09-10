@@ -288,6 +288,63 @@ describe('ClassroomPlayerView', () => {
     // 验证展开
     expect(aside.attributes('style') || '').not.toContain('display: none')
   })
+
+  it('验证侧边栏桌面端自适应平铺与移动端遮罩交互（彻底消除遮挡）', async () => {
+    const classroomStore = useClassroomStore()
+    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: {
+          'el-button': { template: '<button><slot /></button>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-drawer': { template: '<div><slot /></div>' }
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const dirBtn = wrapper.findAll('button').find(b => b.attributes('title') === '章节目录')
+    expect(dirBtn).toBeDefined()
+    await dirBtn.trigger('click')
+    await flushPromises()
+
+    const aside = wrapper.find('aside')
+    expect(aside.exists()).toBe(true)
+
+    // 验证 aside 具有桌面端自适应平铺样式（相对定位非绝对覆盖）
+    expect(aside.classes()).toContain('lg:relative')
+    expect(aside.classes()).toContain('lg:inset-auto')
+
+    // 验证 main 具有 flex-1 与 min-w-0 自适应缩放属性
+    const main = wrapper.find('main')
+    expect(main.classes()).toContain('min-w-0')
+    expect(main.classes()).toContain('flex-1')
+
+    // 验证画布最大宽度具有 min(100%, ...) 防溢出约束
+    const stageCanvas = wrapper.find('.aspect-video')
+    expect(stageCanvas.attributes('style')).toContain('min(100%')
+
+    // 验证移动端遮罩存在，且点击后收起侧边栏
+    const backdrop = wrapper.find('.lg\\:hidden.fixed.inset-0')
+    expect(backdrop.exists()).toBe(true)
+    await backdrop.trigger('click')
+    await flushPromises()
+    expect(aside.attributes('style')).toContain('display: none')
+
+    // 再次展开并点击侧边栏内部的关闭按钮
+    await dirBtn.trigger('click')
+    await flushPromises()
+    expect(aside.attributes('style') || '').not.toContain('display: none')
+
+    const closeBtn = aside.findAll('button').find(b => b.attributes('title') === '关闭目录')
+    expect(closeBtn).toBeDefined()
+    await closeBtn.trigger('click')
+    await flushPromises()
+    expect(aside.attributes('style')).toContain('display: none')
+  })
 })
+
 
 

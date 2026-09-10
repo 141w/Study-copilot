@@ -167,10 +167,9 @@ async def create_note(
 
     db.add(note)
     await db.commit()
-    await db.refresh(note)
     logger.info("Created note %s for user %s", note.id, user.id)
     await _safe_reindex(db, user)
-    return note
+    return await get_note(db, user, note.id)
 
 
 async def list_notes(

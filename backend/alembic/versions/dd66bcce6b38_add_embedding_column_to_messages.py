@@ -7,8 +7,9 @@ Create Date: 2026-09-03 21:44:02.936891
 Adds an embedding column to messages for semantic search of chat history.
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers
 revision: str = "dd66bcce6b38"

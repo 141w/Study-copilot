@@ -11,6 +11,7 @@ from app.api.classroom_api import router as classroom_router
 from app.api.config import router as config_router
 from app.api.courses import router as courses_router
 from app.api.document import router as document_router
+from app.api.memory import router as memory_router
 from app.api.metrics import router as metrics_router
 from app.api.notes import router as notes_router
 from app.api.quiz import router as quiz_router
@@ -68,7 +69,9 @@ async def lifespan(app: FastAPI):
 
     # Start background task worker
     from app.core.task_worker import start_worker
+    from app.core.tracing import flush_tracing, init_tracing, shutdown_tracing
 
+    init_tracing()
     await start_worker()
     yield
 
@@ -76,6 +79,8 @@ async def lifespan(app: FastAPI):
     from app.core.task_worker import stop_worker
 
     await stop_worker()
+    flush_tracing()
+    shutdown_tracing()
 
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
@@ -121,6 +126,7 @@ app.include_router(tts_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
 app.include_router(metrics_router, prefix="/api")
 app.include_router(classroom_router, prefix="/api")
+app.include_router(memory_router, prefix="/api")
 
 
 @app.get("/")

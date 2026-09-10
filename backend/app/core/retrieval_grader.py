@@ -7,9 +7,11 @@ Retrieval Grader — 评估检索结果质量
 """
 
 import asyncio
+import json
 import logging
 
 from app.core.llm import LLM
+from app.core.tracing import observe_span
 from app.core.vector_store import result_relevance
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,12 @@ class RetrievalQuality:
         return self.quality == "good"
 
     def to_dict(self) -> dict:
-        return {"quality": self.quality, "reason": self.reason, "score": self.score, "detail": self.detail}
+        return {
+            "quality": self.quality,
+            "reason": self.reason,
+            "score": self.score,
+            "detail": self.detail,
+        }
 
 
 class RetrievalGrader:
@@ -48,6 +55,7 @@ class RetrievalGrader:
         "分析结果："
     )
 
+    @observe_span(name="rag.retrieval_grader.grade")
     async def grade(
         self, query: str, retrieved: list[dict], user_config: dict | None = None
     ) -> RetrievalQuality:
@@ -56,7 +64,9 @@ class RetrievalGrader:
         # ── 无结果 ──
         if not retrieved:
             logger.info("[Grader] No results → bad (no_results)")
-            return RetrievalQuality("bad", "no_results", 0.0, "未检索到任何匹配切片，候选知识集为空")
+            return RetrievalQuality(
+                "bad", "no_results", 0.0, "未检索到任何匹配切片，候选知识集为空"
+            )
 
         # ── 规则级评估 ──
         # 优先使用统一 [0,1] 相关度；旧结果回退 distance 换算
@@ -130,7 +140,9 @@ class RetrievalGrader:
                 pass
 
             # 纯文本兜底判断
-            is_relevant = raw.lower().startswith("yes") or "是" in raw[:5] or "true" in raw.lower()[:10]
+            is_relevant = (
+                raw.lower().startswith("yes") or "是" in raw[:5] or "true" in raw.lower()[:10]
+            )
             logger.info(
                 "[Grader] LLM judgment: %s → %s",
                 raw[:30],

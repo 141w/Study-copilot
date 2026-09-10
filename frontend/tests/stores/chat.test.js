@@ -122,4 +122,47 @@ describe('Chat Store', () => {
     expect(store.messages[1].discussionTurns[0].persona).toBe('苏老师')
     expect(store.messages[1].summary).toBe('总结结论')
   })
+
+  it('saveMessageAsNote calls API and updates local message note info', async () => {
+    store.messages = [
+      { id: 'msg-1', role: 'assistant', content: '测试正文' }
+    ]
+    const mockNoteResp = {
+      data: {
+        success: true,
+        note: {
+          id: 'note-123',
+          title: '测试笔记标题',
+          tags: ['AI', '测试']
+        }
+      }
+    }
+    api.post.mockResolvedValue(mockNoteResp)
+
+    const res = await store.saveMessageAsNote('msg-1')
+
+    expect(api.post).toHaveBeenCalledWith('/chat/messages/msg-1/save-note')
+    expect(res.title).toBe('测试笔记标题')
+    expect(store.messages[0].saved_note).toEqual(mockNoteResp.data.note)
+    expect(store.messages[0].savedNote).toEqual(mockNoteResp.data.note)
+  })
+
+  it('fetchHistory normalizes saved_note into savedNote', async () => {
+    const mockHistory = {
+      messages: [
+        {
+          id: 'msg-note',
+          role: 'assistant',
+          content: '正文',
+          saved_note: { id: 'n-1', title: '深度学习', tags: ['DL'] }
+        }
+      ]
+    }
+    api.get.mockResolvedValue({ data: mockHistory })
+
+    await store.fetchHistory('sess-note')
+
+    expect(store.messages[0].savedNote).toEqual({ id: 'n-1', title: '深度学习', tags: ['DL'] })
+    expect(store.messages[0].saved_note).toEqual({ id: 'n-1', title: '深度学习', tags: ['DL'] })
+  })
 })

@@ -54,6 +54,7 @@ declare module 'vue' {
     ElTreeSelect: typeof import('element-plus/es/components/tree-select/index.mjs')['ElTreeSelect']
     EmptyState: typeof import('./components/common/EmptyState.vue')['default']
     GenerateClassroomDialog: typeof import('./components/classroom/GenerateClassroomDialog.vue')['default']
+    MemoryManager: typeof import('./components/profile/MemoryManager.vue')['default']
     NoteCard: typeof import('./components/NoteCard.vue')['default']
     NoteEditor: typeof import('./components/NoteEditor.vue')['default']
     PageHeader: typeof import('./components/common/PageHeader.vue')['default']

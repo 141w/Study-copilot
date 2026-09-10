@@ -15,6 +15,7 @@ from enum import Enum
 from app.core.llm import LLM
 from app.core.query_decomposer import query_decomposer
 from app.core.template_manager import render_template
+from app.core.tracing import observe_span
 from app.core.vector_store import _relevance_sort_key, result_relevance
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class AdaptiveRetriever:
             logger.warning("[Adaptive] Strategy selection failed: %s, defaulting to STANDARD", e)
             return RetrievalStrategy.STANDARD
 
+    @observe_span(name="rag.adaptive_retriever.retrieve")
     async def retrieve_adaptive(
         self,
         doc_ids: list[str],

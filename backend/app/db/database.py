@@ -328,6 +328,56 @@ class CustomPersona(Base):
     )
 
 
+class MemoryItem(Base):
+    """Long-term memory item for cross-session knowledge retention.
+
+    Categorized into 5 kinds (WeKnora design):
+    - profile: stable identity traits (grade, major, background) -> resident block
+    - preference: behavioral tendencies (brief answers, python focus) -> resident block
+    - fact: situational domain knowledge (exam date, courses) -> situational recall
+    - task: ongoing projects or learning goals -> situational recall
+    - interest: recurring topics of interest -> conditions retrieval
+    """
+
+    __tablename__ = "memory_items"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(
+        String(30), index=True
+    )  # profile/preference/fact/task/interest
+    origin: Mapped[str] = mapped_column(String(30), default="explicit")  # explicit/extracted/manual
+    status: Mapped[str] = mapped_column(
+        String(30), default="active", index=True
+    )  # active/superseded/archived/pending
+    key: Mapped[str] = mapped_column(String(100), index=True)
+    content: Mapped[str] = mapped_column(Text)
+    source_message_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow_naive, onupdate=_utcnow_naive
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class MemorySubject(Base):
+    """User-level memory settings and resident block cache."""
+
+    __tablename__ = "memory_subjects"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    block_text: Mapped[str] = mapped_column(Text, default="")
+    capacity: Mapped[int] = mapped_column(Integer, default=200)
+    last_extracted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow_naive, onupdate=_utcnow_naive
+    )
+
+
 async def get_db() -> AsyncIterator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         try:

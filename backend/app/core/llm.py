@@ -11,6 +11,7 @@ import httpx
 from openai import AsyncOpenAI
 
 from app.config import settings
+from app.core.tracing import record_generation
 
 SUPPORTED_MESSAGE_FORMATS = {"openai", "anthropic", "gemini", "ollama"}
 
@@ -129,8 +130,22 @@ class LLM:
                 )
                 # SDK 的 content 可为 None（模型空回复）；chat 契约是非空 str
                 if resp.choices:
-                    content = resp.choices[0].message.content
-                    return content if content is not None else ""
+                    content = resp.choices[0].message.content or ""
+                    usage_dict = None
+                    if getattr(resp, "usage", None):
+                        usage_dict = {
+                            "prompt_tokens": getattr(resp.usage, "prompt_tokens", 0),
+                            "completion_tokens": getattr(resp.usage, "completion_tokens", 0),
+                            "total_tokens": getattr(resp.usage, "total_tokens", 0),
+                        }
+                    record_generation(
+                        name="llm.chat",
+                        model=self.model,
+                        input_messages=messages,
+                        output_text=content,
+                        usage=usage_dict,
+                    )
+                    return content
                 return ""
             except Exception as e:
                 if attempt == max_retries - 1:
@@ -148,7 +163,7 @@ class LLM:
         include_reasoning: bool = False,
     ) -> AsyncGenerator[Any, None]:
         """流式聊天接口，逐 token 返回生成内容。支持重试（stream 创建阶段）。
-        
+
         若 include_reasoning=True，返回字典流：
           {"type": "reasoning" | "token", "content": str}
         若 include_reasoning=False，返回纯字符串流（默认向后兼容）。
@@ -223,6 +238,84 @@ class LLM:
                 else:
                     raise
         raise last_err  # type: ignore[misc]
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        max_retries: int = 2,
+    ) -> dict[str, Any]:
+        """Chat with function calling/tools support (OpenAI tool protocol).
+
+        Returns a dictionary with:
+        {
+            "content": str | None,
+            "tool_calls": list[dict],
+            "finish_reason": str,
+            "usage": dict | None,
+        }
+        """
+        for attempt in range(max_retries):
+            try:
+                kwargs: dict[str, Any] = {
+                    "model": self.model,
+                    "messages": cast(Any, messages),
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }
+                if tools:
+                    kwargs["tools"] = cast(Any, tools)
+
+                resp = await self.client.chat.completions.create(**kwargs)
+                choice = resp.choices[0]
+                message = choice.message
+
+                tool_calls_data = []
+                raw_tool_calls = getattr(message, "tool_calls", None)
+                if raw_tool_calls:
+                    for tc in raw_tool_calls:
+                        tc_func = getattr(tc, "function", None)
+                        if tc_func:
+                            tool_calls_data.append({
+                                "id": getattr(tc, "id", ""),
+                                "type": getattr(tc, "type", "function"),
+                                "function": {
+                                    "name": getattr(tc_func, "name", ""),
+                                    "arguments": getattr(tc_func, "arguments", "{}"),
+                                },
+                            })
+
+                usage_dict = None
+                if getattr(resp, "usage", None):
+                    usage_dict = {
+                        "prompt_tokens": getattr(resp.usage, "prompt_tokens", 0),
+                        "completion_tokens": getattr(resp.usage, "completion_tokens", 0),
+                        "total_tokens": getattr(resp.usage, "total_tokens", 0),
+                    }
+
+                record_generation(
+                    name="llm.chat_with_tools",
+                    model=self.model,
+                    input_messages=messages,
+                    output_text=message.content or "",
+                    usage=usage_dict,
+                )
+
+                return {
+                    "content": message.content,
+                    "tool_calls": tool_calls_data,
+                    "finish_reason": choice.finish_reason or "stop",
+                    "usage": usage_dict,
+                }
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise
+                logger.warning(f"ChatWithTools attempt {attempt + 1} failed: {e}. Retrying...")
+                await asyncio.sleep(2**attempt + random.uniform(0, 1))
+
+        return {"content": None, "tool_calls": [], "finish_reason": "error", "usage": None}
 
     @classmethod
     def from_config(cls, cfg: dict | None = None) -> "LLM":

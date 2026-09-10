@@ -40,6 +40,12 @@ export interface ThinkingStep {
   detail: string
 }
 
+export interface SavedNoteInfo {
+  id: string
+  title: string
+  tags: string[]
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -47,6 +53,8 @@ export interface ChatMessage {
   sources?: Source[]
   thinking?: string | ThinkingStep[]
   reasoning?: string
+  saved_note?: SavedNoteInfo
+  savedNote?: SavedNoteInfo
   isStreaming?: boolean
   expandedSources?: boolean
   timestamp?: string

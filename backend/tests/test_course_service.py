@@ -1,11 +1,12 @@
 """Tests for course service: CRUD + document associations."""
 
+import json
 import uuid
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import CourseSpace, Document, User
+from app.db import CourseSpace, Document, Note, User
 from app.exceptions import NotFoundError
 from app.services import course_service
 
@@ -201,9 +202,6 @@ async def test_get_course_documents_with_source_doc_ids(db_session: AsyncSession
 
 @pytest.mark.asyncio
 async def test_get_courses_counts(db_session: AsyncSession, user: User):
-    import json
-    from app.db import Note
-
     d1 = _doc(user.id, "count1.pdf")
     db_session.add(d1)
     await db_session.commit()
@@ -227,4 +225,3 @@ async def test_get_courses_counts(db_session: AsyncSession, user: User):
     assert c.id in counts
     assert counts[c.id]["document_count"] == 1
     assert counts[c.id]["note_count"] == 1
-

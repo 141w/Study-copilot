@@ -16,7 +16,7 @@
           <el-icon><ArrowLeft /></el-icon>
         </el-button>
         <div class="min-w-0 flex items-center gap-2 sm:gap-2.5">
-          <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-semibold flex-shrink-0 border border-[var(--color-primary)]/20">
+          <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] font-semibold flex-shrink-0 border border-[var(--border-default)]">
             AI 互动微课
           </span>
           <h1 class="text-xs sm:text-sm font-semibold truncate text-[var(--text-primary)] max-w-[140px] sm:max-w-xs md:max-w-md" :title="courseTitle">
@@ -27,7 +27,7 @@
           </span>
           <span
             v-if="sourceDocuments.length > 0"
-            class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-medium hidden md:inline-flex items-center gap-1 border border-emerald-500/20"
+            class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--color-success-light)] text-[var(--color-success)] font-medium hidden md:inline-flex items-center gap-1 border border-[var(--color-success)]/20"
           >
             <el-icon class="w-3 h-3"><Tickets /></el-icon>
             {{ sourceDocuments.length }} 份参考文档
@@ -127,14 +127,14 @@
 
     <!-- 主演播视口 (Visual Stage + Studio Deck) -->
     <div v-else class="flex-1 flex overflow-hidden relative min-h-0">
-      <main class="flex-1 flex flex-col items-center justify-between p-3 sm:p-4 overflow-hidden relative min-h-0">
-        <!-- 16:9 画布纯净演播区 (Visual Stage - 100% 内容无遮挡) -->
-        <div class="w-full max-w-5xl flex-1 flex flex-col justify-center items-center min-h-0 relative">
+      <main class="flex-1 flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-y-auto lg:overflow-hidden relative min-h-0 min-w-0 transition-all duration-300">
+        <!-- 16:9 画布纯净演播区 (Visual Stage - 100% 内容无遮挡与自适应缩放) -->
+        <div class="w-full max-w-5xl flex-1 flex flex-col justify-center items-center min-h-0 min-w-0 relative">
           <div
-            class="relative w-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-lg flex flex-col justify-center transition-all duration-300"
+            class="relative w-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
             :style="{
-              maxHeight: 'min(560px, calc(100vh - 250px))',
-              maxWidth: 'calc((100vh - 250px) * 16 / 9)',
+              maxHeight: 'min(560px, calc(100vh - 240px))',
+              maxWidth: 'min(100%, calc((100vh - 240px) * 16 / 9))',
               backgroundColor: canvasTheme.backgroundColor || 'var(--surface-card)',
               color: canvasTheme.fontColor || 'var(--text-primary)'
             }"
@@ -142,14 +142,14 @@
             <!-- 幕顶微型信息栏 -->
             <div class="absolute top-3 left-4 right-4 flex items-center justify-between pointer-events-none z-10">
               <div class="flex items-center gap-2">
-                <span class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-black/40 backdrop-blur-md text-white border border-white/10 shadow-xs">
+                <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-xs">
                   {{ currentScene?.type === 'quiz' ? '随堂交互测验' : `第 ${currentSceneIndex + 1} 幕 · 讲解` }}
                 </span>
-                <span class="text-xs text-white/80 font-medium truncate max-w-md drop-shadow">
+                <span class="text-xs text-white/90 font-medium truncate max-w-xs sm:max-w-md drop-shadow-xs">
                   {{ currentScene?.title }}
                 </span>
               </div>
-              <div class="text-[11px] text-white/60 font-mono bg-black/30 backdrop-blur px-2 py-0.5 rounded-md border border-white/10">
+              <div class="text-[11px] text-white/70 font-mono bg-black/40 backdrop-blur-xs px-2 py-0.5 rounded-md border border-white/10">
                 Scene {{ currentSceneIndex + 1 }} / {{ totalScenes }}
               </div>
             </div>
@@ -180,7 +180,7 @@
 
                 <!-- 图片元素（概念插图） -->
                 <template v-else-if="el.type === 'image'">
-                  <div class="w-full h-full rounded-xl overflow-hidden shadow-md border border-[var(--border-default)] relative group bg-black/20">
+                  <div class="w-full h-full rounded-xl overflow-hidden shadow-xs border border-[var(--border-default)] relative group bg-black/10">
                     <img
                       :src="el.src"
                       alt="Illustration"
@@ -220,7 +220,7 @@
               class="relative w-full h-full p-6 sm:p-10 flex flex-col justify-center max-w-2xl mx-auto overflow-y-auto"
             >
               <div class="mb-3">
-                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/20">
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--border-default)]">
                   随堂挑战
                 </span>
                 <h2 class="text-sm sm:text-lg font-bold mt-2.5 text-[var(--text-primary)] leading-snug">
@@ -282,11 +282,11 @@
             <!-- 角色头像与徽章 -->
             <div class="flex items-center gap-2.5 flex-shrink-0">
               <div
-                class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 relative shadow-xs"
+                class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 relative shadow-2xs"
                 :style="{
-                  backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'rgba(59, 130, 246, 0.12)',
-                  color: currentAgentConfig?.color || '#3B82F6',
-                  border: `1px solid ${currentAgentConfig?.color ? `${currentAgentConfig.color}35` : 'rgba(59, 130, 246, 0.25)'}`
+                  backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'var(--color-primary-light)',
+                  color: currentAgentConfig?.color || 'var(--color-primary)',
+                  border: `1px solid ${currentAgentConfig?.color ? `${currentAgentConfig.color}35` : 'var(--border-default)'}`
                 }"
               >
                 <el-icon class="text-lg">
@@ -298,7 +298,7 @@
                 <span
                   v-if="isPlaying && (isAudioPlaying || audioEnabled)"
                   class="absolute -inset-1 rounded-xl border animate-ping pointer-events-none opacity-30"
-                  :style="{ borderColor: currentAgentConfig?.color || '#3B82F6' }"
+                  :style="{ borderColor: currentAgentConfig?.color || 'var(--color-primary)' }"
                 ></span>
               </div>
               <div>
@@ -309,14 +309,14 @@
                   <span
                     class="text-[10px] px-1.5 py-0.2 rounded-full font-medium"
                     :style="{
-                      backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'rgba(59, 130, 246, 0.12)',
-                      color: currentAgentConfig?.color || '#3B82F6'
+                      backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'var(--color-primary-light)',
+                      color: currentAgentConfig?.color || 'var(--color-primary)'
                     }"
                   >
                     {{ currentAgentConfig?.role || '角色发言' }}
                   </span>
                 </div>
-                <div class="text-[10px] text-[var(--text-muted)] flex items-center gap-1 mt-0.5">
+                <div class="text-[10px] text-[var(--text-muted)] flex items-center gap-1 mt-0.5 font-mono">
                   <span>动作 {{ currentActionIndex + 1 }}/{{ totalActionsInScene }}</span>
                   <span v-if="isPlaying && (isAudioPlaying || audioEnabled)" class="flex items-center gap-0.5 ml-1">
                     <span class="w-0.5 h-1.5 bg-[var(--color-success)] rounded-full animate-pulse"></span>
@@ -340,7 +340,7 @@
                 @click="prevActionOrScene"
                 :disabled="currentSceneIndex === 0 && currentActionIndex === 0"
                 title="上一句/上一幕"
-                class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)] disabled:opacity-30 text-[var(--text-primary)] flex items-center justify-center transition-colors text-xs cursor-pointer"
+                class="w-8 h-8 rounded-lg bg-[var(--surface-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)] disabled:opacity-30 disabled:hover:bg-[var(--surface-card)] text-[var(--text-primary)] flex items-center justify-center transition-colors text-xs cursor-pointer shadow-2xs"
               >
                 <el-icon><ArrowLeft /></el-icon>
               </button>
@@ -348,7 +348,7 @@
                 @click="nextActionOrScene"
                 :disabled="currentSceneIndex === totalScenes - 1 && currentActionIndex === totalActionsInScene - 1"
                 title="下一句/下一幕"
-                class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)] disabled:opacity-30 text-[var(--text-primary)] flex items-center justify-center transition-colors text-xs cursor-pointer"
+                class="w-8 h-8 rounded-lg bg-[var(--surface-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)] disabled:opacity-30 disabled:hover:bg-[var(--surface-card)] text-[var(--text-primary)] flex items-center justify-center transition-colors text-xs cursor-pointer shadow-2xs"
               >
                 <el-icon><ArrowRight /></el-icon>
               </button>
@@ -372,17 +372,17 @@
             <div class="flex items-center gap-3.5">
               <button
                 @click="togglePlay"
-                class="px-6 py-2 rounded-full font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                class="px-5 py-2 rounded-full font-medium text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-xs"
                 :class="isPlaying
-                  ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border-default)] hover:bg-[var(--bg-hover)]'
-                  : 'bg-[var(--color-primary)] text-[var(--text-inverse)] hover:opacity-90 shadow-sm'"
+                  ? 'bg-[var(--surface-card)] text-[var(--text-primary)] border border-[var(--border-default)] hover:bg-[var(--bg-hover)]'
+                  : 'bg-[var(--color-primary)] text-[var(--text-inverse)] hover:bg-[var(--color-primary-hover)]'"
               >
                 <el-icon class="text-base"><VideoPause v-if="isPlaying" /><VideoPlay v-else /></el-icon>
                 <span>{{ isPlaying ? '暂停' : '播放' }}</span>
               </button>
 
               <!-- 幕切换胶囊指示器 -->
-              <div class="hidden sm:flex items-center gap-1.5 pl-2 border-l border-[var(--border-default)]">
+              <div class="hidden sm:flex items-center gap-1.5 pl-3 border-l border-[var(--border-default)]">
                 <button
                   v-for="(_, sIdx) in totalScenes"
                   :key="sIdx"
@@ -412,18 +412,27 @@
         </div>
       </main>
 
-      <!-- 侧边栏：微课幕次目录 (Slide-over Drawer) -->
+      <!-- 移动端/平板遮罩 (点击收起侧边栏) -->
+      <div
+        v-if="showSidebar"
+        class="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-xs z-30 transition-opacity"
+        @click="showSidebar = false"
+      ></div>
+
+      <!-- 侧边栏：微课幕次目录 (桌面端自适应平铺排布，移动端抽屉浮层) -->
       <aside
         v-show="showSidebar"
-        class="absolute inset-y-0 right-0 w-72 sm:w-80 bg-[var(--surface-card)]/98 backdrop-blur-xl border-l border-[var(--border-default)] z-30 flex flex-col shadow-xl transition-all duration-300"
+        class="h-full bg-[var(--surface-card)] border-l border-[var(--border-default)] flex flex-col transition-all duration-300
+               fixed inset-y-0 right-0 z-40 w-72 sm:w-80 shadow-2xl
+               lg:relative lg:inset-auto lg:z-10 lg:w-72 xl:w-80 lg:shadow-none lg:flex-shrink-0"
       >
-        <div class="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
+        <div class="p-3.5 sm:p-4 border-b border-[var(--border-default)] flex items-center justify-between flex-shrink-0">
           <div class="flex items-center gap-2">
             <el-icon class="text-[var(--color-primary)]"><Tickets /></el-icon>
             <h3 class="text-sm font-semibold text-[var(--text-primary)]">课堂幕次目录</h3>
           </div>
-          <el-button circle size="small" @click="showSidebar = false">
-            <el-icon><Fold /></el-icon>
+          <el-button circle size="small" @click="showSidebar = false" title="关闭目录">
+            <el-icon><Close /></el-icon>
           </el-button>
         </div>
 
@@ -436,16 +445,16 @@
             :class="[
               Number(sIdx) === currentSceneIndex
                 ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs font-medium'
-                : 'border-[var(--border-default)] hover:border-[var(--border-hover)] bg-[var(--bg-primary)] text-[var(--text-primary)]'
+                : 'border-[var(--border-default)] hover:border-[var(--border-hover)] bg-[var(--surface-card)] hover:bg-[var(--bg-secondary)]/70 text-[var(--text-primary)]'
             ]"
           >
             <div class="flex items-start justify-between gap-2">
-              <span class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[var(--bg-secondary)]">
+              <span class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-secondary)] font-mono">
                 #{{ Number(sIdx) + 1 }}
               </span>
               <span
                 class="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                :class="sc.type === 'quiz' ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]' : 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'"
+                :class="sc.type === 'quiz' ? 'bg-[var(--color-warning-light)] text-[var(--color-warning)]' : 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'"
               >
                 {{ sc.type === 'quiz' ? '随堂测验' : '讲解幕' }}
               </span>
@@ -462,7 +471,7 @@
         </div>
 
         <!-- 引用源文档 -->
-        <div v-if="sourceDocuments.length > 0" class="p-3 border-t border-[var(--border-default)] bg-[var(--bg-secondary)]/50 flex-shrink-0">
+        <div v-if="sourceDocuments.length > 0" class="p-3 border-t border-[var(--border-default)] bg-[var(--bg-secondary)]/30 flex-shrink-0">
           <div class="flex items-center gap-1.5 mb-2 text-xs font-semibold text-[var(--text-muted)]">
             <el-icon class="w-3.5 h-3.5 text-[var(--color-primary)]"><Tickets /></el-icon>
             <span>本课引用参考材料 ({{ sourceDocuments.length }})</span>
@@ -475,7 +484,7 @@
               :title="doc.filename"
             >
               <span class="truncate flex-1 font-medium text-[var(--text-primary)]">{{ doc.filename }}</span>
-              <span v-if="doc.file_size" class="text-[10px] text-[var(--text-muted)] flex-shrink-0">
+              <span v-if="doc.file_size" class="text-[10px] text-[var(--text-muted)] flex-shrink-0 font-mono">
                 {{ formatSize(doc.file_size) }}
               </span>
             </div>
@@ -495,7 +504,7 @@
         <div
           v-for="(act, aIdx) in currentScene?.actions || []"
           :key="act.id || aIdx"
-          class="p-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]"
+          class="p-3 rounded-xl border border-[var(--border-default)] bg-[var(--surface-card)]"
         >
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-xs font-bold" :style="{ color: getAgentConfig(act.agentId)?.color || 'var(--color-primary)' }">
@@ -528,6 +537,7 @@ import {
   Promotion,
   Fold,
   List,
+  Close,
   Loading,
   CircleCheckFilled,
   CircleCloseFilled,

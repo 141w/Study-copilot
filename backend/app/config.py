@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     classroom_webhook_secret: str = ""  # 课堂 webhook HMAC 签名密钥
     classroom_enabled: bool = True  # 互动课堂功能开关（默认开启）
 
+    # 可观测性（Langfuse 全链路追踪）
+    langfuse_enabled: bool = False
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+
+    # 洋葱聊天管线 V2 开关
+    pipeline_v2_enabled: bool = False
+
     # CORS：逗号分隔的允许来源；部署到域名后必须在 .env 覆盖
     cors_origins: str = (
         "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"

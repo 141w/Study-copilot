@@ -502,6 +502,12 @@
             </div>
           </div>
         </el-tab-pane>
+        <!-- ── TAB 5: 长期记忆 ── -->
+        <el-tab-pane label="长期记忆" name="memory">
+          <div class="py-2">
+            <MemoryManager />
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
   </div>
@@ -522,6 +528,7 @@ import { useToastStore } from '../stores/toast'
 import { useReducedMotion } from '../composables/useReducedMotion'
 import { formatSize } from '../composables/useFormat'
 import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
+import MemoryManager from '@/components/profile/MemoryManager.vue'
 import { useUserPrefs } from '@/composables/useUserPrefs'
 import {
   Document, Reading, EditPen, ChatDotSquare, TrendCharts,

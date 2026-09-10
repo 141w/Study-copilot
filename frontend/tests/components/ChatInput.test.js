@@ -3,10 +3,10 @@ import { mount } from '@vue/test-utils'
 import ChatInput from '@/components/chat/ChatInput.vue'
 
 describe('ChatInput', () => {
-  it('正确渲染输入卡片、快捷键提示与占位符', () => {
+  it('正确渲染输入卡片与占位符', () => {
     const wrapper = mount(ChatInput, {
       props: {
-        placeholder: '输入问题，按 Enter 发送...'
+        placeholder: '输入您的问题...'
       },
       global: {
         stubs: {
@@ -16,8 +16,7 @@ describe('ChatInput', () => {
     })
 
     expect(wrapper.find('textarea').exists()).toBe(true)
-    expect(wrapper.find('textarea').attributes('placeholder')).toBe('输入问题，按 Enter 发送...')
-    expect(wrapper.text()).toContain('Enter 发送')
+    expect(wrapper.find('textarea').attributes('placeholder')).toBe('输入您的问题...')
   })
 
   it('输入内容后点击发送按钮触发 send 事件并清空输入', async () => {
@@ -93,7 +92,9 @@ describe('ChatInput', () => {
 
     const stopBtn = wrapper.find('button[aria-label="停止生成"]')
     expect(stopBtn.exists()).toBe(true)
-    expect(stopBtn.text()).toContain('停止生成')
+    // 停止回答只保留 SVG 图标，移除文字
+    expect(stopBtn.find('svg').exists()).toBe(true)
+    expect(stopBtn.text().trim()).toBe('')
 
     await stopBtn.trigger('click')
     expect(wrapper.emitted('stop')).toBeTruthy()

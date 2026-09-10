@@ -134,11 +134,18 @@ async def create_classroom(
                 try:
                     await add_document_to_course(db, current_user, placeholder.id, d_id)
                 except Exception as add_err:
-                    logger.warning("Failed to link doc %s to placeholder %s: %s", d_id, placeholder.id, add_err)
+                    logger.warning(
+                        "Failed to link doc %s to placeholder %s: %s", d_id, placeholder.id, add_err
+                    )
 
             await db.commit()
             course_id = placeholder.id
-            logger.info("Classroom placeholder course: %s -> %s (docs=%d)", class_id, course_id, len(req.doc_ids))
+            logger.info(
+                "Classroom placeholder course: %s -> %s (docs=%d)",
+                class_id,
+                course_id,
+                len(req.doc_ids),
+            )
         except Exception as e:  # noqa: BLE001
             logger.warning("Placeholder course creation failed: %s", e)
 
@@ -220,7 +227,7 @@ async def list_classrooms(
     for c in courses:
         url = ""
         try:
-            desc = json.loads(c.description)
+            desc = json.loads(c.description or "{}")
             url = desc.get("classroom_url", "")
         except (json.JSONDecodeError, TypeError):
             pass
@@ -311,23 +318,27 @@ async def _fetch_classroom_payload(
     classroom_data = None
     if course and course.description:
         try:
-            desc_obj = json.loads(course.description)
+            desc_obj = json.loads(course.description or "{}")
             classroom_data = desc_obj.get("classroom_data")
             if not classroom_data and desc_obj.get("outline"):
                 from app.core.course_generator import (
                     build_classroom_dsl,
                     save_classroom_dsl_to_disk,
                 )
-                from app.db import Quiz
+                from app.db import Document, Quiz
 
-                q_res = await db.execute(select(Quiz).where(Quiz.user_id == user.id))
+                q_res = await db.execute(
+                    select(Quiz)
+                    .join(Document, Quiz.document_id == Document.id)
+                    .where(Document.user_id == user.id)
+                )
                 quizzes = [
                     {
                         "id": q.id,
                         "question": q.question,
                         "question_type": q.question_type,
                         "options": q.options,
-                        "correct_answer": q.correct_answer,
+                        "correct_answer": q.answer,
                         "explanation": q.explanation,
                     }
                     for q in q_res.scalars().all()[:10]
@@ -372,8 +383,7 @@ async def _fetch_classroom_payload(
 
             c_docs = await get_course_documents(db, user, course.id)
             doc_items = [
-                {"id": d.id, "filename": d.filename, "file_size": d.file_size}
-                for d in c_docs
+                {"id": d.id, "filename": d.filename, "file_size": d.file_size} for d in c_docs
             ]
             classroom_data["sourceDocuments"] = doc_items
             if "stage" in classroom_data and isinstance(classroom_data["stage"], dict):

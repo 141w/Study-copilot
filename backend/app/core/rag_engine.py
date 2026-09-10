@@ -18,6 +18,7 @@ from app.core.pgvector_store import PgVectorStore
 from app.core.query_router import QueryType, query_router
 from app.core.retrieval_grader import retrieval_grader
 from app.core.template_manager import render_template
+from app.core.tracing import observe_span
 from app.core.vector_store import _relevance_sort_key, result_relevance
 from app.exceptions import classify_llm_error
 
@@ -184,6 +185,46 @@ class RAGEngine:
         except Exception as e:
             # 未分类的供应商异常 → 友好的类型化错误（否则表现为裸 500）
             raise classify_llm_error(e) from e
+
+    async def _synthesize_note_doc(self, doc_ids, query, user_config=None) -> dict:
+        """根据文档或问题生成结构化学习笔记。"""
+        ctx = ""
+        sources_list = []
+        if doc_ids:
+            results = await self.retrieve(doc_ids, query, top_k=5)
+            if results:
+                ctx = self.build_context(results, max_context_tokens=16000)
+                for i, r in enumerate(results[:10]):
+                    chunk = r.get("chunk", {})
+                    sources_list.append(
+                        {
+                            "index": i + 1,
+                            "document_id": chunk.get("document_id", ""),
+                            "page": str(chunk.get("page", "") or ""),
+                            "source": chunk.get("source", ""),
+                            "text": chunk.get("text", ""),
+                            "relevance_score": _display_relevance(r),
+                        }
+                    )
+
+        llm = LLM.from_config(user_config)
+        prompt = render_template("notes/synthesize_note.jinja2", query=query, context=ctx)
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": query},
+        ]
+        try:
+            answer = await llm.chat(messages, temperature=0.3, max_tokens=2500)
+        except Exception as e:
+            raise classify_llm_error(e) from e
+
+        return {
+            "answer": answer or "",
+            "sources": sources_list,
+            "used_source_indices": [s["index"] for s in sources_list],
+            "filtered_sources": sources_list,
+            "intent": "note_taking",
+        }
 
     async def _summarize_docs(self, doc_ids, user_config=None) -> dict:
         """检索全部文档内容并生成摘要。返回与 ask() 相同的格式。"""
@@ -413,9 +454,28 @@ class RAGEngine:
             parts.append(f"[{source_id}]: {preview}")
         return "\n".join(parts)
 
+    async def _get_memory_envelope(self, llm_config: dict | None, query: str) -> str:
+        """Recall user's long-term memory envelope if user_id is provided."""
+        user_id = llm_config.get("user_id") if llm_config else None
+        if not user_id:
+            return ""
+        try:
+            from app.db.database import AsyncSessionLocal
+            from app.services.memory_service import memory_service
+
+            async with AsyncSessionLocal() as session:
+                recalled = await memory_service.recall(user_id, query, session)
+                return recalled.prompt_envelope if recalled and recalled.prompt_envelope else ""
+        except Exception as e:
+            logger.debug("Memory recall error (ignored): %s", e)
+            return ""
+
     async def generate_answer(self, query, context, sources_text="", history=None, llm_config=None):
         ai_style = llm_config.get("ai_style") if llm_config else None
         system_prompt = render_template("rag/main_qa_system.jinja2", ai_style=ai_style)
+        memory_envelope = await self._get_memory_envelope(llm_config, query)
+        if memory_envelope:
+            system_prompt = f"{system_prompt}\n\n{memory_envelope}"
         user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
         messages = [
             {"role": "system", "content": system_prompt},
@@ -439,6 +499,9 @@ class RAGEngine:
     ):
         ai_style = llm_config.get("ai_style") if llm_config else None
         system_prompt = render_template("rag/main_qa_system.jinja2", ai_style=ai_style)
+        memory_envelope = await self._get_memory_envelope(llm_config, query)
+        if memory_envelope:
+            system_prompt = f"{system_prompt}\n\n{memory_envelope}"
         user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
         messages = [
             {"role": "system", "content": system_prompt},
@@ -465,6 +528,7 @@ class RAGEngine:
             # 流式场景同样映射为类型化错误，避免裸 500 中断 SSE
             raise classify_llm_error(e) from e
 
+    @observe_span(name="rag.ask")
     async def ask(self, doc_ids, query, history=None, user_config: dict | None = None):
         # 检查是否需要切换 Embedding 模型
         if user_config and user_config.get("embedding_model"):
@@ -499,6 +563,9 @@ class RAGEngine:
 
         if route == QueryType.SUMMARY:
             return await self._summarize_docs(doc_ids, user_config)
+
+        if route == QueryType.NOTE_TAKING:
+            return await self._synthesize_note_doc(doc_ids, final_query, user_config)
 
         # ── Step 2: RAG 路径（自适应检索 + 答案反思） ──
         # final_query 已在 Step 1 中由 analyze() 处理好
@@ -595,6 +662,7 @@ class RAGEngine:
             "context_used": True,
         }
 
+    @observe_span(name="rag.ask_stream")
     async def ask_stream(self, doc_ids, query, history=None, user_config: dict | None = None):
         # 检查是否需要切换 Embedding 模型
         if user_config and user_config.get("embedding_model"):
@@ -674,6 +742,66 @@ class RAGEngine:
                     yield {"type": "token", "content": chunk}
             return
 
+        if route == QueryType.NOTE_TAKING:
+            yield {"type": "intent", "intent": "note_taking"}
+            yield {
+                "type": "thinking",
+                "step": "intent_analysis",
+                "detail": f"意图识别：【学习笔记沉淀】。正在提取核心概念与考点，编排结构化笔记：「{final_query}」",
+            }
+            ctx = ""
+            sources_list = []
+            if doc_ids:
+                results = await self.retrieve(doc_ids, final_query, top_k=5)
+                if results:
+                    ctx = self.build_context(results, max_context_tokens=16000)
+                    for i, r in enumerate(results[:10]):
+                        chunk = r.get("chunk", {})
+                        chunk_text = chunk.get("text", "")
+                        page = chunk.get("page", "")
+                        if page is None:
+                            page = ""
+                        elif not isinstance(page, str):
+                            page = str(page)
+                        sources_list.append(
+                            {
+                                "index": i + 1,
+                                "document_id": chunk.get("document_id", ""),
+                                "page": page,
+                                "source": chunk.get("source", ""),
+                                "text": chunk_text,
+                                "relevance_score": _display_relevance(r),
+                            }
+                        )
+                    yield {
+                        "type": "sources",
+                        "sources": sources_list,
+                        "filtered_sources": sources_list,
+                    }
+            yield {
+                "type": "thinking",
+                "step": "strategy_select",
+                "detail": "策略规划：应用标准化知识卡片模板，生成包含核心定义、原理解析、易错陷阱与思考题的结构化笔记。",
+            }
+            system_prompt = render_template(
+                "notes/synthesize_note.jinja2", query=final_query, context=ctx
+            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": final_query},
+            ]
+            async for chunk in llm.chat_stream(messages, include_reasoning=True):
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "reasoning":
+                        yield {"type": "reasoning", "content": chunk["content"]}
+                    elif chunk.get("type") == "token":
+                        yield {"type": "token", "content": chunk["content"]}
+                    else:
+                        yield chunk
+                else:
+                    yield {"type": "token", "content": chunk}
+            return
+
         # ── Step 2: RAG 路径（自适应检索 + 答案反思） ──
         # final_query 已在 Step 1 中由 analyze() 处理好
         if final_query != query:
@@ -706,7 +834,8 @@ class RAGEngine:
             yield {
                 "type": "thinking",
                 "step": "retrieval_check",
-                "detail": quality.detail or f"检索到 {len(retrieved)} 条结果，质量评分：{quality.score:.2f}（{quality.reason}）",
+                "detail": quality.detail
+                or f"检索到 {len(retrieved)} 条结果，质量评分：{quality.score:.2f}（{quality.reason}）",
             }
             if not quality.is_good:
                 logger.info(
@@ -724,7 +853,9 @@ class RAGEngine:
                 )
                 if corrected:
                     retrieved = corrected
-                    quality_corrected = await retrieval_grader.grade(final_query, retrieved, user_config)
+                    quality_corrected = await retrieval_grader.grade(
+                        final_query, retrieved, user_config
+                    )
                     yield {
                         "type": "thinking",
                         "step": "retrieval_check",
@@ -793,9 +924,7 @@ class RAGEngine:
             reason = evaluation.get("reason", "")
             analysis_text = evaluation.get("analysis", "")
             if not evaluation.get("pass", True):
-                logger.info(
-                    "[RAG] Answer reflection failed (%s), refining...", reason
-                )
+                logger.info("[RAG] Answer reflection failed (%s), refining...", reason)
                 yield {
                     "type": "thinking",
                     "step": "reflection_fail",

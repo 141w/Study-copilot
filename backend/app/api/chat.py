@@ -30,6 +30,8 @@ class AskRequest(BaseModel):
     session_id: str | None = None
     config: dict | None = None
     stream: bool | None = False
+    mode: str | None = "fast"  # "fast" | "deep_research"
+    agent_enabled: bool | None = False
 
 
 class Source(BaseModel):
@@ -98,6 +100,8 @@ class MessageResp(BaseModel):
     summary: str | None = None
     thinking: list[dict] | None = None
     reasoning: str | None = None
+    saved_note: dict | None = None
+    savedNote: dict | None = None  # noqa: N815
     created_at: str
 
 
@@ -151,6 +155,7 @@ async def ask(
                     req.document_ids,
                     req.session_id,
                     req.config,
+                    mode=req.mode or ("deep_research" if req.agent_enabled else "fast"),
                 ):
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             except Exception as e:
@@ -214,8 +219,9 @@ async def get_history(
         summary = None
         thinking = None
         reasoning = None
+        saved_note = None
         if not m.sources:
-            return sources, discussion_turns, personas, summary, thinking, reasoning
+            return sources, discussion_turns, personas, summary, thinking, reasoning, saved_note
         try:
             raw = json.loads(m.sources)
             if isinstance(raw, list):
@@ -234,13 +240,16 @@ async def get_history(
                 raw_reasoning = raw.get("reasoning")
                 if isinstance(raw_reasoning, str):
                     reasoning = raw_reasoning
+                saved_note = raw.get("saved_note") or raw.get("savedNote")
         except Exception:
             pass
-        return sources, discussion_turns, personas, summary, thinking, reasoning
+        return sources, discussion_turns, personas, summary, thinking, reasoning, saved_note
 
     messages_resp = []
     for m in msgs:
-        sources, discussion_turns, personas, summary, thinking, reasoning = parse_message_payload(m)
+        sources, discussion_turns, personas, summary, thinking, reasoning, saved_note = (
+            parse_message_payload(m)
+        )
         messages_resp.append(
             MessageResp(
                 id=m.id,
@@ -253,6 +262,8 @@ async def get_history(
                 summary=summary,
                 thinking=thinking,
                 reasoning=reasoning,
+                saved_note=saved_note,
+                savedNote=saved_note,
                 created_at=str(m.created_at),
             )
         )
@@ -298,6 +309,25 @@ async def search_messages(
         db, current_user, req.query, req.session_id, req.top_k
     )
     return [SearchResult(**r) for r in results]
+
+
+@router.post("/messages/{message_id}/save-note")
+async def save_message_as_note(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """手动将指定消息（如问答/讲解成果）提炼并保存至个人笔记，并建立向量索引"""
+    note = await chat_service.save_message_as_note(db, current_user, message_id)
+    return {
+        "success": True,
+        "message": "已保存至笔记",
+        "note": {
+            "id": note.id,
+            "title": note.title,
+            "tags": [t.name for t in (note.tags or [])],
+        },
+    }
 
 
 @router.get("/personas")

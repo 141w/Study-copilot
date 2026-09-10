@@ -15,6 +15,7 @@ from enum import Enum
 
 from app.core.llm import LLM
 from app.core.template_manager import render_template
+from app.core.tracing import observe_span
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,34 @@ class QueryType(str, Enum):
     RAG_QA = "rag_qa"
     DIRECT_ANSWER = "direct"
     SUMMARY = "summary"
+    NOTE_TAKING = "note_taking"
     OUT_OF_SCOPE = "out_of_scope"
 
 
 # ── 关键词规则（优先级高于 LLM，节省一次调用） ──────────────────────
+
+_NOTE_TAKING_KEYWORDS = [
+    "记笔记",
+    "记成笔记",
+    "存为笔记",
+    "保存笔记",
+    "保存为笔记",
+    "记录笔记",
+    "记录为笔记",
+    "整理成笔记",
+    "整理笔记",
+    "写入笔记",
+    "写进笔记",
+    "生成笔记",
+    "做笔记",
+    "做一份笔记",
+    "做学习笔记",
+    "学习笔记",
+    "记入笔记",
+    "存入笔记",
+    "转为笔记",
+    "提炼为笔记",
+]
 
 _SUMMARY_KEYWORDS = [
     "总结",
@@ -81,6 +106,7 @@ class QueryRouter:
         "   - rag_qa: 基于文档内容的具体问答（需要检索相关段落）\n"
         '   - direct: 通用概念解释，不需要文档（如"什么是Python"）\n'
         "   - summary: 要求总结/概述整个文档\n"
+        '   - note_taking: 要求整理、提炼或保存为学习笔记（如"帮我整理成笔记"、"存入笔记"）\n'
         "   - out_of_scope: 闲聊或与学习无关的问题\n\n"
         "2. 如果问题依赖对话历史（含代词、省略、指代），改写为独立完整的问题。\n"
         "   如果不依赖历史，保持原样。\n\n"
@@ -94,6 +120,7 @@ class QueryRouter:
     def __init__(self) -> None:
         pass
 
+    @observe_span(name="rag.query_router.analyze")
     async def analyze(
         self,
         query: str,
@@ -108,27 +135,35 @@ class QueryRouter:
         """
         query_stripped = query.strip()
 
-        # ── 规则 1：没有文档 → 直接回答 ──
-        if not doc_ids:
-            logger.info("[Router] No documents → DIRECT_ANSWER")
-            return QueryAnalysis(QueryType.DIRECT_ANSWER, query_stripped)
-
-        # ── 规则 2：闲聊 ──
+        # ── 规则 1：闲聊 ──
         if query_stripped in _CHITCHAT_KEYWORDS:
             logger.info("[Router] Chitchat detected → OUT_OF_SCOPE")
             return QueryAnalysis(QueryType.OUT_OF_SCOPE, query_stripped)
 
-        # ── 规则 3：总结类 ──
+        # ── 规则 2：笔记记录类（优先命中关键词，无历史时直接判定） ──
+        if any(kw in query_stripped for kw in _NOTE_TAKING_KEYWORDS):
+            logger.info("[Router] Note taking keywords detected")
+            if not history or len(history) == 0:
+                return QueryAnalysis(QueryType.NOTE_TAKING, query_stripped)
+
+        # ── 规则 3：没有文档且非记笔记 → 直接回答 ──
+        if not doc_ids and not any(kw in query_stripped for kw in _NOTE_TAKING_KEYWORDS):
+            logger.info("[Router] No documents → DIRECT_ANSWER")
+            return QueryAnalysis(QueryType.DIRECT_ANSWER, query_stripped)
+
+        # ── 规则 4：总结类 ──
         if any(kw in query_stripped for kw in _SUMMARY_KEYWORDS):
             logger.info("[Router] Summary keywords → SUMMARY")
             return QueryAnalysis(QueryType.SUMMARY, query_stripped)
 
-        # ── 规则 4：无可用 LLM → 与 _classify_intent 相同的兜底语义 ──
+        # ── 规则 5：无可用 LLM → 与 _classify_intent 相同的兜底语义 ──
         if llm is None:
+            if any(kw in query_stripped for kw in _NOTE_TAKING_KEYWORDS):
+                return QueryAnalysis(QueryType.NOTE_TAKING, query_stripped)
             logger.info("[Router] No LLM configured → RAG_QA with original query")
             return QueryAnalysis(QueryType.RAG_QA, query_stripped)
 
-        # ── 规则 5：没有历史 → 不需要改写，直接走 LLM 分类 ──
+        # ── 规则 6：没有历史 → 不需要改写，直接走 LLM 分类 ──
         if not history or len(history) == 0:
             intent = await self._classify_intent(query_stripped, llm)
             return QueryAnalysis(intent, query_stripped)
@@ -157,13 +192,17 @@ class QueryRouter:
             return self._parse_response(response, query_stripped)
 
         except Exception as e:
-            logger.warning("[Router] LLM analysis failed: %s, defaulting to RAG_QA", e)
+            logger.warning("[Router] LLM analysis failed: %s, defaulting", e)
+            if any(kw in query_stripped for kw in _NOTE_TAKING_KEYWORDS):
+                return QueryAnalysis(QueryType.NOTE_TAKING, query_stripped)
             return QueryAnalysis(QueryType.RAG_QA, query_stripped)
 
     async def _classify_intent(self, query: str, llm: LLM | None = None) -> QueryType:
         """简单分类（无历史时使用）"""
         if llm is None:
             # 没有 LLM 实例，用规则兜底
+            if any(kw in query.strip() for kw in _NOTE_TAKING_KEYWORDS):
+                return QueryType.NOTE_TAKING
             return QueryType.RAG_QA
 
         try:
@@ -178,7 +217,9 @@ class QueryRouter:
             )
             response = (response or "").strip().lower()
 
-            if "summary" in response:
+            if "note_taking" in response or "note" in response:
+                return QueryType.NOTE_TAKING
+            elif "summary" in response:
                 return QueryType.SUMMARY
             elif "direct" in response:
                 return QueryType.DIRECT_ANSWER

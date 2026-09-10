@@ -21,8 +21,10 @@ def upgrade() -> None:
     op.drop_constraint("messages_session_id_fkey", "messages", type_="foreignkey")
     op.create_foreign_key(
         "messages_session_id_fkey",
-        "messages", "chat_sessions",
-        ["session_id"], ["id"],
+        "messages",
+        "chat_sessions",
+        ["session_id"],
+        ["id"],
         ondelete="CASCADE",
     )
 
@@ -31,6 +33,8 @@ def downgrade() -> None:
     op.drop_constraint("messages_session_id_fkey", "messages", type_="foreignkey")
     op.create_foreign_key(
         "messages_session_id_fkey",
-        "messages", "chat_sessions",
-        ["session_id"], ["id"],
+        "messages",
+        "chat_sessions",
+        ["session_id"],
+        ["id"],
     )

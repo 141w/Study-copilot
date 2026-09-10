@@ -161,6 +161,10 @@ class OpenAITTSProvider:
         self.api_key = (api_key or "").strip()
         self.model = (model or "tts-1").strip()
 
+    def get_voices(self) -> dict[str, list[dict]]:
+        """Return pre-defined voices grouped by language."""
+        return VOICES
+
     async def generate_speech(self, text: str, voice: str | None = None, speed: float = 1.0) -> str:
         if not text or not text.strip():
             raise ValueError("文本不能为空")

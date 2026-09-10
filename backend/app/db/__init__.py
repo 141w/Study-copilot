@@ -7,6 +7,8 @@ from app.db.database import (
     CustomPersona,
     Document,
     DocumentChunk,
+    MemoryItem,
+    MemorySubject,
     Message,
     Note,
     Quiz,

@@ -55,6 +55,8 @@ export interface ChatStreamMessage {
   isStreaming?: boolean
   thinking?: string | ThinkingStep[]
   reasoning?: string
+  saved_note?: { id: string; title: string; tags: string[] }
+  savedNote?: { id: string; title: string; tags: string[] }
   /** Discussion mode: per-persona content (legacy compatibility) */
   personas?: DiscussionPersona[]
   /** Discussion mode: chronological timeline turns */
@@ -131,10 +133,15 @@ export const useChatStore = defineStore('chat', () => {
       const response = await api.get<{ messages: (ChatStreamMessage & { discussion_turns?: DiscussionTurn[] })[] }>(
         `/chat/history/${sessionId}`
       )
-      messages.value = (response.data.messages || []).map(m => ({
-        ...m,
-        discussionTurns: m.discussionTurns || (m as any).discussion_turns || undefined,
-      }))
+      messages.value = (response.data.messages || []).map(m => {
+        const savedNote = m.savedNote || (m as any).saved_note || undefined
+        return {
+          ...m,
+          savedNote,
+          saved_note: savedNote,
+          discussionTurns: m.discussionTurns || (m as any).discussion_turns || undefined,
+        }
+      })
       currentSession.value = sessionId
       lastFetched.value = Date.now()
     } catch (error) {
@@ -195,6 +202,7 @@ export const useChatStore = defineStore('chat', () => {
 
       currentSession.value = response.data.session_id
 
+      const savedNote = response.data.saved_note || response.data.savedNote
       messages.value.push({
         id: Date.now() + 1,
         role: 'assistant' as const,
@@ -202,6 +210,8 @@ export const useChatStore = defineStore('chat', () => {
         sources: response.data.sources,
         used_source_indices: response.data.used_source_indices || [],
         filtered_sources: response.data.filtered_sources || [],
+        saved_note: savedNote,
+        savedNote: savedNote,
         expandedSources: false,
         created_at: new Date().toISOString()
       })
@@ -218,7 +228,8 @@ export const useChatStore = defineStore('chat', () => {
   async function askQuestionStream(
     question: string,
     documentIds: string[],
-    sessionId: string | null = null
+    sessionId: string | null = null,
+    mode: 'fast' | 'deep_research' = 'fast'
   ): Promise<{ success: boolean; cancelled?: boolean }> {
     loading.value = true
     isStreaming.value = true
@@ -263,7 +274,9 @@ export const useChatStore = defineStore('chat', () => {
           document_ids: documentIds,
           session_id: sessionId || currentSession.value,
           config: { ai_style: prefs.value.aiStyle },
-          stream: true
+          stream: true,
+          mode,
+          agent_enabled: mode === 'deep_research',
         }),
         signal: controller.signal
       })
@@ -370,11 +383,23 @@ export const useChatStore = defineStore('chat', () => {
                   ? m.content + '\n\n---\n\n' + (errText || fallback)
                   : (errText || fallback)
               }
+            } else if (data.type === 'note_saved') {
+              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+              if (msgIdx !== -1 && data.note) {
+                const noteInfo = data.note as { id: string; title: string; tags: string[] }
+                messages.value[msgIdx].saved_note = noteInfo
+                messages.value[msgIdx].savedNote = noteInfo
+              }
             } else if (data.type === 'done') {
               // 流式结束，更新最终状态
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
                 messages.value[msgIdx].isStreaming = false
+                const doneNote = (data.saved_note || data.savedNote) as { id: string; title: string; tags: string[] } | undefined
+                if (doneNote) {
+                  messages.value[msgIdx].saved_note = doneNote
+                  messages.value[msgIdx].savedNote = doneNote
+                }
               }
               // 新会话首次回答完成后，刷新历史列表让侧栏能看到它
               if (
@@ -482,6 +507,24 @@ export const useChatStore = defineStore('chat', () => {
     searchQuery.value = ''
   }
 
+  async function saveMessageAsNote(messageId: string | number): Promise<{ id: string; title: string; tags: string[] }> {
+    try {
+      const response = await api.post<{ success: boolean; note: { id: string; title: string; tags: string[] } }>(
+        `/chat/messages/${messageId}/save-note`
+      )
+      const note = response.data.note
+      const msg = messages.value.find(m => m.id === messageId)
+      if (msg) {
+        msg.saved_note = note
+        msg.savedNote = note
+      }
+      return note
+    } catch (error) {
+      console.error('Error saving message as note:', error)
+      throw error
+    }
+  }
+
   return {
     messages,
     sessions,
@@ -503,6 +546,7 @@ export const useChatStore = defineStore('chat', () => {
     clearMessages,
     clearSearch,
     searchMessages,
+    saveMessageAsNote,
     isStreaming
   }
 })

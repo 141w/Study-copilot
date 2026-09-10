@@ -7,8 +7,9 @@ Create Date: 2026-09-06
 Adds context_window column to user_llm_configs table, defaulting to 256k (262144).
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c1d2e3f4a5b6"

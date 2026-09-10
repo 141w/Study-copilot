@@ -152,6 +152,42 @@
         ></div>
         <span v-if="message.isStreaming && message.content" class="stream-caret" aria-hidden="true"></span>
 
+        <!-- 5. 学习笔记已保存卡片 -->
+        <div
+          v-if="savedNoteInfo"
+          class="saved-note-card my-3 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 flex items-center justify-between gap-3 text-xs"
+        >
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <el-icon class="w-4 h-4"><EditPen /></el-icon>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-medium text-[var(--text-primary)] truncate max-w-[200px] sm:max-w-xs">
+                  {{ savedNoteInfo.title }}
+                </span>
+                <span class="px-1.5 py-0.2 text-[10px] rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                  已存入笔记
+                </span>
+              </div>
+              <div v-if="savedNoteInfo.tags && savedNoteInfo.tags.length > 0" class="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--text-muted)] flex-wrap">
+                <span v-for="tag in savedNoteInfo.tags" :key="tag" class="text-emerald-600/80 dark:text-emerald-400/80">
+                  #{{ tag }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <el-button
+            size="small"
+            type="primary"
+            plain
+            class="shrink-0 !text-xs !px-2.5"
+            @click="navigateToNote(savedNoteInfo.id)"
+          >
+            查看笔记
+          </el-button>
+        </div>
+
         <!-- Actions -->
         <div
           v-if="!message.isStreaming && message.content"
@@ -162,6 +198,25 @@
             <el-icon class="w-3.5 h-3.5 mr-1"><DocumentCopy /></el-icon>
             {{ isCopied ? '已复制' : '复制' }}
           </el-button>
+          <el-button
+            v-if="!savedNoteInfo"
+            size="small"
+            text
+            bg
+            :loading="isSavingNote"
+            @click="handleSaveNote"
+            title="将回答提炼并存入个人笔记"
+          >
+            <el-icon class="w-3.5 h-3.5 mr-1"><EditPen /></el-icon>
+            存为笔记
+          </el-button>
+          <span
+            v-else
+            class="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 select-none px-2 py-0.5 rounded bg-emerald-500/10"
+          >
+            <el-icon class="w-3 h-3"><EditPen /></el-icon>
+            已存笔记
+          </span>
         </div>
 
         <!-- Sources chips -->
@@ -202,8 +257,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ArrowRight, DocumentCopy } from '@/components/icons'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { ArrowRight, DocumentCopy, EditPen } from '@/components/icons'
 import type { ChatStreamMessage } from '@/stores/chat'
+import { useChatStore } from '@/stores/chat'
 import type { BotMood } from '@/components/CopilotBotAvatar.vue'
 import type { ExpressionId } from '@/bot/expressions'
 import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
@@ -225,7 +283,38 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'copy', msg: ChatStreamMessage): void
   (e: 'scrollToSource', index: number): void
+  (e: 'saveNote', msg: ChatStreamMessage): void
 }>()
+
+const router = useRouter()
+const chatStore = useChatStore()
+const isSavingNote = ref(false)
+
+const savedNoteInfo = computed(() => {
+  return props.message.savedNote || props.message.saved_note || null
+})
+
+async function handleSaveNote() {
+  if (isSavingNote.value || !props.message.id || savedNoteInfo.value) return
+  isSavingNote.value = true
+  emit('saveNote', props.message)
+  try {
+    const note = await chatStore.saveMessageAsNote(props.message.id)
+    ElMessage.success(`已保存至笔记：《${note.title}》`)
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || err?.message || '保存笔记失败')
+  } finally {
+    isSavingNote.value = false
+  }
+}
+
+function navigateToNote(noteId?: string) {
+  if (router) {
+    router.push({ path: '/notes', query: noteId ? { id: noteId } : undefined })
+  } else if (typeof window !== 'undefined') {
+    window.location.href = noteId ? `/notes?id=${noteId}` : '/notes'
+  }
+}
 
 // 默认折叠：两个思考过程均初始保持折叠
 const isThinkingOpen = ref(false)

@@ -140,7 +140,9 @@ async def submit_classroom_generation(
                 try:
                     await add_document_to_course(db, user, course_space.id, d_id)
                 except Exception as add_err:
-                    logger.warning("Failed to link doc %s to course %s: %s", d_id, course_space.id, add_err)
+                    logger.warning(
+                        "Failed to link doc %s to course %s: %s", d_id, course_space.id, add_err
+                    )
 
             classroom_url = f"/courses/{course_space.id}/classroom"
             classroom_data = course_data.get("classroom_data")
@@ -323,7 +325,12 @@ async def handle_webhook_callback(
             try:
                 await add_document_to_course(db, user, course_row.id, d_id)
             except Exception as link_err:
-                logger.warning("Failed to link doc %s to course %s in webhook: %s", d_id, course_row.id, link_err)
+                logger.warning(
+                    "Failed to link doc %s to course %s in webhook: %s",
+                    d_id,
+                    course_row.id,
+                    link_err,
+                )
 
         course_row.description = json.dumps(
             {
