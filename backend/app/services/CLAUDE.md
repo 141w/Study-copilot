@@ -32,7 +32,8 @@ Core (app/core/*.py)
 |------|--------|---------------|
 | `auth_service.py` | Authentication | register, login, refresh_token |
 | `document_service.py` | Document upload/parse | upload_document, delete_document, list_documents |
-| `chat_service.py` | RAG Q&A | ask_question, stream_answer, get_history |
+| `chat_service.py` | RAG Q&A | ask_question, ask_question_stream (fast | pipeline_v2 | deep_research), get_history |
+| `memory_service.py` | Long-term memory (WeKnora M3) | recall, search, add_item, confirm_pending, list_items |
 | `quiz_service.py` | Quiz generation | generate_quiz, submit_quiz, get_wrong_questions |
 | `analysis_service.py` | Learning analytics | analyze_wrong_questions, get_knowledge_stats, get_progress |
 | `config_service.py` | LLM configuration | get_config, update_config |

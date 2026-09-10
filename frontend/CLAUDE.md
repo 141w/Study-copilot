@@ -21,14 +21,16 @@ frontend/
 │   │   ├── CourseDetailView.vue # Course detail with docs & notes
 │   │   ├── NotesView.vue      # Note management (manual + AI)
 │   │   ├── TasksView.vue      # Async task management
-│   │   ├── ProfileView.vue    # User profile & password settings
+│   │   ├── ProfileView.vue    # User profile, password & long-term memory panel
 │   ├── components/
 │   │   ├── chat/
 │   │   │   ├── ChatDiscussionItem.vue # Multi-agent persona discussion message item
 │   │   │   ├── ChatHistoryPanel.vue   # Conversation history sidebar
 │   │   │   ├── ChatInput.vue          # Message input with document & persona selector
-│   │   │   ├── ChatMessageItem.vue    # Chat message bubble with citations
+│   │   │   ├── ChatMessageItem.vue    # Chat message bubble with citations + thinking/reasoning
 │   │   │   └── ChatSourceCards.vue    # Expandable source citation cards
+│   │   ├── profile/
+│   │   │   └── MemoryManager.vue      # Long-term memory list / enable / confirm / delete
 │   │   ├── common/
 │   │   │   ├── AppHeader.vue         # Top navigation bar (el-dropdown + theme toggle)
 │   │   │   ├── AppSidebar.vue        # Side navigation (el-menu with router)
@@ -51,10 +53,11 @@ frontend/
 │   │   ├── ConfirmDialog.vue        # Reusable confirmation dialog
 │   ├── stores/               # Pinia stores (TypeScript)
 │   │   ├── auth.ts           # Login state, tokens, user info
-│   │   ├── chat.ts           # Messages, streaming, conversations
+│   │   ├── chat.ts           # Messages, streaming (fast | deep_research), conversations
 │   │   ├── config.ts         # LLM configuration
 │   │   ├── course.ts         # Course spaces, document associations
 │   │   ├── document.ts       # Document list, upload state
+│   │   ├── memory.ts         # Long-term memory store (list/create/confirm/search)
 │   │   ├── note.ts           # Notes list, tags, search, filters
 │   │   ├── classroom.ts      # AI Classroom store: job polling & auto-sync
 │   │   ├── quiz.ts           # Quiz state, answers, results

@@ -16,6 +16,8 @@ Core modules contain **pure business logic** with no HTTP or framework dependenc
 | `answer_reflector.py` | Answer quality self-reflection | Hallucination and alignment check with refinement |
 | `document_parser.py` | Document parsing factory | PDF (Docling/PyMuPDF), DOCX (python-docx), PPTX (python-pptx) |
 | `chunker.py` | Text chunking strategies | `FixedChunker` (512 tokens), `SemanticChunker`, `HierarchicalChunker` |
+| `chunk_strategy.py` | Adaptive chunking chain (WeKnora M2) | `profile_document`, `select_chunking_chain`, `validate_chunks`, `enrich_chunk_breadcrumbs` |
+| `tracing.py` | Langfuse observability (WeKnora M1) | `init_tracing`, `@observe_span`, NoOp when disabled |
 | `document_bundle.py` | Multi-doc budget allocation | Proportional fair text budget algorithm |
 | `course_generator.py` | Local course & quiz generator | Auto-generate course outline and quizzes from docs |
 | `persona_discussion.py` | Multi-agent persona discussion | 4 standard presets (苏老师, 学霸, 求知同学, 归纳助手) + sequential chain |
@@ -24,7 +26,7 @@ Core modules contain **pure business logic** with no HTTP or framework dependenc
 | `pgvector_store.py` | Production vector store | PostgreSQL + pgvector (IVFFlat/HNSW cosine similarity) |
 | `vector_store.py` | Legacy vector store | FAISS + rank-bm25 + jieba + RRF fusion |
 | `embedder.py` | Text embedding | `embed_texts()`, `embed_query()` — wraps local SBERT models (async + caching) |
-| `llm.py` | LLM client wrapper | OpenAI SDK with retry/backoff, supports OpenRouter/OpenAI/Anthropic/Gemini |
+| `llm.py` | LLM client wrapper | `chat` / `chat_stream` / `chat_with_tools`; OpenRouter/OpenAI/Anthropic/Gemini |
 | `encryption.py` | Fernet credential encryption | `encrypt_value()`, `decrypt_value()` — API key encryption at rest |
 | `tts.py` | Edge TTS text-to-speech | `synthesize_speech()` — async audio generation via edge-tts |
 | `url_extractor.py` | Web content extraction | `extract_from_url()` — fetches and parses web page content |

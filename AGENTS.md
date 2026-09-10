@@ -19,23 +19,46 @@ This file provides architectural guidance for contributors working on Study Copi
 - **CI/CD**: GitHub Actions
 - **代码质量**: Ruff linter + TypeScript + vue-tsc
 
+### v4 Features（WeKnora 吸收升级 M1–M5）
+- **Langfuse 可观测**: 可选全链路追踪（关闭时 NoOp 零开销），覆盖 RAG/路由/检索/反思/LLM
+- **自适应分块链**: 文档画像 → 策略链选择 → WeKnora 五法则校验降级 → 面包屑上下文注入
+- **长期记忆五分类**: profile/preference（常驻）+ fact/task（情境）+ interest（检索意图）；pending 隔离 + CJK 词法召回（0 LLM）
+- **洋葱聊天管线**: PipelineBuilder 插件编排；`PIPELINE_V2_ENABLED` 双轨；**流式 SSE 主路径已接入**
+- **ReAct 深度研究**: 6 只读工具 + Think-Act-Observe 护栏；前端「快速 / 深度研究」切换
+
 **Key Values**: Local-first embedding, multi-provider LLM support, Chinese-language optimized, self-hosted.
 
 ---
 
-## Current State (2026-09-06)
+## Current State (2026-09-10)
 
-- **Git**: `master` 分支（全部优化落地，未 push 远端）
-- **Tests**: 后端 527 passed (41 测试文件) / 前端 258 passed (28 测试文件) / 覆盖率 72.43% (门禁 65%) / vue-tsc exit 0
+- **Git**: `master` 分支（WeKnora M1-M5 + 流式管线落地，未 push 远端）
+- **Tests**: 后端 **615 passed**（覆盖率 **72.57%**，门禁 65%）/ 前端 **290 passed** / mypy 0 / ruff 0 / vue-tsc 0
 - **Ports**: 前端 3000，后端 8000
 - **Frontend**: Vue3 + Vite + TypeScript + Pinia + TailwindCSS + GSAP + Element Plus
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL 16+ + pgvector + sentence-transformers
 - **打包**: backend/pyproject.toml（hatchling）+ uv.lock（~484 TOML 条目）；requirements.txt 为兼容层
 - **CI**: uv 安装依赖 + ruff lint + mypy 类型门禁（渐进式棘轮配置）+ 覆盖率门禁 65% + 前端 vitest/vue-tsc 全链路
-- **可观测性**: 结构化 JSON 日志（生产）/ 文本（开发）+ X-Trace-ID 纯 ASGI 追踪中间件 + /health DB 探测
+- **可观测性**: 结构化 JSON 日志 + X-Trace-ID ASGI 中间件 + 可选 Langfuse（`LANGFUSE_ENABLED`）+ /health DB 探测
 - **Docker**: 多阶段构建、非 root 运行、healthcheck；.dockerignore 收敛构建上下文
 
-### Recent Changes (2026-08-17 ~ 2026-09-07)
+### Recent Changes (2026-08-17 ~ 2026-09-10)
+
+**2026-09-10 批次（洋葱管线流式接线 + Agent 工具测 + alembic 多 head 修复）：**
+1. **PIPELINE_V2 覆盖 SSE 主路径** (`pipeline/` + `chat_service.py`)：
+   - `PipelineState` 增加 `stream_mode`/`event_queue`，插件经 `emit_event` 渐进推送；
+   - 新增 `execute_chat_pipeline_stream`，事件协议对齐 `rag_engine.ask_stream`（thinking/sources/token/reasoning/answer/answer_refined）；
+   - Generate / QueryUnderstand（直答/总结/笔记）支持流式短路径；BuildContext 补发 sources；
+   - `ask_question_stream` 在 `PIPELINE_V2_ENABLED=True` 时走流式管线（深度研究仍走 Agent）。
+2. **Agent 工具层单测补齐** (`tests/test_agent_tools.py`)：6 只读工具成功/空/失败路径 + ContextCompactor 预算/摘要/降级。
+3. **真机冒烟与 alembic 修复**：`fa1b2c3d4e5f` 与 `c1d2e3f4a5b6` 双 head 导致启动迁移卡死，`down_revision` 改挂 `c1d2e3f4a5b6` 恢复单链；注册/登录/`GET /api/memory`/SSE 短路径与 token 流实测 200 且 `done` 收尾。
+
+**2026-09-08 批次（WeKnora 吸收升级 M1–M5 全量落地）：**
+1. **M1 Langfuse** (`core/tracing.py` + `main.py` lifespan)：NoOp 优雅降级；`@observe_span` / `trace_span_ctx`；RAG/路由/检索/反思埋点。
+2. **M2 自适应分块** (`core/chunk_strategy.py` + `document_service.py`)：文档画像、策略链、五法则校验、面包屑 `context_header`。
+3. **M3 长期记忆** (`services/memory_service.py` + `api/memory.py` + `MemoryManager.vue`)：五分类 + 状态机；CJK 单字+Bigram 词法召回；pending 不入 prompt；Profile 第 5 Tab。
+4. **M4 洋葱管线** (`app/pipeline/`)：base/manager/builder + 8 插件；`PIPELINE_V2_ENABLED` 双轨与对拍测试。
+5. **M5 ReAct Agent** (`app/agent/`)：`chat_with_tools`、6 工具、截断/防死循环/Nudge/上下文压缩；前端「快速/深度研究」。
 
 **2026-09-07 批次（双轨思考体系：微观原生 CoT 深度思考流 + 宏观 Agentic 决策反思全透明）：**
 1. **微观底层大模型原生 CoT 流式解析** (`llm.py` + `rag_engine.py` + `chat_service.py`)：
@@ -257,9 +280,11 @@ This file provides architectural guidance for contributors working on Study Copi
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Vector DB | FAISS (file-based) | No extra service; simple deployment |
+| Vector DB | pgvector (PostgreSQL) | Single service; production path. FAISS file index is legacy only |
 | Embedding | Local SBERT models | Privacy, no API cost, Chinese support |
 | Streaming | SSE | Standard HTTP, no WebSocket complexity |
+| Chat pipeline | Onion plugins + dual-track flag | Incremental migration; `PIPELINE_V2_ENABLED` covers stream path |
+| Memory recall | Lexical CJK (not vector) | Sub-ms, 0 LLM on query path; pending isolation |
 | LLM abstraction | OpenAI-compatible API | Swap providers without code changes |
 | Auth | JWT (stateless) | Standard, works with SPA |
 

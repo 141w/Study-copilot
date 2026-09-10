@@ -6,7 +6,14 @@ This file provides architectural guidance for contributors working on Study Copi
 
 **Study Copilot** is an AI-powered learning assistant built with FastAPI + Vue3. It enables users to upload documents (PDF/DOCX/PPTX), ask questions via RAG (Retrieval-Augmented Generation), generate quizzes automatically, and track learning progress.
 
-### v3 Features (Current)
+### v4 Features (WeKnora 吸收升级)
+- **Langfuse 可观测**: `core/tracing.py`，关闭时 NoOp 零开销；`LANGFUSE_ENABLED` + keys；lifespan init/flush
+- **自适应分块链**: `core/chunk_strategy.py` — DocProfile 画像 → 策略链 → 五法则校验降级 → 面包屑注入
+- **长期记忆五分类**: profile/preference 常驻 + fact/task 情境 + interest；pending 隔离；CJK 词法召回；`/api/memory` + Profile 面板
+- **洋葱聊天管线**: `app/pipeline/` 插件编排；`PIPELINE_V2_ENABLED` 双轨；流式 SSE 主路径 `execute_chat_pipeline_stream`
+- **ReAct 深度研究**: `app/agent/` 6 只读工具 + Think-Act-Observe；前端「快速/深度研究」；SSE 事件 agent/thinking/token
+
+### v3 Features
 - **TypeScript**: 渐进式 TypeScript 迁移，stores 全面 TS，views/composables 渐进覆盖
 - **组件复用**: Element Plus (el-button, el-card, el-input 等通用组件)
 - **Prompt 模板化**: Jinja2 模板管理 28 个 LLM prompt (7 个子目录)
@@ -15,7 +22,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - **主题系统**: Light/Dark 主题切换，CSS 变量驱动
 - **响应式布局**: 移动端适配，自适应侧边栏，用户菜单
 - **通用组件**: AppHeader、AppSidebar、ConfirmDialog、PageHeader、SkeletonList、EmptyState、DocumentPicker
-- **功能组件**: CopilotBotAvatar、CourseCard、NoteCard、NoteEditor、TaskPanel、TransformDialog、TTSPlayer、UrlImportDialog、ChatHistoryPanel、ChatInput、ChatDiscussionItem、ChatMessageItem、ChatSourceCards、GenerateClassroomDialog、ClassroomCard、IconSet
+- **功能组件**: CopilotBotAvatar、CourseCard、NoteCard、NoteEditor、TaskPanel、TransformDialog、TTSPlayer、UrlImportDialog、ChatHistoryPanel、ChatInput、ChatDiscussionItem、ChatMessageItem、ChatSourceCards、GenerateClassroomDialog、ClassroomCard、MemoryManager、IconSet
 
 ### v2 / v3 Features
 - **Agentic RAG**: 查询路由、上下文感知改写、自适应检索（4种策略）、纠错检索、会话摘要、答案自我反思
@@ -54,12 +61,14 @@ This file provides architectural guidance for contributors working on Study Copi
 │          Backend (FastAPI)                   │
 │          backend/ @ port 8000                │
 ├──────────────────────────────────────────────┤
-│ - 13 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis/classroom_api)
+│ - 14 REST API routers (auth/chat/config/courses/document/metrics/notes/quiz/tasks/transform/tts/analysis/classroom_api/memory)
 │ - Agentic RAG (Router + Adaptive + Corrective + Reflection)
+│ - Onion chat pipeline V2 (streaming SSE) + ReAct Agent (deep research)
+│ - Long-term memory (five-kind, lexical recall)
 │ - Vector search via PostgreSQL+pgvector (production)
 │ - Multi-provider LLM abstraction (OpenAI SDK)
 │ - JWT authentication (access + refresh)
-│ - 11 service orchestration modules (analysis, auth, chat, config, course, document, note, classroom, quiz, task, transform) │
+│ - 12 service orchestration modules (analysis, auth, chat, config, course, document, note, classroom, quiz, task, transform, memory) │
                    │
 ┌──────────────────▼───────────────────────────┐
 │          Data Layer                          │

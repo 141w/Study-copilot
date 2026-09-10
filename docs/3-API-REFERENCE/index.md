@@ -15,6 +15,7 @@ Unauthenticated endpoints: `/`, `/health`, `/api/metrics`, `/api/classroom/webho
 - [Configuration](#configuration)
 - [Notes](#notes)
 - [Courses](#courses)
+- [Long-term Memory](#long-term-memory)
 - [Transform](#transform)
 - [TTS](#tts)
 - [Tasks](#tasks)
@@ -239,9 +240,21 @@ POST /api/chat/ask
   "question": "What is the main topic of chapter 3?",
   "document_ids": ["uuid-1", "uuid-2"],
   "session_id": "uuid-or-null",
+  "stream": false,
+  "agent_enabled": false,
+  "mode": "fast",
   "config": { "temperature": 0.7 }
 }
 ```
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `stream` | bool | `true` → SSE 事件流 |
+| `agent_enabled` | bool | 兼容字段；等价于 `mode=deep_research` |
+| `mode` | `"fast" \| "deep_research"` | deep_research 走 ReAct Agent（6 只读工具） |
+
+当后端设置 `PIPELINE_V2_ENABLED=True` 时，流式 `fast` 路径走洋葱管线 `execute_chat_pipeline_stream`。
+
 **Response:** `200 OK`
 ```json
 {
@@ -264,12 +277,16 @@ POST /api/chat/ask
 
 **Note:** Set `"stream": true` in the request body to receive SSE events:
 ```
+data: {"type": "session", "session_id": "uuid"}
+data: {"type": "thinking", "step": "intent_analysis", "detail": "..."}
+data: {"type": "sources", "sources": [...], "filtered_sources": [...]}
 data: {"type": "token", "content": "Based"}
-data: {"type": "token", "content": " on"}
-data: {"type": "citation", "index": 1, "text": "..."}
+data: {"type": "reasoning", "content": "..."}
 data: {"type": "answer_refined", "content": "..."}
 data: {"type": "done"}
 ```
+
+Deep research (`mode=deep_research`) additionally emits thinking steps such as `agent_start` / `agent_think` / `tool_call` / `tool_result`.
 
 ---
 
@@ -889,6 +906,79 @@ Generate a course outline + quizzes from source documents using LLM.
   "section_count": 8,
   "quiz_count": 15
 }
+```
+
+---
+
+## Long-term Memory
+
+Five-kind personal memory (WeKnora M3): `profile` / `preference` (resident) + `fact` / `task` (situational) + `interest`.
+System-inferred items start as `pending` and are **not** injected into prompts until confirmed.
+
+### List Memories
+```
+GET /api/memory?kind=preference&status=active
+```
+**Headers:** `Authorization: Bearer ***`
+**Response:** `200 OK`
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "kind": "preference",
+      "origin": "manual",
+      "status": "active",
+      "key": "answer_style",
+      "content": "偏好简明要点式回答"
+    }
+  ],
+  "config": {
+    "enabled": true,
+    "capacity": 200,
+    "has_resident_block": false,
+    "last_extracted_at": null
+  }
+}
+```
+
+### Create Memory
+```
+POST /api/memory
+```
+```json
+{ "kind": "profile", "content": "计算机专业大三学生", "key": "major" }
+```
+
+### Confirm Pending Memory
+```
+POST /api/memory/{item_id}/confirm
+```
+
+### Supersede Memory
+```
+POST /api/memory/{item_id}/supersede
+```
+
+### Delete Memory
+```
+DELETE /api/memory/{item_id}
+```
+
+### Update Memory Config
+```
+PUT /api/memory/config
+```
+```json
+{ "enabled": true, "capacity": 200 }
+```
+
+### Search Memory
+```
+POST /api/memory/search
+```
+```json
+{ "query": "学习偏好", "limit": 10 }
 ```
 
 ---

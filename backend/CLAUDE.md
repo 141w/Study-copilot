@@ -11,10 +11,11 @@ backend/
 │   │   ├── __init__.py
 │   │   ├── analysis.py               # GET /wrong, GET /knowledge, /progress
 │   │   ├── auth.py                    # POST /register, /login, GET/PUT /me, PUT /password, POST /refresh
-│   │   ├── chat.py                    # POST /ask (stream:true), GET /history
+│   │   ├── chat.py                    # POST /ask (stream:true | agent_enabled), GET /history
 │   │   ├── config.py                  # GET/POST user LLM config
 │   │   ├── courses.py                 # CRUD course spaces, document associations
 │   │   ├── document.py                # POST /upload, GET /, DELETE /{id}
+│   │   ├── memory.py                  # Long-term memory list/create/confirm/supersede/search
 │   │   ├── metrics.py                 # Operational metrics (task counts)
 │   │   ├── notes.py                   # CRUD notes + tags + semantic search
 │   │   ├── classroom_api.py           # AI interactive classroom REST endpoints
@@ -23,28 +24,41 @@ backend/
 │   │   ├── transform.py               # Content transformation endpoints (8 types)
 │   │   │   └── GET /transformations   # List available transformation types
 │   │   └── tts.py                     # Text-to-speech synthesis
+│   ├── agent/                         # ReAct deep-research agent (WeKnora M5)
+│   │   ├── engine.py                  # Think-Act-Observe loop + stall/truncation guards
+│   │   ├── context.py                 # ContextCompactor + estimate_tokens
+│   │   ├── prompts.py                 # Agent system prompt
+│   │   └── tools/                     # 6 read-only tools + ToolRegistry + policy
+│   ├── pipeline/                      # Onion chat pipeline V2 (WeKnora M4)
+│   │   ├── base.py                    # EventType / PipelineState / Plugin / emit_event
+│   │   ├── manager.py                 # EventManager onion chain
+│   │   ├── builder.py                 # PipelineBuilder
+│   │   └── plugins/                   # history/memory/query/retrieve/grade/context/generate/reflect
 │   ├── core/                          # Business logic (no HTTP concerns)
 │   │   ├── __init__.py
 │   │   ├── adaptive_retriever.py      # Adaptive retrieval strategies (4 strategies)
 │   │   ├── answer_reflector.py        # Answer quality self-reflection
+│   │   ├── chunk_strategy.py          # DocProfile + strategy chain + WeKnora validators
 │   │   ├── chunker.py                 # FixedChunker, SemanticChunker, HierarchicalChunker
 │   │   ├── course_generator.py        # Auto-generate course outline + quizzes from docs
 │   │   ├── document_bundle.py         # Multi-document packing for LLM context
 │   │   ├── document_parser.py         # Factory: Docling/PyMuPDF/python-docx/python-pptx
 │   │   ├── embedder.py                # sentence-transformers wrapper with async + caching
 │   │   ├── encryption.py              # Fernet credential encryption for API keys
-│   │   ├── llm.py                     # OpenAI SDK wrapper with retry/backoff
+│   │   ├── llm.py                     # OpenAI SDK wrapper (chat / chat_stream / chat_with_tools)
 │   │   ├── logger.py                  # Structured logging with trace-id ContextVar
+│   │   ├── note_synthesizer.py        # Note metadata extraction from answers
 │   │   ├── persona_discussion.py      # Multi-agent discussion mode (sequential persona chain)
 │   │   ├── pgvector_store.py          # Production vector search via PostgreSQL+pgvector
 │   │   ├── query_decomposer.py        # Query decomposition + entity extraction
 │   │   ├── query_router.py            # Query intent classification + context rewrite
 │   │   ├── quiz_generator.py          # LLM-based question generation
-│   │   ├── rag_engine.py              # Agentic RAG orchestrator
+│   │   ├── rag_engine.py              # Agentic RAG orchestrator (legacy stream path)
 │   │   ├── rate_limit.py              # 自研滑动窗口 IPRateLimiter
 │   │   ├── retrieval_grader.py        # Two-level retrieval quality assessment
 │   │   ├── task_worker.py             # Background task enqueue/dequeue/process
 │   │   ├── template_manager.py        # Jinja2 template renderer for LLM prompts
+│   │   ├── tracing.py                 # Langfuse tracing (NoOp when disabled)
 │   │   ├── transformations.py         # 8 transformation types (summary/keypoints/outline/flashcards/mindmap/qa/translate/explain)
 │   │   ├── tts.py                     # Edge TTS wrapper
 │   │   ├── url_extractor.py           # Web content extraction
@@ -65,6 +79,7 @@ backend/
 │   │   ├── course_service.py          # Course space management + document associations
 │   │   ├── document_service.py        # upload_document, delete_document, list_documents
 │   │   ├── note_service.py            # Note CRUD + tagging + semantic search
+│   │   ├── memory_service.py          # Five-kind long-term memory + lexical recall
 │   │   ├── classroom_service.py       # AI interactive classroom platform integration
 │   │   ├── quiz_service.py            # generate_quiz, submit_quiz, get_wrong_questions
 │   │   ├── task_service.py            # Async task queue (create, get_status, list, cancel)
@@ -79,7 +94,7 @@ backend/
 ├── alembic/                           # Database migrations
 │   ├── versions/
 │   └── env.py
-├── tests/                             # Pytest suite (39 test files, 490 tests, 72.52% cov)
+├── tests/                             # Pytest suite (615 tests, ~72.57% cov)
 │   ├── conftest.py
 │   ├── conftest_async.py
 │   ├── conftest_fixtures.py

@@ -67,6 +67,12 @@
 | AI 互动课堂 | 内置 AI 互动微课引擎，一键从文档生成交互式微课（支持配图）+ 多智能体讨论模式 + 双通道自愈轮询 | ✅ v3.2 |
 | AI 课程生成 | 基于文档自动生成课程大纲 + 测验题（本地引擎） | ✅ v3.2 |
 | 多文档问答 | 多文档 CJK 布包，跨文档 RAG 检索 | ✅ v3.2 |
+| 双轨思考 | 原生 CoT reasoning 流 + Agentic 决策事件三层展示 | ✅ v3.2 |
+| Langfuse 可观测 | 可选全链路追踪，关闭时零开销 | ✅ v4 |
+| 自适应分块链 | 文档画像 → 策略链 → 校验降级 → 面包屑上下文 | ✅ v4 |
+| 长期记忆 | 五分类记忆（画像/偏好/事实/任务/兴趣），CJK 词法召回，个人中心管理 | ✅ v4 |
+| 洋葱聊天管线 | 插件化 RAG 管线，`PIPELINE_V2_ENABLED` 双轨（含流式 SSE） | ✅ v4 |
+| 深度研究 Agent | ReAct 自主检索（6 只读工具），前端「快速 / 深度研究」切换 | ✅ v4 |
 
 ### 应用场景
 
@@ -1227,6 +1233,25 @@ docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn
 ---
 
 ## 更新日志
+
+### v4.0.0 (2026-09) — WeKnora 吸收升级 M1–M5
+
+> 参照 WeKnora v0.8.0 设计，落地可观测、分块、记忆、管线、Agent 五项架构升级。
+
+**新增**
+- Langfuse 全链路追踪（`LANGFUSE_ENABLED`，未配置时 NoOp）
+- 自适应分块链：`DocProfile` + 策略链 + 五法则校验 + 面包屑注入
+- 长期记忆五分类 + pending 隔离 + CJK 词法召回 + `POST /api/memory` 管理
+- 洋葱聊天管线 `app/pipeline/`（`PIPELINE_V2_ENABLED` 双轨，流式 SSE 已接线）
+- ReAct 深度研究模式：6 只读工具 + 前端「快速 / 深度研究」切换
+
+**修复**
+- alembic 多 head 导致启动迁移卡死（`fa1b2c3d4e5f` 改挂 `c1d2e3f4a5b6`）
+
+**测试**
+- 后端 615 passed / 覆盖率 72.57%；前端 290 passed；mypy / ruff / vue-tsc 全绿
+
+---
 
 ### v3.2.0 — AI 互动课堂 & 本地课程生成 & 讨论模式
 

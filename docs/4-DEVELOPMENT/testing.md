@@ -37,15 +37,18 @@ pytest tests/ --cov-report=html
 
 **Note**: Coverage failure threshold (currently 65%) is set in `pyproject.toml` under `[tool.pytest.ini_options]` as `--cov-fail-under=65`. All invocations inherit it; use `--no-cov` to skip the check.
 
-### Test Files (39 files, 490 tests, 72.52% coverage)
+### Test Files (615 tests, ~72.57% coverage)
 
 | File | Tests |
 |------|-------|
 | `tests/test_analysis_service.py` | Wrong answer analysis, knowledge stats, progress |
 | `tests/test_api.py` | Health check, root endpoint |
+| `tests/test_agent_engine.py` | ReAct AgentEngine loop, tool registry, stall guards |
+| `tests/test_agent_tools.py` | 6 read-only tools execute paths + ContextCompactor |
 | `tests/test_auth.py` | Password hash, JWT encode/decode, expiration |
 | `tests/test_auth_service.py` | Registration, login, token refresh service logic |
 | `tests/test_chat_service.py` | RAG Q&A, chat sessions, history retrieval |
+| `tests/test_chunk_strategy.py` | DocProfile, strategy chain, WeKnora validators |
 | `tests/test_chunker.py` | Fixed/Semantic/Hierarchical chunking strategies |
 | `tests/test_config_service.py` | LLM config CRUD, temperature roundtrip |
 | `tests/test_course_generator.py` | Local course outline & quiz generation |
@@ -59,9 +62,12 @@ pytest tests/ --cov-report=html
 | `tests/test_hybrid_retrieval_contract.py` | FAISS+BM25 RRF hybrid retrieval contract |
 | `tests/test_list_pagination.py` | Paginated list endpoints and offset/limit validation |
 | `tests/test_logging_config.py` | Structured JSON/text logging and trace context |
+| `tests/test_memory_service.py` | Five-kind memory, lexical recall, pending isolation |
 | `tests/test_metrics.py` | `/api/metrics` operational task counts snapshot |
 | `tests/test_note_indexing.py` | Note-vector-store indexing and semantic search |
+| `tests/test_agent_note_writing.py` | Note metadata extraction / auto-save path |
 | `tests/test_classroom_integration.py` | AI classroom integration, status polling, webhook, self-healing |
+| `tests/test_pipeline_parity.py` | Onion pipeline non-stream parity + streaming SSE path |
 | `tests/test_persona_discussion.py` | Multi-persona discussion presets and sequential chain |
 | `tests/test_profile.py` | User profile and password update endpoints |
 | `tests/test_quiz.py` | Quiz generation and submission API endpoints |
@@ -75,6 +81,7 @@ pytest tests/ --cov-report=html
 | `tests/test_task_service.py` | Task CRUD service, enqueue, and status reporting |
 | `tests/test_tasks.py` | Task API endpoints and cancellation |
 | `tests/test_trace_middleware.py` | Trace middleware (X-Trace-ID propagation) |
+| `tests/test_tracing.py` | Langfuse tracing NoOp / enable paths |
 | `tests/test_transform_service.py` | 9 content transformation types orchestration |
 | `tests/test_tts.py` | Edge TTS audio generation and voice listing |
 | `tests/test_type_safety_regressions.py` | Type safety baseline and regression checks |
