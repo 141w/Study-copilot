@@ -239,7 +239,7 @@
           <template v-else>
             <button
               type="button"
-              class="w-full flex items-center justify-between gap-2 text-left group mb-2 px-1.5 py-1 -mx-1.5 rounded-md hover:bg-[var(--bg-hover)]/70 transition-colors"
+              class="w-full flex items-center justify-between gap-2 text-left group mb-2 px-1.5 py-1 -mx-1.5 rounded-md hover:bg-[var(--bg-hover)] transition-colors"
               data-test="sources-toggle"
               :aria-expanded="isSourcesOpen"
               @click="isSourcesOpen = !isSourcesOpen"

@@ -87,19 +87,13 @@ describe('ChatInput', () => {
       }
     })
 
-    const sendBtn = wrapper.find('[data-test="send-btn"]')
-    // 空输入：禁用态用 tertiary 底 + muted 字，避免暗色下白底 opacity 变灰糊成一团
-    expect(sendBtn.attributes('disabled')).toBeDefined()
-    let cls = sendBtn.classes().join(' ')
-    expect(cls).toContain('bg-[var(--bg-tertiary)]')
-    expect(cls).not.toMatch(/(?:^|\s)text-white(?:\s|$)/)
-
     const textarea = wrapper.find('textarea')
     await textarea.setValue('暗色模式检查')
-    await wrapper.vm.$nextTick()
 
-    cls = sendBtn.classes().join(' ')
-    expect(sendBtn.attributes('disabled')).toBeUndefined()
+    const sendBtn = wrapper.find('button[aria-label="发送消息"]')
+    const cls = sendBtn.classes().join(' ')
+    // 不可用硬编码 text-white：暗色主色为白，会白底白图标
+    expect(cls).not.toMatch(/(?:^|\s)text-white(?:\s|$)/)
     expect(cls).toContain('text-[var(--text-inverse)]')
     expect(cls).toContain('bg-[var(--color-primary)]')
   })

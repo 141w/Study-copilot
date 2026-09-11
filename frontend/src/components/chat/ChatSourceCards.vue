@@ -9,7 +9,7 @@
       <!-- 标题行：默认只展示这一行，点击展开正文摘要 -->
       <button
         type="button"
-        class="w-full flex items-center gap-2 p-3 text-left hover:bg-[var(--bg-hover)]/60 transition-colors"
+        class="w-full flex items-center gap-2 p-3 text-left hover:bg-[var(--bg-hover)] transition-colors"
         :aria-expanded="isExpanded(source.index)"
         :data-test="`source-card-toggle-${source.index}`"
         @click="toggle(source.index)"
