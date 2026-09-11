@@ -293,7 +293,7 @@
                   <button
                     type="button"
                     class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
-                    :class="classroomForm.tts_provider === 'edge-tts' ? 'bg-[var(--color-primary)] text-white border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    :class="classroomForm.tts_provider === 'edge-tts' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
                     @click="selectTTSPreset('edge-tts')"
                   >
                     Microsoft Edge (内置免密·推荐)
@@ -301,7 +301,7 @@
                   <button
                     type="button"
                     class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
-                    :class="classroomForm.tts_provider === 'custom' ? 'bg-[var(--color-primary)] text-white border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    :class="classroomForm.tts_provider === 'custom' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
                     @click="selectTTSPreset('custom')"
                   >
                     自定义兼容端点

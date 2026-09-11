@@ -78,6 +78,26 @@ describe('ChatInput', () => {
     expect(wrapper.emitted('send')).toBeFalsy()
   })
 
+  it('发送键使用主题反转色令牌（暗色下白底黑图标可见）', async () => {
+    const wrapper = mount(ChatInput, {
+      global: {
+        stubs: {
+          'el-icon': true,
+        }
+      }
+    })
+
+    const textarea = wrapper.find('textarea')
+    await textarea.setValue('暗色模式检查')
+
+    const sendBtn = wrapper.find('button[aria-label="发送消息"]')
+    const cls = sendBtn.classes().join(' ')
+    // 不可用硬编码 text-white：暗色主色为白，会白底白图标
+    expect(cls).not.toMatch(/(?:^|\s)text-white(?:\s|$)/)
+    expect(cls).toContain('text-[var(--text-inverse)]')
+    expect(cls).toContain('bg-[var(--color-primary)]')
+  })
+
   it('loading 状态下渲染停止生成按钮并触发 stop 事件', async () => {
     const wrapper = mount(ChatInput, {
       props: {

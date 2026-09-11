@@ -35,7 +35,7 @@
       <button
         v-else
         type="button"
-        class="flex items-center justify-center w-9 h-9 rounded-lg text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer active:scale-95 flex-shrink-0"
+        class="flex items-center justify-center w-9 h-9 rounded-lg text-[var(--text-inverse)] bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer active:scale-95 flex-shrink-0"
         :disabled="disabled || !inputText.trim()"
         title="发送消息"
         aria-label="发送消息"
