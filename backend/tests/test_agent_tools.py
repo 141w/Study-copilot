@@ -73,15 +73,19 @@ def _mock_db_session(chunks=None, doc=None, empty_doc=False):
     """Build a fake AsyncSessionLocal context manager returning rows."""
     db = MagicMock()
     execute = AsyncMock()
-    if chunks is not None:
-        execute.return_value = SimpleNamespace(
-            scalars=lambda: SimpleNamespace(all=lambda: chunks)
-        )
-    else:
-        doc_value = None if empty_doc else doc
-        execute.return_value = SimpleNamespace(
-            scalar_one_or_none=lambda: doc_value
-        )
+
+    class _Res:
+        def scalars(self):
+            return SimpleNamespace(all=lambda: chunks or [])
+
+        def all(self):
+            # Document.id/filename projection for _load_filename_map
+            return []
+
+        def scalar_one_or_none(self):
+            return None if empty_doc else doc
+
+    execute.return_value = _Res()
     db.execute = execute
     return db
 
@@ -112,7 +116,10 @@ async def test_grep_chunks_found():
         res = await tool.execute(keyword="梯度下降", doc_ids=["d1"], limit=5)
     assert res.success is True
     assert "梯度下降" in res.output
-    assert res.data == ["c1"]
+    # Structured shape for the engine source pool (not raw chunk ids)
+    assert isinstance(res.data, list) and len(res.data) == 1
+    assert res.data[0]["chunk"]["text"] == "这段话包含梯度下降关键词"
+    assert res.data[0]["chunk"]["document_id"] == "d1"
 
 
 @pytest.mark.asyncio
@@ -141,8 +148,20 @@ async def test_list_document_chunks_requires_doc_id():
 async def test_list_document_chunks_ok():
     tool = ListDocumentChunksTool()
     chunks = [
-        SimpleNamespace(id="c1", chunk_index=0, content="第一块", chunk_metadata={"page": 1}),
-        SimpleNamespace(id="c2", chunk_index=1, content="第二块", chunk_metadata={"page": 2}),
+        SimpleNamespace(
+            id="c1",
+            chunk_index=0,
+            document_id="d1",
+            content="第一块",
+            chunk_metadata={"page": 1},
+        ),
+        SimpleNamespace(
+            id="c2",
+            chunk_index=1,
+            document_id="d1",
+            content="第二块",
+            chunk_metadata={"page": 2},
+        ),
     ]
     db = _mock_db_session(chunks=chunks)
     cm = MagicMock()
@@ -154,6 +173,9 @@ async def test_list_document_chunks_ok():
     assert res.success is True
     assert "第一块" in res.output
     assert "第二块" in res.output
+    assert isinstance(res.data, list) and len(res.data) == 2
+    assert res.data[0]["chunk"]["text"] == "第一块"
+    assert res.data[1]["chunk"]["page"] == "2"
 
 
 @pytest.mark.asyncio

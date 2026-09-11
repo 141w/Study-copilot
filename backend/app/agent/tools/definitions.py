@@ -16,6 +16,40 @@ from app.services.memory_service import memory_service
 logger = logging.getLogger(__name__)
 
 
+async def _load_filename_map(db, doc_ids: list[str]) -> dict[str, str]:
+    """Best-effort document_id → filename map for source labels."""
+    if not doc_ids:
+        return {}
+    try:
+        res = await db.execute(
+            select(Document.id, Document.filename).where(Document.id.in_(doc_ids))
+        )
+        return {row[0]: row[1] for row in res.all()}
+    except Exception as e:
+        logger.debug("[AgentTools] filename map load failed: %s", e)
+        return {}
+
+
+def _chunk_to_source_entry(
+    c: DocumentChunk,
+    filename_map: dict[str, str] | None = None,
+    relevance: float = 0.85,
+) -> dict[str, Any]:
+    """Normalize DocumentChunk into knowledge_search-like result shape for the source pool."""
+    meta = c.chunk_metadata or {}
+    page = meta.get("page", "")
+    source = (filename_map or {}).get(c.document_id) or c.document_id
+    return {
+        "chunk": {
+            "text": c.content or "",
+            "document_id": c.document_id,
+            "page": str(page) if page is not None else "",
+            "source": source,
+        },
+        "relevance": relevance,
+    }
+
+
 class KnowledgeSearchTool(Tool):
     """Tool: knowledge_search — Semantic/hybrid retrieval over document chunks."""
 
@@ -115,12 +149,16 @@ class GrepChunksTool(Tool):
                 if not chunks:
                     return ToolResult(success=True, output=f"未找到包含关键词 '{keyword}' 的段落。", data=[])
 
-                lines = []
-                for i, c in enumerate(chunks, 1):
-                    page = (c.chunk_metadata or {}).get("page", "")
-                    lines.append(f"[{i}] (文档ID: {c.document_id}, 页码: {page}): {c.content[:300]}")
+                filename_map = await _load_filename_map(db, list({c.document_id for c in chunks}))
+                entries = [_chunk_to_source_entry(c, filename_map, relevance=0.8) for c in chunks]
 
-                return ToolResult(success=True, output="\n\n".join(lines), data=[c.id for c in chunks])
+                lines = []
+                for i, (c, entry) in enumerate(zip(chunks, entries), 1):
+                    page = (c.chunk_metadata or {}).get("page", "")
+                    src = entry["chunk"]["source"]
+                    lines.append(f"[{i}] 来自《{src}》(页码: {page}): {c.content[:300]}")
+
+                return ToolResult(success=True, output="\n\n".join(lines), data=entries)
         except Exception as e:
             logger.warning("[Tool:grep_chunks] Execution failed: %s", e)
             return ToolResult(success=False, output=f"精确匹配失败: {e}", error=str(e))
@@ -172,12 +210,20 @@ class ListDocumentChunksTool(Tool):
                 if not chunks:
                     return ToolResult(success=True, output="未读取到更多文档切片。", data=[])
 
-                lines = []
-                for c in chunks:
-                    page = (c.chunk_metadata or {}).get("page", "")
-                    lines.append(f"[切片 #{c.chunk_index} | 页码: {page}]\n{c.content}")
+                filename_map = await _load_filename_map(db, list({c.document_id for c in chunks}))
+                # Sequential read: relevance decays slightly by offset so later pages rank lower
+                entries = [
+                    _chunk_to_source_entry(c, filename_map, relevance=max(0.55, 0.9 - 0.05 * (offset + i)))
+                    for i, c in enumerate(chunks)
+                ]
 
-                return ToolResult(success=True, output="\n\n---\n\n".join(lines), data=[c.id for c in chunks])
+                lines = []
+                for c, entry in zip(chunks, entries):
+                    page = (c.chunk_metadata or {}).get("page", "")
+                    src = entry["chunk"]["source"]
+                    lines.append(f"[切片 #{c.chunk_index} | 来自《{src}》 | 页码: {page}]\n{c.content}")
+
+                return ToolResult(success=True, output="\n\n---\n\n".join(lines), data=entries)
         except Exception as e:
             logger.warning("[Tool:list_document_chunks] Failed: %s", e)
             return ToolResult(success=False, output=f"读取切片失败: {e}", error=str(e))

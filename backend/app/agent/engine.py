@@ -390,15 +390,12 @@ class AgentEngine:
                     batch = _sources_from_tool_result(tool_res.data)
                     if batch:
                         merged = _dedupe_sources(source_pool, batch)
-                        # For knowledge_search, rewrite observation with global [来源N]
-                        if fn_name == "knowledge_search" and batch:
-                            # Map only the newly appended items' indices onto batch order
-                            # After reindex, use the tail matching batch size by dedup identity
-                            numbered = _format_numbered_observation(
-                                self._aligned_batch(source_pool, batch)
-                            )
-                            if numbered:
-                                observation = numbered
+                        # Rewrite observation with global [来源N] so citations stay aligned
+                        numbered = _format_numbered_observation(
+                            self._aligned_batch(source_pool, batch)
+                        )
+                        if numbered:
+                            observation = numbered
                         yield {
                             "type": "sources",
                             "sources": merged,
