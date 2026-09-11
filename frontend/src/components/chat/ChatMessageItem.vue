@@ -228,7 +228,7 @@
           <!-- 研究阶段：不打断阅读，只给一行定位摘要 -->
           <div
             v-if="isResearchPhase"
-            class="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"
+            class="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]"
             data-test="sources-research-hint"
           >
             <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] animate-pulse shrink-0" />
@@ -239,18 +239,18 @@
           <template v-else>
             <button
               type="button"
-              class="w-full flex items-center justify-between gap-2 text-left group mb-2"
+              class="w-full flex items-center justify-between gap-2 text-left group mb-2 px-1.5 py-1 -mx-1.5 rounded-md hover:bg-[var(--bg-hover)]/70 transition-colors"
               data-test="sources-toggle"
               :aria-expanded="isSourcesOpen"
               @click="isSourcesOpen = !isSourcesOpen"
             >
-              <span class="text-xs text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition-colors">
+              <span class="text-xs text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
                 参考来源
                 <span v-if="usedSourceCount > 0">共 {{ usedSourceCount }} 个</span>
                 <span v-else>共 {{ displaySources.length }} 个</span>
               </span>
               <span
-                class="text-[10px] text-[var(--text-muted)] group-hover:text-[var(--color-primary)] transition-colors shrink-0"
+                class="text-[10px] px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] group-hover:text-[var(--text-primary)] group-hover:border-[var(--border-hover)] transition-colors shrink-0"
               >
                 {{ isSourcesOpen ? '收起' : '展开' }}
               </span>

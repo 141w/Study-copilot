@@ -1,9 +1,9 @@
 <template>
   <div class="chat-input-wrapper w-full">
     <div class="flex gap-2.5 sm:gap-3 items-center w-full">
-      <!-- Input container (standard clean rounded-lg rectangle, not capsule) -->
+      <!-- Input container -->
       <div
-        class="flex-1 bg-[var(--surface-card)] border border-[var(--border-default)] hover:border-[var(--color-primary-light)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/15 rounded-lg px-3 py-2 shadow-xs transition-all duration-200 flex items-center"
+        class="flex-1 bg-[var(--surface-card)] border border-[var(--border-default)] hover:border-[var(--border-hover)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary-light)] rounded-lg px-3 py-2 transition-all duration-200 flex items-center"
       >
         <textarea
           ref="textareaRef"
@@ -22,7 +22,7 @@
       <button
         v-if="loading"
         type="button"
-        class="flex items-center justify-center w-9 h-9 rounded-lg text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-xs cursor-pointer active:scale-95 flex-shrink-0"
+        class="flex items-center justify-center w-9 h-9 rounded-lg text-[var(--text-inverse)] bg-[var(--color-error)] hover:bg-[var(--color-error)]/90 transition-colors cursor-pointer active:scale-95 flex-shrink-0"
         title="停止回答"
         aria-label="停止生成"
         @click="stopStream"
@@ -35,20 +35,24 @@
       <button
         v-else
         type="button"
-        class="flex items-center justify-center w-9 h-9 rounded-lg text-[var(--text-inverse)] bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer active:scale-95 flex-shrink-0"
+        class="send-btn flex items-center justify-center w-9 h-9 rounded-lg cursor-pointer active:scale-95 flex-shrink-0 transition-all"
+        :class="canSend
+          ? 'text-[var(--text-inverse)] bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)]'
+          : 'text-[var(--text-muted)] bg-[var(--bg-tertiary)] border border-[var(--border-default)] cursor-not-allowed'"
         :disabled="disabled || !inputText.trim()"
         title="发送消息"
         aria-label="发送消息"
+        data-test="send-btn"
         @click="sendMessage"
       >
-        <el-icon :size="16"><Promotion /></el-icon>
+        <el-icon :size="16" class="send-btn-icon"><Promotion /></el-icon>
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { Promotion } from '@/components/icons'
 
 const props = withDefaults(defineProps<{
@@ -68,6 +72,8 @@ const emit = defineEmits<{
 
 const inputText = ref('')
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+const canSend = computed(() => !props.disabled && !props.loading && Boolean(inputText.value.trim()))
 
 const MIN_HEIGHT_PX = 20
 const MAX_HEIGHT_PX = 120
@@ -124,3 +130,10 @@ onMounted(() => {
   }
 })
 </script>
+
+<style scoped>
+/* 强制图标继承按钮前景：暗色主色为白时，图标必须是反色（墨），不能吃 el-color-primary */
+.send-btn-icon {
+  color: inherit;
+}
+</style>

@@ -4,12 +4,12 @@
       v-for="(source, sidx) in sources"
       :key="sidx"
       :id="`source-card-${source.index}`"
-      class="source-card bg-[var(--surface-card)] rounded-xl border border-[var(--border-default)] shadow-xs text-sm transition-all duration-200 hover:border-[var(--color-primary-light)] hover:shadow-sm overflow-hidden"
+      class="source-card bg-[var(--surface-card)] rounded-xl border border-[var(--border-default)] text-sm transition-colors duration-200 hover:border-[var(--border-hover)] overflow-hidden"
     >
       <!-- 标题行：默认只展示这一行，点击展开正文摘要 -->
       <button
         type="button"
-        class="w-full flex items-center gap-2 p-3 text-left"
+        class="w-full flex items-center gap-2 p-3 text-left hover:bg-[var(--bg-hover)]/60 transition-colors"
         :aria-expanded="isExpanded(source.index)"
         :data-test="`source-card-toggle-${source.index}`"
         @click="toggle(source.index)"
@@ -24,7 +24,7 @@
         </span>
         <span v-if="source.page" class="text-xs text-[var(--text-muted)] shrink-0">P{{ source.page }}</span>
         <span
-          class="text-[10px] text-[var(--text-muted)] shrink-0"
+          class="text-[10px] px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] shrink-0"
           data-test="source-card-expand-hint"
         >
           {{ isExpanded(source.index) ? '收起' : '详情' }}
