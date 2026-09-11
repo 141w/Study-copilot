@@ -219,27 +219,46 @@
           </span>
         </div>
 
-        <!-- 来源：完整卡片优先展示（对齐「来源卡片」而非仅角标/气泡） -->
+        <!-- 来源：流式研究阶段仅摘要；正文开始/结束后展示可折叠完整卡 -->
         <div
           v-if="displaySources.length > 0"
           class="mt-4 pt-3 border-t border-[var(--border-default)]"
           data-test="sources-section"
         >
-          <div class="text-xs text-[var(--text-muted)] mb-2">
-            参考来源
-            <span v-if="message.used_source_indices && message.used_source_indices.length > 0">
-              共 {{ message.used_source_indices.length }} 个
-            </span>
-            <span v-else>共 {{ displaySources.length }} 个</span>
-            <span
-              v-if="message.isStreaming && !message.content"
-              class="ml-1.5 text-[10px] text-[var(--color-primary)]"
-            >
-              研究中，已定位文献…
-            </span>
+          <!-- 研究阶段：不打断阅读，只给一行定位摘要 -->
+          <div
+            v-if="isResearchPhase"
+            class="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"
+            data-test="sources-research-hint"
+          >
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] animate-pulse shrink-0" />
+            <span>研究中，已定位 {{ displaySources.length }} 个来源…</span>
           </div>
-          <!-- 完整来源卡（文件名 + 页码 + 摘要）——主展示 -->
-          <ChatSourceCards :sources="displaySources" />
+
+          <!-- 正文出现或流结束后：可折叠完整来源卡 -->
+          <template v-else>
+            <button
+              type="button"
+              class="w-full flex items-center justify-between gap-2 text-left group mb-2"
+              data-test="sources-toggle"
+              :aria-expanded="isSourcesOpen"
+              @click="isSourcesOpen = !isSourcesOpen"
+            >
+              <span class="text-xs text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition-colors">
+                参考来源
+                <span v-if="usedSourceCount > 0">共 {{ usedSourceCount }} 个</span>
+                <span v-else>共 {{ displaySources.length }} 个</span>
+              </span>
+              <span
+                class="text-[10px] text-[var(--text-muted)] group-hover:text-[var(--color-primary)] transition-colors shrink-0"
+              >
+                {{ isSourcesOpen ? '收起' : '展开' }}
+              </span>
+            </button>
+            <div v-if="isSourcesOpen" data-test="sources-body">
+              <ChatSourceCards :sources="displaySources" />
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -308,6 +327,71 @@ const displaySources = computed<Source[]>(() => {
   const list = Array.isArray(filtered) && filtered.length > 0 ? filtered : (Array.isArray(all) ? all : [])
   return list.map((s) => ({ ...s, source: sourceLabel(s) }))
 })
+
+const usedSourceCount = computed(() => {
+  const n = props.message.used_source_indices?.length
+  return typeof n === 'number' && n > 0 ? n : 0
+})
+
+/**
+ * 深度研究工具阶段：流式中且正文未到——只显示摘要行，避免来源卡抢占阅读区。
+ * 首 token 到达或流结束后进入完整可折叠展示。
+ */
+const isResearchPhase = computed(() => {
+  return Boolean(props.message.isStreaming && !props.message.content)
+})
+
+/** 完整来源卡展开态：历史消息默认展开；流式结束后自动展开一次 */
+const isSourcesOpen = ref(false)
+
+function syncSourcesOpenAfterStream(): void {
+  if (displaySources.value.length > 0) {
+    isSourcesOpen.value = true
+  }
+}
+
+// 正文开始吐字：离开研究阶段，铺开完整卡
+watch(
+  () => Boolean(props.message.content),
+  (hasContent, hadContent) => {
+    if (hasContent && !hadContent) {
+      isSourcesOpen.value = false
+      // 首 token 后给用户完整来源入口；默认展开一次便于核对引用
+      if (displaySources.value.length > 0) {
+        isSourcesOpen.value = true
+      }
+    }
+  }
+)
+
+// 流结束：确保完整区可见且默认展开
+watch(
+  () => props.message.isStreaming,
+  (isStreaming, wasStreaming) => {
+    if (!isStreaming && wasStreaming) {
+      syncSourcesOpenAfterStream()
+    }
+  }
+)
+
+// 历史会话挂载 / 消息切换：非流式且有来源时默认展开
+watch(
+  () => props.message.id,
+  () => {
+    isSourcesOpen.value = Boolean(
+      !props.message.isStreaming && displaySources.value.length > 0
+    )
+  },
+  { immediate: true }
+)
+
+// 点击正文内的 [来源N] 跳转时，确保来源区是打开的
+watch(
+  () => props.message.expandedSources,
+  (open) => {
+    if (open) isSourcesOpen.value = true
+  }
+)
 
 const savedNoteInfo = computed(() => {
   return props.message.savedNote || props.message.saved_note || null

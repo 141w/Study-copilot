@@ -339,10 +339,7 @@ export const useChatStore = defineStore('chat', () => {
                 // 整体替换，确保 Vue 能侦测到变化
                 messages.value[msgIdx].sources = [...nextSources]
                 messages.value[msgIdx].filtered_sources = [...nextFiltered]
-                // 深度研究：正文尚未开始时，让来源区可先于正文出现（由组件 v-if 控制）
-                if (!messages.value[msgIdx].expandedSources) {
-                  messages.value[msgIdx].expandedSources = true
-                }
+                // 展开态由 ChatMessageItem 控制：流式研究阶段仅摘要，结束后可折叠完整卡
               }
             } else if (data.type === 'token') {
               // 实时更新临时消息内容（增量累加）

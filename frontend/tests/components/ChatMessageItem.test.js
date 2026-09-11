@@ -100,7 +100,7 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.text()).toContain('RAG 架构解析')
   })
 
-  it('深度研究：工具阶段来源卡可见（正文未出），Agent 徽章与双轨思考', async () => {
+  it('深度研究：正文未出仅来源摘要行，完整卡延迟到首 token 后', async () => {
     const wrapper = mount(ChatMessageItem, {
       props: {
         message: {
@@ -137,18 +137,114 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
 
     await wrapper.vm.$nextTick()
 
-    // 正文未出现时来源区已可见（深度研究关键）
+    // 研究阶段：来源区有，但只有摘要行，不铺完整卡
     expect(wrapper.find('[data-test="sources-section"]').exists()).toBe(true)
-    expect(wrapper.find('.source-card').exists()).toBe(true)
-    expect(wrapper.text()).toContain('ml_notes.md')
-    expect(wrapper.text()).toContain('梯度下降是一种优化算法')
-    expect(wrapper.text()).toContain('研究中，已定位文献…')
+    expect(wrapper.find('[data-test="sources-research-hint"]').exists()).toBe(true)
+    expect(wrapper.find('.source-card').exists()).toBe(false)
+    expect(wrapper.text()).toContain('研究中，已定位 1 个来源')
+    expect(wrapper.text()).not.toContain('梯度下降是一种优化算法')
     // Agent 徽章 + 双轨面板（与快速模式一致：默认折叠，不强制展开）
     expect(wrapper.text()).toContain('研究启动')
     expect(wrapper.find('.thinking-section').exists()).toBe(true)
     expect(wrapper.find('.reasoning-box').exists()).toBe(true)
     // 折叠态：details 不带 open
     expect(wrapper.find('.thinking-section').attributes('open')).toBeUndefined()
+  })
+
+  it('来源卡：首 token 后展示完整卡且默认展开，可折叠切换', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'deep-2',
+          role: 'assistant',
+          content: '',
+          sources: [
+            { index: 1, source: 'ml_notes.md', page: '1', text: '梯度下降是一种优化算法', document_id: 'd1' },
+          ],
+          filtered_sources: [
+            { index: 1, source: 'ml_notes.md', page: '1', text: '梯度下降是一种优化算法', document_id: 'd1' },
+          ],
+          isStreaming: true,
+          created_at: new Date().toISOString(),
+        },
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true,
+        },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-test="sources-research-hint"]').exists()).toBe(true)
+    expect(wrapper.find('.source-card').exists()).toBe(false)
+
+    // 首 token 到达
+    await wrapper.setProps({
+      message: {
+        id: 'deep-2',
+        role: 'assistant',
+        content: '梯度下降是优化算法 [来源1]',
+        sources: [
+          { index: 1, source: 'ml_notes.md', page: '1', text: '梯度下降是一种优化算法', document_id: 'd1' },
+        ],
+        filtered_sources: [
+          { index: 1, source: 'ml_notes.md', page: '1', text: '梯度下降是一种优化算法', document_id: 'd1' },
+        ],
+        isStreaming: true,
+        created_at: new Date().toISOString(),
+      },
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-test="sources-research-hint"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="sources-toggle"]').exists()).toBe(true)
+    expect(wrapper.find('.source-card').exists()).toBe(true)
+    expect(wrapper.text()).toContain('ml_notes.md')
+    expect(wrapper.text()).toContain('梯度下降是一种优化算法')
+    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('true')
+
+    // 收起
+    await wrapper.find('[data-test="sources-toggle"]').trigger('click')
+    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.source-card').exists()).toBe(false)
+    expect(wrapper.text()).toContain('参考来源')
+
+    // 再展开
+    await wrapper.find('[data-test="sources-toggle"]').trigger('click')
+    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('.source-card').exists()).toBe(true)
+  })
+
+  it('历史消息（非流式）来源卡默认展开', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'hist-1',
+          role: 'assistant',
+          content: '回答内容 [来源1]',
+          sources: [
+            { index: 1, source: 'notes.md', page: '2', text: '原文摘要', document_id: 'd1' },
+          ],
+          isStreaming: false,
+          created_at: new Date().toISOString(),
+        },
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true,
+        },
+      },
+    })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.source-card').exists()).toBe(true)
+    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('true')
   })
 
   it('正确渲染原生 CoT 深度思考面板（Reasoning Box）与折叠交互', async () => {
