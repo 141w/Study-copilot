@@ -95,8 +95,15 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.emitted('copy')).toBeTruthy()
     expect(wrapper.emitted('copy')?.[0][0].id).toBe('2')
 
-    // 来源卡可见（完整卡片，非仅气泡）
+    // 来源卡可见：默认只显示标题，正文摘要需点击展开
     expect(wrapper.find('.source-card').exists()).toBe(true)
+    expect(wrapper.text()).toContain('rag_paper.pdf')
+    expect(wrapper.text()).not.toContain('RAG 架构解析')
+    const cardToggle = wrapper.find('[data-test="source-card-toggle-1"]')
+    expect(cardToggle.exists()).toBe(true)
+    expect(cardToggle.attributes('aria-expanded')).toBe('false')
+    await cardToggle.trigger('click')
+    expect(cardToggle.attributes('aria-expanded')).toBe('true')
     expect(wrapper.text()).toContain('RAG 架构解析')
   })
 
@@ -204,10 +211,17 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.find('[data-test="sources-toggle"]').exists()).toBe(true)
     expect(wrapper.find('.source-card').exists()).toBe(true)
     expect(wrapper.text()).toContain('ml_notes.md')
-    expect(wrapper.text()).toContain('梯度下降是一种优化算法')
+    // 卡内正文默认折叠，仅标题
+    expect(wrapper.text()).not.toContain('梯度下降是一种优化算法')
+    expect(wrapper.find('[data-test="source-card-body"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('true')
 
-    // 收起
+    // 展开单卡详情
+    await wrapper.find('[data-test="source-card-toggle-1"]').trigger('click')
+    expect(wrapper.text()).toContain('梯度下降是一种优化算法')
+    expect(wrapper.find('[data-test="source-card-body"]').exists()).toBe(true)
+
+    // 收起外层来源区
     await wrapper.find('[data-test="sources-toggle"]').trigger('click')
     expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('.source-card').exists()).toBe(false)
@@ -219,7 +233,7 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.find('.source-card').exists()).toBe(true)
   })
 
-  it('历史消息（非流式）来源卡默认展开', async () => {
+  it('历史消息（非流式）来源区默认展开，单卡默认只显示标题', async () => {
     const wrapper = mount(ChatMessageItem, {
       props: {
         message: {
@@ -245,6 +259,11 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.source-card').exists()).toBe(true)
     expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('true')
+    // 单卡正文默认折叠
+    expect(wrapper.text()).toContain('notes.md')
+    expect(wrapper.text()).not.toContain('原文摘要')
+    await wrapper.find('[data-test="source-card-toggle-1"]').trigger('click')
+    expect(wrapper.text()).toContain('原文摘要')
   })
 
   it('正确渲染原生 CoT 深度思考面板（Reasoning Box）与折叠交互', async () => {
