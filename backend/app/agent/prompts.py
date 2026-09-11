@@ -9,8 +9,15 @@ def build_agent_system_prompt(
     tools: list[Tool],
     user_envelope: str = "",
     mode: str = "deep_research",
+    documents: list[dict] | None = None,
 ) -> str:
-    """Build the autonomous ReAct agent system prompt with active tool guidance."""
+    """Build the autonomous ReAct agent system prompt with active tool guidance.
+
+    Args:
+        documents: Optional list of ``{"id": ..., "filename": ...}`` for the
+            user-selected research scope. Injected so the model knows which
+            ``doc_ids`` to pass to knowledge tools.
+    """
     tool_descriptions = "\n".join(
         f"- `{t.name}`: {t.description}" for t in tools
     )
@@ -24,8 +31,34 @@ def build_agent_system_prompt(
         "3. **工具协同**：\n"
         f"{tool_descriptions}\n"
         "4. **收敛与总结**：在获取充分的证据之后，停止调用工具，以条理清晰、层次分明、通俗易懂的 Markdown 格式输出最终完整解答。\n"
-        "5. **引用标注**：如果从特定文档段落获得了关键事实，请在回答中明确注明来源文档或切片信息。\n"
+        "5. **引用标注**：凡使用文档类工具（knowledge_search / grep_chunks / list_document_chunks）得到的事实，"
+        "终答中必须在对应句子末尾标注 `[来源N]`（N 与工具 observation 中给出的编号完全一致）；"
+        "不得编造编号；若未检索到文档证据，则不要写 `[来源N]`，可写「未在所选文档中找到」。\n"
     )
+
+    docs = documents or []
+    if docs:
+        doc_lines = "\n".join(
+            f"- 《{d.get('filename') or d.get('id')}》 id=`{d.get('id')}`"
+            for d in docs
+        )
+        doc_ids = ", ".join(f'"{d.get("id")}"' for d in docs)
+        base_prompt += (
+            "\n### 当前研究范围（用户已选文档）：\n"
+            "回答文档相关问题时，**必须**使用 `knowledge_search` / `grep_chunks` / "
+            "`list_document_chunks`，并通过 `doc_ids` 限定在下列文档内检索，"
+            "禁止在范围外的文档或无文档语料上编造答案：\n"
+            f"{doc_lines}\n\n"
+            f"可用 doc_ids 数组（调用工具时系统会自动注入，也可显式传入）：`[{doc_ids}]`\n"
+            "若检索结果为空，请如实说明在已选文档中未找到相关内容，不要改用通用知识冒充文档结论。\n"
+        )
+    else:
+        base_prompt += (
+            "\n### 当前研究范围：\n"
+            "用户**尚未选择任何文档**。请优先提示用户上传/勾选文档；"
+            "若用户问的是文档内容，请明确说明需要先选择文档。"
+            "仅在用户明确询问通用常识时，才可不依赖文档作答。\n"
+        )
 
     if user_envelope:
         base_prompt = f"{base_prompt}\n\n{user_envelope}"

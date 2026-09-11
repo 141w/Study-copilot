@@ -287,6 +287,20 @@ class LLM:
                                 },
                             })
 
+                # 原生 CoT（DeepSeek-R1 / StepFun / SiliconFlow 等）：非流式响应也可能带 reasoning_content
+                reasoning_text = getattr(message, "reasoning_content", None)
+                if not reasoning_text:
+                    model_extra = getattr(message, "model_extra", None)
+                    if isinstance(model_extra, dict):
+                        reasoning_text = model_extra.get("reasoning_content")
+                if not reasoning_text:
+                    try:
+                        raw = getattr(message, "model_dump", None)
+                        if callable(raw):
+                            reasoning_text = raw().get("reasoning_content")
+                    except Exception:
+                        reasoning_text = None
+
                 usage_dict = None
                 if getattr(resp, "usage", None):
                     usage_dict = {
@@ -308,6 +322,7 @@ class LLM:
                     "tool_calls": tool_calls_data,
                     "finish_reason": choice.finish_reason or "stop",
                     "usage": usage_dict,
+                    "reasoning": reasoning_text or "",
                 }
             except Exception as e:
                 if attempt == max_retries - 1:
@@ -315,7 +330,7 @@ class LLM:
                 logger.warning(f"ChatWithTools attempt {attempt + 1} failed: {e}. Retrying...")
                 await asyncio.sleep(2**attempt + random.uniform(0, 1))
 
-        return {"content": None, "tool_calls": [], "finish_reason": "error", "usage": None}
+        return {"content": None, "tool_calls": [], "finish_reason": "error", "usage": None, "reasoning": ""}
 
     @classmethod
     def from_config(cls, cfg: dict | None = None) -> "LLM":

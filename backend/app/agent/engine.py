@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -22,9 +21,87 @@ from app.agent.tools.definitions import (
 )
 from app.agent.tools.policy import can_run_concurrently
 from app.core.llm import LLM
+from app.core.rag_engine import extract_source_indices
 from app.services.memory_service import memory_service
 
 logger = logging.getLogger(__name__)
+
+_ANSWER_TOKEN_CHUNK = 24
+
+
+def _sources_from_tool_result(data: Any) -> list[dict[str, Any]]:
+    """Convert knowledge_search retrieve results into SSE sources payload (local 1..k)."""
+    if not isinstance(data, list) or not data:
+        return []
+    sources: list[dict[str, Any]] = []
+    for i, r in enumerate(data[:10], 1):
+        if not isinstance(r, dict):
+            continue
+        chunk = r.get("chunk")
+        if not isinstance(chunk, dict):
+            continue
+        page = chunk.get("page", "")
+        if page is None:
+            page = ""
+        elif not isinstance(page, str):
+            page = str(page)
+        sources.append(
+            {
+                "index": i,
+                "document_id": chunk.get("document_id", ""),
+                "page": page,
+                "source": chunk.get("source", ""),
+                "text": chunk.get("text", ""),
+                "relevance_score": float(r.get("relevance") or r.get("reranker_score") or 0.9),
+            }
+        )
+    return sources
+
+
+def _source_dedup_key(s: dict[str, Any]) -> str:
+    return f"{s.get('document_id')}|{s.get('page')}|{(s.get('text') or '')[:80]}"
+
+
+def _format_numbered_observation(sources: list[dict[str, Any]]) -> str:
+    """Rewrite knowledge tool observation with global [来源N] labels for citation alignment."""
+    if not sources:
+        return ""
+    lines: list[str] = []
+    for s in sources:
+        text = (s.get("text") or "").strip()
+        if len(text) > 400:
+            text = text[:400] + "…"
+        lines.append(
+            f"[来源{s.get('index')}] 《{s.get('source') or s.get('document_id')}》"
+            f" p{s.get('page') or '-'}:\n{text}"
+        )
+    return "\n\n".join(lines)
+
+
+async def _emit_answer_as_tokens(
+    answer: str, chunk_size: int = _ANSWER_TOKEN_CHUNK
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Emit a finished answer as progressive SSE tokens (perceived streaming)."""
+    text = answer or ""
+    if not text:
+        return
+    for i in range(0, len(text), chunk_size):
+        yield {"type": "token", "content": text[i : i + chunk_size]}
+
+
+def _dedupe_sources(pool: list[dict[str, Any]], new_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge new sources into pool; reindex 1..N; return full pool snapshot."""
+    existing_keys = {_source_dedup_key(s) for s in pool}
+    for s in new_sources:
+        key = _source_dedup_key(s)
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)
+        pool.append(s)
+    # Stable reindex so [来源N] stays aligned with UI cards
+    for i, s in enumerate(pool, 1):
+        s["index"] = i
+    return list(pool)
 
 
 @dataclass
@@ -63,6 +140,54 @@ class AgentEngine:
         self.registry.register(SearchConversationsTool())
         self.registry.register(SearchMemoryTool())
 
+    async def _load_documents(self, doc_ids: list[str]) -> list[dict[str, Any]]:
+        """Fetch filenames for selected document IDs (best-effort)."""
+        if not doc_ids:
+            return []
+        try:
+            from sqlalchemy import select
+
+            from app.db import AsyncSessionLocal, Document
+
+            async with AsyncSessionLocal() as db:
+                res = await db.execute(select(Document).where(Document.id.in_(doc_ids)))
+                docs = res.scalars().all()
+                return [{"id": d.id, "filename": d.filename} for d in docs]
+        except Exception as e:
+            logger.warning("[AgentEngine] Failed to load document metadata: %s", e)
+            return [{"id": d, "filename": d} for d in doc_ids]
+
+    async def _stream_final_answer(
+        self, llm: LLM, messages: list[dict[str, Any]]
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """True streaming synthesis for the fallback / overflow path."""
+        try:
+            async for chunk in llm.chat_stream(
+                messages, temperature=0.5, include_reasoning=True
+            ):
+                if isinstance(chunk, dict):
+                    ctype = chunk.get("type")
+                    if ctype in ("reasoning", "token"):
+                        yield {"type": ctype, "content": chunk.get("content", "")}
+                    else:
+                        yield chunk
+                else:
+                    yield {"type": "token", "content": str(chunk)}
+        except Exception as e:
+            logger.warning("[AgentEngine] chat_stream failed, falling back to chat: %s", e)
+            try:
+                final_ans = await llm.chat(messages, temperature=0.5)
+            except Exception as e2:
+                logger.error("[AgentEngine] chat fallback failed: %s", e2)
+                yield {
+                    "type": "thinking",
+                    "step": "agent_error",
+                    "detail": f"终答生成失败：{e2}",
+                }
+                return
+            async for ev in _emit_answer_as_tokens(final_ans or ""):
+                yield ev
+
     async def execute_stream(
         self,
         query: str,
@@ -90,8 +215,17 @@ class AgentEngine:
             except Exception as e:
                 logger.warning("[AgentEngine] Memory recall failed: %s", e)
 
+        # 1.5 Resolve selected document metadata so the model knows the research scope
+        documents = await self._load_documents(doc_ids or [])
+        if doc_ids and not documents:
+            documents = [{"id": d, "filename": d} for d in doc_ids]
+
         # 2. Build system prompt and initial message array
-        system_prompt = build_agent_system_prompt(tools, user_envelope=user_envelope)
+        system_prompt = build_agent_system_prompt(
+            tools,
+            user_envelope=user_envelope,
+            documents=documents,
+        )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
         ]
@@ -99,16 +233,26 @@ class AgentEngine:
             messages.extend(history[-6:])
         messages.append({"role": "user", "content": query})
 
+        if documents:
+            bound = doc_ids or [d.get("id", "") for d in documents]
+            names = "、".join(f"《{d.get('filename') or d.get('id')}》" for d in documents[:5])
+            scope_detail = (
+                f"已锁定研究范围 {len(documents)} 篇文档（{names}）。"
+                f"将通过 knowledge_search 等工具在 doc_ids={bound[:3]}… 内检索。"
+            )
+        else:
+            scope_detail = "未选择参考文档，文档类问题将提示用户先选择文档。"
         yield {
             "type": "thinking",
             "step": "agent_start",
-            "detail": f"启动【深度研究模式】(ReAct Agent)。已装载 {len(tools)} 项工具，正在规划研究路径...",
+            "detail": f"启动【深度研究模式】(ReAct Agent)。已装载 {len(tools)} 项工具。{scope_detail}",
         }
 
         repeated_responses = 0
         last_response_text = ""
         nudge_count = 0
         accumulated_answer = ""
+        source_pool: list[dict[str, Any]] = []
 
         # Main ReAct iteration loop
         for iteration in range(1, self.max_iterations + 1):
@@ -140,6 +284,14 @@ class AgentEngine:
             content = llm_res.get("content") or ""
             tool_calls = llm_res.get("tool_calls") or []
             finish_reason = llm_res.get("finish_reason") or "stop"
+
+            # 真实模型原生 CoT（若供应商在非流式 tool-use 响应中返回 reasoning_content）
+            reasoning_text = (llm_res.get("reasoning") or "").strip()
+            if reasoning_text:
+                # 分批下发，前端深度思考面板可逐段呈现
+                step = 48
+                for i in range(0, len(reasoning_text), step):
+                    yield {"type": "reasoning", "content": reasoning_text[i : i + step]}
 
             # Check for length truncation (WeKnora safety rule: refuse partial execution)
             if finish_reason == "length":
@@ -200,7 +352,6 @@ class AgentEngine:
                 "detail": f"第 {iteration} 轮：模型决定调用 {len(tool_calls)} 个工具获取客观证据...",
             }
 
-            # Partition into concurrent and barrier calls
             for tc in tool_calls:
                 fn = tc.get("function", {})
                 fn_name = fn.get("name", "")
@@ -230,33 +381,111 @@ class AgentEngine:
                 else:
                     tool_res = await tool_impl.execute(**args)
 
+                observation = tool_res.output
+                if tool_res.success and fn_name in (
+                    "knowledge_search",
+                    "grep_chunks",
+                    "list_document_chunks",
+                ):
+                    batch = _sources_from_tool_result(tool_res.data)
+                    if batch:
+                        merged = _dedupe_sources(source_pool, batch)
+                        # For knowledge_search, rewrite observation with global [来源N]
+                        if fn_name == "knowledge_search" and batch:
+                            # Map only the newly appended items' indices onto batch order
+                            # After reindex, use the tail matching batch size by dedup identity
+                            numbered = _format_numbered_observation(
+                                self._aligned_batch(source_pool, batch)
+                            )
+                            if numbered:
+                                observation = numbered
+                        yield {
+                            "type": "sources",
+                            "sources": merged,
+                            "filtered_sources": merged,
+                        }
+                        yield {
+                            "type": "thinking",
+                            "step": "tool_result",
+                            "detail": (
+                                f"工具 `{fn_name}` 执行完成 (成功)：累计 {len(merged)} 条来源。"
+                                f"{observation[:120]}..."
+                            ),
+                        }
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "name": fn_name,
+                            "content": observation or tool_res.output,
+                        })
+                        continue
+
                 yield {
                     "type": "thinking",
                     "step": "tool_result",
                     "detail": f"工具 `{fn_name}` 执行完成 ({'成功' if tool_res.success else '失败'})：{tool_res.output[:120]}...",
                 }
-
-                # Append tool observation message
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call_id,
                     "name": fn_name,
-                    "content": tool_res.output,
+                    "content": observation,
                 })
 
-        # ── Output answer streaming / completion ──
+        # ── Surface cumulative sources + emit answer as progressive tokens ──
         if accumulated_answer:
-            yield {"type": "answer", "content": accumulated_answer}
-        else:
-            # Final synthesis fallback if loop ran out of iterations
+            if source_pool:
+                used = extract_source_indices(accumulated_answer)
+                filtered = (
+                    [s for s in source_pool if s.get("index") in used]
+                    if used
+                    else list(source_pool)
+                )
+                yield {
+                    "type": "sources",
+                    "sources": list(source_pool),
+                    "filtered_sources": filtered,
+                }
+            async for ev in _emit_answer_as_tokens(accumulated_answer):
+                yield ev
+            return
+
+        # Final synthesis fallback if loop ran out of iterations
+        yield {
+            "type": "thinking",
+            "step": "agent_synthesize",
+            "detail": "达到研究轮次上限，正在汇总所有已收集到的文献与证据进行终答生成...",
+        }
+        messages.append({
+            "role": "user",
+            "content": (
+                "请根据你前面所收集到的所有工具检索结果与笔记，"
+                "直接给出最终详细完整的回答。若引用文档事实，请使用与工具 observation 中一致的 [来源N] 编号。"
+            ),
+        })
+        syn_answer_parts: list[str] = []
+        async for chunk in self._stream_final_answer(llm, messages):
+            if chunk.get("type") == "token":
+                syn_answer_parts.append(chunk.get("content", ""))
+            yield chunk
+        if source_pool:
+            syn_answer = "".join(syn_answer_parts)
+            used = extract_source_indices(syn_answer)
+            filtered = (
+                [s for s in source_pool if s.get("index") in used] if used else list(source_pool)
+            )
             yield {
-                "type": "thinking",
-                "step": "agent_synthesize",
-                "detail": "达到研究轮次上限，正在汇总所有已收集到的文献与证据进行终答生成...",
+                "type": "sources",
+                "sources": list(source_pool),
+                "filtered_sources": filtered,
             }
-            messages.append({
-                "role": "user",
-                "content": "请根据你前面所收集到的所有工具检索结果与笔记，直接给出最终详细完整的回答。",
-            })
-            final_ans = await llm.chat(messages, temperature=0.5)
-            yield {"type": "answer", "content": final_ans}
+
+    @staticmethod
+    def _aligned_batch(
+        pool: list[dict[str, Any]], batch: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Return the pool entries that correspond to this batch (newly added or reindexed)."""
+        if not batch:
+            return []
+        batch_keys = {_source_dedup_key(s) for s in batch}
+        return [s for s in pool if _source_dedup_key(s) in batch_keys]

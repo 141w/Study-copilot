@@ -85,6 +85,7 @@ interface SseEvent {
   content?: string
   step?: number | string
   detail?: string
+  reasoning?: string
   [key: string]: unknown
 }
 
@@ -330,11 +331,18 @@ export const useChatStore = defineStore('chat', () => {
                 currentSession.value = data.session_id
               }
             } else if (data.type === 'sources') {
-              // 更新临时消息的来源信息
+              // 更新临时消息的来源信息（深度研究可能在正文出现前就推 sources）
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
-                messages.value[msgIdx].sources = data.sources
-                messages.value[msgIdx].filtered_sources = data.filtered_sources
+                const nextSources = Array.isArray(data.sources) ? data.sources : []
+                const nextFiltered = Array.isArray(data.filtered_sources) ? data.filtered_sources : []
+                // 整体替换，确保 Vue 能侦测到变化
+                messages.value[msgIdx].sources = [...nextSources]
+                messages.value[msgIdx].filtered_sources = [...nextFiltered]
+                // 深度研究：正文尚未开始时，让来源区可先于正文出现（由组件 v-if 控制）
+                if (!messages.value[msgIdx].expandedSources) {
+                  messages.value[msgIdx].expandedSources = true
+                }
               }
             } else if (data.type === 'token') {
               // 实时更新临时消息内容（增量累加）
@@ -349,12 +357,13 @@ export const useChatStore = defineStore('chat', () => {
                 messages.value[msgIdx].content = data.content || ''
               }
             } else if (data.type === 'thinking') {
-              // 思考过程事件（Agentic RAG）—— 追加到步骤数组
+              // 思考过程事件（Agentic RAG / Deep Research 决策轨）
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
                 const m = messages.value[msgIdx]
                 if (!Array.isArray(m.thinking)) m.thinking = []
                 m.thinking.push({ step: data.step!, detail: data.detail! })
+                // 注意：不再把决策步骤伪造成 reasoning。reasoning 只接受模型原生 CoT 事件。
               }
             } else if (data.type === 'reasoning') {
               // 模型原生 CoT 深度思考流 (DeepSeek-R1 / o1 / QwQ 等)

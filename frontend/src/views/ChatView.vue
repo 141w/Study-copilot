@@ -594,8 +594,9 @@ function renderMarkdown(text: string, isStreaming = false): string {
 function scrollToSource(index: number): void {
   const lastMsg = chatStore.messages[chatStore.messages.length - 1]
   if (lastMsg && lastMsg.role === 'assistant') {
+    // 点击来源条目时展开该消息的完整来源卡（由 ChatMessageItem 内部 isSourcesOpen 控制）
     const msgIndex = chatStore.messages.length - 1
-    chatStore.messages[msgIndex].expandedSources = !chatStore.messages[msgIndex].expandedSources
+    chatStore.messages[msgIndex].expandedSources = true
     setTimeout(() => {
       const card = document.getElementById(`source-card-${index}`)
       if (card) {

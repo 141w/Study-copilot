@@ -219,37 +219,28 @@
           </span>
         </div>
 
-        <!-- Sources chips -->
+        <!-- 来源：完整卡片优先展示（对齐「来源卡片」而非仅角标/气泡） -->
         <div
-          v-if="message.sources && message.sources.length > 0 && (!message.isStreaming || message.content)"
+          v-if="displaySources.length > 0"
           class="mt-4 pt-3 border-t border-[var(--border-default)]"
+          data-test="sources-section"
         >
           <div class="text-xs text-[var(--text-muted)] mb-2">
             参考来源
             <span v-if="message.used_source_indices && message.used_source_indices.length > 0">
               共 {{ message.used_source_indices.length }} 个
             </span>
-          </div>
-          <div class="space-y-0.5 source-stagger">
-            <button
-              v-for="(source, sidx) in (message.filtered_sources && message.filtered_sources.length > 0 ? message.filtered_sources : message.sources)"
-              :key="sidx"
-              @click="emit('scrollToSource', source.index)"
-              class="source-card-btn source-row w-full text-left text-xs px-2 py-1.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-2"
+            <span v-else>共 {{ displaySources.length }} 个</span>
+            <span
+              v-if="message.isStreaming && !message.content"
+              class="ml-1.5 text-[10px] text-[var(--color-primary)]"
             >
-              <span
-                class="w-4 h-4 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[10px] flex items-center justify-center font-medium flex-shrink-0"
-              >
-                {{ source.index }}
-              </span>
-              <span v-if="source.source" class="truncate flex-shrink min-w-0">{{ source.source }}</span>
-              <span v-if="source.page" class="text-[var(--text-muted)] flex-shrink-0">P{{ source.page }}</span>
-            </button>
+              研究中，已定位文献…
+            </span>
           </div>
+          <!-- 完整来源卡（文件名 + 页码 + 摘要）——主展示 -->
+          <ChatSourceCards :sources="displaySources" />
         </div>
-
-        <!-- Expanded Source Cards -->
-        <ChatSourceCards v-if="message.expandedSources" :sources="message.sources" />
       </div>
     </div>
   </div>
@@ -262,7 +253,9 @@ import { ElMessage } from 'element-plus'
 import { ArrowRight, DocumentCopy, EditPen } from '@/components/icons'
 import type { ChatStreamMessage } from '@/stores/chat'
 import { useChatStore } from '@/stores/chat'
+import { useDocumentStore } from '@/stores/document'
 import type { BotMood } from '@/components/CopilotBotAvatar.vue'
+import type { Source } from '@/types/models'
 import type { ExpressionId } from '@/bot/expressions'
 import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
 import TTSPlayer from '@/components/TTSPlayer.vue'
@@ -288,7 +281,33 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const chatStore = useChatStore()
+const documentStore = useDocumentStore()
 const isSavingNote = ref(false)
+
+// 若文档库未加载（历史会话恢复），拉取一次以便 UUID source → 文件名
+if ((documentStore.documents || []).length === 0) {
+  documentStore.fetchDocuments().catch(() => {})
+}
+
+/** chunk.source 可能是 document_id（UUID）——用文档库映射回文件名 */
+function sourceLabel(s: Source): string {
+  if (!s) return ''
+  const raw = s.source || ''
+  if (!raw) return s.document_id || ''
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(raw)) {
+    const doc = (documentStore.documents || []).find((d) => d.id === raw || d.id === s.document_id)
+    if (doc?.filename) return doc.filename
+  }
+  return raw
+}
+
+/** 优先展示被引用来源；无 filter 时展示全部。展示名映射为可读文件名 */
+const displaySources = computed<Source[]>(() => {
+  const filtered = props.message.filtered_sources
+  const all = props.message.sources
+  const list = Array.isArray(filtered) && filtered.length > 0 ? filtered : (Array.isArray(all) ? all : [])
+  return list.map((s) => ({ ...s, source: sourceLabel(s) }))
+})
 
 const savedNoteInfo = computed(() => {
   return props.message.savedNote || props.message.saved_note || null
@@ -316,7 +335,7 @@ function navigateToNote(noteId?: string) {
   }
 }
 
-// 默认折叠：两个思考过程均初始保持折叠
+// 与快速模式一致：思考面板默认折叠；流式中只靠摘要行展示最新步骤，结束后自动收起
 const isThinkingOpen = ref(false)
 const isReasoningOpen = ref(false)
 
@@ -421,6 +440,25 @@ function getStepBadge(step: string | number): { label: string; color: string } {
       return { label: '事实核验通过', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' }
     case 'reflection_fail':
       return { label: '反思修正', color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' }
+    // Deep research Agent steps
+    case 'agent_start':
+      return { label: '研究启动', color: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' }
+    case 'agent_think':
+      return { label: '自主研判', color: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' }
+    case 'agent_act':
+      return { label: '执行行动', color: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/20' }
+    case 'tool_call':
+      return { label: '调用工具', color: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' }
+    case 'tool_result':
+      return { label: '工具结果', color: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20' }
+    case 'agent_synthesize':
+      return { label: '证据汇总', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' }
+    case 'agent_error':
+      return { label: '研究异常', color: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' }
+    case 'agent_truncated':
+      return { label: '输出截断', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' }
+    case 'agent_stall':
+      return { label: '循环熔断', color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' }
     default:
       return { label: '决策步骤', color: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20' }
   }

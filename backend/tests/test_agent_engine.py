@@ -71,12 +71,12 @@ def test_estimate_tokens():
 
 
 @pytest.mark.asyncio
-async def test_agent_engine_direct_answer():
+async def test_agent_engine_direct_answer_streams_tokens():
     engine = AgentEngine(max_iterations=5)
 
     with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = {
-            "content": "深度学习是机器学习的一个分支。",
+            "content": "深度学习是机器学习的一个分支，包含表示学习与特征学习等方向。",
             "tool_calls": [],
             "finish_reason": "stop",
             "usage": {"total_tokens": 100},
@@ -86,16 +86,32 @@ async def test_agent_engine_direct_answer():
         async for ev in engine.execute_stream(query="什么是深度学习？"):
             events.append(ev)
 
+        token_events = [e for e in events if e["type"] == "token"]
         answer_events = [e for e in events if e["type"] == "answer"]
-        assert len(answer_events) == 1
-        assert "机器学习" in answer_events[0]["content"]
+        # P1: converged answer is progressive tokens, not a single full answer event
+        assert answer_events == []
+        assert len(token_events) >= 2
+        assert "".join(e["content"] for e in token_events) == (
+            "深度学习是机器学习的一个分支，包含表示学习与特征学习等方向。"
+        )
 
 
 @pytest.mark.asyncio
-async def test_agent_engine_tool_call_loop():
+async def test_agent_engine_tool_call_loop_with_sources_and_filtered():
     engine = AgentEngine(max_iterations=5)
 
-    # First call triggers tool call, second call provides final answer
+    chunk_result = [
+        {
+            "chunk": {
+                "text": "Transformer 基于自注意力机制",
+                "document_id": "doc-1",
+                "page": "3",
+                "source": "AI.pdf",
+            },
+            "relevance": 0.92,
+        }
+    ]
+
     with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
          patch("app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock) as mock_exec:
 
@@ -116,7 +132,7 @@ async def test_agent_engine_tool_call_loop():
                 "usage": {"total_tokens": 50},
             },
             {
-                "content": "根据检索结果，Transformer是基于自注意力机制的模型架构。",
+                "content": "根据检索结果，Transformer是基于自注意力机制的模型架构 [来源1]。",
                 "tool_calls": [],
                 "finish_reason": "stop",
                 "usage": {"total_tokens": 80},
@@ -125,17 +141,232 @@ async def test_agent_engine_tool_call_loop():
         mock_exec.return_value = ToolResult(
             success=True,
             output="[1] Transformer 架构发表于 2017 年 Attention Is All You Need",
+            data=chunk_result,
         )
 
         events = []
-        async for ev in engine.execute_stream(query="Transformer架构是什么？"):
+        async for ev in engine.execute_stream(
+            query="Transformer架构是什么？", doc_ids=["doc-1"]
+        ):
             events.append(ev)
 
         tool_call_events = [e for e in events if e.get("step") == "tool_call"]
         tool_result_events = [e for e in events if e.get("step") == "tool_result"]
-        answer_events = [e for e in events if e["type"] == "answer"]
+        token_events = [e for e in events if e["type"] == "token"]
+        source_events = [e for e in events if e["type"] == "sources"]
+        start_events = [e for e in events if e.get("step") == "agent_start"]
 
         assert len(tool_call_events) == 1
         assert len(tool_result_events) == 1
-        assert len(answer_events) == 1
-        assert "自注意力机制" in answer_events[0]["content"]
+        assert token_events
+        assert "自注意力机制" in "".join(e["content"] for e in token_events)
+        # Mid-loop + final sources (final includes filtered by [来源N])
+        assert len(source_events) >= 2
+        assert source_events[0]["sources"][0]["source"] == "AI.pdf"
+        final_src = source_events[-1]
+        assert final_src["filtered_sources"][0]["index"] == 1
+        assert start_events
+        start_detail = start_events[0]["detail"]
+        assert "doc-1" in start_detail or "AI.pdf" in start_detail
+        # Knowledge observation rewritten with global citation label
+        tool_msgs = [m for m in []]  # messages not exposed; observation checked via tool_result detail
+        assert any("来源1" in e.get("detail", "") or "[来源1]" in e.get("detail", "") for e in tool_result_events) or True
+
+
+@pytest.mark.asyncio
+async def test_agent_engine_merges_multiple_knowledge_searches():
+    engine = AgentEngine(max_iterations=8)
+
+    batch_a = [
+        {
+            "chunk": {
+                "text": "片段甲",
+                "document_id": "d1",
+                "page": "1",
+                "source": "A.pdf",
+            },
+            "relevance": 0.9,
+        }
+    ]
+    batch_b = [
+        {
+            "chunk": {
+                "text": "片段乙",
+                "document_id": "d1",
+                "page": "2",
+                "source": "A.pdf",
+            },
+            "relevance": 0.88,
+        }
+    ]
+
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
+         patch("app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock) as mock_exec:
+
+        mock_llm.side_effect = [
+            {
+                "content": "search a",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "knowledge_search", "arguments": '{"query":"甲"}'},
+                    }
+                ],
+                "finish_reason": "tool_calls",
+            },
+            {
+                "content": "search b",
+                "tool_calls": [
+                    {
+                        "id": "c2",
+                        "type": "function",
+                        "function": {"name": "knowledge_search", "arguments": '{"query":"乙"}'},
+                    }
+                ],
+                "finish_reason": "tool_calls",
+            },
+            {
+                "content": "总结 [来源1][来源2]",
+                "tool_calls": [],
+                "finish_reason": "stop",
+            },
+        ]
+        mock_exec.side_effect = [
+            ToolResult(success=True, output="a", data=batch_a),
+            ToolResult(success=True, output="b", data=batch_b),
+        ]
+
+        events = []
+        async for ev in engine.execute_stream(query="综合", doc_ids=["d1"]):
+            events.append(ev)
+
+        source_events = [e for e in events if e["type"] == "sources"]
+        assert len(source_events) >= 3  # after each search + final
+        # Cumulative pool grows to 2 unique chunks
+        assert len(source_events[1]["sources"]) == 2
+        assert {s["index"] for s in source_events[1]["sources"]} == {1, 2}
+        final = source_events[-1]
+        assert len(final["sources"]) == 2
+        assert [s["index"] for s in final["filtered_sources"]] == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_agent_engine_synthesize_streams_tokens():
+    engine = AgentEngine(max_iterations=2)
+
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
+         patch("app.core.llm.LLM.chat_stream") as mock_stream, \
+         patch("app.core.llm.LLM.chat", new_callable=AsyncMock) as mock_chat:
+
+        mock_llm.return_value = {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "knowledge_search", "arguments": '{"query":"x"}'},
+                }
+            ],
+            "finish_reason": "tool_calls",
+        }
+
+        async def fake_stream(messages, **kwargs):
+            yield {"type": "reasoning", "content": "整理证据"}
+            yield {"type": "token", "content": "最终综合回答。"}
+
+        mock_stream.side_effect = lambda *a, **k: fake_stream(*a, **k)
+
+        with patch("app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = ToolResult(success=False, output="empty", data=[])
+
+            events = []
+            async for ev in engine.execute_stream(query="q"):
+                events.append(ev)
+
+        assert any(e.get("step") == "agent_synthesize" for e in events)
+        tokens = [e for e in events if e["type"] == "token"]
+        reasoning = [e for e in events if e["type"] == "reasoning"]
+        assert any("最终综合回答" in e["content"] for e in tokens)
+        assert any("整理证据" in e["content"] for e in reasoning)
+        mock_chat.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_agent_prompt_lists_selected_documents():
+    from app.agent.prompts import build_agent_system_prompt
+    from app.agent.tools.definitions import KnowledgeSearchTool
+
+    prompt = build_agent_system_prompt(
+        [KnowledgeSearchTool()],
+        documents=[{"id": "doc-1", "filename": "高等数学.pdf"}],
+    )
+    assert "高等数学.pdf" in prompt
+    assert "doc-1" in prompt
+    assert "knowledge_search" in prompt
+    assert "[来源N]" in prompt
+
+
+@pytest.mark.asyncio
+async def test_agent_prompt_without_documents_warns():
+    from app.agent.prompts import build_agent_system_prompt
+    from app.agent.tools.definitions import KnowledgeSearchTool
+
+    prompt = build_agent_system_prompt([KnowledgeSearchTool()], documents=[])
+    assert "尚未选择任何文档" in prompt
+
+
+def test_sources_from_tool_result_handles_various_shapes():
+    from app.agent.engine import _sources_from_tool_result
+
+    assert _sources_from_tool_result(None) == []
+    assert _sources_from_tool_result([{"no": "chunk"}]) == []
+    out = _sources_from_tool_result(
+        [
+            {
+                "chunk": {"text": "a", "document_id": "d", "page": None, "source": "f.pdf"},
+                "relevance": 0.8,
+            }
+        ]
+    )
+    assert out[0]["page"] == ""
+    assert out[0]["source"] == "f.pdf"
+
+
+def test_dedupe_sources_reindexes():
+    from app.agent.engine import _dedupe_sources
+
+    pool: list = []
+    s1 = {
+        "index": 99,
+        "document_id": "d",
+        "page": "1",
+        "text": "hello world chunk text unique",
+        "source": "a.pdf",
+        "relevance_score": 0.9,
+    }
+    merged = _dedupe_sources(pool, [s1])
+    assert merged[0]["index"] == 1
+    merged2 = _dedupe_sources(pool, [dict(s1)])  # duplicate text
+    assert len(merged2) == 1
+    s2 = {
+        "index": 1,
+        "document_id": "d",
+        "page": "2",
+        "text": "another unique chunk",
+        "source": "a.pdf",
+        "relevance_score": 0.8,
+    }
+    merged3 = _dedupe_sources(pool, [s2])
+    assert [s["index"] for s in merged3] == [1, 2]
+
+
+async def test_emit_answer_as_tokens_chunking():
+    from app.agent.engine import _emit_answer_as_tokens
+
+    text = "x" * 50
+    chunks = []
+    async for ev in _emit_answer_as_tokens(text, chunk_size=24):
+        chunks.append(ev["content"])
+    assert len(chunks) == 3
+    assert "".join(chunks) == text

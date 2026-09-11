@@ -95,11 +95,60 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.emitted('copy')).toBeTruthy()
     expect(wrapper.emitted('copy')?.[0][0].id).toBe('2')
 
-    // 来源点击触发 scrollToSource
-    const sourceBtn = wrapper.find('.source-row')
-    await sourceBtn.trigger('click')
-    expect(wrapper.emitted('scrollToSource')).toBeTruthy()
-    expect(wrapper.emitted('scrollToSource')?.[0][0]).toBe(1)
+    // 来源卡可见（完整卡片，非仅气泡）
+    expect(wrapper.find('.source-card').exists()).toBe(true)
+    expect(wrapper.text()).toContain('RAG 架构解析')
+  })
+
+  it('深度研究：工具阶段来源卡可见（正文未出），Agent 徽章与双轨思考', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'deep-1',
+          role: 'assistant',
+          content: '',
+          thinking: [
+            { step: 'agent_start', detail: '启动深度研究' },
+            { step: 'tool_call', detail: '调用 knowledge_search' },
+            { step: 'tool_result', detail: '累计 1 条来源' },
+          ],
+          reasoning: '启动深度研究\n调用 knowledge_search\n累计 1 条来源\n',
+          sources: [
+            { index: 1, source: 'ml_notes.md', page: '1', text: '梯度下降是一种优化算法', document_id: 'd1' },
+          ],
+          filtered_sources: [
+            { index: 1, source: 'ml_notes.md', page: '1', text: '梯度下降是一种优化算法', document_id: 'd1' },
+          ],
+          isStreaming: true,
+          created_at: new Date().toISOString(),
+        },
+        renderedMarkdown: '',
+        renderedReasoning: '<p>证据链</p>',
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true,
+        },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+
+    // 正文未出现时来源区已可见（深度研究关键）
+    expect(wrapper.find('[data-test="sources-section"]').exists()).toBe(true)
+    expect(wrapper.find('.source-card').exists()).toBe(true)
+    expect(wrapper.text()).toContain('ml_notes.md')
+    expect(wrapper.text()).toContain('梯度下降是一种优化算法')
+    expect(wrapper.text()).toContain('研究中，已定位文献…')
+    // Agent 徽章 + 双轨面板（与快速模式一致：默认折叠，不强制展开）
+    expect(wrapper.text()).toContain('研究启动')
+    expect(wrapper.find('.thinking-section').exists()).toBe(true)
+    expect(wrapper.find('.reasoning-box').exists()).toBe(true)
+    // 折叠态：details 不带 open
+    expect(wrapper.find('.thinking-section').attributes('open')).toBeUndefined()
   })
 
   it('正确渲染原生 CoT 深度思考面板（Reasoning Box）与折叠交互', async () => {
@@ -175,7 +224,8 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
 
     // 思考过程中：展示第二行动态片段（双行）
     expect(wrapper.text()).toContain('正在深度思考...')
-    expect(wrapper.text()).toContain('正在推理中...')
+    // reasoning 正文（展开或缩略均可出现原文/截断）
+    expect(wrapper.find('.reasoning-box').exists()).toBe(true)
 
     // 思考完成，正式回答正文开始到达
     await wrapper.setProps({
