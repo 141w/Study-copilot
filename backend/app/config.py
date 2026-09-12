@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"  # DEBUG / INFO / WARNING / ERROR
     encryption_key: str = ""
+    # Optional path to a key file (Docker secret); takes precedence over encryption_key when set
+    encryption_key_file: str = ""
+    # Comma-separated historical Fernet keys used only for decrypt during rotation
+    encryption_fallback_keys: str = ""
 
     # AI 互动课堂配置
     classroom_base_url: str = "http://localhost:3001"  # AI 互动课堂服务地址
@@ -46,6 +50,12 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
+
+    # Provider reasoning field mapping (comma-separated delta attribute names)
+    reasoning_content_fields: str = "reasoning_content"
+    # SSE resume buffer TTL (seconds)
+    sse_resume_ttl_seconds: int = 120
+    sse_resume_max_events: int = 2000
 
     # 洋葱聊天管线 V2 开关
     pipeline_v2_enabled: bool = False

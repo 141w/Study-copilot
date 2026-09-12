@@ -303,18 +303,35 @@ class SearchConversationsTool(Tool):
     async def execute(self, **kwargs: Any) -> ToolResult:
         query = kwargs.get("query", "").strip()
         limit = kwargs.get("limit", 5)
-        # Note: In agent execution context, user_id can be passed in kwargs
+        # Trusted runtime identity — engine always overwrites this; never trust model args alone.
         user_id = kwargs.get("user_id")
 
         if not query:
             return ToolResult(success=False, output="查询词不能为空", error="empty_query")
 
+        if not user_id:
+            logger.info(
+                "[Tool:search_conversations] denied: missing user_id (query_len=%d)",
+                len(query),
+            )
+            return ToolResult(
+                success=False,
+                output="当前未绑定用户身份，无法搜索历史会话。",
+                error="missing_user_id",
+            )
+
+        logger.info(
+            "[Tool:search_conversations] user_id=%s query_len=%d limit=%s",
+            user_id,
+            len(query),
+            limit,
+        )
+
         try:
             from app.db import ChatSession, Message
             async with AsyncSessionLocal() as db:
                 stmt = select(Message).join(ChatSession, Message.session_id == ChatSession.id)
-                if user_id:
-                    stmt = stmt.where(ChatSession.user_id == user_id)
+                stmt = stmt.where(ChatSession.user_id == user_id)
                 stmt = stmt.where(Message.content.ilike(f"%{query}%")).order_by(Message.created_at.desc()).limit(limit)
 
                 res = await db.execute(stmt)
@@ -362,7 +379,22 @@ class SearchMemoryTool(Tool):
         user_id = kwargs.get("user_id")
 
         if not user_id:
-            return ToolResult(success=True, output="当前未绑定用户身份，无法读取长期记忆。", data=[])
+            logger.info(
+                "[Tool:search_memory] denied: missing user_id (query_len=%d)",
+                len(query),
+            )
+            return ToolResult(
+                success=False,
+                output="当前未绑定用户身份，无法读取长期记忆。",
+                error="missing_user_id",
+            )
+
+        logger.info(
+            "[Tool:search_memory] user_id=%s query_len=%d limit=%s",
+            user_id,
+            len(query),
+            limit,
+        )
 
         try:
             async with AsyncSessionLocal() as db:

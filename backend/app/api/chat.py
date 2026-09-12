@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
@@ -147,6 +147,10 @@ async def ask(
     if req.stream:
 
         async def generate_stream():
+            from app.core.sse_resume import stream_resume_buffer
+
+            buffered = stream_resume_buffer.create(str(current_user.id))
+            event_id = 0
             try:
                 async for event in chat_service.ask_question_stream(
                     db,
@@ -157,12 +161,34 @@ async def ask(
                     req.config,
                     mode=req.mode or ("deep_research" if req.agent_enabled else "fast"),
                 ):
+                    if event.get("type") == "session" and "stream_id" not in event:
+                        event = {**event, "stream_id": buffered.stream_id}
+                    event_id += 1
+                    event = {**event, "id": event_id}
+                    stream_resume_buffer.append(buffered.stream_id, event)
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                stream_resume_buffer.mark_finished(buffered.stream_id)
+            except GeneratorExit:
+                stream_resume_buffer.mark_finished(buffered.stream_id, interrupted=True)
+                raise
             except Exception as e:
                 # 上游异常（如模型不可达）转为可见事件并正常收尾，
                 # 避免客户端在已发出的 200 流上无限等待
-                yield f"data: {json.dumps({'type': 'error', 'message': f'服务暂时无法连接模型：{e}'}, ensure_ascii=False)}\n\n"
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                event_id += 1
+                err = {
+                    "type": "error",
+                    "code": "internal_error",
+                    "message": f"服务暂时无法连接模型：{e}",
+                    "recoverable": True,
+                    "id": event_id,
+                }
+                stream_resume_buffer.append(buffered.stream_id, err)
+                yield f"data: {json.dumps(err, ensure_ascii=False)}\n\n"
+                event_id += 1
+                done = {"type": "done", "id": event_id}
+                stream_resume_buffer.append(buffered.stream_id, done)
+                stream_resume_buffer.mark_finished(buffered.stream_id)
+                yield f"data: {json.dumps(done)}\n\n"
 
         return StreamingResponse(
             generate_stream(),
@@ -184,6 +210,45 @@ async def ask(
         used_source_indices=result.get("used_source_indices", []),
         filtered_sources=[Source(**s) for s in result.get("filtered_sources", [])],
         session_id=result["session_id"],
+    )
+
+
+@router.get("/stream/{stream_id}/resume")
+async def resume_stream(
+    stream_id: str,
+    last_event_id: int | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    """Replay buffered SSE events after last_event_id (in-memory, single-node)."""
+    from app.core.sse_resume import stream_resume_buffer
+
+    stream = stream_resume_buffer.get_events_after(stream_id, str(current_user.id), last_event_id)
+    if stream is None:
+        raise NotFoundError("流不存在或已过期，无法续传")
+
+    events = stream_resume_buffer.slice_after(stream, last_event_id)
+
+    async def generate_resume():
+        for event in events:
+            eid = event.get("id", 0)
+            yield f"id: {eid}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+        if stream.finished:
+            if stream.interrupted:
+                payload = {
+                    "type": "error",
+                    "code": "stream_interrupted",
+                    "message": "流曾被中断，以上为已缓冲的全部内容。",
+                    "recoverable": True,
+                }
+                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'resume_pending', 'stream_id': stream_id})}\n\n"
+
+    return StreamingResponse(
+        generate_resume(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
@@ -736,7 +801,7 @@ async def discuss(
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             error_msg = f"讨论服务暂时不可用：{e}"
-            yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'code': 'internal_error', 'message': error_msg, 'recoverable': True}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         finally:
             await _save_discussion_record()

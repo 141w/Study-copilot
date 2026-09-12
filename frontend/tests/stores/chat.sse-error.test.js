@@ -99,6 +99,31 @@ describe('Chat Store — SSE error 事件可见性', () => {
     await store.askQuestionStream('测试', ['doc-1'])
 
     const aiMsg = store.messages.find((m) => m.role === 'assistant')
-    expect(aiMsg.content).toBe('回答生成失败，请稍后重试')
+    expect(aiMsg.content).toContain('回答生成失败，请稍后重试')
+    expect(aiMsg.error_recoverable).toBe(true)
+  })
+
+  it('结构化 error 携带 code/recoverable=false 时提示需检查配置', async () => {
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      body: sseStream([
+        {
+          type: 'error',
+          code: 'rate_limit',
+          message: '模型限流',
+          recoverable: false,
+        },
+        { type: 'done' },
+      ]),
+    }
+    global.fetch = vi.fn().mockResolvedValue(mockResponse)
+
+    await store.askQuestionStream('限流场景', ['doc-1'])
+
+    const aiMsg = store.messages.find((m) => m.role === 'assistant')
+    expect(aiMsg.error_code).toBe('rate_limit')
+    expect(aiMsg.error_recoverable).toBe(false)
+    expect(aiMsg.content).toContain('需检查配置')
   })
 })

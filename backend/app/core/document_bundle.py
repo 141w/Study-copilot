@@ -34,17 +34,30 @@ RESERVED_BUDGET_RATIO = 0.4  # 保底预算总额占总上限比例
 SECTION_SEP = "\n\n---\n\n"
 
 
-def allocate_document_text_budgets(lengths: list[int], max_chars: int) -> list[int]:
+def allocate_document_text_budgets(
+    lengths: list[int],
+    max_chars: int,
+    relevances: list[float] | None = None,
+) -> list[int]:
     """文档文本公平预算分配算法：
 
     两阶段字符预算分配：
     1. 为每篇文档预留保底预算（最多 1500 字符或总预算的 40% / N），确保多文档时不被长文档完全挤占
-    2. 剩余预算按各文档未满足需求的比例公平分配
+    2. 剩余预算按各文档未满足需求 × 相关度权重 的比例分配（无相关度时退化为纯需求比例）
     """
     if not lengths or max_chars <= 0:
         return [0] * len(lengths)
 
     num_docs = len(lengths)
+    if relevances is None:
+        weights = [1.0] * num_docs
+    else:
+        # Pad / truncate relevances to match lengths; clamp to [0.05, 1]
+        weights = list(relevances[:num_docs])
+        while len(weights) < num_docs:
+            weights.append(0.5)
+        weights = [max(0.05, min(1.0, float(w))) for w in weights]
+
     reserved = min(
         num_docs * BASE_BUDGET_PER_DOCUMENT,
         int(max_chars * RESERVED_BUDGET_RATIO),
@@ -55,21 +68,25 @@ def allocate_document_text_budgets(lengths: list[int], max_chars: int) -> list[i
 
     # 记录尚未完全满足的文档
     unmet = [
-        {"index": idx, "remaining": max(0, lengths[idx] - budgets[idx])}
+        {
+            "index": idx,
+            "remaining": max(0, lengths[idx] - budgets[idx]),
+            "weight": weights[idx],
+        }
         for idx in range(num_docs)
         if lengths[idx] > budgets[idx]
     ]
 
     while remaining_budget > 0 and unmet:
-        total_remaining = sum(e["remaining"] for e in unmet)
-        if total_remaining == 0:
+        total_weighted = sum(e["remaining"] * e["weight"] for e in unmet)
+        if total_weighted == 0:
             break
 
         distributed = 0
         for entry in list(unmet):
             if remaining_budget == 0:
                 break
-            share = (remaining_budget * entry["remaining"]) // total_remaining
+            share = int(remaining_budget * (entry["remaining"] * entry["weight"]) / total_weighted)
             allocation = min(entry["remaining"], max(share, 1), remaining_budget)
             budgets[entry["index"]] += allocation
             entry["remaining"] -= allocation
@@ -103,18 +120,21 @@ def _truncate_at_boundary(text: str, max_chars: int) -> str:
 
 async def build_bundle(
     documents: list[tuple[str, str]],
+    relevances: list[float] | None = None,
 ) -> BundleResult:
     """将多个文档打包为单个文本。
 
     采用两阶段公平预算控制：
     - 保底预算防止长文档挤占短文档
-    - 剩余预算按比例分配
+    - 剩余预算按比例分配（可选按相关度加权）
     - 边界安全截断
 
     参数
     ----
     documents : list[tuple[str, str]]
         [(filename, content_text), ...]
+    relevances : list[float] | None
+        与 documents 对齐的相关度权重（0~1），高相关文档获得更多剩余预算。
 
     返回
     ----
@@ -123,12 +143,17 @@ async def build_bundle(
     source_names: list[str] = []
     headers: list[str] = []
     bodies: list[str] = []
+    rels: list[float] = []
 
     for idx, (filename, content) in enumerate(documents[:MAX_FILES]):
         name = filename or f"文档{idx + 1}"
         source_names.append(name)
         headers.append(f"【来源 {idx + 1}】{name}")
         bodies.append(content.strip())
+        if relevances is not None and idx < len(relevances):
+            rels.append(float(relevances[idx]))
+        else:
+            rels.append(0.5)
 
     if not bodies:
         return BundleResult(text="", source_names=[], total_chars=0, truncated=False)
@@ -142,7 +167,7 @@ async def build_bundle(
     truncated = total_raw_with_headers > MAX_TEXT_CHARS
 
     if truncated:
-        allocated = allocate_document_text_budgets(raw_lengths, body_budget)
+        allocated = allocate_document_text_budgets(raw_lengths, body_budget, relevances=rels)
         truncated_bodies = [
             _truncate_at_boundary(body, limit) if len(body) > limit else body
             for body, limit in zip(bodies, allocated)

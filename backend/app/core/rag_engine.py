@@ -9,7 +9,9 @@ from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
+from app.agent.context import trim_history
 from app.config import settings
+from app.core import metrics_counters
 from app.core.adaptive_retriever import adaptive_retriever
 from app.core.answer_reflector import answer_reflector
 from app.core.embedder import embedder
@@ -59,7 +61,7 @@ class RAGEngine:
         """Rewrite a follow-up query into a standalone question using conversation history."""
         try:
             history_parts = []
-            for msg in history[-10:]:
+            for msg in trim_history(history, max_messages=10, max_tokens=2000):
                 role_label = "User" if msg.get("role") == "user" else "AI"
                 history_parts.append(f"{role_label}: {msg.get('content', '')}")
             history_text = "\n".join(history_parts)
@@ -88,10 +90,10 @@ class RAGEngine:
         - > 10 条：早期历史 → LLM 摘要，最近 5 条完整保留
         """
         if not history or len(history) <= 10:
-            return history or []
+            return trim_history(history, max_messages=10, max_tokens=2000)
 
         early_history = history[:-5]
-        recent_history = history[-5:]
+        recent_history = trim_history(history[-5:], max_messages=5, max_tokens=1500)
 
         # 对早期历史生成摘要
         try:
@@ -115,7 +117,7 @@ class RAGEngine:
             ]
         except Exception as e:
             logger.warning("[RAG] History summarization failed: %s, using truncation", e)
-            return history[-10:]
+            return trim_history(history, max_messages=10, max_tokens=2000)
 
     # ── Agentic RAG methods ──────────────────────────────────────────
 
@@ -140,12 +142,14 @@ class RAGEngine:
                 "detail": f"检索到 {len(retrieved)} 条结果，质量：{quality.quality}（{quality.reason}，得分 {quality.score:.2f}）",
             }
         )
-
+        metrics_counters.incr("rag.retrieval_check")
         if quality.is_good:
+            metrics_counters.incr("rag.retrieval_good")
             return retrieved, thinking_events
 
         # 检索质量差 → 改写查询重试一次
         logger.info("Retrieval quality poor (%s), rewriting query...", quality.reason)
+        metrics_counters.incr("rag.retrieval_retry")
         thinking_events.append(
             {
                 "type": "thinking",

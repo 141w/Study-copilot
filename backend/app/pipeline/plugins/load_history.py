@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from app.agent.context import trim_history
 from app.core.llm import LLM
 from app.pipeline.base import EventType, NextFn, PipelineState, Plugin
 
@@ -26,7 +27,7 @@ class LoadHistoryPlugin(Plugin):
         if history and len(history) > 10:
             llm = LLM.from_config(state.user_config)
             early_history = history[:-5]
-            recent_history = history[-5:]
+            recent_history = trim_history(history[-5:], max_messages=5, max_tokens=1500)
             try:
                 history_text = "\n".join(
                     f"{'用户' if m.get('role') == 'user' else 'AI'}: {m.get('content', '')[:150]}"
@@ -48,6 +49,8 @@ class LoadHistoryPlugin(Plugin):
                 ]
             except Exception as e:
                 logger.warning("[Pipeline] History summarization failed: %s, using truncation", e)
-                state.history = history[-10:]
+                state.history = trim_history(history, max_messages=10, max_tokens=2000)
+        elif history:
+            state.history = trim_history(history, max_messages=10, max_tokens=2000)
 
         await next_fn()

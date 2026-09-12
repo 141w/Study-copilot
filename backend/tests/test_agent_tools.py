@@ -229,6 +229,15 @@ async def test_search_conversations_empty_query():
 
 
 @pytest.mark.asyncio
+async def test_search_conversations_requires_user_id():
+    """No identity → refuse; must never fall back to a global scan."""
+    tool = SearchConversationsTool()
+    res = await tool.execute(query="线性代数")
+    assert res.success is False
+    assert res.error == "missing_user_id"
+
+
+@pytest.mark.asyncio
 async def test_search_conversations_hits():
     tool = SearchConversationsTool()
     msg = SimpleNamespace(id="m1", role="user", content="如何学习线性代数？")
@@ -247,7 +256,7 @@ async def test_search_conversations_hits():
 async def test_search_memory_no_user():
     tool = SearchMemoryTool()
     res = await tool.execute(query="偏好")
-    assert res.success is True
+    assert res.success is False
     assert "未绑定" in res.output
 
 
