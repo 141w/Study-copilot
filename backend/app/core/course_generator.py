@@ -545,9 +545,8 @@ def build_classroom_dsl(
                 "viewportSize": 1000,
                 "viewportRatio": 0.5625,
                 "theme": {
-                    "backgroundColor": "#F8FAFC",
+                    # 不写死浅色画布/前景：由前端按应用亮暗主题适配
                     "themeColors": ["#3B82F6", "#10B981", "#F59E0B", "#6366F1"],
-                    "fontColor": "#1E293B",
                     "fontName": "PingFang SC, Microsoft YaHei, sans-serif",
                 },
                 "elements": intro_elements,
@@ -759,9 +758,8 @@ def build_classroom_dsl(
                     "viewportSize": 1000,
                     "viewportRatio": 0.5625,
                     "theme": {
-                        "backgroundColor": "#F8FAFC",
+                        # 不写死浅色画布/前景：由前端按应用亮暗主题适配
                         "themeColors": ["#3B82F6", "#10B981", "#F59E0B", "#6366F1"],
-                        "fontColor": "#1E293B",
                         "fontName": "PingFang SC, Microsoft YaHei, sans-serif",
                     },
                     "elements": sec_elements,
@@ -862,9 +860,8 @@ def build_classroom_dsl(
                 "viewportSize": 1000,
                 "viewportRatio": 0.5625,
                 "theme": {
-                    "backgroundColor": "#F8FAFC",
+                    # 不写死浅色画布/前景：由前端按应用亮暗主题适配
                     "themeColors": ["#3B82F6", "#10B981", "#F59E0B", "#6366F1"],
-                    "fontColor": "#1E293B",
                     "fontName": "PingFang SC, Microsoft YaHei, sans-serif",
                 },
                 "elements": [

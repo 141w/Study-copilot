@@ -35,42 +35,8 @@
         </div>
       </div>
 
-      <!-- 右侧控制组：倍速、语音、连播、台词记录、目录与全屏 -->
+      <!-- 右侧控制组：核心快捷 + 次级设置收纳 -->
       <div class="flex items-center gap-1.5 sm:gap-2">
-        <!-- 倍速切换 -->
-        <el-button
-          size="small"
-          @click="cyclePlaybackRate"
-          title="点击切换播放倍速"
-        >
-          <span class="text-xs font-mono font-medium">{{ playbackRate }}x</span>
-        </el-button>
-
-        <!-- 语音朗读开关 -->
-        <el-button
-          size="small"
-          :type="audioEnabled ? 'primary' : 'default'"
-          plain
-          @click="toggleAudio"
-          :title="audioEnabled ? '语音朗读已开启' : '语音朗读已静音'"
-        >
-          <el-icon><Reading /></el-icon>
-          <span class="text-xs ml-1 hidden md:inline">{{ audioEnabled ? '语音开启' : '已静音' }}</span>
-        </el-button>
-
-        <!-- 自动连播开关 -->
-        <el-button
-          size="small"
-          :type="autoAdvance ? 'primary' : 'default'"
-          plain
-          @click="autoAdvance = !autoAdvance"
-          :title="autoAdvance ? '自动切幕已开启' : '手动切幕'"
-          class="hidden sm:inline-flex"
-        >
-          <el-icon><Promotion /></el-icon>
-          <span class="text-xs ml-1 hidden lg:inline">{{ autoAdvance ? '自动连播' : '单幕暂停' }}</span>
-        </el-button>
-
         <!-- 研讨台词记录抽屉 -->
         <el-button
           circle
@@ -92,6 +58,20 @@
           <el-icon><List /></el-icon>
         </el-button>
 
+        <!-- 次级设置：倍速 / 语音 / 连播 -->
+        <el-dropdown trigger="click" @command="handleQuickCommand">
+          <el-button circle size="small" title="播放设置">
+            <el-icon><Setting /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="rate">倍速 · {{ playbackRate }}x</el-dropdown-item>
+              <el-dropdown-item command="audio">语音朗读 · {{ audioEnabled ? '已开启' : '已静音' }}</el-dropdown-item>
+              <el-dropdown-item command="auto">自动连播 · {{ autoAdvance ? '已开启' : '单幕暂停' }}</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
         <!-- 全屏按钮 -->
         <el-button
           circle
@@ -99,7 +79,7 @@
           @click="toggleFullscreen"
           title="全屏切换"
         >
-          <el-icon><Fold /></el-icon>
+          <el-icon><View /></el-icon>
         </el-button>
       </div>
     </header>
@@ -128,16 +108,12 @@
     <!-- 主演播视口 (Visual Stage + Studio Deck) -->
     <div v-else class="flex-1 flex overflow-hidden relative min-h-0">
       <main class="flex-1 flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-y-auto lg:overflow-hidden relative min-h-0 min-w-0 transition-all duration-300">
-        <!-- 16:9 画布纯净演播区 (Visual Stage - 100% 内容无遮挡与自适应缩放) -->
-        <div class="w-full max-w-5xl flex-1 flex flex-col justify-center items-center min-h-0 min-w-0 relative">
+        <!-- 16:9 画布：flex 槽位约束 -->
+        <div class="stage-slot w-full max-w-5xl flex-1 min-h-0 min-w-0 relative flex items-center justify-center">
           <div
-            class="relative w-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
-            :style="{
-              maxHeight: 'min(560px, calc(100vh - 240px))',
-              maxWidth: 'min(100%, calc((100vh - 240px) * 16 / 9))',
-              backgroundColor: canvasTheme.backgroundColor || 'var(--surface-card)',
-              color: canvasTheme.fontColor || 'var(--text-primary)'
-            }"
+            class="stage-frame relative w-full max-h-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
+            :class="hasCustomCanvasTheme ? '' : 'stage-default-theme'"
+            :style="stageFrameStyle"
           >
             <!-- 幕顶微型信息栏 -->
             <div class="absolute top-3 left-4 right-4 flex items-center justify-between pointer-events-none z-10">
@@ -169,19 +145,19 @@
                 <template v-if="el.type === 'text'">
                   <div
                     v-if="isRichHtml(el.content)"
-                    class="font-semibold leading-tight tracking-wide drop-shadow-xs slide-html"
+                    class="font-semibold leading-tight tracking-wide slide-html"
                     :style="{
                       fontSize: `clamp(13px, ${(el.fontSize || 20) / 10}vw, ${el.fontSize || 24}px)`,
-                      color: el.defaultColor || 'inherit'
+                      color: getTextColorStyle(el)
                     }"
                     v-html="el.content"
                   />
                   <div
                     v-else
-                    class="font-semibold leading-tight tracking-wide drop-shadow-xs whitespace-pre-wrap"
+                    class="font-semibold leading-tight tracking-wide whitespace-pre-wrap"
                     :style="{
                       fontSize: `clamp(13px, ${(el.fontSize || 20) / 10}vw, ${el.fontSize || 24}px)`,
-                      color: el.defaultColor || 'inherit'
+                      color: getTextColorStyle(el)
                     }"
                   >
                     {{ el.content }}
@@ -190,7 +166,7 @@
 
                 <!-- 图片元素（概念插图） -->
                 <template v-else-if="el.type === 'image'">
-                  <div class="w-full h-full rounded-xl overflow-hidden shadow-xs border border-[var(--border-default)] relative group bg-black/10">
+                  <div class="w-full h-full rounded-xl overflow-hidden shadow-sm border border-[var(--border-default)] relative group bg-black/10">
                     <img
                       :src="el.src"
                       alt="Illustration"
@@ -202,20 +178,17 @@
                 <!-- 图形/卡片容器元素 -->
                 <template v-else-if="el.type === 'shape'">
                   <div
-                    class="w-full h-full rounded-xl p-4 sm:p-5 shadow-xs border transition-all duration-300 flex flex-col overflow-hidden backdrop-blur-sm"
+                    class="w-full h-full rounded-xl p-4 sm:p-5 shadow-sm border transition-all duration-300 flex flex-col overflow-hidden"
                     :class="[
                       isElementHighlighted(el.id)
-                        ? 'ring-2 ring-[var(--color-primary)] border-[var(--color-primary)] bg-[var(--color-primary-light)]/20 scale-[1.01] shadow-md'
-                        : 'border-[var(--border-default)]'
+                        ? 'ring-2 ring-[var(--color-primary)] scale-[1.01] shadow-md'
+                        : ''
                     ]"
-                    :style="{
-                      backgroundColor: el.fill || 'var(--bg-secondary)',
-                      borderColor: el.outline?.color || 'var(--border-default)'
-                    }"
+                    :style="getShapeStyle(el)"
                   >
                     <div
                       class="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed overflow-y-auto"
-                      :style="{ color: el.fill?.startsWith('#F') || el.fill?.startsWith('#E') || el.fill?.startsWith('#fff') ? '#1E293B' : 'inherit' }"
+                      :style="{ color: getShapeTextColor(el) }"
                     >
                       {{ el.text }}
                     </div>
@@ -339,7 +312,12 @@
 
             <!-- 台词正文 -->
             <div class="flex-1 min-w-0 px-2">
-              <p class="text-xs sm:text-sm text-[var(--text-primary)] font-normal leading-relaxed line-clamp-2">
+              <p
+                class="text-xs sm:text-sm text-[var(--text-primary)] font-normal leading-relaxed cursor-pointer select-none"
+                :class="dialogueExpanded ? '' : 'line-clamp-2'"
+                :title="dialogueExpanded ? '点击收起' : '点击展开全文'"
+                @click="dialogueExpanded = !dialogueExpanded"
+              >
                 {{ currentAction?.text || '（微课剧本正在就位...）' }}
               </p>
             </div>
@@ -380,16 +358,15 @@
 
             <!-- 核心播放/暂停控制与幕进度指示器 -->
             <div class="flex items-center gap-3.5">
-              <button
+              <el-button
+                :type="isPlaying ? 'default' : 'primary'"
+                size="default"
                 @click="togglePlay"
-                class="px-5 py-2 rounded-full font-medium text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-xs"
-                :class="isPlaying
-                  ? 'bg-[var(--surface-card)] text-[var(--text-primary)] border border-[var(--border-default)] hover:bg-[var(--bg-hover)]'
-                  : 'bg-[var(--color-primary)] text-[var(--text-inverse)] hover:bg-[var(--color-primary-hover)]'"
+                class="!px-5"
               >
-                <el-icon class="text-base"><VideoPause v-if="isPlaying" /><VideoPlay v-else /></el-icon>
+                <el-icon class="mr-1.5"><VideoPause v-if="isPlaying" /><VideoPlay v-else /></el-icon>
                 <span>{{ isPlaying ? '暂停' : '播放' }}</span>
-              </button>
+              </el-button>
 
               <!-- 幕切换胶囊指示器 -->
               <div class="hidden sm:flex items-center gap-1.5 pl-3 border-l border-[var(--border-default)]">
@@ -543,9 +520,6 @@ import {
   ArrowRight,
   VideoPlay,
   VideoPause,
-  Reading,
-  Promotion,
-  Fold,
   List,
   Close,
   Loading,
@@ -556,6 +530,8 @@ import {
   Brain,
   User,
   ChatLineRound,
+  Setting,
+  View,
 } from '../components/icons'
 
 const route = useRoute()
@@ -575,7 +551,8 @@ const currentActionIndex = ref(0)
 const isPlaying = ref(false)
 const audioEnabled = ref(true)
 const autoAdvance = ref(true)
-const showSidebar = ref(false)
+const showSidebar = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false)
+const dialogueExpanded = ref(false)
 const showHistoryDrawer = ref(false)
 
 // 播放倍速
@@ -589,6 +566,12 @@ function cyclePlaybackRate() {
   if (currentAudio) {
     currentAudio.playbackRate = playbackRate.value
   }
+}
+
+function handleQuickCommand(command: string | number | object): void {
+  if (command === 'rate') cyclePlaybackRate()
+  else if (command === 'audio') toggleAudio()
+  else if (command === 'auto') autoAdvance.value = !autoAdvance.value
 }
 
 // 测验场景专用状态
@@ -620,6 +603,81 @@ function formatSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 const canvasTheme = computed(() => currentScene.value?.content?.canvas?.theme || {})
+
+/** 生成器默认浅色画布（历史课件 #F8FAFC + #1E293B）——视为未定制 */
+const STOCK_LIGHT_CANVAS_BGS = new Set(['#f8fafc', '#ffffff', '#f9fafb', '#f1f5f9'])
+
+/** 真正定制画布主题？默认浅底深字 → 跟随应用亮暗令牌 */
+const hasCustomCanvasTheme = computed(() => {
+  const t = canvasTheme.value
+  const bg = String(t?.backgroundColor || '').toLowerCase()
+  const font = String(t?.fontColor || '').toLowerCase()
+  if (!bg && !font) return false
+  if (STOCK_LIGHT_CANVAS_BGS.has(bg) && (!font || font === '#1e293b')) {
+    return false
+  }
+  return true
+})
+
+const stageFrameStyle = computed(() => {
+  if (hasCustomCanvasTheme.value) {
+    return {
+      backgroundColor: canvasTheme.value.backgroundColor || 'var(--surface-card)',
+      color: canvasTheme.value.fontColor || 'var(--text-primary)',
+    }
+  }
+  return {
+    backgroundColor: 'var(--surface-card)',
+    color: 'var(--text-primary)',
+  }
+})
+
+function hexLuminance(color: string): number | null {
+  const hex = color.trim().replace('#', '')
+  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(hex)) return null
+  const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex
+  const r = parseInt(full.slice(0, 2), 16) / 255
+  const g = parseInt(full.slice(2, 4), 16) / 255
+  const b = parseInt(full.slice(4, 6), 16) / 255
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function getTextColorStyle(el: any): string {
+  if (!hasCustomCanvasTheme.value) return 'inherit'
+  return el.defaultColor || 'inherit'
+}
+
+function getShapeStyle(el: any): Record<string, string> {
+  const fill = typeof el.fill === 'string' ? el.fill : ''
+  const outline = el.outline?.color
+  let background: string
+  if (!fill) {
+    background = 'var(--bg-tertiary)'
+  } else if (!hasCustomCanvasTheme.value) {
+    const lum = hexLuminance(fill)
+    background = lum !== null && lum > 0.55 ? 'var(--bg-tertiary)' : fill
+  } else {
+    background = fill
+  }
+  const outLum = outline ? hexLuminance(outline) : null
+  const border = !hasCustomCanvasTheme.value && outLum !== null && outLum > 0.7
+    ? 'var(--border-default)'
+    : (outline || 'var(--border-default)')
+  return { backgroundColor: background, borderColor: border }
+}
+
+function getShapeTextColor(el: any): string {
+  if (el.defaultColor) return el.defaultColor
+  const fill = typeof el.fill === 'string' ? el.fill : ''
+  if (!hasCustomCanvasTheme.value) {
+    const lum = fill ? hexLuminance(fill) : null
+    if (lum === null || lum > 0.55) return 'inherit'
+  }
+  const lum = fill ? hexLuminance(fill) : null
+  if (lum !== null && lum > 0.55) return '#111827'
+  if (lum !== null && lum < 0.2) return '#F8FAFC'
+  return 'inherit'
+}
 const canvasElements = computed(() => currentScene.value?.content?.canvas?.elements || [])
 const currentActions = computed(() => currentScene.value?.actions || [])
 const totalActionsInScene = computed(() => currentActions.value.length)
@@ -1099,5 +1157,21 @@ onUnmounted(() => {
 }
 .slide-html :deep(li) {
   margin: 0.1em 0;
+}
+
+/* flex 槽位 + 默认主题令牌画布 */
+.stage-slot {
+  min-height: 0;
+  min-width: 0;
+}
+.stage-frame {
+  margin: 0 auto;
+}
+.stage-default-theme {
+  background-color: var(--surface-card);
+  color: var(--text-primary);
+}
+html.dark .stage-default-theme {
+  box-shadow: inset 0 0 0 1px var(--border-default);
 }
 </style>
