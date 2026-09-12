@@ -118,10 +118,8 @@
         <div class="stage-slot w-full max-w-5xl flex-1 min-h-0 min-w-0 relative flex items-center justify-center">
           <div
             class="stage-frame relative w-full max-h-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
-            :style="{
-              backgroundColor: canvasTheme.backgroundColor || 'var(--surface-card)',
-              color: canvasTheme.fontColor || 'var(--text-primary)'
-            }"
+            :class="hasCustomCanvasTheme ? '' : 'stage-default-theme'"
+            :style="stageFrameStyle"
           >
             <!-- 幕顶微型信息栏（深色玻璃底，保证任意画布主题下可读） -->
             <div class="absolute top-3 left-4 right-4 flex items-center justify-between pointer-events-none z-10">
@@ -176,20 +174,17 @@
                 <!-- 图形/卡片容器元素 -->
                 <template v-else-if="el.type === 'shape'">
                   <div
-                    class="w-full h-full rounded-xl p-4 sm:p-5 shadow-sm border transition-all duration-300 flex flex-col overflow-hidden backdrop-blur-sm"
+                    class="w-full h-full rounded-xl p-4 sm:p-5 shadow-sm border transition-all duration-300 flex flex-col overflow-hidden"
                     :class="[
                       isElementHighlighted(el.id)
-                        ? 'ring-2 ring-[var(--color-primary)] border-[var(--color-primary)] bg-[var(--color-primary-light)]/20 scale-[1.01] shadow-md'
-                        : 'border-[var(--border-default)]'
+                        ? 'ring-2 ring-[var(--color-primary)] scale-[1.01] shadow-md'
+                        : ''
                     ]"
-                    :style="{
-                      backgroundColor: el.fill || 'var(--bg-secondary)',
-                      borderColor: el.outline?.color || 'var(--border-default)'
-                    }"
+                    :style="getShapeStyle(el)"
                   >
                     <div
                       class="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed overflow-y-auto"
-                      :style="{ color: el.fill?.startsWith('#F') || el.fill?.startsWith('#E') || el.fill?.startsWith('#fff') ? '#1E293B' : 'inherit' }"
+                      :style="{ color: getShapeTextColor(el) }"
                     >
                       {{ el.text }}
                     </div>
@@ -611,6 +606,65 @@ function formatSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 const canvasTheme = computed(() => currentScene.value?.content?.canvas?.theme || {})
+
+/** 课件是否自带画布主题色；否则整幕跟随应用亮暗主题 */
+const hasCustomCanvasTheme = computed(() => {
+  const t = canvasTheme.value
+  return Boolean(t?.backgroundColor || t?.fontColor)
+})
+
+const stageFrameStyle = computed(() => {
+  if (hasCustomCanvasTheme.value) {
+    return {
+      backgroundColor: canvasTheme.value.backgroundColor || 'var(--surface-card)',
+      color: canvasTheme.value.fontColor || 'var(--text-primary)',
+    }
+  }
+  // 默认：完全走设计令牌，暗色/亮色自动切换
+  return {
+    backgroundColor: 'var(--surface-card)',
+    color: 'var(--text-primary)',
+  }
+})
+
+/** 近似相对亮度（#rgb / #rrggbb） */
+function hexLuminance(color: string): number | null {
+  const hex = color.trim().replace('#', '')
+  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(hex)) return null
+  const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex
+  const r = parseInt(full.slice(0, 2), 16) / 255
+  const g = parseInt(full.slice(2, 4), 16) / 255
+  const b = parseInt(full.slice(4, 6), 16) / 255
+  // sRGB 近似
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function getShapeStyle(el: any): Record<string, string> {
+  const fill = typeof el.fill === 'string' ? el.fill : ''
+  const outline = el.outline?.color
+  // 无自定义填充时用主题令牌，暗色自动适配
+  const background = fill || 'var(--bg-tertiary)'
+  const border = outline || 'var(--border-default)'
+  return {
+    backgroundColor: background,
+    borderColor: border,
+  }
+}
+
+function getShapeTextColor(el: any): string {
+  if (el.defaultColor) return el.defaultColor
+  const fill = typeof el.fill === 'string' ? el.fill : ''
+  // 课件给了浅色填充：用深色字（与画布主题无关，卡片自身底色决定对比）
+  const lum = fill ? hexLuminance(fill) : null
+  if (lum !== null && lum > 0.55) {
+    return '#111827'
+  }
+  if (lum !== null && lum < 0.2) {
+    return '#F8FAFC'
+  }
+  // 无填充 / 中间色：继承画布前景（令牌或课件 fontColor）
+  return 'inherit'
+}
 const canvasElements = computed(() => currentScene.value?.content?.canvas?.elements || [])
 const currentActions = computed(() => currentScene.value?.actions || [])
 const totalActionsInScene = computed(() => currentActions.value.length)
@@ -1015,6 +1069,15 @@ onUnmounted(() => {
 .stage-frame {
   /* width 100% + max-height 100% + aspect-ratio：高度不够时自动收窄宽度 */
   margin: 0 auto;
+}
+/* 无课件自定义主题时：画布与内嵌卡片完全跟随应用亮暗令牌 */
+.stage-default-theme {
+  background-color: var(--surface-card);
+  color: var(--text-primary);
+}
+html.dark .stage-default-theme {
+  /* 暗色下略抬一档，避免与页面画布纯黑糊在一起 */
+  box-shadow: inset 0 0 0 1px var(--border-default);
 }
 </style>
 

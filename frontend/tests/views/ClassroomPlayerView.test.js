@@ -433,6 +433,43 @@ describe('ClassroomPlayerView', () => {
     expect(pauseBtn).toBeDefined()
     expect(pauseBtn.attributes('data-type')).toBe('default')
   })
+
+  it('讲解幕无课件主题时跟随亮暗令牌，浅填充卡片用深色字', async () => {
+    const classroomStore = useClassroomStore()
+    const data = JSON.parse(JSON.stringify(mockClassroomData))
+    delete data.scenes[0].content.canvas.theme
+    data.scenes[0].content.canvas.elements.push({
+      id: 'el-light',
+      type: 'shape',
+      text: '浅色卡片正文',
+      fill: '#F1F5F9',
+      left: 60,
+      top: 280,
+      width: 400,
+      height: 80,
+    })
+    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(data)
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: {
+          'el-button': { template: '<button><slot /></button>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-drawer': { template: '<div><slot /></div>' }
+        }
+      }
+    })
+    await flushPromises()
+
+    const frame = wrapper.find('.stage-frame')
+    expect(frame.classes()).toContain('stage-default-theme')
+    expect(frame.attributes('style') || '').not.toContain('#0F172A')
+
+    const lightCard = wrapper.findAll('.stage-frame .rounded-xl').find(s => s.text().includes('浅色卡片正文'))
+    expect(lightCard).toBeDefined()
+    expect(lightCard.attributes('style')).toContain('rgb(241, 245, 249)')
+    expect(lightCard.find('div').attributes('style')).toContain('rgb(17, 24, 39)')
+  })
 })
 
 
