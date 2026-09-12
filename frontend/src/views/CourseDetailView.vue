@@ -59,23 +59,44 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <router-link v-if="parsedInfo.classroomUrl && parsedInfo.classroomUrl.startsWith('/')" :to="parsedInfo.classroomUrl">
+            <router-link v-if="hasPlayableClassroom && effectiveClassroomRoute" :to="effectiveClassroomRoute">
               <el-button type="success" size="small">
                 <el-icon class="mr-1"><VideoPlay /></el-icon>进入 AI 课堂
               </el-button>
             </router-link>
-            <a v-else-if="parsedInfo.classroomUrl" :href="parsedInfo.classroomUrl" target="_blank">
-              <el-button type="success" size="small">
-                <el-icon class="mr-1"><VideoPlay /></el-icon>进入 AI 课堂
-              </el-button>
-            </a>
+            <!-- 生成中：不重复发起 -->
             <el-button
+              v-if="parsedInfo.isPending"
               size="small"
-              type="default"
+              type="info"
+              plain
+              disabled
+            >
+              <el-icon class="mr-1 is-loading"><Loading /></el-icon>
+              课堂生成中…
+            </el-button>
+            <!-- 尚未有课堂：才显示主入口 -->
+            <el-button
+              v-else-if="!hasPlayableClassroom"
+              size="small"
+              type="primary"
               @click="showClassroomDialog = true"
               :disabled="courseDocuments.length === 0"
-            ><el-icon class="w-4 h-4"><VideoPlay /></el-icon>
+            >
+              <el-icon class="mr-1"><VideoPlay /></el-icon>
               生成课堂
+            </el-button>
+            <!-- 已有课堂：仅保留低调的重新生成 -->
+            <el-button
+              v-else
+              size="small"
+              type="default"
+              plain
+              @click="showClassroomDialog = true"
+              :disabled="courseDocuments.length === 0"
+            >
+              <el-icon class="mr-1"><Switch /></el-icon>
+              重新生成
             </el-button>
             <el-button v-if="activeTab === 'notes'" @click="showNewNote = true" type="default" class="flex items-center gap-2 text-sm">
               <el-icon class="w-4 h-4"><EditPen /></el-icon>
@@ -113,16 +134,11 @@
               </p>
             </div>
 
-            <router-link v-if="parsedInfo.classroomUrl && parsedInfo.classroomUrl.startsWith('/')" :to="parsedInfo.classroomUrl" class="flex-shrink-0">
+            <router-link v-if="hasPlayableClassroom && effectiveClassroomRoute" :to="effectiveClassroomRoute" class="flex-shrink-0">
               <el-button type="primary">
                 <el-icon class="mr-1.5"><VideoPlay /></el-icon>进入 AI 互动课堂
               </el-button>
             </router-link>
-            <a v-else-if="parsedInfo.classroomUrl" :href="parsedInfo.classroomUrl" target="_blank" class="flex-shrink-0">
-              <el-button type="primary">
-                <el-icon class="mr-1.5"><VideoPlay /></el-icon>进入 AI 互动课堂
-              </el-button>
-            </a>
           </div>
 
           <!-- 章节列表 -->
@@ -310,7 +326,19 @@ import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
 import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import { useReducedMotion } from '../composables/useReducedMotion'
-import { Reading, EditPen, Document, Delete, WarningFilled, DocumentAdd, ArrowLeft, VideoPlay, Tickets } from '@/components/icons'
+import {
+  Reading,
+  EditPen,
+  Document,
+  Delete,
+  WarningFilled,
+  DocumentAdd,
+  ArrowLeft,
+  VideoPlay,
+  Tickets,
+  Loading,
+  Switch,
+} from '@/components/icons'
 import gsap from 'gsap'
 
 import { parseCourseDescription } from '../utils/course'
@@ -361,6 +389,21 @@ let editDraftTimer: ReturnType<typeof setTimeout> | null = null
 const courseId = computed(() => route.params.id as string)
 const course = computed(() => courseStore.currentCourse)
 const parsedInfo = computed(() => parseCourseDescription(course.value?.description))
+const hasPlayableClassroom = computed(() => {
+  return (
+    !parsedInfo.value.isPending &&
+    (Boolean(parsedInfo.value.classroomId) || Boolean(parsedInfo.value.classroomUrl))
+  )
+})
+const effectiveClassroomRoute = computed(() => {
+  if (course.value?.id) {
+    return `/courses/${course.value.id}/classroom`
+  }
+  if (parsedInfo.value.classroomUrl && parsedInfo.value.classroomUrl.startsWith('/')) {
+    return parsedInfo.value.classroomUrl
+  }
+  return null
+})
 const loading = computed(() => courseStore.loading)
 const effectiveDocCount = computed(() => {
   if (courseDocuments.value.length > 0) return courseDocuments.value.length
