@@ -380,14 +380,26 @@ export const useChatStore = defineStore('chat', () => {
               // 用户只看到空白回答停止加载）
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
-                const m = messages.value[msgIdx] as { content: string; isStreaming?: boolean }
+                const m = messages.value[msgIdx] as {
+                  content: string
+                  isStreaming?: boolean
+                  error_code?: string
+                  error_recoverable?: boolean
+                }
                 m.isStreaming = false
-                // 已有部分内容时追加（保留已流式输出），否则直接展示错误
+                const errCode = typeof data.code === 'string' ? data.code : 'internal_error'
+                const recoverable = data.recoverable !== false
+                m.error_code = errCode
+                m.error_recoverable = recoverable
                 const errText = typeof data.message === 'string' ? data.message : ''
-                const fallback = '回答生成失败，请稍后重试'
+                const fallback = recoverable
+                  ? '回答生成失败，请稍后重试'
+                  : '回答生成失败，需要检查模型或网络配置后重试'
+                const body = errText || fallback
+                const hint = recoverable ? '（可重试）' : '（需检查配置）'
                 m.content = m.content
-                  ? m.content + '\n\n---\n\n' + (errText || fallback)
-                  : (errText || fallback)
+                  ? m.content + '\n\n---\n\n' + body + hint
+                  : body + hint
               }
             } else if (data.type === 'note_saved') {
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.agent.context import ContextCompactor
+from app.agent.context import ContextCompactor, estimate_tokens
 from app.agent.prompts import build_agent_system_prompt
 from app.agent.tools.base import Tool, ToolRegistry, ToolResult
 from app.agent.tools.definitions import (
@@ -27,6 +28,30 @@ from app.services.memory_service import memory_service
 logger = logging.getLogger(__name__)
 
 _ANSWER_TOKEN_CHUNK = 24
+_DEFAULT_TOKEN_BUDGET = 48000
+_DEFAULT_MAX_REPEATED_TOOL_CALLS = 3
+
+
+def _tool_call_key(name: str, args: dict[str, Any]) -> str:
+    """Stable hash for (tool_name, canonical args) used by the tool-call stall fuse."""
+    payload = json.dumps({"name": name, "args": args}, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _bind_trusted_tool_args(
+    args: dict[str, Any],
+    *,
+    user_id: str | None,
+    doc_ids: list[str] | None,
+) -> dict[str, Any]:
+    """Strip model-supplied identity/scope params and re-inject trusted runtime values."""
+    args.pop("user_id", None)
+    args.pop("doc_ids", None)
+    if doc_ids:
+        args["doc_ids"] = list(doc_ids)
+    if user_id:
+        args["user_id"] = user_id
+    return args
 
 
 def _sources_from_tool_result(data: Any) -> list[dict[str, Any]]:
@@ -125,10 +150,14 @@ class AgentEngine:
         max_iterations: int = 15,
         max_repeated_rounds: int = 2,
         max_concurrency: int = 4,
+        max_token_budget: int = _DEFAULT_TOKEN_BUDGET,
+        max_repeated_tool_calls: int = _DEFAULT_MAX_REPEATED_TOOL_CALLS,
     ) -> None:
         self.max_iterations = max_iterations
         self.max_repeated_rounds = max_repeated_rounds
         self.max_concurrency = max_concurrency
+        self.max_token_budget = max_token_budget
+        self.max_repeated_tool_calls = max_repeated_tool_calls
         self.compactor = ContextCompactor()
 
         # Build default tool registry
@@ -253,6 +282,10 @@ class AgentEngine:
         nudge_count = 0
         accumulated_answer = ""
         source_pool: list[dict[str, Any]] = []
+        token_usage = 0
+        last_tool_key = ""
+        repeated_tool_calls = 0
+        terminate_reason = "iterations_exhausted"
 
         # Main ReAct iteration loop
         for iteration in range(1, self.max_iterations + 1):
@@ -274,16 +307,36 @@ class AgentEngine:
                 )
             except Exception as e:
                 logger.error("[AgentEngine] LLM invocation error: %s", e)
+                err_text = str(e)
+                code = "llm_error"
+                lower = err_text.lower()
+                if "rate" in lower or "429" in err_text or "quota" in lower:
+                    code = "rate_limit"
+                elif "timeout" in lower or "timed out" in lower:
+                    code = "timeout"
                 yield {
                     "type": "thinking",
                     "step": "agent_error",
                     "detail": f"模型调用异常：{e}，正在尝试降级并基于已有事实生成回答...",
+                }
+                yield {
+                    "type": "error",
+                    "code": code,
+                    "message": f"模型调用失败：{err_text}",
+                    "recoverable": True,
                 }
                 break
 
             content = llm_res.get("content") or ""
             tool_calls = llm_res.get("tool_calls") or []
             finish_reason = llm_res.get("finish_reason") or "stop"
+
+            # Incremental token spend: this turn's output + later tool observations
+            turn_out = len(content or "")
+            for _tc in tool_calls or []:
+                fn_args = (_tc.get("function") or {}).get("arguments") or ""
+                turn_out += len(fn_args if isinstance(fn_args, str) else json.dumps(fn_args))
+            token_usage += int(turn_out * 0.8) + 8
 
             # 真实模型原生 CoT（若供应商在非流式 tool-use 响应中返回 reasoning_content）
             reasoning_text = (llm_res.get("reasoning") or "").strip()
@@ -343,6 +396,7 @@ class AgentEngine:
 
                 # Model decided to stop calling tools and provide final answer
                 accumulated_answer = content
+                terminate_reason = "model_converged"
                 break
 
             # ── Act: Execute tool calls ──
@@ -352,6 +406,7 @@ class AgentEngine:
                 "detail": f"第 {iteration} 轮：模型决定调用 {len(tool_calls)} 个工具获取客观证据...",
             }
 
+            tool_loop_break = False
             for tc in tool_calls:
                 fn = tc.get("function", {})
                 fn_name = fn.get("name", "")
@@ -359,15 +414,32 @@ class AgentEngine:
                 call_id = tc.get("id", "")
 
                 try:
-                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args or {})
                 except Exception:
                     args = {}
 
-                # Automatically bind implicit runtime parameters
-                if doc_ids and "doc_ids" not in args:
-                    args["doc_ids"] = doc_ids
-                if user_id and "user_id" not in args:
-                    args["user_id"] = user_id
+                # Force-bind trusted identity/scope; model cannot override user_id/doc_ids
+                args = _bind_trusted_tool_args(args, user_id=user_id, doc_ids=doc_ids)
+
+                # Tool-call stall fuse: same (name, args) repeatedly
+                tool_key = _tool_call_key(fn_name, args)
+                if tool_key == last_tool_key:
+                    repeated_tool_calls += 1
+                    if repeated_tool_calls >= self.max_repeated_tool_calls:
+                        yield {
+                            "type": "thinking",
+                            "step": "agent_stall",
+                            "detail": (
+                                f"检测到连续 {repeated_tool_calls} 次相同工具调用 `{fn_name}`"
+                                "（同参数），触发工具熔断并转入终答汇总。"
+                            ),
+                        }
+                        terminate_reason = "tool_stall"
+                        tool_loop_break = True
+                        break
+                else:
+                    repeated_tool_calls = 1
+                    last_tool_key = tool_key
 
                 yield {
                     "type": "thinking",
@@ -382,6 +454,7 @@ class AgentEngine:
                     tool_res = await tool_impl.execute(**args)
 
                 observation = tool_res.output
+                token_usage += int(len(observation or "") * 0.8)
                 if tool_res.success and fn_name in (
                     "knowledge_search",
                     "grep_chunks",
@@ -428,6 +501,29 @@ class AgentEngine:
                     "name": fn_name,
                     "content": observation,
                 })
+
+            if tool_loop_break:
+                break
+
+            # Dual-threshold fuse: stop runaway tool loops once incremental spend exceeds budget
+            if token_usage >= self.max_token_budget:
+                terminate_reason = "token_budget_exhausted"
+                yield {
+                    "type": "thinking",
+                    "step": "agent_budget",
+                    "detail": (
+                        f"累计新增 token 预算已达 {token_usage}/{self.max_token_budget}，"
+                        "提前终止工具循环并汇总已有证据生成终答。"
+                    ),
+                }
+                break
+
+        logger.info(
+            "[AgentEngine] loop finished reason=%s iterations_token_est=%s budget=%s",
+            terminate_reason,
+            token_usage,
+            self.max_token_budget,
+        )
 
         # ── Surface cumulative sources + emit answer as progressive tokens ──
         if accumulated_answer:

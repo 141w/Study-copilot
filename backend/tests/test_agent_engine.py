@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -370,3 +371,160 @@ async def test_emit_answer_as_tokens_chunking():
         chunks.append(ev["content"])
     assert len(chunks) == 3
     assert "".join(chunks) == text
+
+
+def test_tool_call_key_is_stable():
+    from app.agent.engine import _tool_call_key
+
+    a = _tool_call_key("search_memory", {"query": "偏好", "limit": 5})
+    b = _tool_call_key("search_memory", {"limit": 5, "query": "偏好"})
+    c = _tool_call_key("search_memory", {"query": "其他", "limit": 5})
+    assert a == b
+    assert a != c
+
+
+def test_bind_trusted_tool_args_overwrites_model_identity():
+    from app.agent.engine import _bind_trusted_tool_args
+
+    args = _bind_trusted_tool_args(
+        {"query": "x", "user_id": "attacker", "doc_ids": ["stolen"]},
+        user_id="owner-1",
+        doc_ids=["doc-own"],
+    )
+    assert args["user_id"] == "owner-1"
+    assert args["doc_ids"] == ["doc-own"]
+
+
+@pytest.mark.asyncio
+async def test_engine_overrides_model_supplied_user_id():
+    """Model-injected user_id must be discarded in favor of trusted runtime identity."""
+    engine = AgentEngine(max_iterations=2)
+
+    captured: dict = {}
+
+    async def fake_search_memory(self, **kwargs):
+        captured.update(kwargs)
+        return ToolResult(success=True, output="ok", data=[])
+
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
+         patch(
+             "app.agent.tools.definitions.SearchMemoryTool.execute",
+             fake_search_memory,
+         ):
+        mock_llm.side_effect = [
+            {
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {
+                            "name": "search_memory",
+                            "arguments": '{"query":"偏好","user_id":"victim-9"}',
+                        },
+                    }
+                ],
+                "finish_reason": "tool_calls",
+            },
+            {
+                "content": "已根据本人记忆作答。",
+                "tool_calls": [],
+                "finish_reason": "stop",
+            },
+        ]
+
+        events = []
+        async for ev in engine.execute_stream(query="我的偏好？", user_id="owner-1"):
+            events.append(ev)
+
+    assert captured.get("user_id") == "owner-1"
+    assert captured.get("query") == "偏好"
+
+
+@pytest.mark.asyncio
+async def test_engine_tool_call_stall_fuse():
+    """Repeated identical tool calls must trip the fuse and stop the loop."""
+    engine = AgentEngine(max_iterations=10, max_repeated_tool_calls=3)
+
+    exec_calls = {"n": 0}
+
+    async def fake_search(self, **kwargs):
+        exec_calls["n"] += 1
+        return ToolResult(success=True, output="same", data=[])
+
+    same_call = {
+        "id": "c1",
+        "type": "function",
+        "function": {"name": "search_memory", "arguments": '{"query":"loop"}'},
+    }
+
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
+         patch("app.core.llm.LLM.chat_stream") as mock_stream, \
+         patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search):
+        mock_llm.return_value = {
+            "content": "",
+            "tool_calls": [same_call],
+            "finish_reason": "tool_calls",
+        }
+
+        async def fake_stream(messages, **kwargs):
+            yield {"type": "token", "content": "熔断后汇总。"}
+
+        mock_stream.side_effect = lambda *a, **k: fake_stream(*a, **k)
+
+        events = []
+        async for ev in engine.execute_stream(query="loop", user_id="u1"):
+            events.append(ev)
+
+    stalls = [e for e in events if e.get("step") == "agent_stall"]
+    assert any("工具熔断" in (e.get("detail") or "") for e in stalls)
+    # Fused before running forever — at most a few executions
+    assert exec_calls["n"] <= 5
+    assert mock_llm.call_count <= 5
+
+
+@pytest.mark.asyncio
+async def test_engine_token_budget_stops_tool_loop():
+    engine = AgentEngine(max_iterations=20, max_token_budget=50)
+
+    async def fake_search(self, **kwargs):
+        # Large observation to burn budget quickly
+        return ToolResult(success=True, output="x" * 400, data=[])
+
+    def make_call(i: int):
+        return {
+            "id": f"c{i}",
+            "type": "function",
+            "function": {"name": "search_memory", "arguments": json.dumps({"query": f"q{i}"})},
+        }
+
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
+         patch("app.core.llm.LLM.chat_stream") as mock_stream, \
+         patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search):
+        mock_llm.side_effect = [
+            {
+                "content": "",
+                "tool_calls": [make_call(i)],
+                "finish_reason": "tool_calls",
+            }
+            for i in range(15)
+        ] + [
+            {
+                "content": "汇总。",
+                "tool_calls": [],
+                "finish_reason": "stop",
+            }
+        ]
+
+        async def fake_stream(messages, **kwargs):
+            yield {"type": "token", "content": "预算耗尽后的回答。"}
+
+        mock_stream.side_effect = lambda *a, **k: fake_stream(*a, **k)
+
+        events = []
+        async for ev in engine.execute_stream(query="budget", user_id="u1"):
+            events.append(ev)
+
+    budget_events = [e for e in events if e.get("step") == "agent_budget"]
+    assert budget_events, "expected agent_budget thinking event"
+    assert mock_llm.call_count < 15

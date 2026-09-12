@@ -320,6 +320,14 @@ async def ask_question_stream(
                 answer_parts.clear()
                 answer_parts.append(chunk["content"])
                 yield {"type": "answer_refined", "content": chunk["content"]}
+            elif chunk["type"] == "error":
+                # Forward structured errors from Agent/RAG (previously dropped)
+                yield {
+                    "type": "error",
+                    "code": chunk.get("code") or "internal_error",
+                    "message": chunk.get("message") or "回答生成失败",
+                    "recoverable": bool(chunk.get("recoverable", True)),
+                }
     except GeneratorExit:
         full_answer = "".join(answer_parts)
         if full_answer:

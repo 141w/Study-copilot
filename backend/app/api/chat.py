@@ -161,7 +161,7 @@ async def ask(
             except Exception as e:
                 # 上游异常（如模型不可达）转为可见事件并正常收尾，
                 # 避免客户端在已发出的 200 流上无限等待
-                yield f"data: {json.dumps({'type': 'error', 'message': f'服务暂时无法连接模型：{e}'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'code': 'internal_error', 'message': f'服务暂时无法连接模型：{e}', 'recoverable': True}, ensure_ascii=False)}\n\n"
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         return StreamingResponse(
@@ -736,7 +736,7 @@ async def discuss(
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             error_msg = f"讨论服务暂时不可用：{e}"
-            yield f"data: {json.dumps({'type': 'error', 'message': error_msg}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'code': 'internal_error', 'message': error_msg, 'recoverable': True}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         finally:
             await _save_discussion_record()
