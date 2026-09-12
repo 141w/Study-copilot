@@ -11,7 +11,7 @@
           <el-icon class="w-6 h-6"><Fold /></el-icon>
         </button>
         <router-link to="/" class="flex items-center gap-2">
-          <CopilotBotAvatar :size="48" :mood="headerBotMood" />
+          <CopilotBotAvatar :size="48" :mood="headerBotMood" class="header-bot-flip" />
           <span class="text-lg font-semibold text-[var(--text-primary)] hidden sm:inline">Study Copilot</span>
         </router-link>
       </div>
@@ -81,7 +81,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import gsap from 'gsap'
 import { useAuthStore } from '../../stores/auth'
 import { useSidebarStore } from '../../stores/sidebar'
 import { useThemeStore } from '../../stores/theme'
@@ -89,6 +90,8 @@ import { useRouter } from 'vue-router'
 import { User, Sunny, Moon, Setting, Fold } from '@/components/icons'
 import CopilotBotAvatar, { type BotMood } from '@/components/CopilotBotAvatar.vue'
 import { useUserPrefs } from '@/composables/useUserPrefs'
+import { useReducedMotion } from '@/composables/useReducedMotion'
+import { takeLoginHandoffRect } from '@/utils/loginHandoff'
 
 const authStore = useAuthStore()
 const sidebarStore = useSidebarStore()
@@ -115,7 +118,40 @@ onMounted(() => {
   window.addEventListener('pointerdown', onActivity, { passive: true })
   window.addEventListener('keydown', onActivity, { passive: true })
   onActivity()
+  playLoginHandoffFlip()
 })
+
+/** 登录成功交接：从登录页 bot 位置 FLIP 到顶栏 logo */
+function playLoginHandoffFlip(): void {
+  if (useReducedMotion().prefersReduced.value) {
+    takeLoginHandoffRect()
+    return
+  }
+  nextTick(() => {
+    const from = takeLoginHandoffRect()
+    if (!from) return
+    const el = document.querySelector('.header-bot-flip') as HTMLElement | null
+    if (!el) return
+    try {
+      const to = el.getBoundingClientRect()
+      if (!to.width) return
+      const dx = from.left + from.width / 2 - (to.left + to.width / 2)
+      const dy = from.top + from.height / 2 - (to.top + to.height / 2)
+      const scale = from.width / to.width
+      gsap.from(el, {
+        x: dx,
+        y: dy,
+        scale,
+        duration: 0.7,
+        ease: 'power3.inOut',
+        clearProps: 'x,y,scale',
+      })
+      headerBotMood.value = 'arrive'
+    } catch {
+      /* rect 失败则直接落位 */
+    }
+  })
+}
 
 onBeforeUnmount(() => {
   if (headerIdleTimer) clearTimeout(headerIdleTimer)
@@ -142,3 +178,11 @@ function handleCommand(command: string | number | object): void {
   }
 }
 </script>
+
+<style scoped>
+/* 登录成功 FLIP：SVG 缩放需绕中心 */
+.header-bot-flip :deep(svg) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+</style>

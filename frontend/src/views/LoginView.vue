@@ -21,17 +21,22 @@
     ></div>
 
     <!-- ── 中央悬浮卡片 ── -->
-    <div class="relative z-10 w-full max-w-md">
-      <!-- 品牌标识 -->
-      <div class="text-center mb-8">
-        <CopilotBotAvatar ref="botLogo" :size="80" mood="idle" class="mx-auto mb-5 block" />
+    <div ref="authCenter" class="relative z-10 w-full max-w-md">
+      <!-- 品牌标识（bot 独立一层，登录成功后飞向顶栏 logo） -->
+      <div ref="brandBlock" class="text-center mb-8">
+        <CopilotBotAvatar
+          ref="botLogo"
+          :size="80"
+          mood="idle"
+          class="auth-bot-flip mx-auto mb-5 block"
+        />
         <h1 class="auth-title text-2xl font-semibold tracking-tight">Study Copilot</h1>
         <p class="auth-subtitle mt-2 text-sm"><span class="slogan-a">让每一份学习资料</span><span class="slogan-b">都被充分理解</span></p>
       </div>
 
       <!-- 登录卡片 -->
       <form @submit.prevent="handleLogin">
-      <div class="card-shell rounded-2xl">
+      <div ref="cardShell" class="card-shell rounded-2xl">
         <el-card ref="loginCard" :body-style="{ padding: '32px' }" shadow="never">
           <div class="space-y-4">
             <div>
@@ -70,7 +75,7 @@
       </div>
       </form>
 
-      <p class="auth-footer text-center mt-6 text-sm">
+      <p ref="authFooter" class="auth-footer text-center mt-6 text-sm">
         还没有账户?
         <router-link to="/register" class="auth-link font-medium hover:underline">
           立即注册
@@ -89,6 +94,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useConfigStore } from '../stores/config'
 import type { AxiosError } from 'axios'
 import { useReducedMotion } from '../composables/useReducedMotion'
+import { setLoginHandoffRect } from '@/utils/loginHandoff'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -99,6 +105,9 @@ const { prefersReduced } = useReducedMotion()
 
 const loginCard = ref<HTMLElement | null>(null)
 const botLogo = ref<InstanceType<typeof CopilotBotAvatar> | null>(null)
+const brandBlock = ref<HTMLElement | null>(null)
+const cardShell = ref<HTMLElement | null>(null)
+const authFooter = ref<HTMLElement | null>(null)
 let ctx: gsap.Context | null = null
 
 const form = ref({
@@ -107,6 +116,7 @@ const form = ref({
 })
 const loading = ref(false)
 const error = ref('')
+const successAnimating = ref(false)
 
 // 背景粒子：10 个光点错峰上浮（纯 CSS 动画，reduced-motion 下停用）
 const particles = Array.from({ length: 10 }, (_, i) => ({
@@ -117,21 +127,89 @@ const particles = Array.from({ length: 10 }, (_, i) => ({
 }))
 
 async function handleLogin(): Promise<void> {
+  if (successAnimating.value) return
   loading.value = true
   error.value = ''
 
   try {
     await authStore.login(form.value.username, form.value.password)
     await configStore.syncToChatStore()
-    // 回跳到登录前想访问的页面；无记录则回首页（P0-3）
     const redirect = route.query.redirect
-    router.push(typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/')
+    const target = typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/'
+    await playLoginSuccessHandoff(target)
   } catch (e) {
     const axiosError = e as AxiosError<{ detail: string }>
     error.value = axiosError.response?.data?.detail || '登录失败，请检查用户名和密码'
-  } finally {
     loading.value = false
   }
+}
+
+/** 登录成功：卡片向四周扩散 → 捕获 bot 位置 → 路由进首页，由顶栏 FLIP 落位 logo */
+async function playLoginSuccessHandoff(target: string): Promise<void> {
+  successAnimating.value = true
+  loading.value = false
+
+  if (prefersReduced.value) {
+    await router.push(target)
+    successAnimating.value = false
+    return
+  }
+
+  // 标题 / 副标题 / 页脚淡出（bot 保留在画面中）
+  const chrome: HTMLElement[] = []
+  const titleEl = brandBlock.value?.querySelector('.auth-title') as HTMLElement | null
+  const subEl = brandBlock.value?.querySelector('.auth-subtitle') as HTMLElement | null
+  if (titleEl) chrome.push(titleEl)
+  if (subEl) chrome.push(subEl)
+  if (authFooter.value) chrome.push(authFooter.value)
+
+  const card = cardShell.value
+  const botEl = document.querySelector('.auth-bot-flip') as HTMLElement | null
+
+  // 卡片向四周放大并淡出
+  if (card) {
+    gsap.to(card, {
+      scale: 1.55,
+      opacity: 0,
+      duration: 0.55,
+      ease: 'power2.in',
+      transformOrigin: '50% 50%',
+    })
+  }
+  if (chrome.length) {
+    gsap.to(chrome, {
+      opacity: 0,
+      y: -18,
+      duration: 0.32,
+      ease: 'power2.in',
+      stagger: 0.03,
+    })
+  }
+  // 装饰层同步收束，避免黑底残影
+  gsap.to('.auth-page .bg-glow, .auth-page .bg-ring, .auth-page .bg-particle, .auth-page .bg-grid', {
+    opacity: 0,
+    duration: 0.45,
+    ease: 'power1.in',
+  })
+
+  // 扩散过程中 bot 轻微上浮 + 点头，提示「交接」
+  if (botEl) {
+    gsap.to(botEl, { y: -28, scale: 1.06, duration: 0.5, ease: 'power2.inOut' })
+    botLogo.value?.play?.('arrive')
+  }
+
+  await new Promise<void>((resolve) => {
+    gsap.delayedCall(0.48, resolve)
+  })
+
+  // 记录 bot 最终 rect（供顶栏 FLIP），再隐藏避免路由切换时闪一下
+  if (botEl) {
+    setLoginHandoffRect(botEl.getBoundingClientRect())
+    gsap.set(botEl, { opacity: 0 })
+  }
+
+  await router.push(target)
+  successAnimating.value = false
 }
 
 onMounted(() => {
@@ -294,6 +372,12 @@ html.dark .login-btn:hover {
 }
 .login-btn:active {
   transform: translateY(0);
+}
+
+/* 共享元素 FLIP：SVG transform 需中心化 */
+.auth-bot-flip {
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 /* ── 动画 Keyframes ── */
