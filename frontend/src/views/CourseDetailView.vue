@@ -298,10 +298,11 @@
       @confirm="doDeleteNote"
     />
 
-    <!-- AI 互动课堂生成 -->
+    <!-- AI 互动课堂生成（传 courseId 则原课覆盖重做） -->
     <GenerateClassroomDialog
       v-model="showClassroomDialog"
       :documents="courseDocuments"
+      :course-id="courseId"
       @generated="onClassroomGenerated"
     />
   </div>

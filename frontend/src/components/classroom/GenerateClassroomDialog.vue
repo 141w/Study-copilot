@@ -124,14 +124,17 @@ const props = withDefaults(defineProps<{
   modelValue: boolean
   /** 可选：预选文档列表 */
   documents: Document[]
+  /** 可选：已有课程 ID；提供则原课覆盖重做，不新建课程 */
+  courseId?: string | null
 }>(), {
   modelValue: false,
   documents: () => [],
+  courseId: null,
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'generated': [result: { jobId: string; courseId?: string }]
+  'generated': [result: { jobId: string; courseId?: string; taskId?: string }]
   close: []
 }>()
 
@@ -195,6 +198,7 @@ async function generate(): Promise<void> {
       enable_tts: enableTTS.value,
       enable_image_generation: enableImageGeneration.value,
       agent_mode: 'default',
+      ...(props.courseId ? { course_id: props.courseId } : {}),
     })
     generated.value = true
     ElMessage.success('课堂生成任务已创建！可前往课程空间查看。')
