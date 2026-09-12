@@ -467,8 +467,45 @@ describe('ClassroomPlayerView', () => {
 
     const lightCard = wrapper.findAll('.stage-frame .rounded-xl').find(s => s.text().includes('浅色卡片正文'))
     expect(lightCard).toBeDefined()
-    expect(lightCard.attributes('style')).toContain('rgb(241, 245, 249)')
-    expect(lightCard.find('div').attributes('style')).toContain('rgb(17, 24, 39)')
+    // 无自定义主题：浅 hex 填充映射为主题令牌，不再整卡发白
+    expect(lightCard.attributes('style')).toContain('var(--bg-tertiary)')
+    expect(lightCard.find('div').attributes('style')).toContain('inherit')
+  })
+
+  it('讲解幕有课件主题时保留浅填充与深色字', async () => {
+    const classroomStore = useClassroomStore()
+    const data = JSON.parse(JSON.stringify(mockClassroomData))
+    data.scenes[0].content.canvas.theme = { backgroundColor: '#FFFFFF', fontColor: '#111827' }
+    data.scenes[0].content.canvas.elements.push({
+      id: 'el-obj',
+      type: 'shape',
+      text: '🎯 【学习目标】: 掌握 Proxy',
+      fill: '#F1F5F9',
+      left: 60,
+      top: 280,
+      width: 800,
+      height: 60,
+    })
+    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(data)
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: {
+          'el-button': { template: '<button><slot /></button>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-drawer': { template: '<div><slot /></div>' }
+        }
+      }
+    })
+    await flushPromises()
+
+    const frame = wrapper.find('.stage-frame')
+    expect(frame.classes()).not.toContain('stage-default-theme')
+
+    const objCard = wrapper.findAll('.stage-frame .rounded-xl').find(s => s.text().includes('🎯'))
+    expect(objCard).toBeDefined()
+    expect(objCard.attributes('style')).toContain('rgb(241, 245, 249)')
+    expect(objCard.find('div').attributes('style')).toContain('rgb(17, 24, 39)')
   })
 })
 

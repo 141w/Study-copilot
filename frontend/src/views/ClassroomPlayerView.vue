@@ -153,7 +153,7 @@
                     class="font-semibold leading-tight tracking-wide"
                     :style="{
                       fontSize: `clamp(13px, ${(el.fontSize || 20) / 10}vw, ${el.fontSize || 24}px)`,
-                      color: el.defaultColor || 'inherit'
+                      color: getTextColorStyle(el)
                     }"
                   >
                     {{ el.content }}
@@ -639,12 +639,29 @@ function hexLuminance(color: string): number | null {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
+function getTextColorStyle(el: any): string {
+  // 无课件画布主题时忽略硬编码 defaultColor（生成器多为亮色深字 #1E293B，
+  // 暗色下会变成深字贴深底），交给画布/主题令牌
+  if (!hasCustomCanvasTheme.value) return 'inherit'
+  return el.defaultColor || 'inherit'
+}
+
 function getShapeStyle(el: any): Record<string, string> {
   const fill = typeof el.fill === 'string' ? el.fill : ''
   const outline = el.outline?.color
-  // 无自定义填充时用主题令牌，暗色自动适配
-  const background = fill || 'var(--bg-tertiary)'
-  const border = outline || 'var(--border-default)'
+  // 课件自带画布主题：保留作者配色（浅卡贴在深画布上是刻意设计）
+  // 无自定义主题：浅色 hex 填充改走主题令牌，避免暗色下整卡发白
+  let background: string
+  if (!fill) {
+    background = 'var(--bg-tertiary)'
+  } else if (!hasCustomCanvasTheme.value && hexLuminance(fill) !== null && hexLuminance(fill)! > 0.55) {
+    background = 'var(--bg-tertiary)'
+  } else {
+    background = fill
+  }
+  const border = outline && !( !hasCustomCanvasTheme.value && hexLuminance(outline) !== null && hexLuminance(outline)! > 0.7)
+    ? outline
+    : 'var(--border-default)'
   return {
     backgroundColor: background,
     borderColor: border,
@@ -654,7 +671,14 @@ function getShapeStyle(el: any): Record<string, string> {
 function getShapeTextColor(el: any): string {
   if (el.defaultColor) return el.defaultColor
   const fill = typeof el.fill === 'string' ? el.fill : ''
-  // 课件给了浅色填充：用深色字（与画布主题无关，卡片自身底色决定对比）
+  // 无自定义主题且浅填充已映射为令牌底：字色跟随画布/主题
+  if (!hasCustomCanvasTheme.value) {
+    const lum = fill ? hexLuminance(fill) : null
+    if (lum === null || lum > 0.55) {
+      return 'inherit'
+    }
+  }
+  // 课件自定义配色：按卡片底色亮度定字色
   const lum = fill ? hexLuminance(fill) : null
   if (lum !== null && lum > 0.55) {
     return '#111827'
@@ -662,7 +686,6 @@ function getShapeTextColor(el: any): string {
   if (lum !== null && lum < 0.2) {
     return '#F8FAFC'
   }
-  // 无填充 / 中间色：继承画布前景（令牌或课件 fontColor）
   return 'inherit'
 }
 const canvasElements = computed(() => currentScene.value?.content?.canvas?.elements || [])
