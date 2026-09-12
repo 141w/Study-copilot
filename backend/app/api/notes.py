@@ -61,6 +61,8 @@ class NoteResponse(BaseModel):
 class NoteBrief(BaseModel):
     id: str
     title: str
+    # 列表需要摘要与编辑回填；笔记体量小，直接带全文避免「只有标签」假空
+    content: str = ""
     course_space_id: str | None
     note_type: str
     is_pinned: bool
@@ -91,6 +93,7 @@ def _note_to_brief(note) -> NoteBrief:
     return NoteBrief(
         id=note.id,
         title=note.title,
+        content=note.content or "",
         course_space_id=note.course_space_id,
         note_type=note.note_type,
         is_pinned=note.is_pinned,

@@ -143,6 +143,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Plus, EditPen, Search } from '@/components/icons'
 import { useNoteStore } from '../stores/note'
 import type { NoteDetail } from '../stores/note'
@@ -169,6 +170,7 @@ interface NoteFormState {
 const noteStore = useNoteStore()
 const courseStore = useCourseStore()
 const toast = useToastStore()
+const route = useRoute()
 // P1-1：GSAP 动画降级（prefers-reduced-motion）
 const { prefersReduced } = useReducedMotion()
 
@@ -295,13 +297,23 @@ async function saveNewNote(): Promise<void> {
 }
 
 // Edit
-function openEditNote(note: NoteDetail): void {
+async function openEditNote(note: NoteDetail): Promise<void> {
   editingNoteId.value = note.id
+  // 列表接口可能只有摘要；编辑前拉详情，避免正文被当成空
+  let full = note
+  try {
+    full = await noteStore.fetchNote(note.id)
+  } catch (_e) {
+    // 详情失败时退回列表数据
+  }
+  const tags = (full.tags || note.tags || [])
+    .map(t => (typeof t === 'string' ? t : (t as { name?: string })?.name))
+    .filter(Boolean) as string[]
   editNote.value = {
-    title: note.title || '',
-    content: note.content || '',
-    tags: [...(note.tags || [])] as string[],
-    course_id: note.course_space_id || ''
+    title: full.title || note.title || '',
+    content: full.content || note.content || '',
+    tags: [...tags],
+    course_id: full.course_space_id || note.course_space_id || ''
   }
   // 恢复该笔记的编辑草稿（如有；P2-4 readNoteDraft 纯函数）
   const restored = readNoteDraft(`note_edit_draft_${note.id}`)
@@ -366,9 +378,18 @@ onMounted(async () => {
     courseStore.fetchCourses()
   ])
 
+  // 从「存为笔记」跳转：/notes?id=xxx 自动打开该笔记
+  const qid = route.query.id
+  if (typeof qid === 'string' && qid) {
+    const target = noteStore.notes.find(n => n.id === qid)
+    if (target) {
+      await openEditNote(target)
+    }
+  }
+
   // 恢复新建草稿（P2-4：useNoteDraft.restoreDraft）
   const draft = newDraft.restoreDraft()
-  if (draft) {
+  if (draft && !editingNoteId.value) {
     newNote.value = {
       title: draft.title,
       content: draft.content,
