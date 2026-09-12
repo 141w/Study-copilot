@@ -528,3 +528,92 @@ async def test_engine_token_budget_stops_tool_loop():
     budget_events = [e for e in events if e.get("step") == "agent_budget"]
     assert budget_events, "expected agent_budget thinking event"
     assert mock_llm.call_count < 15
+
+
+def test_trim_history_respects_token_and_message_budgets():
+    from app.agent.context import estimate_tokens, trim_history
+
+    history = [
+        {"role": "user", "content": "旧问题" + "长" * 400},
+        {"role": "assistant", "content": "旧回答" + "长" * 400},
+        {"role": "user", "content": "最近的问题"},
+        {"role": "assistant", "content": "最近的回答"},
+    ]
+    trimmed = trim_history(history, max_messages=10, max_tokens=80)
+    assert trimmed, "must keep at least the newest message"
+    assert trimmed[-1]["content"] == "最近的回答"
+    assert estimate_tokens(trimmed) <= 80 or len(trimmed) == 1
+    # Old oversized turns dropped first
+    assert all("旧" not in (m.get("content") or "") for m in trimmed[:-1] or trimmed)
+
+    by_count = trim_history(history, max_messages=2, max_tokens=10_000)
+    assert len(by_count) == 2
+    assert by_count[-1]["content"] == "最近的回答"
+
+    assert trim_history(None) == []
+    assert trim_history([]) == []
+
+
+@pytest.mark.asyncio
+async def test_engine_nudge_exhausted_emits_fallback_and_notice():
+    engine = AgentEngine(max_iterations=6)
+
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
+         patch("app.core.llm.LLM.chat_stream") as mock_stream:
+        mock_llm.return_value = {
+            "content": "",
+            "tool_calls": [],
+            "finish_reason": "stop",
+        }
+
+        async def fake_stream(messages, **kwargs):
+            yield {"type": "token", "content": "基于已有证据的兜底回答。"}
+
+        mock_stream.side_effect = lambda *a, **k: fake_stream(*a, **k)
+
+        events = []
+        async for ev in engine.execute_stream(query="空输出"):
+            events.append(ev)
+
+    steps = [e.get("step") for e in events if e.get("type") == "thinking"]
+    assert "agent_nudge_exhausted" in steps
+    assert "agent_synthesize" in steps
+    tokens = "".join(e.get("content") or "" for e in events if e.get("type") == "token")
+    assert "有限信息" in tokens
+    assert "兜底回答" in tokens
+
+
+@pytest.mark.asyncio
+async def test_engine_tool_stall_synthesis_gets_limited_info_notice():
+    engine = AgentEngine(max_iterations=10, max_repeated_tool_calls=3)
+
+    async def fake_search(self, **kwargs):
+        return ToolResult(success=True, output="same", data=[])
+
+    same_call = {
+        "id": "c1",
+        "type": "function",
+        "function": {"name": "search_memory", "arguments": '{"query":"loop"}'},
+    }
+
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
+         patch("app.core.llm.LLM.chat_stream") as mock_stream, \
+         patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search):
+        mock_llm.return_value = {
+            "content": "",
+            "tool_calls": [same_call],
+            "finish_reason": "tool_calls",
+        }
+
+        async def fake_stream(messages, **kwargs):
+            yield {"type": "token", "content": "熔断后的汇总。"}
+
+        mock_stream.side_effect = lambda *a, **k: fake_stream(*a, **k)
+
+        events = []
+        async for ev in engine.execute_stream(query="loop", user_id="u1"):
+            events.append(ev)
+
+    tokens = "".join(e.get("content") or "" for e in events if e.get("type") == "token")
+    assert "有限信息" in tokens
+    assert "熔断后的汇总" in tokens

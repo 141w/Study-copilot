@@ -72,11 +72,12 @@
 
 ## Batch 2 — 质量与体验（P1）
 
-### 5. Nudge 耗尽兜底【原 P1-7】
+### 5. Nudge 耗尽兜底【原 P1-7】✅ Batch2
 
 - Nudge 封顶 2 次后若仍空内容，强制基于已有 observation 生成「部分结论 + 明确未覆盖声明」。
 - UI 标注「该回答基于有限信息」。
 - **验收**：不收敛场景仍返回可读免责回答。
+- **落地**：`agent_nudge_exhausted` + synthesis 免责前缀；`tool_stall` / `token_budget` / `iterations` 同样标注。
 
 ### 6. Answer Reflector 去自证【原 P1-8】
 
@@ -84,10 +85,11 @@
 - 可选：裁判模型与生成模型分离配置。
 - **验收**：覆盖率指标上线；LLM 评估调用下降。
 
-### 7. 短期上下文 Token 预算【原 P1-9】
+### 7. 短期上下文 Token 预算【原 P1-9】✅ Batch2
 
 - 滑动窗口改为 `min(轮次上限, token 预算)`；超预算先裁更早轮次。
 - **验收**：单轮超长文本时 prompt 总量受控。
+- **落地**：`trim_history`（Agent 6 轮/1500 tok；RAG/管线 10 轮/2000 tok）。
 
 ### 8. ContextCompactor 结构化事实【原 P1-10】
 

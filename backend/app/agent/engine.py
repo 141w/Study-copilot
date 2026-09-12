@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.agent.context import ContextCompactor, estimate_tokens
+from app.agent.context import ContextCompactor, estimate_tokens, trim_history
 from app.agent.prompts import build_agent_system_prompt
 from app.agent.tools.base import Tool, ToolRegistry, ToolResult
 from app.agent.tools.definitions import (
@@ -30,6 +30,34 @@ logger = logging.getLogger(__name__)
 _ANSWER_TOKEN_CHUNK = 24
 _DEFAULT_TOKEN_BUDGET = 48000
 _DEFAULT_MAX_REPEATED_TOOL_CALLS = 3
+_HISTORY_MAX_MESSAGES = 6
+_HISTORY_MAX_TOKENS = 1500
+_LIMITED_INFO_REASON = frozenset(
+    {
+        "nudge_exhausted",
+        "tool_stall",
+        "token_budget_exhausted",
+        "iterations_exhausted",
+    }
+)
+_LIMITED_INFO_PREFIX = (
+    "> ⚠️ **该回答基于有限信息**：研究未能完整收敛或预算已耗尽，以下内容可能不完整。\n\n"
+)
+
+
+def _apply_limited_info_notice(answer: str, terminate_reason: str) -> str:
+    if terminate_reason not in _LIMITED_INFO_REASON:
+        return answer
+    text = (answer or "").strip()
+    if not text:
+        return (
+            _LIMITED_INFO_PREFIX
+            + "未能基于已收集证据生成完整结论。请补充文档范围、精简问题后重试，"
+            "或改用「快速问答」模式。"
+        )
+    if text.startswith(_LIMITED_INFO_PREFIX.strip()[:8]):
+        return text
+    return _LIMITED_INFO_PREFIX + text
 
 
 def _tool_call_key(name: str, args: dict[str, Any]) -> str:
@@ -259,7 +287,13 @@ class AgentEngine:
             {"role": "system", "content": system_prompt},
         ]
         if history:
-            messages.extend(history[-6:])
+            messages.extend(
+                trim_history(
+                    history,
+                    max_messages=_HISTORY_MAX_MESSAGES,
+                    max_tokens=_HISTORY_MAX_TOKENS,
+                )
+            )
         messages.append({"role": "user", "content": query})
 
         if documents:
@@ -382,13 +416,25 @@ class AgentEngine:
                 last_response_text = content
 
                 # Empty content nudge (WeKnora rule: nudge <= 2 times if stopped with empty content)
-                if not content.strip() and nudge_count < 2:
-                    nudge_count += 1
-                    messages.append({
-                        "role": "user",
-                        "content": "Please provide your complete answer now as plain text.",
-                    })
-                    continue
+                if not content.strip():
+                    if nudge_count < 2:
+                        nudge_count += 1
+                        messages.append({
+                            "role": "user",
+                            "content": "Please provide your complete answer now as plain text.",
+                        })
+                        continue
+                    # Nudge exhausted — do not pretend convergence; force synthesis + disclaimer
+                    yield {
+                        "type": "thinking",
+                        "step": "agent_nudge_exhausted",
+                        "detail": (
+                            "连续 Nudge 后模型仍输出空内容，转入基于已有证据的兜底终答，"
+                            "并在回答中标注信息可能不完整。"
+                        ),
+                    }
+                    terminate_reason = "nudge_exhausted"
+                    break
 
                 # Model decided to stop calling tools and provide final answer
                 accumulated_answer = content
@@ -542,8 +588,9 @@ class AgentEngine:
 
         # ── Surface cumulative sources + emit answer as progressive tokens ──
         if accumulated_answer:
+            final_text = _apply_limited_info_notice(accumulated_answer, terminate_reason)
             if source_pool:
-                used = extract_source_indices(accumulated_answer)
+                used = extract_source_indices(final_text)
                 filtered = (
                     [s for s in source_pool if s.get("index") in used]
                     if used
@@ -554,15 +601,21 @@ class AgentEngine:
                     "sources": list(source_pool),
                     "filtered_sources": filtered,
                 }
-            async for ev in _emit_answer_as_tokens(accumulated_answer):
+            async for ev in _emit_answer_as_tokens(final_text):
                 yield ev
             return
 
-        # Final synthesis fallback if loop ran out of iterations
+        # Final synthesis fallback if loop ran out of iterations / budget / nudge
+        synth_detail = {
+            "iterations_exhausted": "达到研究轮次上限，正在汇总所有已收集到的文献与证据进行终答生成...",
+            "token_budget_exhausted": "Token 预算耗尽，正在汇总已有证据进行终答生成...",
+            "nudge_exhausted": "模型多次空输出，正在基于已有工具结果进行兜底终答生成...",
+            "tool_stall": "工具调用触发熔断，正在汇总已有证据进行终答生成...",
+        }.get(terminate_reason, "正在汇总所有已收集到的文献与证据进行终答生成...")
         yield {
             "type": "thinking",
             "step": "agent_synthesize",
-            "detail": "达到研究轮次上限，正在汇总所有已收集到的文献与证据进行终答生成...",
+            "detail": synth_detail,
         }
         messages.append({
             "role": "user",
@@ -571,6 +624,8 @@ class AgentEngine:
                 "直接给出最终详细完整的回答。若引用文档事实，请使用与工具 observation 中一致的 [来源N] 编号。"
             ),
         })
+        if terminate_reason in _LIMITED_INFO_REASON:
+            yield {"type": "token", "content": _LIMITED_INFO_PREFIX}
         syn_answer_parts: list[str] = []
         async for chunk in self._stream_final_answer(llm, messages):
             if chunk.get("type") == "token":

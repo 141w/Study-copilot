@@ -29,6 +29,33 @@ def estimate_tokens(messages: list[dict[str, Any]]) -> int:
     return total
 
 
+def trim_history(
+    history: list[dict[str, Any]] | None,
+    *,
+    max_messages: int = 10,
+    max_tokens: int = 2000,
+) -> list[dict[str, Any]]:
+    """Keep the newest history under both message-count and token budgets.
+
+    Walks backwards from the end; drops older turns first. Always keeps the
+    most recent non-empty message when history is non-empty, even if that
+    single turn exceeds ``max_tokens`` (caller still gets the latest context).
+    """
+    if not history:
+        return []
+    window = history[-max_messages:] if max_messages > 0 else list(history)
+    selected: list[dict[str, Any]] = []
+    used = 0
+    for msg in reversed(window):
+        cost = estimate_tokens([msg])
+        if selected and used + cost > max_tokens:
+            break
+        selected.append(msg)
+        used += cost
+    selected.reverse()
+    return selected
+
+
 class ContextCompactor:
     """Monitors context window usage and performs selective compaction when exceeding thresholds."""
 

@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
+from app.agent.context import trim_history
 from app.config import settings
 from app.core.adaptive_retriever import adaptive_retriever
 from app.core.answer_reflector import answer_reflector
@@ -59,7 +60,7 @@ class RAGEngine:
         """Rewrite a follow-up query into a standalone question using conversation history."""
         try:
             history_parts = []
-            for msg in history[-10:]:
+            for msg in trim_history(history, max_messages=10, max_tokens=2000):
                 role_label = "User" if msg.get("role") == "user" else "AI"
                 history_parts.append(f"{role_label}: {msg.get('content', '')}")
             history_text = "\n".join(history_parts)
@@ -88,10 +89,10 @@ class RAGEngine:
         - > 10 条：早期历史 → LLM 摘要，最近 5 条完整保留
         """
         if not history or len(history) <= 10:
-            return history or []
+            return trim_history(history, max_messages=10, max_tokens=2000)
 
         early_history = history[:-5]
-        recent_history = history[-5:]
+        recent_history = trim_history(history[-5:], max_messages=5, max_tokens=1500)
 
         # 对早期历史生成摘要
         try:
@@ -115,7 +116,7 @@ class RAGEngine:
             ]
         except Exception as e:
             logger.warning("[RAG] History summarization failed: %s, using truncation", e)
-            return history[-10:]
+            return trim_history(history, max_messages=10, max_tokens=2000)
 
     # ── Agentic RAG methods ──────────────────────────────────────────
 
