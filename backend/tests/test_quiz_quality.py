@@ -186,3 +186,53 @@ async def test_generate_quizzes_recovery_pass_fills_gaps():
     assert MockLLM.return_value.generate.await_count == 2
     types = [q["question_type"] for q in out]
     assert "choice" in types and "short_answer" in types
+
+
+@pytest.mark.asyncio
+async def test_generate_quizzes_recovery_on_total_first_pass_failure():
+    """First pass yields nothing → still attempt one recovery LLM call."""
+    good = {"quizzes": [_choice_item()]}
+    with patch("app.core.quiz_generator.LLM") as MockLLM:
+        MockLLM.return_value.generate = AsyncMock(
+            side_effect=[
+                "完全不是 JSON",
+                json.dumps(good, ensure_ascii=False),
+            ]
+        )
+        gen = QuizGenerator()
+        gen.llm = MockLLM.return_value
+        out = await gen.generate_quizzes("ctx", choice_count=1, short_answer_count=0)
+    assert MockLLM.return_value.generate.await_count == 2
+    assert len(out) == 1
+    assert out[0]["question_type"] == "choice"
+
+
+def test_sample_chunk_indexes_covers_head_mid_tail():
+    from app.services.quiz_service import sample_chunk_indexes
+
+    idx = sample_chunk_indexes(20, sample_n=5)
+    assert idx[0] == 0
+    assert idx[-1] == 19
+    assert any(8 <= i <= 12 for i in idx)
+    assert sample_chunk_indexes(3) == [0, 1, 2]
+    assert sample_chunk_indexes(0) == []
+
+
+def test_assemble_quiz_context_budget_and_source_labels():
+    from app.services.quiz_service import assemble_quiz_context
+
+    parts = [f"【来源】doc{i}.pdf\n" + ("内容" * 50) for i in range(10)]
+    ctx = assemble_quiz_context(parts, budget=200)
+    assert len(ctx) <= 200
+    assert ctx.startswith("【来源】doc0.pdf")
+
+
+def test_service_labels_and_samples_together():
+    from app.services.quiz_service import assemble_quiz_context, sample_chunk_indexes
+
+    chunks = [f"段落{i}的核心知识点说明。" for i in range(12)]
+    labels = [f"【来源】讲义.pdf\n{chunks[i]}" for i in sample_chunk_indexes(len(chunks), 4)]
+    ctx = assemble_quiz_context(labels, budget=10_000)
+    assert "【来源】讲义.pdf" in ctx
+    assert "段落0" in ctx
+    assert "段落11" in ctx

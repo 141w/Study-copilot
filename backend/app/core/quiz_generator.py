@@ -233,10 +233,10 @@ class QuizGenerator:
             sum(1 for q in normalized if q["question_type"] == "short_answer"),
         )
 
-        # One recovery pass if critically under-delivered
+        # One recovery pass if under-delivered (including total first-pass failure)
         need_choice = choice_count - sum(1 for q in normalized if q["question_type"] == "choice")
         need_short = short_answer_count - sum(1 for q in normalized if q["question_type"] == "short_answer")
-        if (need_choice > 0 or need_short > 0) and normalized:
+        if need_choice > 0 or need_short > 0:
             try:
                 retry_prompt = build_mixed_prompt(ctx, max(need_choice, 0), max(need_short, 0))
                 retry_resp = await self.llm.generate(

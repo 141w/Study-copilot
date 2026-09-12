@@ -21,6 +21,33 @@ _QUIZ_CONTEXT_BUDGET = 4800
 _CHUNKS_PER_DOC = 8
 
 
+def sample_chunk_indexes(total: int, sample_n: int = _CHUNKS_PER_DOC) -> list[int]:
+    """Evenly spaced indexes including head and tail (avoids intro-only quizzes)."""
+    if total <= 0:
+        return []
+    n = min(sample_n, total)
+    if total <= n:
+        return list(range(total))
+    step = (total - 1) / (n - 1)
+    return sorted({int(round(i * step)) for i in range(n)})
+
+
+def assemble_quiz_context(labeled_parts: list[str], budget: int = _QUIZ_CONTEXT_BUDGET) -> str:
+    """Join labeled snippets under a character budget."""
+    ctx_parts: list[str] = []
+    used = 0
+    for part in labeled_parts:
+        if used >= budget:
+            break
+        room = budget - used
+        take = part if len(part) <= room else part[:room]
+        if not take.strip():
+            continue
+        ctx_parts.append(take)
+        used += len(take)
+    return "\n\n".join(ctx_parts)
+
+
 async def generate_quizzes(
     db: AsyncSession,
     user: User,
@@ -109,16 +136,7 @@ async def _do_generate_quiz(
             .order_by(DocumentChunk.chunk_index)
         )
         all_chunks = list(chunk_result.scalars().all())
-        sample_n = min(_CHUNKS_PER_DOC, len(all_chunks))
-        if sample_n <= 0:
-            continue
-        if len(all_chunks) <= sample_n:
-            indexes = list(range(len(all_chunks)))
-        else:
-            # Sample across head / middle / tail so quizzes are not limited to the intro
-            step = (len(all_chunks) - 1) / (sample_n - 1)
-            indexes = sorted({int(round(i * step)) for i in range(sample_n)})
-
+        indexes = sample_chunk_indexes(len(all_chunks))
         for i in indexes:
             if i < len(all_chunks) and all_chunks[i].content:
                 chunks_list.append(f"【来源】{doc.filename}\n{all_chunks[i].content}")
@@ -127,19 +145,8 @@ async def _do_generate_quiz(
     if not chunks_list:
         raise ValidationError("文档内容不足")
 
-    ctx_parts: list[str] = []
-    used = 0
-    for part in chunks_list:
-        if used >= _QUIZ_CONTEXT_BUDGET:
-            break
-        room = _QUIZ_CONTEXT_BUDGET - used
-        take = part if len(part) <= room else part[:room]
-        if not take.strip():
-            continue
-        ctx_parts.append(take)
-        used += len(take)
-    ctx = "\n\n".join(ctx_parts)
-    logger.debug(f"context length: {len(ctx)} parts: {len(ctx_parts)}")
+    ctx = assemble_quiz_context(chunks_list)
+    logger.debug(f"context length: {len(ctx)}")
 
     user_config = await get_llm_config_with_secret(db, user)
     llm_config = dict(user_config)
