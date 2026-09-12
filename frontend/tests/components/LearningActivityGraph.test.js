@@ -29,8 +29,9 @@ describe('LearningActivityGraph', () => {
     expect(wrapper.find('[data-test="learning-activity"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('0 contributions')
     // 每一格都是灰底 + 透明度 0 叠层
-    const cells = wrapper.findAll('.rounded-\\[3px\\].bg-\\[var\\(--text-primary\\)\\]\\/\\[0\\.08\\]')
+    const cells = wrapper.findAll('[data-test="activity-cell"]')
     expect(cells.length).toBeGreaterThanOrEqual(365)
+    expect(cells[0].classes()).toContain('activity-cell')
   })
 
   it('有贡献时叠层透明度非 0，标题含总数', async () => {

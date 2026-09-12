@@ -39,7 +39,8 @@
           <div
             v-for="day in week"
             :key="day.date"
-            class="shrink-0 rounded-[3px] bg-[var(--text-primary)]/[0.08] cursor-default"
+            class="activity-cell shrink-0 rounded-[3px] cursor-default"
+            data-test="activity-cell"
             :style="{ width: cellPx + 'px', height: cellPx + 'px' }"
             :title="describeDay(day)"
             @pointerenter="onHover(day, $event)"
@@ -232,3 +233,13 @@ async function load() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+/* 对齐 rare-ui / GitHub：空格恒为浅灰底，贡献用绿色叠层透明度 */
+.activity-cell {
+  background-color: rgba(27, 31, 35, 0.08);
+}
+html.dark .activity-cell {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+</style>
