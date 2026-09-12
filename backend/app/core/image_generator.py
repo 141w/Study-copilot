@@ -37,6 +37,19 @@ async def test_image_connectivity(config: dict[str, Any]) -> dict[str, Any]:
     model = (config.get("image_model") or DEFAULT_IMAGE_MODEL).strip()
     provider = config.get("image_provider", "siliconflow")
 
+    # SSRF: user-supplied base_url must not probe internal/metadata networks
+    from app.core.url_extractor import _validate_url
+    from app.exceptions import ValidationError as _ValErr
+
+    try:
+        _validate_url(base_url)
+    except _ValErr as e:
+        return {
+            "success": False,
+            "message": str(e),
+            "latency_ms": 0,
+        }
+
     if not api_key and provider != "comfyui-image":
         return {
             "success": False,

@@ -626,9 +626,14 @@ async function handleSend(content: string): Promise<void> {
   scrollLatestUserMessageIntoView()
 }
 
+/** 讨论模式 SSE AbortController — 与问答流 cancelStream 对齐，供「停止」按钮使用 */
+let discussAbortController: AbortController | null = null
+
 async function handleDiscuss(content: string): Promise<void> {
   // 使用原生 fetch 调用 /chat/discuss SSE 端点
+  discussAbortController?.abort()
   const controller = new AbortController()
+  discussAbortController = controller
   const token = localStorage.getItem('token')
   // 失败时等 isStreaming 落下后再播 alert：avatarMood 在 streaming 期间锁死 thinking
   let pendingAlert = false
@@ -696,13 +701,16 @@ async function handleDiscuss(content: string): Promise<void> {
 
     const msg = chatStore.messages.find((m: any) => m.id === discussionMsgId)
     const personaBlocks: Record<string, { avatar: string; color?: string; lines: string[] }> = {}
+    // 跨 chunk 缓冲，避免 TCP 分片切断 SSE 行导致 JSON 解析失败
+    let sseBuffer = ''
 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
 
-      const text = decoder.decode(value, { stream: true })
-      const lines = text.split('\n')
+      sseBuffer += decoder.decode(value, { stream: true })
+      const lines = sseBuffer.split('\n')
+      sseBuffer = lines.pop() ?? ''
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue
         const payload = line.slice(6)
@@ -882,11 +890,17 @@ async function handleDiscuss(content: string): Promise<void> {
   }
   finally {
     chatStore.isStreaming = false
+    if (discussAbortController === controller) {
+      discussAbortController = null
+    }
     if (pendingAlert) playScene('alert')
   }
 }
 
 function handleStop(): void {
+  // 中止进行中的研讨 SSE（若有）
+  discussAbortController?.abort()
+  discussAbortController = null
   chatStore.cancelStream()
   // P8：用户中止 → 眨眼示意
   playScene('cancelled')

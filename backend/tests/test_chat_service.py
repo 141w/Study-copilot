@@ -94,7 +94,9 @@ async def test_validate_document_ids_user_isolation(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_ask_question_non_streaming(db_session: AsyncSession):
+async def test_ask_question_non_streaming(db_session: AsyncSession, monkeypatch):
+    # These unit tests mock rag_engine directly — pin legacy path.
+    monkeypatch.setattr(chat_service.settings, "pipeline_v2_enabled", False, raising=False)
     u = _user()
     db_session.add(u)
     await db_session.commit()
@@ -136,7 +138,8 @@ async def test_ask_question_non_streaming(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_ask_question_stream_retains_sources(db_session: AsyncSession):
+async def test_ask_question_stream_retains_sources(db_session: AsyncSession, monkeypatch):
+    monkeypatch.setattr(chat_service.settings, "pipeline_v2_enabled", False, raising=False)
     u = _user()
     db_session.add(u)
     await db_session.commit()
@@ -214,7 +217,10 @@ async def test_session_crud(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_ask_question_merges_user_config_with_runtime_config(db_session: AsyncSession):
+async def test_ask_question_merges_user_config_with_runtime_config(
+    db_session: AsyncSession, monkeypatch
+):
+    monkeypatch.setattr(chat_service.settings, "pipeline_v2_enabled", False, raising=False)
     u = _user("merge_test")
     db_session.add(u)
     await db_session.commit()

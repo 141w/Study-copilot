@@ -322,11 +322,8 @@ async def classroom_webhook(
         user = user_res.scalar_one_or_none()
 
     if not user:
-        first_user_res = await db.execute(select(User).limit(1))
-        user = first_user_res.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(status_code=500, detail="无可用的用户上下文")
+        # Never attach webhook results to an arbitrary first user (multi-tenant IDOR).
+        raise HTTPException(status_code=404, detail="未找到该课堂对应的用户归属")
 
     result = await classroom_service.handle_webhook_callback(
         db, user, payload, matched_course=course_row

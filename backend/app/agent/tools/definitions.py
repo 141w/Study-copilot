@@ -132,16 +132,35 @@ class GrepChunksTool(Tool):
         keyword = kwargs.get("keyword", "").strip()
         doc_ids = kwargs.get("doc_ids") or []
         limit = kwargs.get("limit", 5)
+        user_id = kwargs.get("user_id")
 
         if not keyword:
             return ToolResult(success=False, output="关键词不能为空", error="empty_keyword")
+        if not user_id:
+            return ToolResult(
+                success=False, output="当前未绑定用户身份，无法检索文档。", error="missing_user_id"
+            )
+        if not doc_ids:
+            # Prevent full-table ilike across all tenants when scope is empty.
+            return ToolResult(
+                success=True,
+                output="未指定文档范围，请先选择参考文档后再精确检索。",
+                data=[],
+            )
 
         try:
             async with AsyncSessionLocal() as db:
-                stmt = select(DocumentChunk).where(DocumentChunk.content.ilike(f"%{keyword}%"))
-                if doc_ids:
-                    stmt = stmt.where(DocumentChunk.document_id.in_(doc_ids))
-                stmt = stmt.limit(limit)
+                # Tenant scope: only chunks whose parent document belongs to user_id.
+                stmt = (
+                    select(DocumentChunk)
+                    .join(Document, DocumentChunk.document_id == Document.id)
+                    .where(
+                        Document.user_id == user_id,
+                        DocumentChunk.document_id.in_(doc_ids),
+                        DocumentChunk.content.ilike(f"%{keyword}%"),
+                    )
+                    .limit(limit)
+                )
 
                 res = await db.execute(stmt)
                 chunks = res.scalars().all()
@@ -201,15 +220,24 @@ class ListDocumentChunksTool(Tool):
         doc_id = kwargs.get("document_id")
         offset = kwargs.get("offset", 0)
         limit = min(kwargs.get("limit", 3), 10)
+        user_id = kwargs.get("user_id")
 
         if not doc_id:
             return ToolResult(success=False, output="文档 ID 必须提供", error="missing_doc_id")
+        if not user_id:
+            return ToolResult(
+                success=False, output="当前未绑定用户身份，无法读取文档。", error="missing_user_id"
+            )
 
         try:
             async with AsyncSessionLocal() as db:
                 stmt = (
                     select(DocumentChunk)
-                    .where(DocumentChunk.document_id == doc_id)
+                    .join(Document, DocumentChunk.document_id == Document.id)
+                    .where(
+                        Document.user_id == user_id,
+                        DocumentChunk.document_id == doc_id,
+                    )
                     .order_by(DocumentChunk.chunk_index.asc())
                     .offset(offset)
                     .limit(limit)
@@ -266,12 +294,17 @@ class GetDocumentInfoTool(Tool):
 
     async def execute(self, **kwargs: Any) -> ToolResult:
         doc_id = kwargs.get("document_id")
+        user_id = kwargs.get("user_id")
         if not doc_id:
             return ToolResult(success=False, output="文档 ID 必须提供", error="missing_doc_id")
+        if not user_id:
+            return ToolResult(
+                success=False, output="当前未绑定用户身份，无法读取文档。", error="missing_user_id"
+            )
 
         try:
             async with AsyncSessionLocal() as db:
-                stmt = select(Document).where(Document.id == doc_id)
+                stmt = select(Document).where(Document.id == doc_id, Document.user_id == user_id)
                 res = await db.execute(stmt)
                 doc = res.scalar_one_or_none()
 

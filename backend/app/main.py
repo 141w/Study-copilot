@@ -159,7 +159,8 @@ async def health_check():
         checks["database"] = "ok"
     except Exception as e:  # noqa: BLE001 - health must never raise
         logger.warning("Health check DB failure: %s", e)
-        checks["database"] = f"error: {e}"
+        # Do not leak driver/connection details on unauthenticated /health
+        checks["database"] = "error: unavailable"
 
     return {
         "status": "healthy" if checks.get("database") == "ok" else "degraded",

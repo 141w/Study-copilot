@@ -60,7 +60,7 @@ jobs:
       - name: Ruff lint check
         working-directory: backend
         run: |
-          uv run ruff check app/ --output-format=github || true
+          uv run ruff check app/ --output-format=github
 
       - name: Type check with mypy
         working-directory: backend

@@ -1,14 +1,23 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import IPRateLimiter
 from app.db import User, get_db
 from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
+
+# Stricter than chat/upload: brute-force protection on credential endpoints.
+_auth_limiter = IPRateLimiter(requests_per_minute=20)
+
+
+def _enforce_auth_rate_limit(request: Request) -> None:
+    if not _auth_limiter.check(request):
+        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
@@ -70,7 +79,10 @@ async def get_optional_user(
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(
+    request: Request, user_data: UserCreate, db: AsyncSession = Depends(get_db)
+):
+    _enforce_auth_rate_limit(request)
     new_user = await auth_service.register_user(
         db, user_data.username, user_data.email, user_data.password
     )
@@ -84,14 +96,20 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
 ):
+    _enforce_auth_rate_limit(request)
     tokens = await auth_service.authenticate_user(db, form_data.username, form_data.password)
     return Token(**tokens)
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+async def refresh_token(
+    request: Request, token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)
+):
+    _enforce_auth_rate_limit(request)
     tokens = await auth_service.refresh_user_token(db, token)
     return Token(**tokens)
 

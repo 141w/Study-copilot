@@ -433,6 +433,16 @@ async def test_llm_connection(
         req.model_name.strip() if req.model_name else (settings.openai_model or "gpt-4o-mini")
     )
 
+    # SSRF: user-supplied base_url must not probe internal/metadata networks
+    if base_url:
+        from app.core.url_extractor import _validate_url
+        from app.exceptions import ValidationError as _ValErr
+
+        try:
+            _validate_url(base_url)
+        except _ValErr as e:
+            return LLMTestResp(success=False, message=str(e))
+
     llm_inst = LLM(
         api_key=effective_key,
         base_url=base_url,

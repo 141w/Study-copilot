@@ -117,10 +117,22 @@ def test_verify_signature_valid_hmac():
 # ── webhook 端点：classroom_id 空值与匹配 ────────────────────────────────────
 
 
-async def test_webhook_rejects_missing_classroom_id(client):
+async def test_webhook_rejects_missing_classroom_id(client, monkeypatch):
+    """Signature ok but empty classroom_id → 422 (payload validation after auth)."""
+    from app.services import classroom_service as svc
+
+    secret = "whsec-empty-id"
+    monkeypatch.setattr(svc.settings, "classroom_webhook_secret", secret, raising=False)
+    monkeypatch.setattr(svc.settings, "debug", False, raising=False)
+
+    body = json.dumps(
+        {"event": "classroom_completed", "classroom_id": "", "title": "x"}
+    ).encode()
+    sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     resp = await client.post(
         "/api/classroom/webhook",
-        json={"event": "classroom_completed", "classroom_id": "", "title": "x"},
+        content=body,
+        headers={"Content-Type": "application/json", "X-Classroom-Signature": sig},
     )
     assert resp.status_code == 422
 
@@ -187,9 +199,10 @@ async def test_webhook_signed_callback_updates_placeholder(
     assert data["result"]["quizzes_synced"] == 1
 
 
-async def test_webhook_fallback_creates_course_without_placeholder(
+async def test_webhook_orphan_classroom_id_rejected(
     db_session, local_user, client, monkeypatch
 ):
+    """Unowned classroom_id must NOT be attached to the first user (multi-tenant IDOR)."""
     from app.services import classroom_service as svc
 
     secret = "whsec2"
@@ -211,8 +224,7 @@ async def test_webhook_fallback_creates_course_without_placeholder(
         content=body,
         headers={"Content-Type": "application/json", "X-Classroom-Signature": sig},
     )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "ok"
+    assert resp.status_code == 404
 
 
 # ── GET /api/classroom/{job_id}/status 轮询与自愈测试 ──────────────────────────

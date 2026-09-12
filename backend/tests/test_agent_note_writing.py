@@ -82,7 +82,11 @@ async def test_query_router_note_taking_keywords():
 
 
 @pytest.mark.asyncio
-async def test_ask_question_stream_auto_saves_note(db_session: AsyncSession):
+async def test_ask_question_stream_auto_saves_note(db_session: AsyncSession, monkeypatch):
+    from app.services import chat_service as _cs
+
+    # Unit test mocks rag_engine.ask_stream — pin legacy path
+    monkeypatch.setattr(_cs.settings, "pipeline_v2_enabled", False, raising=False)
     user = _create_user()
     db_session.add(user)
     await db_session.commit()
