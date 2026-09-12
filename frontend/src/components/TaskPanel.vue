@@ -213,6 +213,17 @@
             >
               前往测验
             </el-button>
+
+            <!-- 课堂生成完成 → 打开课堂 -->
+            <el-button
+              v-if="task.status === 'completed' && task.task_type === 'classroom_generate' && getTaskInfo(task).targetDocId"
+              size="small"
+              type="primary"
+              plain
+              @click="goToClassroom(getTaskInfo(task).targetDocId!)"
+            >
+              打开课堂
+            </el-button>
           </div>
         </div>
 
@@ -373,6 +384,13 @@ function runningPhaseText(task: Task): string {
     if (p < 50) return '正在提取文档考点并组织题干...'
     return '正在调用大模型生成单选与简答题目及答案解析...'
   }
+  if (task.task_type === 'classroom_generate') {
+    if (p < 15) return '课堂引擎初始化，准备教学大纲...'
+    if (p < 40) return '正在生成分幕大纲与角色剧本...'
+    if (p < 85) return `正在生成互动幻灯片场景 (${p}%)...`
+    if (p < 100) return '正在生成随堂测验与媒体资源...'
+    return '课堂生成收尾中...'
+  }
   return `任务进行中 (${p}%)`
 }
 
@@ -442,6 +460,28 @@ function getTaskInfo(task: Task): TaskDisplayInfo {
     }
   }
 
+  if (task.task_type === 'classroom_generate') {
+    const courseId = (res.course_id as string) || ''
+    const title = (res.title as string) || 'AI 互动课堂'
+    let subtitle = ''
+    if (task.status === 'completed') {
+      subtitle = '互动课堂已生成完成，可打开播放'
+    } else if (task.status === 'running') {
+      subtitle = (res.message as string) || '课堂引擎正在生成多幕互动微课...'
+    } else if (task.status === 'failed') {
+      subtitle = task.error || '课堂生成失败'
+    } else {
+      subtitle = '等待课堂引擎调度'
+    }
+    return {
+      title: `《${title}》· AI 互动课堂`,
+      subtitle,
+      taskBadge: '课堂生成',
+      targetDocId: courseId || undefined,
+      durationText: duration,
+    }
+  }
+
   if (task.task_type === 'quiz_generate') {
     const docNames = Array.isArray(res.document_names) && res.document_names.length > 0
       ? res.document_names.map((n: string) => `《${n}》`).join('、')
@@ -476,6 +516,12 @@ function getTaskInfo(task: Task): TaskDisplayInfo {
 }
 
 function goToDocument(docId: string): void {
+  router.push(`/documents?doc=${docId}`)
+}
+
+function goToClassroom(courseId: string): void {
+  router.push(`/courses/${courseId}/classroom`)
+}
   router.push({ path: '/document', query: { docId } })
 }
 
