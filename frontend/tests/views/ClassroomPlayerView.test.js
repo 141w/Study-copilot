@@ -192,7 +192,7 @@ describe('ClassroomPlayerView', () => {
     expect(wrapper.text()).toContain('网络连接超时')
   })
 
-  it('支持播放倍速循环切换与语音静音切换', async () => {
+  it('支持播放倍速循环切换与语音静音切换（设置下拉）', async () => {
     const classroomStore = useClassroomStore()
     vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
 
@@ -201,29 +201,71 @@ describe('ClassroomPlayerView', () => {
         stubs: {
           'el-button': { template: '<button><slot /></button>' },
           'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
+          'el-drawer': { template: '<div><slot /></div>' },
+          'el-dropdown': {
+            template: `<div class="el-dropdown-stub">
+              <slot />
+              <div class="dropdown-menu-stub"><slot name="dropdown" /></div>
+            </div>`,
+            emits: ['command'],
+            provide() {
+              return {
+                dropdownEmit: (cmd) => this.$emit('command', cmd),
+              }
+            },
+          },
+          'el-dropdown-menu': { template: '<div><slot /></div>' },
+          'el-dropdown-item': {
+            props: { command: { type: [String, Number, Object], default: '' } },
+            inject: ['dropdownEmit'],
+            template: `<button type="button" class="el-dropdown-item" @click="dropdownEmit(command)"><slot /></button>`,
+          },
         }
       }
     })
 
     await flushPromises()
 
-    // 默认倍速为 1x
-    expect(wrapper.text()).toContain('1x')
+    // 设置下拉中展示当前倍速与语音状态（1 在模板中渲染为 1x）
+    const items = wrapper.findAll('.el-dropdown-item')
+    expect(items.length).toBeGreaterThanOrEqual(3)
+    expect(items[0].text()).toMatch(/倍速 · 1(\.0)?x/)
+    expect(items[1].text()).toContain('已开启')
 
-    // 找到倍速按钮并点击切换
-    const buttons = wrapper.findAll('button')
-    const rateBtn = buttons.find(b => b.attributes('title') === '点击切换播放倍速')
-    expect(rateBtn).toBeDefined()
-    await rateBtn.trigger('click')
-    expect(wrapper.text()).toContain('1.25x')
+    await items[0].trigger('click')
+    expect(wrapper.findAll('.el-dropdown-item')[0].text()).toContain('1.25x')
 
-    // 语音开关
-    const audioBtn = buttons.find(b => b.attributes('title')?.includes('语音朗读'))
-    expect(audioBtn).toBeDefined()
-    expect(wrapper.text()).toContain('语音开启')
-    await audioBtn.trigger('click')
-    expect(wrapper.text()).toContain('已静音')
+    await wrapper.findAll('.el-dropdown-item')[1].trigger('click')
+    expect(wrapper.findAll('.el-dropdown-item')[1].text()).toContain('已静音')
+  })
+
+  it('画布使用 flex 槽位约束（无 100vh 魔法数）', async () => {
+    const classroomStore = useClassroomStore()
+    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: {
+          'el-button': { template: '<button><slot /></button>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-drawer': { template: '<div><slot /></div>' },
+        }
+      }
+    })
+    await flushPromises()
+
+    const slot = wrapper.find('.stage-slot')
+    expect(slot.exists()).toBe(true)
+    expect(slot.classes()).toContain('flex-1')
+    expect(slot.classes()).toContain('min-h-0')
+
+    const frame = wrapper.find('.stage-frame')
+    expect(frame.exists()).toBe(true)
+    expect(frame.classes()).toContain('aspect-video')
+    expect(frame.classes()).toContain('max-h-full')
+    expect(frame.classes()).toContain('w-full')
+    // 不再依赖 calc(100vh - 240px)
+    expect(frame.attributes('style') || '').not.toContain('100vh')
   })
 
   it('验证舞台与台词控制台解耦布局及主题变量应用', async () => {
@@ -258,7 +300,33 @@ describe('ClassroomPlayerView', () => {
     expect(wrapper.text()).toContain('欢迎来到本节微课，今天我们学习响应式原理。')
   })
 
-  it('支持章节目录抽屉切换展开与折叠', async () => {
+  it('台词默认两行可点击展开/收起', async () => {
+    const classroomStore = useClassroomStore()
+    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: {
+          'el-button': { template: '<button><slot /></button>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-drawer': { template: '<div><slot /></div>' }
+        }
+      }
+    })
+    await flushPromises()
+
+    const dialogue = wrapper.find('p.line-clamp-2')
+    expect(dialogue.exists()).toBe(true)
+    expect(dialogue.text()).toContain('欢迎来到本节微课')
+
+    await dialogue.trigger('click')
+    expect(wrapper.find('p.line-clamp-2').exists()).toBe(false)
+
+    await wrapper.findAll('p').find(p => p.text().includes('欢迎来到本节微课'))?.trigger('click')
+    expect(wrapper.find('p.line-clamp-2').exists()).toBe(true)
+  })
+
+  it('支持章节目录：桌面默认展开，可切换折叠', async () => {
     const classroomStore = useClassroomStore()
     vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
 
@@ -276,16 +344,17 @@ describe('ClassroomPlayerView', () => {
 
     const aside = wrapper.find('aside')
     expect(aside.exists()).toBe(true)
-    // 默认折叠以保持视口开阔无拥挤
-    expect(aside.attributes('style')).toContain('display: none')
+    // 桌面端（jsdom 默认 1024px）默认打开
+    expect(aside.attributes('style') || '').not.toContain('display: none')
 
-    // 触发目录按钮展开
     const dirBtn = wrapper.findAll('button').find(b => b.attributes('title') === '章节目录')
     expect(dirBtn).toBeDefined()
     await dirBtn.trigger('click')
     await flushPromises()
+    expect(aside.attributes('style')).toContain('display: none')
 
-    // 验证展开
+    await dirBtn.trigger('click')
+    await flushPromises()
     expect(aside.attributes('style') || '').not.toContain('display: none')
   })
 
@@ -307,8 +376,6 @@ describe('ClassroomPlayerView', () => {
 
     const dirBtn = wrapper.findAll('button').find(b => b.attributes('title') === '章节目录')
     expect(dirBtn).toBeDefined()
-    await dirBtn.trigger('click')
-    await flushPromises()
 
     const aside = wrapper.find('aside')
     expect(aside.exists()).toBe(true)
@@ -322,27 +389,49 @@ describe('ClassroomPlayerView', () => {
     expect(main.classes()).toContain('min-w-0')
     expect(main.classes()).toContain('flex-1')
 
-    // 验证画布最大宽度具有 min(100%, ...) 防溢出约束
-    const stageCanvas = wrapper.find('.aspect-video')
-    expect(stageCanvas.attributes('style')).toContain('min(100%')
+    // 验证画布槽位使用 flex 约束
+    expect(wrapper.find('.stage-slot').classes()).toContain('min-h-0')
 
-    // 验证移动端遮罩存在，且点击后收起侧边栏
+    // 确保目录打开后可点遮罩收起（移动端路径）
+    if ((aside.attributes('style') || '').includes('display: none')) {
+      await dirBtn.trigger('click')
+      await flushPromises()
+    }
     const backdrop = wrapper.find('.lg\\:hidden.fixed.inset-0')
     expect(backdrop.exists()).toBe(true)
     await backdrop.trigger('click')
     await flushPromises()
     expect(aside.attributes('style')).toContain('display: none')
+  })
 
-    // 再次展开并点击侧边栏内部的关闭按钮
-    await dirBtn.trigger('click')
-    await flushPromises()
-    expect(aside.attributes('style') || '').not.toContain('display: none')
+  it('播放控制使用 el-button 主/次按钮态', async () => {
+    const classroomStore = useClassroomStore()
+    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
 
-    const closeBtn = aside.findAll('button').find(b => b.attributes('title') === '关闭目录')
-    expect(closeBtn).toBeDefined()
-    await closeBtn.trigger('click')
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: {
+          'el-button': {
+            template: '<button :data-type="type"><slot /></button>',
+            props: ['type', 'size', 'disabled', 'title', 'circle', 'text', 'plain'],
+          },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-drawer': { template: '<div><slot /></div>' }
+        }
+      }
+    })
     await flushPromises()
-    expect(aside.attributes('style')).toContain('display: none')
+
+    // 初始「播放」为 primary（el-button :type 映射到 data-type 避免与原生 type 冲突）
+    const playBtn = wrapper.findAll('button').find(b => b.text().trim() === '播放')
+    expect(playBtn).toBeDefined()
+    expect(playBtn.attributes('data-type')).toBe('primary')
+
+    await playBtn.trigger('click')
+    await flushPromises()
+    const pauseBtn = wrapper.findAll('button').find(b => b.text().trim() === '暂停')
+    expect(pauseBtn).toBeDefined()
+    expect(pauseBtn.attributes('data-type')).toBe('default')
   })
 })
 
