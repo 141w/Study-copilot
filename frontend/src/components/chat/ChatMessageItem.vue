@@ -271,7 +271,11 @@
               </div>
             </button>
             <div v-if="isSourcesOpen" data-test="sources-body">
-              <ChatSourceCards ref="sourceCardsRef" :sources="displaySources" />
+              <ChatSourceCards
+                ref="sourceCardsRef"
+                :sources="displaySources"
+                @open-source="openSourceDocument"
+              />
             </div>
           </template>
         </div>
@@ -409,6 +413,20 @@ watch(
 )
 
 const sourceCardsRef = ref<InstanceType<typeof ChatSourceCards> | null>(null)
+
+/** 打开文档阅读器并定位到来源页/关键词（T17） */
+function openSourceDocument(source: Source): void {
+  const docId = source.document_id || ''
+  const page = source.page ? String(source.page) : undefined
+  const q = (source.text || '').slice(0, 40).trim() || undefined
+  const query: Record<string, string> = {}
+  if (docId) query.document_id = docId
+  if (page) query.page = page
+  if (q) query.q = q
+  // 来源文件名也可作为兜底定位键
+  if (!docId && source.source) query.filename = source.source
+  router.push({ name: 'documents', query })
+}
 
 function handleContentClick(e: MouseEvent): void {
   const target = (e.target as HTMLElement).closest('.source-badge')

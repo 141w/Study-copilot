@@ -198,7 +198,18 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 </tr>
 </table>
 
-> 问答流式、深度研究折叠面板、多角色研讨等界面需启动后端并登录后体验；后续可在 `docs/assets/` 补充更多真机截图。
+> 问答流式、深度研究折叠面板、多角色研讨等界面需启动后端并登录后体验；截图在 `docs/assets/`。
+
+## 评测
+
+```bash
+cd backend
+python -m evals.run_eval                 # 校验 dataset.jsonl 结构
+python -m evals.run_eval --lexical       # 无 LLM 的关键词基线
+python -m evals.run_eval --live --token $JWT --doc-id <id>  # 调用真实 /api/chat/ask
+```
+
+数据集：`backend/evals/dataset.jsonl`。
 
 ---
 

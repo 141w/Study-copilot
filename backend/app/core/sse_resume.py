@@ -1,13 +1,18 @@
-"""In-memory SSE event buffer for stream resume (Last-Event-ID).
+"""SSE event buffer for stream resume (Last-Event-ID).
 
-Process-local only — suitable for single-node self-hosted deployments.
-Multi-replica deployments need a shared store (Redis) later.
+Storage backends:
+- In-memory (default): process-local, suitable for single-node self-hosted.
+- Pluggable interface so multi-replica deployments can swap in Redis/PG later.
+
+Multi-worker uvicorn: each worker has its own buffer; resume only works if
+the resume request lands on the same worker. Use a shared backend for HA.
 """
 
 from __future__ import annotations
 
 import time
 import uuid
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,7 +29,38 @@ class BufferedStream:
     interrupted: bool = False
 
 
-class StreamResumeBuffer:
+class StreamResumeStore(ABC):
+    """Abstract resume buffer — implement for Redis/PG in multi-replica setups."""
+
+    @abstractmethod
+    def create(self, user_id: str) -> BufferedStream: ...
+
+    @abstractmethod
+    def append(self, stream_id: str, event: dict[str, Any]) -> None: ...
+
+    @abstractmethod
+    def mark_finished(self, stream_id: str, *, interrupted: bool = False) -> None: ...
+
+    @abstractmethod
+    def get_stream(self, stream_id: str, user_id: str) -> BufferedStream | None: ...
+
+    def get_events_after(
+        self, stream_id: str, user_id: str, last_event_id: int | None  # noqa: ARG002
+    ) -> BufferedStream | None:
+        """Back-compat alias used by chat resume endpoint."""
+        return self.get_stream(stream_id, user_id)
+
+    def slice_after(
+        self, stream: BufferedStream, last_event_id: int | None
+    ) -> list[dict[str, Any]]:
+        if last_event_id is None:
+            return list(stream.events)
+        return [e for e in stream.events if int(e.get("id", 0)) > last_event_id]
+
+
+class InMemoryStreamResumeStore(StreamResumeStore):
+    """Process-local dict buffer with TTL eviction."""
+
     def __init__(self, ttl_seconds: int | None = None, max_events: int | None = None) -> None:
         self.ttl_seconds = (
             ttl_seconds if ttl_seconds is not None else settings.sse_resume_ttl_seconds
@@ -53,21 +89,12 @@ class StreamResumeBuffer:
         stream.finished = True
         stream.interrupted = interrupted
 
-    def get_events_after(
-        self, stream_id: str, user_id: str, last_event_id: int | None
-    ) -> BufferedStream | None:
+    def get_stream(self, stream_id: str, user_id: str) -> BufferedStream | None:
         self._evict_expired()
         stream = self._streams.get(stream_id)
         if not stream or stream.user_id != user_id:
             return None
         return stream
-
-    def slice_after(
-        self, stream: BufferedStream, last_event_id: int | None
-    ) -> list[dict[str, Any]]:
-        if last_event_id is None:
-            return list(stream.events)
-        return [e for e in stream.events if int(e.get("id", 0)) > last_event_id]
 
     def _evict_expired(self) -> None:
         now = time.time()
@@ -76,4 +103,23 @@ class StreamResumeBuffer:
             self._streams.pop(sid, None)
 
 
-stream_resume_buffer = StreamResumeBuffer()
+# Back-compat alias used by chat API
+class StreamResumeBuffer(InMemoryStreamResumeStore):
+    """Deprecated name — prefer StreamResumeStore / InMemoryStreamResumeStore."""
+
+
+def create_resume_store() -> StreamResumeStore:
+    """Factory: default in-memory; override via settings.sse_resume_backend later."""
+    backend = getattr(settings, "sse_resume_backend", "memory") or "memory"
+    if backend == "memory":
+        return InMemoryStreamResumeStore()
+    logger_name = __name__
+    import logging
+
+    logging.getLogger(logger_name).warning(
+        "Unknown sse_resume_backend=%r, falling back to in-memory", backend
+    )
+    return InMemoryStreamResumeStore()
+
+
+stream_resume_buffer = InMemoryStreamResumeStore()

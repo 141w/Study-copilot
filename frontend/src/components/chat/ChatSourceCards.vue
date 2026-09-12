@@ -56,6 +56,16 @@
             </el-icon>
             <span>{{ copiedIndex === source.index ? '已复制' : '复制摘录' }}</span>
           </button>
+
+          <button
+            type="button"
+            class="source-card__copy"
+            data-test="source-card-open-doc"
+            @click.stop="emitOpen(source)"
+          >
+            <el-icon class="w-3 h-3"><Document /></el-icon>
+            <span>打开原文</span>
+          </button>
         </div>
       </div>
     </div>
@@ -65,11 +75,19 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { Source } from '@/types/models'
-import { ArrowRight, DocumentCopy, Check } from '@/components/icons'
+import { ArrowRight, DocumentCopy, Check, Document } from '@/components/icons'
 
 const props = defineProps<{
   sources?: Source[]
 }>()
+
+const emit = defineEmits<{
+  (e: 'open-source', source: Source): void
+}>()
+
+function emitOpen(source: Source): void {
+  emit('open-source', source)
+}
 
 const expandedSet = ref<Set<number>>(new Set())
 const copiedIndex = ref<number | null>(null)

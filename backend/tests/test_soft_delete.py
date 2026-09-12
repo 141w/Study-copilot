@@ -60,21 +60,20 @@ async def test_note_soft_delete_restore_and_reindex_filter(
     db_session: AsyncSession,
     monkeypatch,
 ):
-    """删除笔记后 reindex 不应再为已删笔记产出 chunk。"""
-    captured = {}
+    """删除笔记后 reindex 不应再为已删笔记产出 embedding。"""
+    captured: list[str] = []
 
-    class FakeStore:
-        def __init__(self, doc_id: str, vectorstore_dir: str = "", retrieval_type: str = "faiss"):
-            pass
+    class FakeEmbedder:
+        async def embed_query(self, text: str):
+            captured.append(text)
+            return [0.2] * 8
 
-        def delete(self):
-            return True
+        async def embed_texts(self, texts):
+            return [[0.2] * 8 for _ in texts]
 
-        async def add_chunks(self, chunks):
-            captured["chunks"] = list(chunks)
-            return True
+    import app.core.embedder as emb_mod
 
-    monkeypatch.setattr(note_service, "DocumentVectorStore", FakeStore)
+    monkeypatch.setattr(emb_mod, "embedder", FakeEmbedder())
 
     user = await _make_user(db_session)
     keep = await note_service.create_note(db_session, user, title="保留", content="保留内容")
@@ -87,10 +86,11 @@ async def test_note_soft_delete_restore_and_reindex_filter(
     titles = [n.title for n in await note_service.list_notes(db_session, user)]
     assert titles == ["保留"]
 
-    # 重建索引：chunk 只应来自未删除笔记
+    # 重建索引：只应 embed 未删除笔记
+    captured.clear()
     await note_service.reindex_user_notes(db_session, user)
-    src_ids = {c["document_id"] for c in captured["chunks"]}
-    assert drop.id not in src_ids and keep.id in src_ids
+    assert keep.title in "".join(captured) or keep.content in "".join(captured)
+    assert drop.content not in "".join(captured)
 
     # 恢复后重新可见
     await note_service.restore_note(db_session, user, drop.id)

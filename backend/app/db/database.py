@@ -265,6 +265,8 @@ class Note(Base):
     )
     # 软删除标记：NULL=正常；非空=回收站（可恢复）
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    # pgvector 语义检索：标题+正文 的整篇 embedding（替代本地 FAISS 文件索引）
+    embedding: Mapped[list[float] | None] = mapped_column(_Vector(), nullable=True)
 
     # relationships
     course_space: Mapped["CourseSpace | None"] = relationship(back_populates="notes")

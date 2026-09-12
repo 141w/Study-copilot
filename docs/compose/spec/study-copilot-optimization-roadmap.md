@@ -1,18 +1,18 @@
 ---
 feature: study-copilot-optimization-roadmap
 status: delivered
-updated: 2026-09-12
-branch: feat/optimization-roadmap
-commits: ca1eb52..HEAD
+updated: 2026-09-13
+branch: feat/optimization-rest
+commits: 5a9584b..HEAD
 ---
 
 # Study Copilot 有益优化总路线
 
 ## Report
 
-**What was built** — Wave 1 安全与可部署已落地：Agent 工具租户隔离、上传路径沙箱、Webhook 归属校验、限流信任边界与登录限流、Dockerfile 前端构建路径、CI ruff 真门禁。Wave 2 部分落地：只读工具并行执行（含熔断不丢已准备调用）、讨论模式 Abort + SSE 跨 chunk 缓冲。Wave 3 部分落地：`PIPELINE_V2_ENABLED` 默认开启、消息 embedding 维度配置化。Wave 4 部分落地：`/health` 脱敏、image/llm `base_url` SSRF 校验。T4（classroom 凭证明文 YAML）在本 HEAD 不存在该写路径，记为 N/A；T12 笔记 pgvector、T14 resume 抽象、T17–T19 产品项未在本分支完成。
+**What was built** — Wave 1 安全与可部署已落地：Agent 工具租户隔离、上传路径沙箱、Webhook 归属校验、限流信任边界与登录限流、Dockerfile 前端构建路径、CI ruff 真门禁。Wave 2 部分落地：只读工具并行执行（含熔断不丢已准备调用）、讨论模式 Abort + SSE 跨 chunk 缓冲。Wave 3 部分落地：`PIPELINE_V2_ENABLED` 默认开启、消息 embedding 维度配置化。Wave 4 部分落地：`/health` 脱敏、image/llm `base_url` SSRF 校验。T4（classroom 凭证明文 YAML）在本 HEAD 不存在该写路径，记为 N/A。第二轮（feat/optimization-rest）补齐：T12 笔记 pgvector、T14 resume 抽象、T17 打开原文、T18/T19 评测与 README。
 
-**Verification** — `pytest tests/ --no-cov`：**643 passed**，5 failed 均为 **PRE-EXISTING** `test_classroom_contract`（缺 `classroom/lib/server/classroom-job-store.ts`、`classroom/data/classrooms` 无样本）。定向套件 agent/upload/chat/pipeline/dimension/rate_limit：**66 passed**。`ruff check` 改动 app 文件：PASS。
+**Verification** — 第二轮 `pytest tests/ --no-cov`：**649 passed**；6 failed 均为 PRE-EXISTING（5×classroom_contract + 1×learning_activity 时区边界）。笔记相关 `test_note_indexing`/`test_soft_delete`：**23 passed**。ruff PASS。
 
 **Journey log**
 - 并行工具改造曾因 stall 提前 break 丢掉同 turn 已准备工具；review 后改为「先执行 prepared 再 break」。
@@ -176,11 +176,11 @@ commits: ca1eb52..HEAD
 - [x] T9: 工具并行 — asyncio.gather + 超时 + 单测 (covers: S2.2)
 - [x] T10: Discuss 取消 + SSE buffer — acceptance: 分片不丢事件、可 abort (covers: S2.2)
 - [x] T11: PIPELINE_V2 默认 True + parity — acceptance: 默认走管线 (covers: S2.3; depends: T8)
-- [ ] T12: 笔记检索 pgvector — 未做，仍 FAISS 文件索引 (covers: S2.3)
+- [x] T12: 笔记检索 pgvector — notes.embedding + 迁移 + LIKE 兜底 (covers: S2.3)
 - [x] T13: embedding 维度配置化 — acceptance: 无运行时 vector(768) 硬编码 (covers: S2.3)
-- [ ] T14: SSE resume 存储抽象 — 未做 (covers: S2.4)
+- [x] T14: SSE resume 存储抽象 — StreamResumeStore + 内存实现 (covers: S2.4)
 - [x] T15: health/错误脱敏 — acceptance: 无 DB 异常原文 (covers: S2.4)
 - [x] T16: base_url SSRF（test-image + test-llm）— acceptance: 内网探测拒绝 (covers: S2.4)
-- [ ] T17: 来源跳转文档阅读器 — 未做 (covers: S2.5)
-- [ ] T18: eval harness 可运行 — 未做 (covers: S2.5)
-- [ ] T19: 真机截图与 README — assets 存在，README 链接待补 (covers: S2.5)
+- [x] T17: 来源「打开原文」跳转 DocumentView (covers: S2.5)
+- [x] T18: eval harness 可运行 — dataset.jsonl + --lexical/--live (covers: S2.5)
+- [x] T19: 真机截图与 README — assets 链接 + 评测说明 (covers: S2.5)

@@ -5,93 +5,83 @@ Note service — CRUD operations for notes, including tag management.
 import logging
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.vector_store import DocumentVectorStore
 from app.db import Note, Tag, User
 from app.exceptions import NotFoundError
 
 logger = logging.getLogger(__name__)
 
-# 笔记语义索引目录与 store 前缀（每用户一个独立索引）
-NOTES_VECTORSTORE_DIR = "./vectorstore/notes"
 
-
-def _notes_store(user_id: str) -> "DocumentVectorStore":
-    """返回该用户笔记向量索引的包装器（FAISS）。"""
-    return DocumentVectorStore(f"notes_{user_id}", vectorstore_dir=NOTES_VECTORSTORE_DIR)
-
-
-def _build_note_chunks(note: Note) -> list[dict]:
-    """把单条笔记切成可入索引的 chunk（document_id=note.id 供搜索回表）。
-
-    标题并入正文提升匹配；内容按固定窗口切片。空笔记跳过。
-    """
+def _note_embed_text(note: Note) -> str:
     title = (note.title or "").strip()
     content = (note.content or "").strip()
-    if not title and not content:
-        return []
+    return f"{title}\n\n{content}".strip()
 
-    body = f"{title}\n\n{content}".strip()
-    size, step = 800, 650
-    if len(body) <= size:
-        pieces = [body]
-    else:
-        pieces = [body[i : i + size] for i in range(0, len(body), step)]
 
-    chunks = []
-    for i, piece in enumerate(pieces):
-        piece = piece.strip()
-        if not piece:
-            continue
-        chunks.append(
-            {
-                "text": piece,
-                "document_id": note.id,
-                "note_id": note.id,
-                "title": note.title or "",
-                "chunk_index": i,
-            }
-        )
-    return chunks
+def _vec_str(embedding: list[float] | None) -> str | None:
+    if embedding is None:
+        return None
+    return "[" + ",".join(str(float(v)) for v in embedding) + "]"
+
+
+async def _embed_note(note: Note) -> list[float] | None:
+    """Embed title+content for pgvector; returns None on failure (non-fatal)."""
+    body = _note_embed_text(note)
+    if not body:
+        return None
+    try:
+        from app.core.embedder import embedder
+
+        vec = await embedder.embed_query(body)
+        return vec.tolist() if hasattr(vec, "tolist") else list(vec)
+    except Exception as exc:
+        logger.warning("Note embedding failed (non-fatal): %s", exc)
+        return None
 
 
 async def reindex_user_notes(db: AsyncSession, user: User) -> int:
-    """全量重建该用户的笔记语义索引。
+    """全量重建该用户的笔记语义索引（pgvector notes.embedding）。
 
     笔记量级小 + Embedder 自带文本哈希缓存，重建成本低；
     相比增量 upsert 更简单且天然覆盖删除场景。
-    返回入索引的 chunk 数。
+    返回成功写入 embedding 的笔记数。
     """
     result = await db.execute(
         select(Note).where(Note.user_id == user.id, Note.deleted_at.is_(None))
     )
     notes = list(result.scalars().all())
 
-    # 先清旧文件再新建实例，避免维度/陈旧数据残留
-    try:
-        _notes_store(user.id).delete()
-    except Exception:  # noqa: BLE001 — 索引文件可能本就不存在
-        pass
-
-    fresh = _notes_store(user.id)
-    all_chunks: list[dict] = []
+    count = 0
     for note in notes:
-        all_chunks.extend(_build_note_chunks(note))
+        emb = await _embed_note(note)
+        note.embedding = emb
+        if emb is not None:
+            count += 1
+    try:
+        bind = db.get_bind()
+        if bind is not None and getattr(bind.dialect, "name", "") == "postgresql":
+            from app.config import settings
 
-    if all_chunks:
-        await fresh.add_chunks(all_chunks)
-        logger.info(
-            "Notes index rebuilt: user=%s notes=%d chunks=%d",
-            user.id,
-            len(notes),
-            len(all_chunks),
-        )
-    else:
-        logger.info("Notes index cleared (no notes): user=%s", user.id)
-    return len(all_chunks)
+            dim = int(getattr(settings, "embedding_dimension", 768) or 768)
+            for note in notes:
+                if note.embedding is None:
+                    continue
+                await db.execute(
+                    text(
+                        f"UPDATE notes SET embedding = CAST(:emb AS vector({dim})) WHERE id = :id"
+                    ),
+                    {"emb": _vec_str(note.embedding), "id": note.id},
+                )
+    except Exception as exc:
+        logger.debug("Bulk note embedding SQL skipped: %s", exc)
+    await db.commit()
+    logger.info(
+        "Notes index rebuilt: user=%s notes=%d embedded=%d", user.id, len(notes), count
+    )
+    return count
 
 
 async def _safe_reindex(db: AsyncSession, user: User) -> None:
@@ -311,50 +301,87 @@ async def search_notes(
     query: str,
     top_k: int = 10,
 ) -> list[dict]:
-    """Semantic search across user notes using FAISS vector index."""
-    store = _notes_store(user.id)
-    await store.load()
+    """Semantic search across user notes via pgvector (fallback: title/content LIKE)."""
+    from app.config import settings
 
-    if not store._store or not store._store.chunks:
-        return []
+    dim = int(getattr(settings, "embedding_dimension", 768) or 768)
+    q_emb = None
+    try:
+        from app.core.embedder import embedder
 
-    results = await store.search(query, top_k * 2)
+        vec = await embedder.embed_query(query)
+        q_emb = vec.tolist() if hasattr(vec, "tolist") else list(vec)
+    except Exception as exc:
+        logger.warning("Note search embed failed, falling back to LIKE: %s", exc)
 
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
+    notes_map: dict[str, Note] = {}
+    ordered_ids: list[str] = []
 
-    note_ids = [r.get("chunk", {}).get("document_id", "") for r in results]
-    note_ids = [nid for nid in note_ids if nid][:top_k]
+    bind = db.get_bind()
+    is_pg = bind is not None and getattr(bind.dialect, "name", "") == "postgresql"
 
-    if not note_ids:
-        return []
+    if is_pg and q_emb is not None:
+        q_str = _vec_str(q_emb)
+        sql = text(
+            f"""
+            SELECT id, 1 - (embedding <=> CAST(:q AS vector({dim}))) AS score
+            FROM notes
+            WHERE user_id = :uid
+              AND deleted_at IS NULL
+              AND embedding IS NOT NULL
+            ORDER BY embedding <=> CAST(:q AS vector({dim}))
+            LIMIT :k
+            """
+        )
+        res = await db.execute(sql, {"q": q_str, "uid": user.id, "k": top_k})
+        ordered_ids = [row[0] for row in res.all()]
+        if ordered_ids:
+            q = await db.execute(
+                select(Note)
+                .options(selectinload(Note.tags))
+                .where(Note.id.in_(ordered_ids), Note.user_id == user.id)
+            )
+            notes_map = {n.id: n for n in q.scalars().all()}
+            out = []
+            for nid in ordered_ids:
+                note = notes_map.get(nid)
+                if not note:
+                    continue
+                out.append(
+                    {
+                        "id": note.id,
+                        "title": note.title,
+                        "content": note.content[:300],
+                        "course_space_id": note.course_space_id,
+                        "tags": [t.name for t in note.tags],
+                        "score": 0.9,
+                    }
+                )
+            if out:
+                return out[:top_k]
 
+    # Fallback: lexical LIKE (SQLite tests / missing embeddings)
+    like = f"%{query.strip()}%"
     q = await db.execute(
         select(Note)
         .options(selectinload(Note.tags))
         .where(
-            Note.id.in_(note_ids),
             Note.user_id == user.id,
-            Note.deleted_at.is_(None),  # 索引陈旧时的双保险
+            Note.deleted_at.is_(None),
+            (Note.title.ilike(like)) | (Note.content.ilike(like)),
         )
+        .limit(top_k)
     )
-    notes_map = {n.id: n for n in q.scalars().all()}
-
     out = []
-    for r in results:
-        nid = r.get("chunk", {}).get("document_id", "")
-        note = notes_map.get(nid)
-        if note:
-            out.append(
-                {
-                    "id": note.id,
-                    "title": note.title,
-                    "content": note.content[:300],
-                    "course_space_id": note.course_space_id,
-                    "tags": [t.name for t in note.tags],
-                    "score": 1.0 - float(r.get("distance", 1)),
-                }
-            )
-        if len(out) >= top_k:
-            break
+    for note in q.scalars().all():
+        out.append(
+            {
+                "id": note.id,
+                "title": note.title,
+                "content": note.content[:300],
+                "course_space_id": note.course_space_id,
+                "tags": [t.name for t in note.tags],
+                "score": 0.5,
+            }
+        )
     return out
