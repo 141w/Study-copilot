@@ -37,7 +37,7 @@ describe('NoteViewer', () => {
     const btns = wrapper.findAll('button')
     const editBtn = btns.find(b => b.text().includes('编辑'))
     expect(editBtn).toBeTruthy()
-    await editBtn!.trigger('click')
+    await editBtn.trigger('click')
     expect(wrapper.emitted('edit')).toBeTruthy()
   })
 })
