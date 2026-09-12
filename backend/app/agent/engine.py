@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -28,7 +29,8 @@ from app.services.memory_service import memory_service
 
 logger = logging.getLogger(__name__)
 
-_ANSWER_TOKEN_CHUNK = 24
+_ANSWER_TOKEN_CHUNK = 12
+_TOOL_EXEC_TIMEOUT = 30.0
 _DEFAULT_TOKEN_BUDGET = 48000
 _DEFAULT_MAX_REPEATED_TOOL_CALLS = 3
 _HISTORY_MAX_MESSAGES = 6
@@ -474,7 +476,7 @@ class AgentEngine:
                 terminate_reason = "model_converged"
                 break
 
-            # ── Act: Execute tool calls ──
+            # ── Act: Execute tool calls (parallel for concurrent-safe read tools) ──
             yield {
                 "type": "thinking",
                 "step": "agent_act",
@@ -482,6 +484,7 @@ class AgentEngine:
             }
 
             tool_loop_break = False
+            prepared: list[dict[str, Any]] = []
             for tc in tool_calls:
                 fn = tc.get("function", {})
                 fn_name = fn.get("name", "")
@@ -523,15 +526,58 @@ class AgentEngine:
                 }
 
                 tool_impl = self.registry.get(fn_name)
-                if not tool_impl:
-                    tool_res = ToolResult(success=False, output=f"未知工具: {fn_name}", error="unknown_tool")
-                else:
-                    with trace_span_ctx(
-                        f"agent.tool.{fn_name}",
-                        metadata={"tool": fn_name},
-                        input_data={k: v for k, v in args.items() if k not in ("user_id",)},
-                    ):
-                        tool_res = await tool_impl.execute(**args)
+                prepared.append(
+                    {
+                        "name": fn_name,
+                        "args": args,
+                        "call_id": call_id,
+                        "impl": tool_impl,
+                        "concurrent": bool(tool_impl) and can_run_concurrently(fn_name),
+                    }
+                )
+
+            # Stall fuse may set tool_loop_break mid-prepare; still execute tools
+            # already accepted into `prepared` so earlier calls in the same turn
+            # are not silently dropped (matches pre-parallel semantics).
+
+            async def _run_one(entry: dict[str, Any]) -> ToolResult:
+                fn_name = entry["name"]
+                if not entry["impl"]:
+                    return ToolResult(success=False, output=f"未知工具: {fn_name}", error="unknown_tool")
+                with trace_span_ctx(
+                    f"agent.tool.{fn_name}",
+                    metadata={"tool": fn_name},
+                    input_data={k: v for k, v in entry["args"].items() if k not in ("user_id",)},
+                ):
+                    return await asyncio.wait_for(
+                        entry["impl"].execute(**entry["args"]),
+                        timeout=_TOOL_EXEC_TIMEOUT,
+                    )
+
+            concurrent = [e for e in prepared if e["concurrent"]]
+            sequential = [e for e in prepared if not e["concurrent"]]
+            results_by_call: dict[str, ToolResult] = {}
+            if len(concurrent) > 1:
+                gathered = await asyncio.gather(
+                    *(_run_one(e) for e in concurrent), return_exceptions=True
+                )
+                for entry, res in zip(concurrent, gathered):
+                    if isinstance(res, Exception):
+                        logger.warning("[AgentEngine] parallel tool %s failed: %s", entry["name"], res)
+                        res = ToolResult(success=False, output=f"工具执行失败: {res}", error=str(res))
+                    results_by_call[entry["call_id"] or entry["name"]] = res
+            else:
+                for entry in concurrent:
+                    results_by_call[entry["call_id"] or entry["name"]] = await _run_one(entry)
+            for entry in sequential:
+                results_by_call[entry["call_id"] or entry["name"]] = await _run_one(entry)
+
+            for entry in prepared:
+                fn_name = entry["name"]
+                call_id = entry["call_id"]
+                tool_res = results_by_call.get(call_id or fn_name) or ToolResult(
+                    success=False, output="工具结果缺失", error="missing_result"
+                )
 
                 observation = tool_res.output
                 token_usage += estimate_tokens([{"role": "tool", "content": observation or ""}])

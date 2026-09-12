@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -617,3 +618,57 @@ async def test_engine_tool_stall_synthesis_gets_limited_info_notice():
     tokens = "".join(e.get("content") or "" for e in events if e.get("type") == "token")
     assert "有限信息" in tokens
     assert "熔断后的汇总" in tokens
+
+
+@pytest.mark.asyncio
+async def test_engine_parallel_safe_tools_execute_both():
+    """Two concurrent-safe tools in one turn must both run (asyncio.gather path)."""
+    engine = AgentEngine(max_iterations=3)
+    calls: list[str] = []
+
+    async def fake_search(self, **kwargs):
+        calls.append("search_memory")
+        await asyncio.sleep(0.01)
+        return ToolResult(success=True, output="memory-hit", data=[])
+
+    async def fake_conv(self, **kwargs):
+        calls.append("search_conversations")
+        await asyncio.sleep(0.01)
+        return ToolResult(success=True, output="conv-hit", data=[])
+
+    dual_calls = [
+        {
+            "id": "c1",
+            "type": "function",
+            "function": {"name": "search_memory", "arguments": '{"query":"a"}'},
+        },
+        {
+            "id": "c2",
+            "type": "function",
+            "function": {"name": "search_conversations", "arguments": '{"query":"b"}'},
+        },
+    ]
+
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
+         patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search), \
+         patch("app.agent.tools.definitions.SearchConversationsTool.execute", fake_conv):
+        mock_llm.side_effect = [
+            {
+                "content": "",
+                "tool_calls": dual_calls,
+                "finish_reason": "tool_calls",
+            },
+            {
+                "content": "综合两条检索结果作答。",
+                "tool_calls": [],
+                "finish_reason": "stop",
+            },
+        ]
+        events = []
+        async for ev in engine.execute_stream(query="parallel", user_id="u1"):
+            events.append(ev)
+
+    assert calls.count("search_memory") == 1
+    assert calls.count("search_conversations") == 1
+    tokens = "".join(e.get("content") or "" for e in events if e.get("type") == "token")
+    assert "综合两条检索结果" in tokens

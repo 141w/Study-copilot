@@ -26,11 +26,17 @@ from app.services.config_service import get_llm_config_with_secret
 
 logger = logging.getLogger(__name__)
 
-_Msg_INSERT_PG = text("""
+
+def _embedding_insert_sql() -> str:
+    """Build INSERT with CAST dimension from settings (not hardcoded 768)."""
+    from app.config import settings
+
+    dim = int(getattr(settings, "embedding_dimension", 768) or 768)
+    return text(f"""
     INSERT INTO messages (id, session_id, role, content, sources, embedding, created_at)
     VALUES (
         :id, :session_id, :role, :content, :sources,
-        CAST(:embedding AS vector(768)), :created_at
+        CAST(:embedding AS vector({dim})), :created_at
     )
 """)
 
@@ -65,9 +71,10 @@ async def _insert_message(
 ) -> None:
     """Insert message into DB.
 
-    Uses explicit CAST(:embedding AS vector(768)) for PostgreSQL/pgvector,
-    and ORM for SQLite. If vector insertion encounters any type or dialect
-    mismatch, falls back to embedding=None so user conversation is never blocked.
+    Uses explicit CAST(:embedding AS vector(N)) where N is
+    settings.embedding_dimension for PostgreSQL/pgvector, and ORM for SQLite.
+    If vector insertion encounters any type or dialect mismatch, falls back to
+    embedding=None so user conversation is never blocked.
     """
     bind = db.get_bind()
     is_pg = bind is not None and getattr(bind.dialect, "name", "") == "postgresql"
@@ -75,7 +82,7 @@ async def _insert_message(
     try:
         if is_pg:
             await db.execute(
-                _Msg_INSERT_PG,
+                _embedding_insert_sql(),
                 {
                     "id": msg_id,
                     "session_id": session_id,
@@ -105,7 +112,7 @@ async def _insert_message(
         await db.rollback()
         if is_pg:
             await db.execute(
-                _Msg_INSERT_PG,
+                _embedding_insert_sql(),
                 {
                     "id": msg_id,
                     "session_id": session_id,

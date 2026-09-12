@@ -1,12 +1,14 @@
 # ---- Frontend Builder ----
+# Build context is the repository root (see docker-compose.yml).
 FROM docker.m.daocloud.io/library/node:20-alpine AS frontend-builder
 
-WORKDIR /app
+WORKDIR /app/frontend
 
-COPY package*.json ./
+# Root package.json is only a script shell — copy the real frontend manifests.
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
-COPY . .
+COPY frontend/ ./
 RUN npm run build
 
 # ---- Backend Builder ----
@@ -19,8 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PIP_DEFAULT_TIMEOUT=120
 
-COPY pyproject.toml ./
-COPY app/ ./app/
+WORKDIR /app
+COPY backend/pyproject.toml ./
+COPY backend/app/ ./app/
 
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir uv
@@ -45,7 +48,7 @@ COPY --from=backend-builder /opt/hf /opt/hf
 ENV HF_HOME=/opt/hf
 
 # Frontend from build stage
-COPY --from=frontend-builder /app/dist /usr/share/nginx/html/
+COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html/
 
 # Nginx config (proxy to localhost:8000)
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf

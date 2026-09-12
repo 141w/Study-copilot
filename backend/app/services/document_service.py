@@ -95,8 +95,18 @@ async def upload_document(
     user_dir = os.path.join(uploads_dir, user.id)
     os.makedirs(user_dir, exist_ok=True)
 
-    ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
-    fp = os.path.join(user_dir, f"{doc_id}.{ext}")
+    # Safe extension: whitelist only; never reuse raw filename fragments (path traversal).
+    _SAFE_EXTS = {"pdf", "docx", "pptx", "txt", "md", "markdown"}
+    raw_ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    ext = raw_ext if raw_ext in _SAFE_EXTS else "bin"
+    if raw_ext and raw_ext not in _SAFE_EXTS:
+        # is_supported() already gated format; this is defense-in-depth for odd names.
+        logger.warning("Sanitized unexpected upload extension %r -> bin for %s", raw_ext, filename)
+
+    user_dir = os.path.realpath(user_dir)
+    fp = os.path.realpath(os.path.join(user_dir, f"{doc_id}.{ext}"))
+    if not (fp == user_dir or fp.startswith(user_dir + os.sep)):
+        raise ValidationError("非法的文件路径")
 
     async with aiofiles.open(fp, "wb") as f:
         await f.write(content)

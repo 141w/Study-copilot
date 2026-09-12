@@ -57,13 +57,16 @@ class Settings(BaseSettings):
     sse_resume_ttl_seconds: int = 120
     sse_resume_max_events: int = 2000
 
-    # 洋葱聊天管线 V2 开关
-    pipeline_v2_enabled: bool = False
+    # 洋葱聊天管线 V2：生产默认开启；回滚可设 PIPELINE_V2_ENABLED=false
+    pipeline_v2_enabled: bool = True
 
     # CORS：逗号分隔的允许来源；部署到域名后必须在 .env 覆盖
     cors_origins: str = (
         "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
     )
+
+    # 仅当反向代理会覆写 X-Forwarded-For 时再打开；默认 False，防止客户端伪造绕过限流
+    trust_proxy_headers: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

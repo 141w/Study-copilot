@@ -103,7 +103,12 @@ async def test_llm_chat_stream_backward_compatibility_str_only():
 
 
 @pytest.mark.asyncio
-async def test_chat_service_stream_reasoning_and_thinking_persistence(db_session: AsyncSession):
+async def test_chat_service_stream_reasoning_and_thinking_persistence(
+    db_session: AsyncSession, monkeypatch
+):
+    from app.services import chat_service as _cs
+
+    monkeypatch.setattr(_cs.settings, "pipeline_v2_enabled", False, raising=False)
     u = User(
         id="test-user-reasoning",
         username="reasoning_user",

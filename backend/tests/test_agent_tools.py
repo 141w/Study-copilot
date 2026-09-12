@@ -93,9 +93,27 @@ def _mock_db_session(chunks=None, doc=None, empty_doc=False):
 @pytest.mark.asyncio
 async def test_grep_chunks_empty_keyword():
     tool = GrepChunksTool()
-    res = await tool.execute(keyword="")
+    res = await tool.execute(keyword="", user_id="u1")
     assert res.success is False
     assert res.error == "empty_keyword"
+
+
+@pytest.mark.asyncio
+async def test_grep_chunks_requires_user_id():
+    tool = GrepChunksTool()
+    res = await tool.execute(keyword="x", doc_ids=["d1"])
+    assert res.success is False
+    assert res.error == "missing_user_id"
+
+
+@pytest.mark.asyncio
+async def test_grep_chunks_requires_doc_scope():
+    """Empty doc_ids must not trigger a cross-tenant full-table scan."""
+    tool = GrepChunksTool()
+    res = await tool.execute(keyword="secret", user_id="u1", doc_ids=[])
+    assert res.success is True
+    assert res.data == []
+    assert "文档范围" in res.output
 
 
 @pytest.mark.asyncio
@@ -113,7 +131,7 @@ async def test_grep_chunks_found():
     cm.__aexit__ = AsyncMock(return_value=False)
 
     with patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm):
-        res = await tool.execute(keyword="梯度下降", doc_ids=["d1"], limit=5)
+        res = await tool.execute(keyword="梯度下降", doc_ids=["d1"], limit=5, user_id="u1")
     assert res.success is True
     assert "梯度下降" in res.output
     # Structured shape for the engine source pool (not raw chunk ids)
@@ -131,7 +149,7 @@ async def test_grep_chunks_none_found():
     cm.__aexit__ = AsyncMock(return_value=False)
 
     with patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm):
-        res = await tool.execute(keyword="不存在的词")
+        res = await tool.execute(keyword="不存在的词", doc_ids=["d1"], user_id="u1")
     assert res.success is True
     assert "未找到" in res.output
 
@@ -139,9 +157,17 @@ async def test_grep_chunks_none_found():
 @pytest.mark.asyncio
 async def test_list_document_chunks_requires_doc_id():
     tool = ListDocumentChunksTool()
-    res = await tool.execute()
+    res = await tool.execute(user_id="u1")
     assert res.success is False
     assert res.error == "missing_doc_id"
+
+
+@pytest.mark.asyncio
+async def test_list_document_chunks_requires_user_id():
+    tool = ListDocumentChunksTool()
+    res = await tool.execute(document_id="d1")
+    assert res.success is False
+    assert res.error == "missing_user_id"
 
 
 @pytest.mark.asyncio
@@ -169,13 +195,21 @@ async def test_list_document_chunks_ok():
     cm.__aexit__ = AsyncMock(return_value=False)
 
     with patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm):
-        res = await tool.execute(document_id="d1", offset=0, limit=5)
+        res = await tool.execute(document_id="d1", offset=0, limit=5, user_id="u1")
     assert res.success is True
     assert "第一块" in res.output
     assert "第二块" in res.output
     assert isinstance(res.data, list) and len(res.data) == 2
     assert res.data[0]["chunk"]["text"] == "第一块"
     assert res.data[1]["chunk"]["page"] == "2"
+
+
+@pytest.mark.asyncio
+async def test_get_document_info_requires_user_id():
+    tool = GetDocumentInfoTool()
+    res = await tool.execute(document_id="d1")
+    assert res.success is False
+    assert res.error == "missing_user_id"
 
 
 @pytest.mark.asyncio
@@ -187,7 +221,7 @@ async def test_get_document_info_not_found():
     cm.__aexit__ = AsyncMock(return_value=False)
 
     with patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm):
-        res = await tool.execute(document_id="missing")
+        res = await tool.execute(document_id="missing", user_id="u1")
     assert res.success is False
     assert res.error == "not_found"
 
@@ -209,7 +243,7 @@ async def test_get_document_info_ok():
     cm.__aexit__ = AsyncMock(return_value=False)
 
     with patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm):
-        res = await tool.execute(document_id="d1")
+        res = await tool.execute(document_id="d1", user_id="u1")
     assert res.success is True
     assert "ai.pdf" in res.output
     assert res.data["chunk_count"] == 12
