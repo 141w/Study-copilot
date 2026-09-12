@@ -292,14 +292,16 @@ class LLM:
                     for tc in raw_tool_calls:
                         tc_func = getattr(tc, "function", None)
                         if tc_func:
-                            tool_calls_data.append({
-                                "id": getattr(tc, "id", ""),
-                                "type": getattr(tc, "type", "function"),
-                                "function": {
-                                    "name": getattr(tc_func, "name", ""),
-                                    "arguments": getattr(tc_func, "arguments", "{}"),
-                                },
-                            })
+                            tool_calls_data.append(
+                                {
+                                    "id": getattr(tc, "id", ""),
+                                    "type": getattr(tc, "type", "function"),
+                                    "function": {
+                                        "name": getattr(tc_func, "name", ""),
+                                        "arguments": getattr(tc_func, "arguments", "{}"),
+                                    },
+                                }
+                            )
 
                 # 原生 CoT（DeepSeek-R1 / StepFun / SiliconFlow 等）：非流式响应也可能带 reasoning_content
                 reasoning_text = getattr(message, "reasoning_content", None)
@@ -344,7 +346,13 @@ class LLM:
                 logger.warning(f"ChatWithTools attempt {attempt + 1} failed: {e}. Retrying...")
                 await asyncio.sleep(2**attempt + random.uniform(0, 1))
 
-        return {"content": None, "tool_calls": [], "finish_reason": "error", "usage": None, "reasoning": ""}
+        return {
+            "content": None,
+            "tool_calls": [],
+            "finish_reason": "error",
+            "usage": None,
+            "reasoning": "",
+        }
 
     @classmethod
     def from_config(cls, cfg: dict | None = None) -> "LLM":

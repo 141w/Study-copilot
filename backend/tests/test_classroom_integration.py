@@ -336,14 +336,16 @@ async def test_get_classroom_status_auto_syncs_placeholder(
     assert meta["classroom_url"] == "http://localhost:3001/classroom/cls-99"
 
 
-async def test_create_classroom_local_fallback(db_session, local_user, client, monkeypatch):
-    """当外部课堂引擎不可达时，能够自动调用本地 course_generator 保底创建课程。"""
+async def test_create_classroom_unreachable_engine_raises_error(
+    db_session, local_user, client, monkeypatch
+):
+    """当 OpenMAIC 外部课堂引擎不可达时，返回明确错误引导启动服务，拒绝简陋本地 mock 课件。"""
     from app.db import Document
     from app.services import classroom_service as svc
     from app.utils.auth import create_access_token
 
     monkeypatch.setattr(svc.settings, "classroom_enabled", True, raising=False)
-    monkeypatch.setattr(svc.settings, "classroom_base_url", "http://localhost:9999", raising=False)
+    monkeypatch.setattr(svc.settings, "classroom_base_url", "http://127.0.0.1:19999", raising=False)
     token = create_access_token({"sub": local_user.id, "username": local_user.username})
 
     # 创建测试文档
@@ -358,20 +360,233 @@ async def test_create_classroom_local_fallback(db_session, local_user, client, m
     db_session.add(doc)
     await db_session.commit()
 
+    resp = await client.post(
+        "/api/classroom/generate",
+        json={"doc_ids": [doc.id], "requirement": "测试生成"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code in (403, 502)
+    data = resp.json()
+    assert "OpenMAIC" in data["detail"] or "未启动" in data["detail"] or "连接" in data["detail"]
+
+
+async def test_create_classroom_successful_openmaic_submission(
+    db_session, local_user, client, monkeypatch
+):
+    """当 OpenMAIC 正常响应时，成功创建占位课程并返回任务信息。"""
     from unittest.mock import AsyncMock
 
-    with patch("app.core.course_generator.generate_course", new_callable=AsyncMock) as mock_gen:
-        mock_gen.return_value = {
-            "outline": {"title": "测试生成课程", "sections": []},
-            "quizzes": [],
+    from sqlalchemy import select
+
+    from app.db import CourseSpace, Document
+    from app.services import classroom_service as svc
+    from app.utils.auth import create_access_token
+
+    monkeypatch.setattr(svc.settings, "classroom_enabled", True, raising=False)
+    monkeypatch.setattr(svc.settings, "classroom_base_url", "http://localhost:3001", raising=False)
+    token = create_access_token({"sub": local_user.id, "username": local_user.username})
+
+    doc = Document(
+        id="doc-test-2",
+        user_id=local_user.id,
+        filename="深度学习导论.pdf",
+        file_path="/tmp/dl.pdf",
+        file_size=200,
+        status="ready",
+    )
+    db_session.add(doc)
+    await db_session.commit()
+
+    mock_submit = AsyncMock(
+        return_value={
+            "jobId": "openmaic-job-123",
+            "status": "queued",
+            "step": "generating_outline",
+            "message": "课堂生成已排队",
+            "pollUrl": "http://localhost:3001/api/generate-classroom/openmaic-job-123",
         }
-        resp = await client.post(
-            "/api/classroom/generate",
-            json={"doc_ids": [doc.id], "requirement": "测试生成"},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "succeeded"
-        assert data["job_id"].startswith("local-")
-        assert data["course_id"] is not None
+    )
+    monkeypatch.setattr(svc, "submit_classroom_generation", mock_submit)
+
+    resp = await client.post(
+        "/api/classroom/generate",
+        json={"doc_ids": [doc.id], "requirement": "神经网络基础"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["job_id"] == "openmaic-job-123"
+    assert data["status"] == "queued"
+    assert data["course_id"] is not None
+    assert data["task_id"] is not None
+
+    # 验证占位课是否写入数据库
+    c_res = await db_session.execute(select(CourseSpace).where(CourseSpace.id == data["course_id"]))
+    course = c_res.scalar_one_or_none()
+    assert course is not None
+    assert "神经网络基础" in course.name
+    meta = json.loads(course.description)
+    assert meta["classroom_pending"] is True
+    assert meta["job_id"] == "openmaic-job-123"
+    assert meta["source_doc_ids"] == [doc.id]
+
+    # 验证 AsyncTask 写入数据库且包含必要元数据
+    from app.db import AsyncTask
+    t_res = await db_session.execute(select(AsyncTask).where(AsyncTask.id == data["task_id"]))
+    task = t_res.scalar_one_or_none()
+    assert task is not None
+    assert task.task_type == "classroom_generate"
+    assert task.status == "pending"
+    task_res = json.loads(task.result) if isinstance(task.result, str) else task.result
+    assert task_res["job_id"] == "openmaic-job-123"
+    assert task_res["course_id"] == data["course_id"]
+
+
+async def test_task_worker_classroom_generate_success(db_session, local_user, monkeypatch):
+    """测试 TaskWorker 处理 classroom_generate 任务的轮询与成功完成流程。"""
+    from unittest.mock import AsyncMock
+
+    from app.core.task_worker import TaskJob, _run_classroom_generate
+    from app.services import classroom_service as svc
+
+    poll_responses = [
+        {
+            "status": "running",
+            "progress": 45,
+            "step": "generating_scenes",
+            "message": "正在生成分幕场景 2/5",
+            "done": False,
+        },
+        {
+            "status": "completed",
+            "progress": 100,
+            "step": "completed",
+            "message": "课堂生成完成",
+            "done": True,
+            "result": {"classroomId": "cr-final-456"},
+        },
+    ]
+    mock_poll = AsyncMock(side_effect=poll_responses)
+    mock_sync = AsyncMock(return_value={"status": "success"})
+    monkeypatch.setattr(svc, "poll_generation_status", mock_poll)
+    monkeypatch.setattr(svc, "sync_completed_classroom_job", mock_sync)
+
+    job = TaskJob(
+        task_id="task-cr-test",
+        user_id=local_user.id,
+        task_type="classroom_generate",
+        payload={"job_id": "openmaic-job-456", "course_id": "course-test-123", "title": "测试课堂"},
+    )
+
+    # 预设一条 AsyncTask 记录
+    from app.db import AsyncTask
+    task_record = AsyncTask(
+        id="task-cr-test",
+        user_id=local_user.id,
+        task_type="classroom_generate",
+        status="pending",
+        progress=0.0,
+        result=json.dumps(job.payload),
+    )
+    db_session.add(task_record)
+    await db_session.commit()
+
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        res = await _run_classroom_generate(job, db_session)
+
+    assert res["classroom_id"] == "cr-final-456"
+    assert res["course_id"] == "course-test-123"
+    assert "/courses/course-test-123/classroom" in res["url"]
+    assert mock_sync.await_count == 1
+
+
+async def test_task_worker_classroom_stall_watchdog(db_session, local_user, monkeypatch):
+    """测试当课堂生成长时间无进度更新（停滞）时，正确触发 TimeoutError。"""
+    from unittest.mock import AsyncMock
+
+    from app.core import task_worker
+    from app.services import classroom_service as svc
+
+    # 模拟持续无进展的同一状态
+    stall_response = {
+        "status": "running",
+        "progress": 50,
+        "step": "generating_scenes",
+        "message": "停滞在某一步骤",
+        "scenes_generated": 2,
+        "done": False,
+    }
+    mock_poll = AsyncMock(return_value=stall_response)
+    monkeypatch.setattr(svc, "poll_generation_status", mock_poll)
+    monkeypatch.setattr(task_worker, "CLASSROOM_STALL_TIMEOUT_SEC", 0.01)
+
+    job = task_worker.TaskJob(
+        task_id="task-stall-test",
+        user_id=local_user.id,
+        task_type="classroom_generate",
+        payload={"job_id": "openmaic-job-stall", "course_id": "course-1", "title": "停滞测试"},
+    )
+
+    from app.db import AsyncTask
+    task_record = AsyncTask(
+        id="task-stall-test",
+        user_id=local_user.id,
+        task_type="classroom_generate",
+        status="pending",
+        progress=0.0,
+        result=json.dumps(job.payload),
+    )
+    db_session.add(task_record)
+    await db_session.commit()
+
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        with pytest.raises(TimeoutError) as exc_info:
+            await task_worker._run_classroom_generate(job, db_session)
+        assert "停滞超过" in str(exc_info.value)
+
+
+async def test_execute_job_classroom_timeout_error_message(db_session, local_user, monkeypatch):
+    """测试 _execute_job 对 classroom_generate 超时时返回精准的业务错误提示，而非误报 Embedding。"""
+    from contextlib import asynccontextmanager
+    from unittest.mock import AsyncMock
+
+    from app.core import task_worker
+
+    job = task_worker.TaskJob(
+        task_id="task-msg-test",
+        user_id=local_user.id,
+        task_type="classroom_generate",
+        payload={"job_id": "openmaic-job-timeout", "title": "超时测试"},
+    )
+
+    from app.db import AsyncTask
+    task_record = AsyncTask(
+        id="task-msg-test",
+        user_id=local_user.id,
+        task_type="classroom_generate",
+        status="pending",
+        progress=0.0,
+        result=json.dumps(job.payload),
+    )
+    db_session.add(task_record)
+    await db_session.commit()
+
+    @asynccontextmanager
+    async def mock_session_local():
+        yield db_session
+
+    monkeypatch.setattr(task_worker, "AsyncSessionLocal", mock_session_local)
+
+    async def raise_timeout(*args, **kwargs):
+        raise TimeoutError()
+
+    monkeypatch.setattr(task_worker, "_run_classroom_generate", raise_timeout)
+    monkeypatch.setattr(task_worker, "CLASSROOM_TASK_TIMEOUT_SEC", 3600)
+
+    await task_worker._execute_job(job)
+
+    await db_session.refresh(task_record)
+    assert task_record.status == "failed"
+    assert "Embedding" not in task_record.error
+    assert "AI 互动课堂生成超时" in task_record.error
+

@@ -67,7 +67,9 @@ class ToolRegistry:
     def register(self, tool: Tool) -> None:
         """Register a tool. First-registered tool wins if there are duplicates."""
         if tool.name in self._tools:
-            logger.warning("[ToolRegistry] Tool '%s' already registered, ignoring duplicate", tool.name)
+            logger.warning(
+                "[ToolRegistry] Tool '%s' already registered, ignoring duplicate", tool.name
+            )
             return
         self._tools[tool.name] = tool
 

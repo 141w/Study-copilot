@@ -1449,7 +1449,7 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
       <div
         ref={stageRef}
         className={cn(
-          'flex-1 flex overflow-hidden bg-gray-50 dark:bg-gray-900',
+          'flex-1 flex overflow-hidden bg-background',
           isPresenting && !controlsVisible && 'cursor-none',
         )}
       >

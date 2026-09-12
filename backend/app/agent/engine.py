@@ -63,7 +63,9 @@ def _apply_limited_info_notice(answer: str, terminate_reason: str) -> str:
 
 def _tool_call_key(name: str, args: dict[str, Any]) -> str:
     """Stable hash for (tool_name, canonical args) used by the tool-call stall fuse."""
-    payload = json.dumps({"name": name, "args": args}, sort_keys=True, ensure_ascii=False, default=str)
+    payload = json.dumps(
+        {"name": name, "args": args}, sort_keys=True, ensure_ascii=False, default=str
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
@@ -168,7 +170,9 @@ async def _emit_answer_as_tokens(
         yield {"type": "token", "content": text[i : i + chunk_size]}
 
 
-def _dedupe_sources(pool: list[dict[str, Any]], new_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _dedupe_sources(
+    pool: list[dict[str, Any]], new_sources: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """Merge new sources into pool; reindex 1..N; return full pool snapshot."""
     existing_keys = {_source_dedup_key(s) for s in pool}
     for s in new_sources:
@@ -245,9 +249,7 @@ class AgentEngine:
     ) -> AsyncGenerator[dict[str, Any], None]:
         """True streaming synthesis for the fallback / overflow path."""
         try:
-            async for chunk in llm.chat_stream(
-                messages, temperature=0.5, include_reasoning=True
-            ):
+            async for chunk in llm.chat_stream(messages, temperature=0.5, include_reasoning=True):
                 if isinstance(chunk, dict):
                     ctype = chunk.get("type")
                     if ctype in ("reasoning", "token"):
@@ -399,7 +401,9 @@ class AgentEngine:
             finish_reason = llm_res.get("finish_reason") or "stop"
 
             # Incremental token spend via shared estimator (output + tool-call args)
-            token_usage += estimate_tokens([{"role": "assistant", "content": content, "tool_calls": tool_calls or []}])
+            token_usage += estimate_tokens(
+                [{"role": "assistant", "content": content, "tool_calls": tool_calls or []}]
+            )
 
             # 真实模型原生 CoT（若供应商在非流式 tool-use 响应中返回 reasoning_content）
             reasoning_text = (llm_res.get("reasoning") or "").strip()
@@ -416,14 +420,18 @@ class AgentEngine:
                     "step": "agent_truncated",
                     "detail": "模型输出因达到最大 token 上限被截断，拒绝执行不完整参数，请求模型重试收敛...",
                 }
-                messages.append({
-                    "role": "assistant",
-                    "content": content,
-                })
-                messages.append({
-                    "role": "user",
-                    "content": "你上一次调用的参数已被截断。请不要生成过长的单次调用，或者直接基于现有结论进行总结。",
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": content,
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "你上一次调用的参数已被截断。请不要生成过长的单次调用，或者直接基于现有结论进行总结。",
+                    }
+                )
                 continue
 
             # Append assistant turn
@@ -452,10 +460,12 @@ class AgentEngine:
                 if not content.strip():
                     if nudge_count < 2:
                         nudge_count += 1
-                        messages.append({
-                            "role": "user",
-                            "content": "Please provide your complete answer now as plain text.",
-                        })
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": "Please provide your complete answer now as plain text.",
+                            }
+                        )
                         continue
                     # Nudge exhausted — do not pretend convergence; force synthesis + disclaimer
                     yield {
@@ -489,7 +499,9 @@ class AgentEngine:
                 call_id = tc.get("id", "")
 
                 try:
-                    args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args or {})
+                    args = (
+                        json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args or {})
+                    )
                 except Exception:
                     args = {}
 
@@ -524,7 +536,9 @@ class AgentEngine:
 
                 tool_impl = self.registry.get(fn_name)
                 if not tool_impl:
-                    tool_res = ToolResult(success=False, output=f"未知工具: {fn_name}", error="unknown_tool")
+                    tool_res = ToolResult(
+                        success=False, output=f"未知工具: {fn_name}", error="unknown_tool"
+                    )
                 else:
                     with trace_span_ctx(
                         f"agent.tool.{fn_name}",
@@ -548,21 +562,25 @@ class AgentEngine:
                             "已提示模型可考虑收敛给出结论。"
                         ),
                     }
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            "最近的检索结果与已有上下文重叠度很高，边际信息有限。"
-                            "若证据已足够，请停止继续调用工具并直接给出最终回答。"
-                        ),
-                    })
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "最近的检索结果与已有上下文重叠度很高，边际信息有限。"
+                                "若证据已足够，请停止继续调用工具并直接给出最终回答。"
+                            ),
+                        }
+                    )
                 if token_usage >= self.max_token_budget:
                     # Still record this observation so synthesis can use it
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "name": fn_name,
-                        "content": observation,
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "name": fn_name,
+                            "content": observation,
+                        }
+                    )
                     terminate_reason = "token_budget_exhausted"
                     yield {
                         "type": "thinking",
@@ -601,12 +619,14 @@ class AgentEngine:
                                 f"{observation[:120]}..."
                             ),
                         }
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": call_id,
-                            "name": fn_name,
-                            "content": observation or tool_res.output,
-                        })
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call_id,
+                                "name": fn_name,
+                                "content": observation or tool_res.output,
+                            }
+                        )
                         continue
 
                 yield {
@@ -614,12 +634,14 @@ class AgentEngine:
                     "step": "tool_result",
                     "detail": f"工具 `{fn_name}` 执行完成 ({'成功' if tool_res.success else '失败'})：{tool_res.output[:120]}...",
                 }
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "name": fn_name,
-                    "content": observation,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": fn_name,
+                        "content": observation,
+                    }
+                )
 
             if tool_loop_break:
                 break
@@ -675,13 +697,15 @@ class AgentEngine:
             "step": "agent_synthesize",
             "detail": synth_detail,
         }
-        messages.append({
-            "role": "user",
-            "content": (
-                "请根据你前面所收集到的所有工具检索结果与笔记，"
-                "直接给出最终详细完整的回答。若引用文档事实，请使用与工具 observation 中一致的 [来源N] 编号。"
-            ),
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "请根据你前面所收集到的所有工具检索结果与笔记，"
+                    "直接给出最终详细完整的回答。若引用文档事实，请使用与工具 observation 中一致的 [来源N] 编号。"
+                ),
+            }
+        )
         if terminate_reason in _LIMITED_INFO_REASON:
             yield {"type": "token", "content": _LIMITED_INFO_PREFIX}
         syn_answer_parts: list[str] = []

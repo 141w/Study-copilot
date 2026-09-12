@@ -111,10 +111,12 @@ def test_init_tracing_enabled_with_mock():
     mock_settings.langfuse_secret_key = "sk-lf-test"
     mock_settings.langfuse_host = "https://cloud.langfuse.com"
 
-    with patch("langfuse.Langfuse") as mock_langfuse_cls:
-        mock_instance = MagicMock()
-        mock_langfuse_cls.return_value = mock_instance
+    import sys
 
+    mock_langfuse_mod = MagicMock()
+    mock_instance = MagicMock()
+    mock_langfuse_mod.Langfuse.return_value = mock_instance
+    with patch.dict(sys.modules, {"langfuse": mock_langfuse_mod}):
         client = init_tracing(mock_settings)
         assert client is mock_instance
         assert is_tracing_enabled()

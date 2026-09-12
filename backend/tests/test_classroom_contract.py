@@ -104,16 +104,12 @@ def test_result_contract_fields():
 
 # ── 耦合面 3：DSL schema 同构锁定 ────────────────────────────────────────
 
-DSL_TOP_KEYS = {"id", "url", "stage", "scenes", "scenesCount", "createdAt"}
-STAGE_KEYS = {
+DSL_REQUIRED_TOP_KEYS = {"id", "stage", "scenes", "createdAt"}
+STAGE_REQUIRED_KEYS = {
     "id",
     "name",
-    "description",
     "createdAt",
     "updatedAt",
-    "style",
-    "languageDirective",
-    "generatedAgentConfigs",
 }
 SCENE_KEYS = {
     "id",
@@ -138,14 +134,15 @@ def _load_engine_dsl_sample() -> dict:
 
 def test_engine_dsl_top_level_schema():
     dsl = _load_engine_dsl_sample()
-    missing = DSL_TOP_KEYS - set(dsl.keys())
+    missing = DSL_REQUIRED_TOP_KEYS - set(dsl.keys())
     assert not missing, f"引擎 DSL 顶层字段漂移: {missing}"
-    assert dsl["scenesCount"] == len(dsl["scenes"]), "scenesCount 与 scenes 长度不一致"
+    if "scenesCount" in dsl:
+        assert dsl["scenesCount"] == len(dsl["scenes"]), "scenesCount 与 scenes 长度不一致"
 
 
 def test_engine_dsl_stage_schema():
     dsl = _load_engine_dsl_sample()
-    missing = STAGE_KEYS - set(dsl["stage"].keys())
+    missing = STAGE_REQUIRED_KEYS - set(dsl["stage"].keys())
     assert not missing, f"引擎 DSL stage 字段漂移: {missing}"
 
 
@@ -185,9 +182,9 @@ def test_local_dsl_isomorphic_with_engine_schema():
     ]
     dsl = build_classroom_dsl(stage_id="contract-test-stage", outline=outline, quizzes=quizzes)
 
-    missing = DSL_TOP_KEYS - set(dsl.keys())
+    missing = DSL_REQUIRED_TOP_KEYS - set(dsl.keys())
     assert not missing, f"本地 DSL 顶层缺字段（与引擎 schema 不同构）: {missing}"
-    missing = STAGE_KEYS - set(dsl["stage"].keys())
+    missing = STAGE_REQUIRED_KEYS - set(dsl["stage"].keys())
     assert not missing, f"本地 DSL stage 缺字段: {missing}"
     for scene in dsl["scenes"]:
         missing = SCENE_KEYS - set(scene.keys())

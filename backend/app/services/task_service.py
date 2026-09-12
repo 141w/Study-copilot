@@ -110,6 +110,7 @@ async def update_task(
         task.completed_at = datetime.now(UTC).replace(tzinfo=None)
         if status == "completed":
             task.progress = 1.0
+            task.error = None
 
     await db.commit()
     await db.refresh(task)

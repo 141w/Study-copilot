@@ -149,6 +149,7 @@
           v-if="message.isStreaming || message.content"
           class="text-[0.9rem] leading-[1.75] text-[var(--text-primary)] prose prose-sm max-w-none"
           v-html="renderedMarkdown"
+          @click="handleContentClick"
         ></div>
         <span v-if="message.isStreaming && message.content" class="stream-caret" aria-hidden="true"></span>
 
@@ -222,41 +223,55 @@
         <!-- 来源：流式研究阶段仅摘要；正文开始/结束后展示可折叠完整卡 -->
         <div
           v-if="displaySources.length > 0"
-          class="mt-4 pt-3 border-t border-[var(--border-default)]"
+          class="sources-section"
           data-test="sources-section"
         >
           <!-- 研究阶段：不打断阅读，只给一行定位摘要 -->
           <div
             v-if="isResearchPhase"
-            class="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]"
+            class="sources-hint"
             data-test="sources-research-hint"
           >
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] animate-pulse shrink-0" />
-            <span>研究中，已定位 {{ displaySources.length }} 个来源…</span>
+            <span class="relative flex h-2 w-2 shrink-0">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span class="sources-hint__text">研究中，已定位 {{ displaySources.length }} 个来源…</span>
           </div>
 
           <!-- 正文出现或流结束后：可折叠完整来源卡 -->
           <template v-else>
             <button
               type="button"
-              class="w-full flex items-center justify-between gap-2 text-left group mb-2 px-1.5 py-1 -mx-1.5 rounded-md hover:bg-[var(--bg-hover)] transition-colors"
+              class="sources-toggle"
               data-test="sources-toggle"
               :aria-expanded="isSourcesOpen"
               @click="isSourcesOpen = !isSourcesOpen"
             >
-              <span class="text-xs text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
-                参考来源
-                <span v-if="usedSourceCount > 0">共 {{ usedSourceCount }} 个</span>
-                <span v-else>共 {{ displaySources.length }} 个</span>
-              </span>
-              <span
-                class="text-[10px] px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] group-hover:text-[var(--text-primary)] group-hover:border-[var(--border-hover)] transition-colors shrink-0"
-              >
-                {{ isSourcesOpen ? '收起' : '展开' }}
-              </span>
+              <div class="sources-toggle__left">
+                <div class="sources-toggle__icon">
+                  <el-icon class="w-3.5 h-3.5"><Reading /></el-icon>
+                </div>
+                <span class="sources-toggle__title">
+                  参考来源
+                </span>
+                <span class="sources-toggle__count">
+                  <span v-if="usedSourceCount > 0">共 {{ usedSourceCount }} 个</span>
+                  <span v-else>共 {{ displaySources.length }} 个</span>
+                </span>
+              </div>
+
+              <div class="sources-toggle__right">
+                <el-icon
+                  class="sources-toggle__arrow w-3.5 h-3.5"
+                  :class="{ 'sources-toggle__arrow--open': isSourcesOpen }"
+                >
+                  <ArrowRight />
+                </el-icon>
+              </div>
             </button>
             <div v-if="isSourcesOpen" data-test="sources-body">
-              <ChatSourceCards :sources="displaySources" />
+              <ChatSourceCards ref="sourceCardsRef" :sources="displaySources" />
             </div>
           </template>
         </div>
@@ -266,10 +281,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, DocumentCopy, EditPen } from '@/components/icons'
+import { ArrowRight, DocumentCopy, EditPen, Reading } from '@/components/icons'
 import type { ChatStreamMessage } from '@/stores/chat'
 import { useChatStore } from '@/stores/chat'
 import { useDocumentStore } from '@/stores/document'
@@ -392,6 +407,25 @@ watch(
     if (open) isSourcesOpen.value = true
   }
 )
+
+const sourceCardsRef = ref<InstanceType<typeof ChatSourceCards> | null>(null)
+
+function handleContentClick(e: MouseEvent): void {
+  const target = (e.target as HTMLElement).closest('.source-badge')
+  if (target) {
+    const idx = target.getAttribute('data-index')
+    if (idx) {
+      const num = parseInt(idx, 10)
+      if (!isNaN(num)) {
+        isSourcesOpen.value = true
+        emit('scrollToSource', num)
+        nextTick(() => {
+          sourceCardsRef.value?.expand(num)
+        })
+      }
+    }
+  }
+}
 
 const savedNoteInfo = computed(() => {
   return props.message.savedNote || props.message.saved_note || null
@@ -560,5 +594,147 @@ summary::-webkit-details-marker {
 }
 summary {
   list-style: none;
+}
+
+/* ==================== 来源区（sources-section）：scoped 纯 CSS ====================
+   项目未启用 Tailwind preflight（global.css 只有 @tailwind utilities）：
+   border 工具类因 border-style 缺省 none 整条不可见；var()/NN 修饰符静默失效
+   （回退 currentColor 画出黑线）；裸 button 带 UA 原生皮肤（ButtonFace + outset）。
+   来源区样式全部在此显式声明，不依赖工具类；令牌取自 variables.css。 */
+.sources-section {
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid color-mix(in srgb, var(--border-default) 80%, transparent);
+}
+.dark .sources-section {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 研究阶段提示条 */
+.sources-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--bg-secondary) 30%, transparent);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.dark .sources-hint {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  color: #a1a1aa;
+}
+.sources-hint__text {
+  font-weight: 500;
+}
+
+/* 「参考来源」折叠按钮：剥 UA 皮肤；无边框无底色，与来源卡同语言，hover 微底色 */
+.sources-toggle {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  margin-bottom: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  user-select: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.sources-toggle:hover {
+  background: color-mix(in srgb, var(--bg-primary) 97%, var(--text-primary));
+}
+.sources-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.dark .sources-toggle:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.7);
+}
+.sources-toggle__left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.sources-toggle__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+.dark .sources-toggle__icon {
+  background: rgba(255, 255, 255, 0.1);
+  color: #a1a1aa;
+}
+.sources-toggle:hover .sources-toggle__icon {
+  color: var(--text-primary);
+}
+.dark .sources-toggle:hover .sources-toggle__icon {
+  color: #ffffff;
+}
+.sources-toggle__title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.dark .sources-toggle__title {
+  color: #e4e4e7;
+}
+.sources-toggle__count {
+  padding: 0.125rem 0.375rem;
+  border: 1px solid rgba(228, 228, 231, 0.8);
+  border-radius: var(--radius-md);
+  background: #f4f4f5;
+  color: #52525b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.dark .sources-toggle__count {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.1);
+  color: #d4d4d8;
+}
+.sources-toggle__right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.sources-toggle__arrow {
+  color: var(--text-muted);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.dark .sources-toggle__arrow {
+  color: #a1a1aa;
+}
+.sources-toggle:hover .sources-toggle__arrow {
+  color: var(--text-primary);
+}
+.dark .sources-toggle:hover .sources-toggle__arrow {
+  color: #ffffff;
+}
+.sources-toggle__arrow--open {
+  transform: rotate(90deg);
 }
 </style>

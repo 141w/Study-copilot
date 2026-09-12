@@ -37,7 +37,9 @@ pytest tests/ --cov-report=html
 
 **Note**: Coverage failure threshold (currently 65%) is set in `pyproject.toml` under `[tool.pytest.ini_options]` as `--cov-fail-under=65`. All invocations inherit it; use `--no-cov` to skip the check.
 
-### Test Files (615 tests, ~72.57% coverage)
+### Test Files（以源码计数为准）
+
+后端当前约 **55 个测试文件 / 634 个测试函数**；覆盖率由 `pyproject.toml` 的 `--cov-fail-under=65` 强制。历史批次文档中的「615 passed / 72.xx%」等为当时全量跑分快照，可能随代码演进漂移，**以本节源码计数与本地/CI 实际输出为准**。
 
 | File | Tests |
 |------|-------|
@@ -178,9 +180,9 @@ Both share `tests/setup.js`, which auto-detects `window` availability:
 - **jsdom**: registers Element Plus (zh-CN), mocks `axios` and `localStorage`, resets Pinia per test
 - **node**: skips DOM mocks, only mocks `axios`
 
-### Test Files (24 files, 227 tests)
+### Test Files（约 298 用例：28 个 SPA 测试文件约 207 + bot 引擎约 91）
 
-#### SPA tests (`tests/` — 17 files)
+#### SPA tests (`tests/` — 28 files, ~207 tests)
 
 | File | Tests |
 |------|-------|

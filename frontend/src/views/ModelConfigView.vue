@@ -4,6 +4,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
       <div>
         <div class="flex items-center gap-3">
+          <CopilotBotAvatar ref="settingsBot" :size="48" mood="idle" />
           <h1 class="text-2xl font-bold text-[var(--text-primary)]">模型配置</h1>
           <span class="text-xs px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium">
             AI Settings
@@ -591,6 +592,7 @@ import {
 import { useConfigStore } from '../stores/config'
 import { useToastStore } from '../stores/toast'
 import type { SystemStatus, LLMCapabilities, ImageTestResult, TTSTestResult } from '../types/models'
+import CopilotBotAvatar from '../components/CopilotBotAvatar.vue'
 
 type MessageFormat = 'openai' | 'anthropic' | 'gemini' | 'ollama'
 
@@ -608,6 +610,7 @@ const configStore = useConfigStore()
 const toast = useToastStore()
 
 const formRef = ref<FormInstance | null>(null)
+const settingsBot = ref<InstanceType<typeof CopilotBotAvatar> | null>(null)
 const saving = ref(false)
 const testingConnection = ref(false)
 const testResult = ref<{ success: boolean; message: string; reply?: string } | null>(null)
@@ -1110,6 +1113,7 @@ function resetConfig(): void {
 
 onMounted(async () => {
   loadSystemStatus()
+  settingsBot.value?.play('swirl')
   const dbConfig = await configStore.fetchLLMConfig()
   if (dbConfig && dbConfig.id) {
     savedKeyMasked.value = dbConfig.api_key_masked || ''

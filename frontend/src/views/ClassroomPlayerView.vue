@@ -1,20 +1,22 @@
 <template>
   <div
     ref="playerContainer"
-    class="h-screen max-h-screen overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col select-none relative font-sans"
+    class="h-screen w-screen max-h-screen overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col select-none relative font-sans"
   >
-    <!-- 顶栏导航与快捷控制条 (Clean Studio Header) -->
-    <header class="h-14 px-3 sm:px-6 bg-[var(--surface-card)]/90 backdrop-blur-md border-b border-[var(--border-default)] flex items-center justify-between z-20 flex-shrink-0 shadow-sm">
-      <!-- 左侧：返回课程、微课标识、标题与幕进度 -->
+    <!-- 顶栏宿主控制条 (Study Copilot Host Header) -->
+    <header class="h-12 px-3 sm:px-5 bg-[var(--surface-card)]/90 backdrop-blur-md border-b border-[var(--border-default)] flex items-center justify-between z-30 flex-shrink-0 shadow-sm">
+      <!-- 左侧：返回、微课标识、课程标题与参考文档 -->
       <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <el-button
           circle
           size="small"
           @click="goBack"
-          title="返回"
+          title="返回课程"
+          class="!border-[var(--border-default)] hover:!border-[var(--color-primary)]"
         >
           <el-icon><ArrowLeft /></el-icon>
         </el-button>
+
         <div class="min-w-0 flex items-center gap-2 sm:gap-2.5">
           <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] font-semibold flex-shrink-0 border border-[var(--border-default)]">
             AI 互动微课
@@ -22,585 +24,369 @@
           <h1 class="text-xs sm:text-sm font-semibold truncate text-[var(--text-primary)] max-w-[140px] sm:max-w-xs md:max-w-md" :title="courseTitle">
             {{ courseTitle }}
           </h1>
-          <span class="text-xs text-[var(--text-muted)] font-mono hidden sm:inline-block border-l border-[var(--border-default)] pl-2.5">
-            第 {{ currentSceneIndex + 1 }} / {{ totalScenes }} 幕
-          </span>
-          <span
+
+          <!-- 参考文档气泡 -->
+          <el-popover
             v-if="sourceDocuments.length > 0"
-            class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--color-success-light)] text-[var(--color-success)] font-medium hidden md:inline-flex items-center gap-1 border border-[var(--color-success)]/20"
+            placement="bottom-start"
+            :width="300"
+            trigger="hover"
           >
-            <el-icon class="w-3 h-3"><Tickets /></el-icon>
-            {{ sourceDocuments.length }} 份参考文档
-          </span>
+            <template #reference>
+              <span
+                class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--color-success-light)] text-[var(--color-success)] font-medium hidden md:inline-flex items-center gap-1 border border-[var(--color-success)]/20 cursor-pointer hover:opacity-85 transition-opacity"
+              >
+                <el-icon class="w-3 h-3"><Tickets /></el-icon>
+                {{ sourceDocuments.length }} 份参考文档
+              </span>
+            </template>
+            <div class="p-1 space-y-2">
+              <div class="text-xs font-semibold text-[var(--text-primary)] border-b border-[var(--border-default)] pb-1.5 flex items-center justify-between">
+                <span>微课引用参考文档</span>
+                <span class="text-[10px] text-[var(--text-muted)] font-mono">共 {{ sourceDocuments.length }} 篇</span>
+              </div>
+              <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                <div
+                  v-for="(doc, idx) in sourceDocuments"
+                  :key="doc.id || idx"
+                  class="text-xs text-[var(--text-secondary)] flex items-center gap-1.5 truncate p-1 rounded hover:bg-[var(--bg-secondary)]"
+                  :title="doc.filename"
+                >
+                  <el-icon class="text-[var(--color-primary)] flex-shrink-0"><Document /></el-icon>
+                  <span class="truncate flex-1">{{ doc.filename || '未命名文档' }}</span>
+                  <span v-if="doc.file_size" class="text-[10px] text-[var(--text-muted)] font-mono flex-shrink-0">
+                    {{ formatSize(doc.file_size) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </el-popover>
         </div>
       </div>
 
-      <!-- 右侧控制组：核心快捷 + 次级设置收纳 -->
+      <!-- 右侧控制组：设置、独立窗口打开、全屏、退出 -->
       <div class="flex items-center gap-1.5 sm:gap-2">
-        <!-- 研讨台词记录抽屉 -->
         <el-button
           circle
           size="small"
-          @click="showHistoryDrawer = true"
-          title="台词记录"
+          @click="settingsVisible = true"
+          title="微课设置"
+          class="!border-[var(--border-default)] hover:!border-[var(--color-primary)]"
         >
-          <el-icon><ChatLineRound /></el-icon>
+          <el-icon><Setting /></el-icon>
         </el-button>
 
-        <!-- 章节目录抽屉切换 -->
         <el-button
+          v-if="resolvedClassroomId"
           circle
           size="small"
-          :type="showSidebar ? 'primary' : 'default'"
-          @click="showSidebar = !showSidebar"
-          title="章节目录"
+          @click="openInNewWindow"
+          title="在独立窗口中演播"
+          class="!border-[var(--border-default)]"
         >
-          <el-icon><List /></el-icon>
+          <el-icon><Promotion /></el-icon>
         </el-button>
 
-        <!-- 次级设置：倍速 / 语音 / 连播 -->
-        <el-dropdown trigger="click" @command="handleQuickCommand">
-          <el-button circle size="small" title="播放设置">
-            <el-icon><Setting /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="rate">倍速 · {{ playbackRate }}x</el-dropdown-item>
-              <el-dropdown-item command="audio">语音朗读 · {{ audioEnabled ? '已开启' : '已静音' }}</el-dropdown-item>
-              <el-dropdown-item command="auto">自动连播 · {{ autoAdvance ? '已开启' : '单幕暂停' }}</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
-        <!-- 全屏按钮 -->
         <el-button
           circle
           size="small"
           @click="toggleFullscreen"
-          title="全屏切换"
+          :title="isFullscreen ? '退出全屏' : '全屏演播'"
+          class="!border-[var(--border-default)]"
         >
           <el-icon><View /></el-icon>
+        </el-button>
+
+        <el-button
+          circle
+          size="small"
+          @click="goBack"
+          title="关闭微课"
+          class="!border-[var(--border-default)]"
+        >
+          <el-icon><Close /></el-icon>
         </el-button>
       </div>
     </header>
 
-    <!-- 加载中态 -->
-    <div v-if="loading" class="flex-1 flex flex-col items-center justify-center p-8 space-y-4">
-      <el-icon class="text-4xl text-[var(--color-primary)] reicon-spin"><Loading /></el-icon>
-      <p class="text-sm text-[var(--text-muted)] animate-pulse">正在加载 AI 互动课堂课件与剧本...</p>
+    <!-- 主视口区域 -->
+    <div class="flex-1 relative w-full h-full overflow-hidden bg-black/5 dark:bg-black/20">
+      <!-- 1. 正在初始化数据态 -->
+      <div
+        v-if="loading"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center p-8 space-y-4 bg-[var(--bg-primary)]"
+      >
+        <el-icon class="text-4xl text-[var(--color-primary)] reicon-spin"><Loading /></el-icon>
+        <div class="text-center space-y-1">
+          <p class="text-sm font-medium text-[var(--text-primary)]">正在加载 AI 互动微课...</p>
+          <p class="text-xs text-[var(--text-muted)]">连接 OpenMAIC 引擎演播环境与剧本数据</p>
+        </div>
+      </div>
+
+      <!-- 2. 错误/异常态 -->
+      <div
+        v-else-if="error || !resolvedClassroomId"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center p-8 space-y-4 bg-[var(--bg-primary)]"
+      >
+        <div class="w-16 h-16 rounded-2xl bg-[var(--color-warning)]/10 flex items-center justify-center text-[var(--color-warning)] mb-1 shadow-sm">
+          <el-icon class="text-3xl"><CircleCloseFilled /></el-icon>
+        </div>
+        <h2 class="text-base sm:text-lg font-semibold text-[var(--text-primary)]">未能载入互动微课</h2>
+        <p class="text-xs sm:text-sm text-[var(--text-muted)] max-w-md text-center leading-relaxed">
+          {{ error || '当前课程暂未生成互动微课，请前往课程详情页点击“生成课堂”。' }}
+        </p>
+        <div class="flex items-center gap-3 mt-4">
+          <el-button type="primary" @click="goBack">返回课程空间</el-button>
+          <el-button @click="initClassroom">重试连接</el-button>
+        </div>
+      </div>
+
+      <!-- 3. OpenMAIC 高保真嵌入 iframe -->
+      <template v-else>
+        <!-- iframe 加载中的优雅骨架遮罩 -->
+        <div
+          v-if="!iframeReady"
+          class="absolute inset-0 z-10 flex flex-col items-center justify-center p-8 space-y-3 bg-[var(--bg-primary)] transition-opacity duration-300 pointer-events-none"
+        >
+          <el-icon class="text-3xl text-[var(--color-primary)] reicon-spin"><Loading /></el-icon>
+          <p class="text-xs text-[var(--text-muted)] animate-pulse">正在载入 OpenMAIC 画布与声学引擎...</p>
+        </div>
+
+        <iframe
+          ref="engineIframe"
+          :src="engineSrc"
+          class="w-full h-full border-0 block"
+          allow="autoplay; camera; microphone; display-capture; clipboard-read; clipboard-write; fullscreen"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
+          @load="onIframeLoad"
+        />
+      </template>
     </div>
 
-    <!-- 错误/未找到态 -->
-    <div v-else-if="error || !classroomData" class="flex-1 flex flex-col items-center justify-center p-8 space-y-4">
-      <div class="w-16 h-16 rounded-2xl bg-[var(--color-warning)]/10 flex items-center justify-center text-[var(--color-warning)] mb-2">
-        <el-icon class="text-3xl"><CircleCloseFilled /></el-icon>
-      </div>
-      <h2 class="text-lg font-medium text-[var(--text-primary)]">课件未找到或已被移除</h2>
-      <p class="text-sm text-[var(--text-muted)] max-w-md text-center">
-        {{ error || '当前课程暂未生成完整的互动微课，请前往课程详情页点击“生成课堂”。' }}
-      </p>
-      <div class="flex items-center gap-3 mt-4">
-        <el-button type="primary" @click="goBack">返回课程详情</el-button>
-        <el-button @click="loadData">重试加载</el-button>
-      </div>
-    </div>
-
-    <!-- 主演播视口 (Visual Stage + Studio Deck) -->
-    <div v-else class="flex-1 flex overflow-hidden relative min-h-0">
-      <main class="flex-1 flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-y-auto lg:overflow-hidden relative min-h-0 min-w-0 transition-all duration-300">
-        <!-- 16:9 画布：flex 槽位约束 -->
-        <div class="stage-slot w-full max-w-5xl flex-1 min-h-0 min-w-0 relative flex items-center justify-center">
-          <div
-            class="stage-frame relative w-full max-h-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
-            :class="hasCustomCanvasTheme ? '' : 'stage-default-theme'"
-            :style="stageFrameStyle"
-          >
-            <!-- 幕顶微型信息栏 -->
-            <div class="absolute top-3 left-4 right-4 flex items-center justify-between pointer-events-none z-10">
-              <div class="flex items-center gap-2">
-                <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-sm">
-                  {{ currentScene?.type === 'quiz' ? '随堂交互测验' : `第 ${currentSceneIndex + 1} 幕 · 讲解` }}
-                </span>
-                <span class="text-xs text-white/90 font-medium truncate max-w-xs sm:max-w-md drop-shadow-sm">
-                  {{ currentScene?.title }}
-                </span>
+    <!-- 课堂设置抽屉/弹窗 -->
+    <el-dialog
+      v-model="settingsVisible"
+      title="微课设置"
+      width="500px"
+      append-to-body
+      class="classroom-settings-dialog"
+    >
+      <div class="space-y-5 py-1">
+        <!-- 1. 演播控制 -->
+        <div>
+          <h3 class="text-xs font-semibold text-[var(--text-primary)] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <el-icon><VideoPlay /></el-icon>
+            演播与语音控制
+          </h3>
+          <div class="space-y-3.5 bg-[var(--bg-secondary)] p-3.5 rounded-xl border border-[var(--border-default)]">
+            <!-- 语速倍速 -->
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-[var(--text-primary)]">播放倍速</div>
+                <div class="text-[11px] text-[var(--text-muted)]">调节老师讲解与研讨发言节奏</div>
               </div>
-              <div class="text-[11px] text-white/70 font-mono bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-md border border-white/10">
-                Scene {{ currentSceneIndex + 1 }} / {{ totalScenes }}
-              </div>
-            </div>
-
-            <!-- A. Slide 场景渲染器 (PPTist 16:9 坐标系) -->
-            <div
-              v-if="currentScene?.type === 'slide'"
-              class="relative w-full h-full p-6 sm:p-8 overflow-hidden select-none"
-            >
-              <div
-                v-for="el in canvasElements"
-                :key="el.id"
-                class="absolute transition-all duration-300 flex flex-col justify-center"
-                :style="getElementStyle(el)"
+              <el-radio-group
+                v-model="playerConfig.speed"
+                size="small"
+                @change="onSpeedChange"
               >
-                <!-- 文本元素：OpenMAIC 常输出 HTML（<p>/<strong>），简化 DSL 为纯文本 -->
-                <template v-if="el.type === 'text'">
-                  <div
-                    v-if="isRichHtml(el.content)"
-                    class="font-semibold leading-tight tracking-wide slide-html"
-                    :style="{
-                      fontSize: `clamp(13px, ${(el.fontSize || 20) / 10}vw, ${el.fontSize || 24}px)`,
-                      color: getTextColorStyle(el)
-                    }"
-                    v-html="el.content"
-                  />
-                  <div
-                    v-else
-                    class="font-semibold leading-tight tracking-wide whitespace-pre-wrap"
-                    :style="{
-                      fontSize: `clamp(13px, ${(el.fontSize || 20) / 10}vw, ${el.fontSize || 24}px)`,
-                      color: getTextColorStyle(el)
-                    }"
-                  >
-                    {{ el.content }}
-                  </div>
-                </template>
-
-                <!-- 图片元素（概念插图） -->
-                <template v-else-if="el.type === 'image'">
-                  <div class="w-full h-full rounded-xl overflow-hidden shadow-sm border border-[var(--border-default)] relative group bg-black/10">
-                    <img
-                      :src="el.src"
-                      alt="Illustration"
-                      class="w-full h-full object-cover"
-                    />
-                  </div>
-                </template>
-
-                <!-- 图形/卡片容器元素 -->
-                <template v-else-if="el.type === 'shape'">
-                  <div
-                    class="w-full h-full rounded-xl p-4 sm:p-5 shadow-sm border transition-all duration-300 flex flex-col overflow-hidden"
-                    :class="[
-                      isElementHighlighted(el.id)
-                        ? 'ring-2 ring-[var(--color-primary)] scale-[1.01] shadow-md'
-                        : ''
-                    ]"
-                    :style="getShapeStyle(el)"
-                  >
-                    <div
-                      class="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed overflow-y-auto"
-                      :style="{ color: getShapeTextColor(el) }"
-                    >
-                      {{ el.text }}
-                    </div>
-                  </div>
-                </template>
-              </div>
+                <el-radio-button :value="1">1.0x</el-radio-button>
+                <el-radio-button :value="1.25">1.25x</el-radio-button>
+                <el-radio-button :value="1.5">1.5x</el-radio-button>
+                <el-radio-button :value="2">2.0x</el-radio-button>
+              </el-radio-group>
             </div>
 
-            <!-- B. Quiz 交互测验场景渲染器 -->
-            <div
-              v-else-if="currentScene?.type === 'quiz'"
-              class="relative w-full h-full p-6 sm:p-10 flex flex-col justify-center max-w-2xl mx-auto overflow-y-auto"
-            >
-              <div class="mb-3">
-                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--border-default)]">
-                  随堂挑战
-                </span>
-                <h2 class="text-sm sm:text-lg font-bold mt-2.5 text-[var(--text-primary)] leading-snug">
-                  {{ currentQuiz?.question }}
-                </h2>
-              </div>
-
-              <!-- 选项列表：与站内一致的纯按钮风格 -->
-              <div class="space-y-2.5 my-1">
-                <el-button
-                  v-for="(opt, oIdx) in currentQuizOptions"
-                  :key="oIdx"
-                  @click="selectQuizOption(opt)"
-                  :disabled="quizSubmitted"
-                  class="quiz-option-btn w-full !h-auto !px-3 !py-2.5 !justify-start !font-normal"
-                  :class="getQuizOptionClass(opt)"
-                >
-                  <span class="flex items-center justify-between w-full gap-2.5">
-                    <span class="flex items-center gap-2.5 min-w-0">
-                      <span class="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0" :class="getQuizOptionBadgeClass(opt)">
-                        {{ getOptionLetter(Number(oIdx)) }}
-                      </span>
-                      <span class="text-left leading-normal text-xs sm:text-sm font-medium">{{ opt }}</span>
-                    </span>
-                    <el-icon v-if="quizSubmitted && isOptionCorrect(opt)" class="text-[var(--color-success)] text-base shrink-0"><CircleCheckFilled /></el-icon>
-                    <el-icon v-else-if="quizSubmitted && selectedOption === opt && !isOptionCorrect(opt)" class="text-[var(--color-error)] text-base shrink-0"><CircleCloseFilled /></el-icon>
-                  </span>
-                </el-button>
-              </div>
-
-              <!-- 测验解析与反馈 -->
-              <div v-if="quizSubmitted" class="mt-3 p-3.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-xs font-bold" :class="isCurrentAnswerCorrect ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'">
-                    {{ isCurrentAnswerCorrect ? '✓ 回答正确！' : '✗ 回答有误' }}
-                  </span>
-                  <span class="text-xs text-[var(--text-secondary)]">正确答案是：{{ currentQuiz?.correctValues?.[0] || '—' }}</span>
-                </div>
-                <p v-if="currentQuiz?.explanation" class="text-xs text-[var(--text-muted)] leading-relaxed">
-                  💡 {{ currentQuiz.explanation }}
-                </p>
-                <div class="mt-2.5 flex justify-end">
+            <!-- 语音朗读音量 -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-xs font-medium text-[var(--text-primary)]">朗读音量</div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono text-[var(--text-muted)]">{{ volumePercent }}%</span>
                   <el-button
-                    type="primary"
+                    link
                     size="small"
-                    @click="nextScene"
-                    class="!px-3.5"
+                    @click="toggleMute"
+                    :class="playerConfig.muted ? 'text-[var(--color-danger)]' : 'text-[var(--text-muted)]'"
                   >
-                    进入下一幕
+                    {{ playerConfig.muted ? '取消静音' : '静音' }}
                   </el-button>
                 </div>
               </div>
+              <el-slider
+                v-model="volumePercent"
+                :min="0"
+                :max="100"
+                :step="5"
+                :disabled="playerConfig.muted"
+                @change="onVolumeChange"
+              />
             </div>
-          </div>
-        </div>
 
-        <!-- 课堂互动台词与控制总台 (Studio Deck - 位于画布下方，完全解耦不遮挡) -->
-        <div class="w-full max-w-5xl flex flex-col gap-2.5 mt-2 flex-shrink-0">
-          <!-- 上层：当前发言角色与剧本台词卡 -->
-          <div class="w-full rounded-2xl bg-[var(--surface-card)] border border-[var(--border-default)] px-4 py-2.5 sm:py-3 shadow-sm flex items-center gap-3.5 transition-colors">
-            <!-- 角色头像与徽章 -->
-            <div class="flex items-center gap-2.5 flex-shrink-0">
-              <div
-                class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 relative "
-                :style="{
-                  backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'var(--color-primary-light)',
-                  color: currentAgentConfig?.color || 'var(--color-primary)',
-                  border: `1px solid ${currentAgentConfig?.color ? `${currentAgentConfig.color}35` : 'var(--border-default)'}`
-                }"
-              >
-                <el-icon class="text-lg">
-                  <GraduationCap v-if="currentAgentConfig?.id === 'teacher'" />
-                  <Brain v-else-if="currentAgentConfig?.id === 'thinker'" />
-                  <User v-else />
-                </el-icon>
-                <!-- 说话动态脉冲波 -->
-                <span
-                  v-if="isPlaying && (isAudioPlaying || audioEnabled)"
-                  class="absolute -inset-1 rounded-xl border animate-ping pointer-events-none opacity-30"
-                  :style="{ borderColor: currentAgentConfig?.color || 'var(--color-primary)' }"
-                ></span>
-              </div>
+            <!-- 自动连播 -->
+            <div class="flex items-center justify-between pt-1 border-t border-[var(--border-default)]/60">
               <div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-xs sm:text-sm font-bold text-[var(--text-primary)]">
-                    {{ currentAgentConfig?.name || '导师' }}
-                  </span>
-                  <span
-                    class="text-[10px] px-1.5 py-px rounded-full font-medium"
-                    :style="{
-                      backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'var(--color-primary-light)',
-                      color: currentAgentConfig?.color || 'var(--color-primary)'
-                    }"
-                  >
-                    {{ currentAgentConfig?.role || '角色发言' }}
-                  </span>
-                </div>
-                <div class="text-[10px] text-[var(--text-muted)] flex items-center gap-1 mt-0.5 font-mono">
-                  <span>动作 {{ currentActionIndex + 1 }}/{{ totalActionsInScene }}</span>
-                  <span v-if="isPlaying && (isAudioPlaying || audioEnabled)" class="flex items-center gap-0.5 ml-1">
-                    <span class="w-0.5 h-1.5 bg-[var(--color-success)] rounded-full animate-pulse"></span>
-                    <span class="w-0.5 h-2.5 bg-[var(--color-success)] rounded-full animate-pulse" style="animation-delay: 150ms"></span>
-                    <span class="w-0.5 h-1 bg-[var(--color-success)] rounded-full animate-pulse" style="animation-delay: 300ms"></span>
-                  </span>
-                </div>
+                <div class="text-xs font-medium text-[var(--text-primary)]">自动连播下一幕</div>
+                <div class="text-[11px] text-[var(--text-muted)]">当前小节讲解完毕后自动转入下一幕</div>
               </div>
-            </div>
-
-            <!-- 台词正文 -->
-            <div class="flex-1 min-w-0 px-2">
-              <p
-                class="text-xs sm:text-sm text-[var(--text-primary)] font-normal leading-relaxed cursor-pointer select-none"
-                :class="dialogueExpanded ? '' : 'line-clamp-2'"
-                :title="dialogueExpanded ? '点击收起' : '点击展开全文'"
-                @click="dialogueExpanded = !dialogueExpanded"
-              >
-                {{ currentAction?.text || '（微课剧本正在就位...）' }}
-              </p>
-            </div>
-
-            <!-- 步进操作：circle small -->
-            <div class="flex items-center gap-1.5 flex-shrink-0">
-              <el-button
-                circle
-                size="small"
-                @click="prevActionOrScene"
-                :disabled="currentSceneIndex === 0 && currentActionIndex === 0"
-                title="上一句/上一幕"
-              >
-                <el-icon><ArrowLeft /></el-icon>
-              </el-button>
-              <el-button
-                circle
-                size="small"
-                @click="nextActionOrScene"
-                :disabled="currentSceneIndex === totalScenes - 1 && currentActionIndex === totalActionsInScene - 1"
-                title="下一句/下一幕"
-              >
-                <el-icon><ArrowRight /></el-icon>
-              </el-button>
+              <el-switch
+                v-model="playerConfig.autoPlay"
+                @change="onAutoPlayChange"
+              />
             </div>
           </div>
+        </div>
 
-          <!-- 下层：统一核心播放控制与进度岛 -->
-          <div class="w-full px-4 py-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-between gap-4 shadow-sm">
-            <!-- 上一幕 -->
-            <el-button
-              text
-              size="small"
-              @click="prevScene"
-              :disabled="currentSceneIndex === 0"
-              title="上一幕"
-            >
-              <el-icon class="mr-1"><ArrowLeft /></el-icon>
-              <span class="hidden sm:inline">上一幕</span>
-            </el-button>
-
-            <!-- 核心播放/暂停控制与幕进度指示器 -->
-            <div class="flex items-center gap-3.5">
-              <el-button
-                :type="isPlaying ? 'default' : 'primary'"
-                size="default"
-                @click="togglePlay"
-                class="!px-5"
-              >
-                <el-icon class="mr-1.5"><VideoPause v-if="isPlaying" /><VideoPlay v-else /></el-icon>
-                <span>{{ isPlaying ? '暂停' : '播放' }}</span>
-              </el-button>
-
-              <!-- 幕切换胶囊指示器 -->
-              <div class="hidden sm:flex items-center gap-1.5 pl-3 border-l border-[var(--border-default)]">
-                <button
-                  v-for="(_, sIdx) in totalScenes"
-                  :key="sIdx"
-                  @click="jumpToScene(Number(sIdx))"
-                  :title="`跳转到第 ${Number(sIdx) + 1} 幕`"
-                  class="h-2 rounded-full transition-all duration-200 cursor-pointer"
-                  :class="[
-                    Number(sIdx) === currentSceneIndex
-                      ? 'w-5 bg-[var(--color-primary)]'
-                      : (Number(sIdx) < currentSceneIndex ? 'w-2 bg-[var(--color-success)] opacity-80 hover:opacity-100' : 'w-2 bg-[var(--border-default)] hover:bg-[var(--border-hover)]')
-                  ]"
-                ></button>
+        <!-- 2. 主模型与讨论引擎 -->
+        <div>
+          <h3 class="text-xs font-semibold text-[var(--text-primary)] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <el-icon><Brain /></el-icon>
+            主模型与讨论引擎
+          </h3>
+          <div class="bg-[var(--bg-secondary)] p-3.5 rounded-xl border border-[var(--border-default)] space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span class="text-xs font-semibold text-[var(--text-primary)]">
+                  {{ playerConfig.modelId || 'step-3.7-flash' }}
+                </span>
               </div>
-            </div>
-
-            <!-- 下一幕 -->
-            <el-button
-              text
-              size="small"
-              @click="nextScene"
-              :disabled="currentSceneIndex === totalScenes - 1"
-              title="下一幕"
-            >
-              <span class="hidden sm:inline">下一幕</span>
-              <el-icon class="ml-1"><ArrowRight /></el-icon>
-            </el-button>
-          </div>
-        </div>
-      </main>
-
-      <!-- 移动端/平板遮罩 (点击收起侧边栏) -->
-      <div
-        v-if="showSidebar"
-                class="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity"
-        @click="showSidebar = false"
-      ></div>
-
-      <!-- 侧边栏：微课幕次目录 (桌面端自适应平铺排布，移动端抽屉浮层) -->
-      <aside
-        v-show="showSidebar"
-        class="h-full bg-[var(--surface-card)] border-l border-[var(--border-default)] flex flex-col transition-all duration-300
-               fixed inset-y-0 right-0 z-40 w-72 sm:w-80 shadow-2xl
-               lg:relative lg:inset-auto lg:z-10 lg:w-72 xl:w-80 lg:shadow-none lg:flex-shrink-0"
-      >
-        <div class="p-3.5 sm:p-4 border-b border-[var(--border-default)] flex items-center justify-between flex-shrink-0">
-          <div class="flex items-center gap-2">
-            <el-icon class="text-[var(--color-primary)]"><Tickets /></el-icon>
-            <h3 class="text-sm font-semibold text-[var(--text-primary)]">课堂幕次目录</h3>
-          </div>
-          <el-button circle size="small" @click="showSidebar = false" title="关闭目录">
-            <el-icon><Close /></el-icon>
-          </el-button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto p-3 space-y-2">
-          <div
-            v-for="(sc, sIdx) in classroomData.scenes"
-            :key="sc.id || sIdx"
-            @click="jumpToScene(Number(sIdx))"
-            class="p-3 rounded-xl border transition-all cursor-pointer group"
-            :class="[
-              Number(sIdx) === currentSceneIndex
-                ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm font-medium'
-                : 'border-[var(--border-default)] hover:border-[var(--border-hover)] bg-[var(--surface-card)] hover:bg-[var(--bg-secondary)]/70 text-[var(--text-primary)]'
-            ]"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <span class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-secondary)] font-mono">
-                #{{ Number(sIdx) + 1 }}
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-success-light)] text-[var(--color-success)] font-medium border border-[var(--color-success)]/20">
+                已接入 · 无感直通
               </span>
-              <span
-                class="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                :class="sc.type === 'quiz' ? 'bg-[var(--color-warning-light)] text-[var(--color-warning)]' : 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'"
+            </div>
+            <p class="text-[11px] text-[var(--text-muted)] leading-relaxed">
+              微课中的随堂提问与圆桌研讨已自动接入 Study Copilot 配置的主大模型，无需在微课内单独填写 API Key。
+            </p>
+            <div class="pt-2 border-t border-[var(--border-default)]/60 flex items-center justify-between">
+              <span class="text-[11px] text-[var(--text-muted)]">如需更换系统主模型</span>
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                @click="goToModelConfig"
               >
-                {{ sc.type === 'quiz' ? '随堂测验' : '讲解幕' }}
-              </span>
-            </div>
-            <h4 class="text-xs font-semibold mt-1.5 line-clamp-1 group-hover:opacity-80">
-              {{ sc.title }}
-            </h4>
-            <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)] mt-2">
-              <span>{{ (sc.actions || []).length }} 条剧本动作</span>
-              <span v-if="Number(sIdx) < currentSceneIndex" class="text-[var(--color-success)] font-medium">已完成</span>
-              <span v-else-if="Number(sIdx) === currentSceneIndex" class="text-[var(--color-primary)] font-bold">演播中</span>
+                前往模型设置
+              </el-button>
             </div>
           </div>
         </div>
 
-        <!-- 引用源文档 -->
-        <div v-if="sourceDocuments.length > 0" class="p-3 border-t border-[var(--border-default)] bg-[var(--bg-secondary)]/30 flex-shrink-0">
-          <div class="flex items-center gap-1.5 mb-2 text-xs font-semibold text-[var(--text-muted)]">
-            <el-icon class="w-3.5 h-3.5 text-[var(--color-primary)]"><Tickets /></el-icon>
-            <span>本课引用参考材料 ({{ sourceDocuments.length }})</span>
-          </div>
-          <div class="space-y-1.5 max-h-36 overflow-y-auto">
-            <div
-              v-for="doc in sourceDocuments"
-              :key="doc.id"
-              class="text-xs p-2 rounded-lg bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-between gap-2"
-              :title="doc.filename"
-            >
-              <span class="truncate flex-1 font-medium text-[var(--text-primary)]">{{ doc.filename }}</span>
-              <span v-if="doc.file_size" class="text-[10px] text-[var(--text-muted)] flex-shrink-0 font-mono">
-                {{ formatSize(doc.file_size) }}
-              </span>
+        <!-- 3. 参会人设说明 -->
+        <div>
+          <h3 class="text-xs font-semibold text-[var(--text-primary)] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <el-icon><User /></el-icon>
+            微课参会人设
+          </h3>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="p-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface-card)] text-center space-y-1">
+              <div class="text-xs font-semibold text-[var(--text-primary)] flex items-center justify-center gap-1">
+                <el-icon class="text-emerald-500"><GraduationCap /></el-icon>
+                苏老师
+              </div>
+              <div class="text-[10px] text-[var(--text-muted)] leading-tight">主讲教师 · 课程串讲与白板推演</div>
+            </div>
+            <div class="p-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface-card)] text-center space-y-1">
+              <div class="text-xs font-semibold text-[var(--text-primary)] flex items-center justify-center gap-1">
+                <el-icon class="text-sky-500"><Lightning /></el-icon>
+                学霸同学
+              </div>
+              <div class="text-[10px] text-[var(--text-muted)] leading-tight">研讨分析 · 深度思辨与概念延伸</div>
+            </div>
+            <div class="p-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface-card)] text-center space-y-1">
+              <div class="text-xs font-semibold text-[var(--text-primary)] flex items-center justify-center gap-1">
+                <el-icon class="text-amber-500"><User /></el-icon>
+                求知同学
+              </div>
+              <div class="text-[10px] text-[var(--text-muted)] leading-tight">互动探索 · 积极提问与疑点追问</div>
             </div>
           </div>
-        </div>
-      </aside>
-    </div>
-
-    <!-- 研讨历史全量抽屉 -->
-    <el-drawer
-      v-model="showHistoryDrawer"
-      title="本节课堂研讨完整记录"
-      direction="rtl"
-      size="380px"
-    >
-      <div class="space-y-3 p-1">
-        <div
-          v-for="(act, aIdx) in currentScene?.actions || []"
-          :key="act.id || aIdx"
-          class="p-3 rounded-xl border border-[var(--border-default)] bg-[var(--surface-card)]"
-        >
-          <div class="flex items-center gap-2 mb-1.5">
-            <span class="text-xs font-bold" :style="{ color: getAgentConfig(act.agentId)?.color || 'var(--color-primary)' }">
-              {{ getAgentConfig(act.agentId)?.name || '角色' }}
-            </span>
-            <span class="text-[10px] text-[var(--text-muted)]">
-              {{ getAgentConfig(act.agentId)?.role }}
-            </span>
-          </div>
-          <p class="text-xs text-[var(--text-primary)] leading-relaxed">
-            {{ act.text }}
-          </p>
         </div>
       </div>
-    </el-drawer>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useClassroomStore } from '../stores/classroom'
-import api from '../services/api'
+import { ElMessage } from 'element-plus'
+import { useCourseStore } from '../stores/course'
+import { useThemeStore } from '../stores/theme'
+import { parseCourseDescription } from '../utils/course'
 import {
   ArrowLeft,
-  ArrowRight,
-  VideoPlay,
-  VideoPause,
-  List,
   Close,
   Loading,
-  CircleCheckFilled,
   CircleCloseFilled,
   Tickets,
-  GraduationCap,
-  Brain,
-  User,
-  ChatLineRound,
-  Setting,
+  Document,
+  Promotion,
   View,
+  Setting,
+  VideoPlay,
+  Brain,
+  GraduationCap,
+  Lightning,
+  User,
 } from '../components/icons'
 
 const route = useRoute()
 const router = useRouter()
-const classroomStore = useClassroomStore()
+const courseStore = useCourseStore()
 
-const classroomId = computed(() => (route.params.id as string) || '')
+const themeStore = useThemeStore()
 const playerContainer = ref<HTMLElement | null>(null)
+const engineIframe = ref<HTMLIFrameElement | null>(null)
 
 const loading = ref(true)
+const iframeReady = ref(false)
 const error = ref('')
-const classroomData = ref<any>(null)
+const isFullscreen = ref(false)
+const settingsVisible = ref(false)
 
-// 播放控制状态
-const currentSceneIndex = ref(0)
-const currentActionIndex = ref(0)
-const isPlaying = ref(false)
-const audioEnabled = ref(true)
-const autoAdvance = ref(true)
-const showSidebar = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false)
-const dialogueExpanded = ref(false)
-const showHistoryDrawer = ref(false)
-
-// 播放倍速
-const playbackRates = [0.75, 1.0, 1.25, 1.5]
-const playbackRate = ref(1.0)
-
-function cyclePlaybackRate() {
-  const currentIdx = playbackRates.indexOf(playbackRate.value)
-  const nextIdx = (currentIdx + 1) % playbackRates.length
-  playbackRate.value = playbackRates[nextIdx]
-  if (currentAudio) {
-    currentAudio.playbackRate = playbackRate.value
-  }
-}
-
-function handleQuickCommand(command: string | number | object): void {
-  if (command === 'rate') cyclePlaybackRate()
-  else if (command === 'audio') toggleAudio()
-  else if (command === 'auto') autoAdvance.value = !autoAdvance.value
-}
-
-// 测验场景专用状态
-const selectedOption = ref('')
-const quizSubmitted = ref(false)
-
-// 定时器与语音合成
-let actionTimer: any = null
-let currentAudio: HTMLAudioElement | null = null
-let currentAudioUrl: string | null = null
-const isAudioPlaying = ref(false)
-
-// 计算属性
-const courseTitle = computed(() => classroomData.value?.stage?.name || 'AI 互动微课')
-const totalScenes = computed(() => (classroomData.value?.scenes || []).length)
-const currentScene = computed(() => classroomData.value?.scenes?.[currentSceneIndex.value] || null)
-const sourceDocuments = computed(() => {
-  return (
-    classroomData.value?.sourceDocuments ||
-    classroomData.value?.stage?.sourceDocuments ||
-    []
-  )
+const playerConfig = ref({
+  speed: 1,
+  volume: 1,
+  muted: false,
+  autoPlay: true,
+  modelId: 'step-3.7-flash',
 })
+
+const volumePercent = computed({
+  get: () => Math.round(playerConfig.value.volume * 100),
+  set: (val: number) => {
+    playerConfig.value.volume = val / 100
+  },
+})
+
+const resolvedClassroomId = ref('')
+const courseTitle = ref('AI 互动微课')
+const sourceDocuments = ref<Array<{ id?: string; filename?: string; file_size?: number }>>([])
+
+const courseId = computed(() => {
+  if ((route.path || '').startsWith('/courses/')) {
+    return (route.params?.id as string) || ''
+  }
+  return ''
+})
+
+const engineSrc = computed(() => {
+  if (!resolvedClassroomId.value) return ''
+  const theme = themeStore.isDark ? 'dark' : 'light'
+  return `/classroom-engine/classroom/${resolvedClassroomId.value}?embedded=true&theme=${theme}`
+})
+
+// 监听宿主主题变化，跨 iframe 实时向 OpenMAIC 发送主题切换消息
+watch(
+  () => themeStore.isDark,
+  (isDark) => {
+    const theme = isDark ? 'dark' : 'light'
+    if (engineIframe.value?.contentWindow) {
+      engineIframe.value.contentWindow.postMessage({ type: 'SET_THEME', theme }, '*')
+    }
+  }
+)
 
 function formatSize(bytes?: number): string {
   if (!bytes) return ''
@@ -608,521 +394,169 @@ function formatSize(bytes?: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
-const canvasTheme = computed(() => currentScene.value?.content?.canvas?.theme || {})
 
-/** 生成器默认浅色画布（历史课件 #F8FAFC + #1E293B）——视为未定制 */
-const STOCK_LIGHT_CANVAS_BGS = new Set(['#f8fafc', '#ffffff', '#f9fafb', '#f1f5f9'])
-
-/** 真正定制画布主题？默认浅底深字 → 跟随应用亮暗令牌 */
-const hasCustomCanvasTheme = computed(() => {
-  const t = canvasTheme.value
-  const bg = String(t?.backgroundColor || '').toLowerCase()
-  const font = String(t?.fontColor || '').toLowerCase()
-  if (!bg && !font) return false
-  if (STOCK_LIGHT_CANVAS_BGS.has(bg) && (!font || font === '#1e293b')) {
-    return false
-  }
-  return true
-})
-
-const stageFrameStyle = computed(() => {
-  if (hasCustomCanvasTheme.value) {
-    return {
-      backgroundColor: canvasTheme.value.backgroundColor || 'var(--surface-card)',
-      color: canvasTheme.value.fontColor || 'var(--text-primary)',
+function onIframeLoad() {
+  setTimeout(() => {
+    iframeReady.value = true
+    const theme = themeStore.isDark ? 'dark' : 'light'
+    if (engineIframe.value?.contentWindow) {
+      engineIframe.value.contentWindow.postMessage({ type: 'SET_THEME', theme }, '*')
     }
-  }
-  return {
-    backgroundColor: 'var(--surface-card)',
-    color: 'var(--text-primary)',
-  }
-})
-
-function hexLuminance(color: string): number | null {
-  const hex = color.trim().replace('#', '')
-  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(hex)) return null
-  const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex
-  const r = parseInt(full.slice(0, 2), 16) / 255
-  const g = parseInt(full.slice(2, 4), 16) / 255
-  const b = parseInt(full.slice(4, 6), 16) / 255
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-function getTextColorStyle(el: any): string {
-  if (!hasCustomCanvasTheme.value) return 'inherit'
-  return el.defaultColor || 'inherit'
-}
-
-function getShapeStyle(el: any): Record<string, string> {
-  const fill = typeof el.fill === 'string' ? el.fill : ''
-  const outline = el.outline?.color
-  let background: string
-  if (!fill) {
-    background = 'var(--bg-tertiary)'
-  } else if (!hasCustomCanvasTheme.value) {
-    const lum = hexLuminance(fill)
-    background = lum !== null && lum > 0.55 ? 'var(--bg-tertiary)' : fill
-  } else {
-    background = fill
-  }
-  const outLum = outline ? hexLuminance(outline) : null
-  const border = !hasCustomCanvasTheme.value && outLum !== null && outLum > 0.7
-    ? 'var(--border-default)'
-    : (outline || 'var(--border-default)')
-  return { backgroundColor: background, borderColor: border }
-}
-
-function getShapeTextColor(el: any): string {
-  if (el.defaultColor) return el.defaultColor
-  const fill = typeof el.fill === 'string' ? el.fill : ''
-  if (!hasCustomCanvasTheme.value) {
-    const lum = fill ? hexLuminance(fill) : null
-    if (lum === null || lum > 0.55) return 'inherit'
-  }
-  const lum = fill ? hexLuminance(fill) : null
-  if (lum !== null && lum > 0.55) return '#111827'
-  if (lum !== null && lum < 0.2) return '#F8FAFC'
-  return 'inherit'
-}
-const canvasElements = computed(() => currentScene.value?.content?.canvas?.elements || [])
-const currentActions = computed(() => currentScene.value?.actions || [])
-const totalActionsInScene = computed(() => currentActions.value.length)
-const currentAction = computed(() => currentActions.value[currentActionIndex.value] || null)
-
-const agentConfigs = computed(() => classroomData.value?.stage?.generatedAgentConfigs || [
-  { id: 'teacher', name: '苏老师', role: '主讲导师', color: '#3B82F6' },
-  { id: 'curious', name: '求知同学', role: '探索学员', color: '#F59E0B' },
-  { id: 'thinker', name: '学霸', role: '深度思考者', color: '#10B981' },
-])
-
-const currentAgentConfig = computed(() => {
-  const agId = currentAction.value?.agentId
-  return agentConfigs.value.find((a: any) => a.id === agId) || agentConfigs.value[0]
-})
-
-function getAgentConfig(agentId: string) {
-  return agentConfigs.value.find((a: any) => a.id === agentId)
-}
-
-// 测验场景相关 — 兼容两种 DSL：
-// A) OpenMAIC: content.questions[] {question, options:[{label,value}], answer:[..], analysis}
-// B) 站内简化: scene.quiz / content.quiz {question, options:string[], answer, explanation}
-interface NormalizedQuiz {
-  question: string
-  options: string[]
-  correctValues: string[]
-  explanation: string
-}
-
-function normalizeOptionLabel(opt: any): { text: string; value: string } {
-  if (typeof opt === 'string') {
-    // "A. xxx" 或纯文案
-    const m = opt.match(/^([A-Da-d])[.、)\s]\s*(.*)$/)
-    return { text: m ? m[2] || opt : opt, value: m ? m[1].toUpperCase() : opt }
-  }
-  const label = String(opt?.label ?? opt?.text ?? '')
-  const value = String(opt?.value ?? label)
-  // label 可能自带 "A. " 前缀
-  const m = label.match(/^([A-Da-d])[.、)\s]\s*(.*)$/)
-  return { text: m ? m[2] || label : label, value: (opt?.value || (m ? m[1].toUpperCase() : value)) }
-}
-
-function normalizeQuiz(raw: any): NormalizedQuiz | null {
-  if (!raw) return null
-  // questions 数组：取第一题（播放器按幕一题）
-  const q = raw.question
-    ? raw
-    : Array.isArray(raw.questions) && raw.questions.length
-      ? raw.questions[0]
-      : null
-  if (!q) return null
-
-  const rawOpts = (q.options || []) as any[]
-  const opts = rawOpts.map((o: any) => normalizeOptionLabel(o))
-  const answerRaw = q.answer
-  let answerVals: string[] = []
-  if (Array.isArray(answerRaw)) {
-    answerVals = answerRaw.map((a: any) => String(a))
-  } else if (answerRaw != null && answerRaw !== '') {
-    answerVals = [String(answerRaw)]
-  }
-  // 同时接受 "A" 与选项全文两种答案写法
-  const correctValues = new Set<string>()
-  for (const a of answerVals) {
-    correctValues.add(a)
-    const hit = opts.find((o: { text: string; value: string }) => o.value === a || o.text === a)
-    if (hit) {
-      correctValues.add(hit.value)
-      correctValues.add(hit.text)
-    }
-  }
-  return {
-    question: String(q.question || q.prompt || ''),
-    options: opts.map((o: { text: string }) => o.text),
-    correctValues: [...correctValues],
-    explanation: String(q.analysis || q.explanation || q.feedback || ''),
-  }
-}
-
-const currentQuiz = computed(() => {
-  if (currentScene.value?.type !== 'quiz') return null
-  const raw =
-    currentScene.value?.content?.questions ||
-    currentScene.value?.content?.quiz ||
-    currentScene.value?.quiz ||
-    currentScene.value?.content ||
-    null
-  return normalizeQuiz(raw)
-})
-
-const currentQuizOptions = computed(() => {
-  return currentQuiz.value?.options?.length
-    ? currentQuiz.value.options
-    : ['选项 A', '选项 B', '选项 C', '选项 D']
-})
-
-function isAnswerMatch(optText: string): boolean {
-  if (!currentQuiz.value) return false
-  const t = optText.trim()
-  return currentQuiz.value.correctValues.some(a => {
-    const ans = String(a).trim()
-    if (!ans) return false
-    return t === ans || t.startsWith(ans) || ans === t.slice(0, 1)
-  })
-}
-
-const isCurrentAnswerCorrect = computed(() => {
-  if (!currentQuiz.value || !selectedOption.value) return false
-  return isAnswerMatch(selectedOption.value)
-})
-
-function getOptionLetter(idx: number | string): string {
-  return String.fromCharCode(65 + Number(idx))
-}
-
-function selectQuizOption(opt: string) {
-  if (quizSubmitted.value) return
-  selectedOption.value = opt
-  quizSubmitted.value = true
-}
-
-function isOptionCorrect(opt: string): boolean {
-  return isAnswerMatch(opt)
-}
-
-function getQuizOptionClass(opt: string): string {
-  if (!quizSubmitted.value) {
-    return '!bg-[var(--surface-card)] hover:!bg-[var(--bg-hover)] !border-[var(--border-default)] !text-[var(--text-primary)]'
-  }
-  if (isOptionCorrect(opt)) {
-    return '!bg-[var(--color-success-light)] !border-[var(--color-success)] !text-[var(--color-success)]'
-  }
-  if (selectedOption.value === opt) {
-    return '!bg-[var(--color-error-light)] !border-[var(--color-error)] !text-[var(--color-error)]'
-  }
-  return '!bg-[var(--bg-secondary)] !border-[var(--border-default)] opacity-60 !text-[var(--text-muted)]'
-}
-
-function getQuizOptionBadgeClass(opt: string): string {
-  if (!quizSubmitted.value) {
-    return 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border-default)]'
-  }
-  if (isOptionCorrect(opt)) {
-    return 'bg-[var(--color-success)] text-[var(--text-inverse)]'
-  }
-  if (selectedOption.value === opt) {
-    return 'bg-[var(--color-error)] text-[var(--text-inverse)]'
-  }
-  return 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
-}
-
-// 16:9 画布坐标换算（基准 1000 x 562.5）
-function isRichHtml(s: any): boolean {
-  return typeof s === 'string' && /<\/?[a-z][\s\S]*>/i.test(s)
-}
-
-function getElementStyle(el: any) {
-  const leftPct = (el.left / 1000) * 100
-  const topPct = (el.top / 562.5) * 100
-  const widthPct = (el.width / 1000) * 100
-  const heightPct = (el.height / 562.5) * 100
-
-  return {
-    left: `${leftPct}%`,
-    top: `${topPct}%`,
-    width: `${widthPct}%`,
-    height: `${heightPct}%`,
-  }
-}
-
-function isElementHighlighted(elementId: string): boolean {
-  if (!currentAction.value) return false
-  return (
-    currentAction.value.targetElementId === elementId ||
-    currentAction.value.spotlight === elementId
-  )
-}
-
-// 播放生命周期与台词推进
-function togglePlay() {
-  isPlaying.value = !isPlaying.value
-  if (isPlaying.value) {
-    playCurrentAction()
-  } else {
-    stopCurrentPlayback()
-  }
-}
-
-function cleanupAudio() {
-  if (currentAudio) {
-    currentAudio.pause()
-    currentAudio.onended = null
-    currentAudio.onerror = null
-    currentAudio = null
-  }
-  if (currentAudioUrl) {
-    URL.revokeObjectURL(currentAudioUrl)
-    currentAudioUrl = null
-  }
-  isAudioPlaying.value = false
-}
-
-function stopCurrentPlayback() {
-  if (actionTimer) {
-    clearTimeout(actionTimer)
-    actionTimer = null
-  }
-  cleanupAudio()
-  if ('speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel()
-    } catch {
-      // ignore
-    }
-  }
-}
-
-function toggleAudio() {
-  audioEnabled.value = !audioEnabled.value
-  if (!audioEnabled.value) {
-    stopCurrentPlayback()
-  } else if (audioEnabled.value && isPlaying.value) {
-    playCurrentAction()
-  }
-}
-
-async function playCurrentAction() {
-  stopCurrentPlayback()
-  if (!isPlaying.value) return
-
-  const act = currentAction.value
-  if (!act) {
-    nextScene()
-    return
-  }
-
-  // 若静音或无台词，走按字长自动切幕
-  if (!audioEnabled.value || !act.text) {
-    scheduleFallbackTimer(act.text || '')
-    return
-  }
-
-  const voiceName = act.voice || currentAgentConfig.value?.voice || ''
-
-  // 1. 优先尝试调用后端高质量 TTS 接口 (/api/tts/generate)
-  try {
-    const resp = await api.post('/tts/generate', {
-      text: act.text,
-      voice: voiceName,
-      speed: playbackRate.value,
-    }, {
-      responseType: 'blob',
-      timeout: 7000,
-    })
-
-    if (!isPlaying.value) return
-
-    if (resp.data && resp.data.size > 0) {
-      cleanupAudio()
-      currentAudioUrl = URL.createObjectURL(resp.data)
-      currentAudio = new Audio(currentAudioUrl)
-      currentAudio.playbackRate = playbackRate.value
-
-      currentAudio.onplay = () => {
-        isAudioPlaying.value = true
-      }
-      currentAudio.onended = () => {
-        cleanupAudio()
-        if (isPlaying.value && autoAdvance.value) {
-          actionTimer = setTimeout(() => {
-            nextActionOrScene()
-          }, 600)
-        }
-      }
-      currentAudio.onerror = () => {
-        cleanupAudio()
-        playWithWebSpeechFallback(act.text)
-      }
-
-      await currentAudio.play()
-      return
-    }
-  } catch {
-    // 后端 TTS 未配置或在单测/无网络环境下，平滑降级至 Web Speech API
-  }
-
-  // 2. 降级为 Web Speech API
-  playWithWebSpeechFallback(act.text)
-}
-
-function playWithWebSpeechFallback(text: string) {
-  if (audioEnabled.value && 'speechSynthesis' in window && text) {
-    try {
-      const utter = new SpeechSynthesisUtterance(text)
-      utter.lang = 'zh-CN'
-      utter.rate = playbackRate.value
-      utter.onstart = () => {
-        isAudioPlaying.value = true
-      }
-      utter.onend = () => {
-        isAudioPlaying.value = false
-        if (isPlaying.value && autoAdvance.value) {
-          actionTimer = setTimeout(() => {
-            nextActionOrScene()
-          }, 800)
-        }
-      }
-      utter.onerror = () => {
-        isAudioPlaying.value = false
-        scheduleFallbackTimer(text)
-      }
-      window.speechSynthesis.speak(utter)
-      return
-    } catch {
-      // 语音异常回退至计时器
-    }
-  }
-
-  scheduleFallbackTimer(text)
-}
-
-function scheduleFallbackTimer(text: string) {
-  const duration = Math.max(2500, Math.min(12000, (text.length * 150) / playbackRate.value))
-  actionTimer = setTimeout(() => {
-    if (isPlaying.value && autoAdvance.value) {
-      nextActionOrScene()
-    }
-  }, duration)
-}
-
-function nextActionOrScene() {
-  if (currentActionIndex.value < totalActionsInScene.value - 1) {
-    currentActionIndex.value++
-    if (isPlaying.value) playCurrentAction()
-  } else {
-    nextScene()
-  }
-}
-
-function prevActionOrScene() {
-  if (currentActionIndex.value > 0) {
-    currentActionIndex.value--
-    if (isPlaying.value) playCurrentAction()
-  } else if (currentSceneIndex.value > 0) {
-    currentSceneIndex.value--
-    currentActionIndex.value = 0
-    resetSceneState()
-    if (isPlaying.value) playCurrentAction()
-  }
-}
-
-function nextScene() {
-  if (currentSceneIndex.value < totalScenes.value - 1) {
-    currentSceneIndex.value++
-    currentActionIndex.value = 0
-    resetSceneState()
-    if (isPlaying.value) playCurrentAction()
-  } else {
-    isPlaying.value = false
-    stopCurrentPlayback()
-  }
-}
-
-function prevScene() {
-  if (currentSceneIndex.value > 0) {
-    currentSceneIndex.value--
-    currentActionIndex.value = 0
-    resetSceneState()
-    if (isPlaying.value) playCurrentAction()
-  }
-}
-
-function jumpToScene(idx: number | string) {
-  currentSceneIndex.value = Number(idx)
-  currentActionIndex.value = 0
-  resetSceneState()
-  if (isPlaying.value) playCurrentAction()
-}
-
-function resetSceneState() {
-  selectedOption.value = ''
-  quizSubmitted.value = false
-  stopCurrentPlayback()
-}
-
-// 全屏切换
-function toggleFullscreen() {
-  if (!playerContainer.value) return
-  if (!document.fullscreenElement) {
-    playerContainer.value.requestFullscreen().catch(() => {})
-  } else {
-    document.exitFullscreen().catch(() => {})
-  }
+  }, 300)
 }
 
 function goBack() {
-  stopCurrentPlayback()
-  if (classroomId.value) {
-    router.push(`/courses/${classroomId.value}`)
+  if (courseId.value) {
+    router.push(`/courses/${courseId.value}`)
   } else {
-    router.push('/courses')
+    router.back()
   }
 }
 
-// 键盘快捷键支持
-function handleKeyDown(e: KeyboardEvent) {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-  if (e.code === 'Space') {
-    e.preventDefault()
-    togglePlay()
-  } else if (e.code === 'ArrowRight') {
-    e.preventDefault()
-    nextActionOrScene()
-  } else if (e.code === 'ArrowLeft') {
-    e.preventDefault()
-    prevActionOrScene()
-  } else if (e.key === 'm' || e.key === 'M') {
-    toggleAudio()
-  } else if (e.key === 'f' || e.key === 'F') {
-    toggleFullscreen()
+function openInNewWindow() {
+  if (resolvedClassroomId.value) {
+    window.open(`/classroom-engine/classroom/${resolvedClassroomId.value}`, '_blank')
   }
 }
 
-async function loadData() {
+function toggleFullscreen() {
+  if (!playerContainer.value) return
+  if (!document.fullscreenElement) {
+    playerContainer.value.requestFullscreen().then(() => {
+      isFullscreen.value = true
+    }).catch(() => {})
+  } else {
+    document.exitFullscreen().then(() => {
+      isFullscreen.value = false
+    }).catch(() => {})
+  }
+}
+
+function handleFullscreenChange() {
+  isFullscreen.value = Boolean(document.fullscreenElement)
+}
+
+function sendConfigToIframe() {
+  if (engineIframe.value?.contentWindow) {
+    engineIframe.value.contentWindow.postMessage(
+      {
+        type: 'SET_CONFIG',
+        speed: playerConfig.value.speed,
+        volume: playerConfig.value.volume,
+        muted: playerConfig.value.muted,
+        autoPlay: playerConfig.value.autoPlay,
+      },
+      '*'
+    )
+  }
+}
+
+function onSpeedChange(val: any) {
+  playerConfig.value.speed = Number(val)
+  sendConfigToIframe()
+}
+
+function onVolumeChange() {
+  sendConfigToIframe()
+}
+
+function toggleMute() {
+  playerConfig.value.muted = !playerConfig.value.muted
+  sendConfigToIframe()
+}
+
+function onAutoPlayChange() {
+  sendConfigToIframe()
+}
+
+function goToModelConfig() {
+  settingsVisible.value = false
+  router.push('/config')
+}
+
+function handleWindowMessage(event: MessageEvent) {
+  if (!event.data || typeof event.data !== 'object') return
+  const { type } = event.data
+
+  if (type === 'OPENMAIC_READY') {
+    iframeReady.value = true
+    if (event.data?.config) {
+      const cfg = event.data.config
+      if (typeof cfg.speed === 'number') playerConfig.value.speed = cfg.speed
+      if (typeof cfg.volume === 'number') playerConfig.value.volume = cfg.volume
+      if (typeof cfg.muted === 'boolean') playerConfig.value.muted = cfg.muted
+      if (typeof cfg.autoPlay === 'boolean') playerConfig.value.autoPlay = cfg.autoPlay
+      if (cfg.modelId) playerConfig.value.modelId = cfg.modelId
+    }
+  } else if (type === 'OPENMAIC_EXIT') {
+    goBack()
+  } else if (type === 'OPENMAIC_QUIZ_COMPLETED') {
+    const results = event.data?.results || []
+    const correct = results.filter((r: any) => r.isCorrect).length
+    if (results.length > 0) {
+      ElMessage.success(`随堂测验已完成！答对 ${correct}/${results.length} 题，结果已自动同步。`)
+    } else {
+      ElMessage.success('随堂测验已完成，结果已自动同步！')
+    }
+  }
+}
+
+async function initClassroom() {
   loading.value = true
   error.value = ''
+  iframeReady.value = false
+
   try {
-    const data = await classroomStore.fetchClassroomDetail(classroomId.value)
-    if (!data) {
-      error.value = '未检索到课堂课件数据'
+    const rawId = (route.params.id as string) || ''
+    if (!rawId) {
+      error.value = '未指定微课 ID'
       return
     }
-    classroomData.value = data
-    currentSceneIndex.value = 0
-    currentActionIndex.value = 0
-    resetSceneState()
+
+    if ((route.path || '').startsWith('/courses/')) {
+      const course = await courseStore.fetchCourse(rawId)
+      if (!course) {
+        error.value = '课程空间不存在或已被删除'
+        return
+      }
+      courseTitle.value = course.name || 'AI 互动微课'
+
+      try {
+        const docs = await courseStore.fetchCourseDocuments(rawId)
+        sourceDocuments.value = (docs || []).map(d => ({
+          id: d.id,
+          filename: d.filename,
+          file_size: d.file_size,
+        }))
+      } catch {
+        sourceDocuments.value = []
+      }
+
+      const parsed = parseCourseDescription(course.description)
+      const targetCid = parsed.classroomId || ''
+      if (!targetCid) {
+        error.value = '当前课程尚未生成完整的 AI 互动微课，请前往课程详情页点击“生成课堂”。'
+        return
+      }
+      resolvedClassroomId.value = targetCid
+    } else {
+      resolvedClassroomId.value = rawId
+    }
+
+    try {
+      const resp = await fetch(`/classroom-engine/api/classroom?id=${resolvedClassroomId.value}`)
+      if (resp.ok) {
+        const data = await resp.json()
+        const classroom = data?.data?.classroom || data?.classroom
+        if (classroom?.stage?.name) {
+          courseTitle.value = classroom.stage.name
+        }
+      }
+    } catch {
+      // 预检失败不阻断 iframe
+    }
   } catch (err: any) {
-    error.value = err?.response?.data?.detail || err.message || '加载微课失败'
+    error.value = err?.response?.data?.detail || err?.message || '加载微课信息失败'
   } finally {
     loading.value = false
   }
@@ -1131,64 +565,24 @@ async function loadData() {
 watch(
   () => route.params.id,
   (newId) => {
-    if (newId) loadData()
+    if (newId) initClassroom()
   }
 )
 
 onMounted(() => {
-  loadData()
-  window.addEventListener('keydown', handleKeyDown)
+  initClassroom()
+  window.addEventListener('message', handleWindowMessage)
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
 })
 
 onUnmounted(() => {
-  stopCurrentPlayback()
-  window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('message', handleWindowMessage)
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 </script>
 
 <style scoped>
-.aspect-video {
-  aspect-ratio: 16 / 9;
-}
-.slide-html :deep(p) {
-  margin: 0.15em 0;
-}
-.slide-html :deep(strong) {
-  font-weight: 700;
-}
-.slide-html :deep(ul),
-.slide-html :deep(ol) {
-  margin: 0.2em 0;
-  padding-left: 1.1em;
-}
-.slide-html :deep(li) {
-  margin: 0.1em 0;
-}
-
-/* flex 槽位 + 默认主题令牌画布 */
-.stage-slot {
-  min-height: 0;
-  min-width: 0;
-}
-.stage-frame {
-  margin: 0 auto;
-}
-.stage-default-theme {
-  background-color: var(--surface-card);
-  color: var(--text-primary);
-}
-html.dark .stage-default-theme {
-  box-shadow: inset 0 0 0 1px var(--border-default);
-}
-
-/* 测验选项：EP 按钮底座 */
-.quiz-option-btn {
-  border-radius: var(--radius-sm);
-  text-align: left;
-  white-space: normal;
-  height: auto;
-}
-.quiz-option-btn:not(.is-disabled):active {
-  transform: scale(0.995);
+iframe {
+  color-scheme: normal;
 }
 </style>

@@ -666,5 +666,82 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.emitted('saveNote')).toBeTruthy()
     expect(wrapper.emitted('saveNote')?.[0][0].id).toBe('msg-to-save')
   })
+
+  it('点击正文角标 .source-badge 触发 scrollToSource 事件并自动展开来源面板', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'msg-badge-click',
+          role: 'assistant',
+          content: '知识检索结果详见 <sup class="source-badge" data-index="1">[1]</sup> 章节。',
+          sources: [
+            { index: 1, source: 'ai_guide.pdf', page: '42', text: 'AI 引导概述正文', document_id: 'd-1' }
+          ],
+          isStreaming: false,
+          created_at: new Date().toISOString()
+        },
+        renderedMarkdown: '知识检索结果详见 <sup class="source-badge" data-index="1">[1]</sup> 章节。'
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true
+        }
+      }
+    })
+
+    const badge = wrapper.find('.source-badge')
+    expect(badge.exists()).toBe(true)
+    await badge.trigger('click')
+
+    expect(wrapper.emitted('scrollToSource')).toBeTruthy()
+    expect(wrapper.emitted('scrollToSource')?.[0][0]).toBe(1)
+    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('true')
+  })
+
+  it('来源卡片 ChatSourceCards 具有暗色模式适配类名与正文摘录强调结构', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'msg-dark-sources',
+          role: 'assistant',
+          content: '正文',
+          sources: [
+            { index: 2, source: 'system_design.docx', page: '8', text: '系统设计正文摘录', document_id: 'd-2' }
+          ],
+          isStreaming: false,
+          created_at: new Date().toISOString()
+        }
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true
+        }
+      }
+    })
+
+    const card = wrapper.find('.source-card')
+    expect(card.exists()).toBe(true)
+    // 重构后来源卡样式走 scoped 语义类；触发按钮必须带「剥 UA 原生皮肤」的专用类
+    // （项目未启用 Tailwind preflight，裸 button 会带 ButtonFace 灰底 + outset 浮雕框）
+    expect(card.find('button').classes()).toContain('source-card__trigger')
+
+    // 展开卡片
+    const toggleBtn = wrapper.find('[data-test="source-card-toggle-2"]')
+    await toggleBtn.trigger('click')
+
+    expect(toggleBtn.attributes('aria-expanded')).toBe('true')
+    expect(card.classes()).toContain('source-card--open')
+    const body = wrapper.find('[data-test="source-card-body"]')
+    expect(body.exists()).toBe(true)
+    expect(body.classes()).toContain('source-card__body')
+    expect(body.find('button').classes()).toContain('source-card__copy')
+    expect(wrapper.text()).toContain('系统设计正文摘录')
+  })
 })
 

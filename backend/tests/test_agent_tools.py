@@ -26,7 +26,9 @@ from app.agent.tools.definitions import (
 @pytest.mark.asyncio
 async def test_knowledge_search_empty_query():
     tool = KnowledgeSearchTool()
-    with patch("app.agent.tools.definitions.rag_engine.retrieve", new_callable=AsyncMock) as mock_ret:
+    with patch(
+        "app.agent.tools.definitions.rag_engine.retrieve", new_callable=AsyncMock
+    ) as mock_ret:
         mock_ret.return_value = []
         res = await tool.execute(query="")
         assert res.success is True
@@ -36,7 +38,9 @@ async def test_knowledge_search_empty_query():
 @pytest.mark.asyncio
 async def test_knowledge_search_with_results():
     tool = KnowledgeSearchTool()
-    with patch("app.agent.tools.definitions.rag_engine.retrieve", new_callable=AsyncMock) as mock_ret:
+    with patch(
+        "app.agent.tools.definitions.rag_engine.retrieve", new_callable=AsyncMock
+    ) as mock_ret:
         mock_ret.return_value = [
             {
                 "chunk": {
@@ -57,7 +61,9 @@ async def test_knowledge_search_with_results():
 @pytest.mark.asyncio
 async def test_knowledge_search_failure():
     tool = KnowledgeSearchTool()
-    with patch("app.agent.tools.definitions.rag_engine.retrieve", new_callable=AsyncMock) as mock_ret:
+    with patch(
+        "app.agent.tools.definitions.rag_engine.retrieve", new_callable=AsyncMock
+    ) as mock_ret:
         mock_ret.side_effect = RuntimeError("vector store down")
         res = await tool.execute(query="x")
         assert res.success is False
@@ -268,8 +274,12 @@ async def test_search_memory_disabled():
     cm.__aenter__ = AsyncMock(return_value=db)
     cm.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm), \
-         patch("app.agent.tools.definitions.memory_service.search", new_callable=AsyncMock) as mock_search:
+    with (
+        patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm),
+        patch(
+            "app.agent.tools.definitions.memory_service.search", new_callable=AsyncMock
+        ) as mock_search,
+    ):
         mock_search.return_value = {"available": False, "items": []}
         res = await tool.execute(query="偏好", user_id="u1")
     assert res.success is True
@@ -285,8 +295,12 @@ async def test_search_memory_hits():
     cm.__aexit__ = AsyncMock(return_value=False)
 
     item = SimpleNamespace(kind="preference", content="喜欢简明回答", id="mem-1")
-    with patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm), \
-         patch("app.agent.tools.definitions.memory_service.search", new_callable=AsyncMock) as mock_search:
+    with (
+        patch("app.agent.tools.definitions.AsyncSessionLocal", return_value=cm),
+        patch(
+            "app.agent.tools.definitions.memory_service.search", new_callable=AsyncMock
+        ) as mock_search,
+    ):
         mock_search.return_value = {"available": True, "items": [item]}
         res = await tool.execute(query="偏好", user_id="u1")
     assert res.success is True

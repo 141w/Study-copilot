@@ -1769,7 +1769,15 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       await pendingRetirementRef.current;
 
       // Validate model configuration before sending
-      const modelConfig = getCurrentModelConfig();
+      let modelConfig = getCurrentModelConfig();
+      if (!modelConfig.modelId) {
+        try {
+          await useSettingsStore.getState().fetchServerProviders();
+          modelConfig = getCurrentModelConfig();
+        } catch {
+          // ignore network failure
+        }
+      }
       if (!modelConfig.modelId) {
         toast.error(t('settings.modelNotConfigured'));
         return;
@@ -1943,7 +1951,15 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       livePausedRef.current = false;
 
       // Validate model configuration before starting discussion
-      const modelConfig = getCurrentModelConfig();
+      let modelConfig = getCurrentModelConfig();
+      if (!modelConfig.modelId) {
+        try {
+          await useSettingsStore.getState().fetchServerProviders();
+          modelConfig = getCurrentModelConfig();
+        } catch {
+          // ignore network failure
+        }
+      }
       if (!modelConfig.modelId) {
         toast.error(t('settings.modelNotConfigured'));
         return;

@@ -74,7 +74,9 @@ class ContextCompactor:
     ) -> list[dict[str, Any]]:
         """If messages exceed max_context_tokens, summarize older messages preserving KeepRecent window."""
         current_tokens = estimate_tokens(messages)
-        if current_tokens <= self.max_context_tokens or len(messages) <= (self.keep_recent_messages + 2):
+        if current_tokens <= self.max_context_tokens or len(messages) <= (
+            self.keep_recent_messages + 2
+        ):
             return messages
 
         logger.info(
@@ -89,8 +91,8 @@ class ContextCompactor:
         if len(non_system) <= self.keep_recent_messages:
             return messages
 
-        to_summarize = non_system[:-self.keep_recent_messages]
-        keep_recent = non_system[-self.keep_recent_messages:]
+        to_summarize = non_system[: -self.keep_recent_messages]
+        keep_recent = non_system[-self.keep_recent_messages :]
 
         summary_text = "\n".join(
             f"{m.get('role')}: {str(m.get('content', ''))[:150]}" for m in to_summarize
@@ -99,7 +101,7 @@ class ContextCompactor:
         try:
             prompt = (
                 "请将以下前期研究与工具调用历史浓缩为结构化事实列表（JSON 数组），"
-                "每项格式 {\"entity\": str, \"value\": str, \"source_hint\": str}，"
+                '每项格式 {"entity": str, "value": str, "source_hint": str}，'
                 "保留关键数字、术语与结论，不超过 12 条。只输出 JSON，不要其它说明。\n\n"
                 f"{summary_text}\n\nJSON："
             )
@@ -112,10 +114,12 @@ class ContextCompactor:
             compacted: list[dict[str, Any]] = []
             if system_msg:
                 compacted.append(system_msg)
-            compacted.append({
-                "role": "system",
-                "content": f"【前期研究与执行摘要】：{facts_text}",
-            })
+            compacted.append(
+                {
+                    "role": "system",
+                    "content": f"【前期研究与执行摘要】：{facts_text}",
+                }
+            )
             compacted.extend(keep_recent)
             return compacted
         except Exception as e:

@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 # 下载被代理挂起）让任务永远停留在 running、前端显示假进度。
 TASK_TIMEOUT_SEC = int(os.environ.get("TASK_TIMEOUT_SEC", "600"))
 
+# AI 互动课堂涉及多幕大纲编排、剧本生成、多角色TTS语音合成与AI生图，通常耗时较长（10-30分钟）。
+# 设置独立的整体超时上限（默认 3600s）与停滞看门狗上限（默认 600s 无任何进展则判定挂起）。
+CLASSROOM_TASK_TIMEOUT_SEC = int(os.environ.get("CLASSROOM_TASK_TIMEOUT_SEC", "3600"))
+CLASSROOM_STALL_TIMEOUT_SEC = int(os.environ.get("CLASSROOM_STALL_TIMEOUT_SEC", "600"))
+
 # 持久化队列：任务以 pending 行落库，worker 轮询认领。
 # 重启后未认领的 pending 行会被新进程继续执行，不再丢失。
 POLL_INTERVAL_SEC = float(os.environ.get("TASK_POLL_INTERVAL_SEC", "1.0"))
@@ -118,35 +123,61 @@ async def _execute_job(job):
     logger.info("Executing %s (%s)", job.task_id, job.task_type)
     async with AsyncSessionLocal() as db:
         await update_task(db, job.task_id, job.user_id, status="running")
+        timeout = TASK_TIMEOUT_SEC
         try:
             if job.task_type == "document_process":
+                timeout = TASK_TIMEOUT_SEC
                 result = await asyncio.wait_for(
-                    _run_document_process(job, db), timeout=TASK_TIMEOUT_SEC
+                    _run_document_process(job, db), timeout=timeout
                 )
             elif job.task_type == "quiz_generate":
+                timeout = TASK_TIMEOUT_SEC
                 result = await asyncio.wait_for(
-                    _run_quiz_generate(job, db), timeout=TASK_TIMEOUT_SEC
+                    _run_quiz_generate(job, db), timeout=timeout
+                )
+            elif job.task_type == "classroom_generate":
+                timeout = CLASSROOM_TASK_TIMEOUT_SEC
+                result = await asyncio.wait_for(
+                    _run_classroom_generate(job, db), timeout=timeout
                 )
             else:
                 raise ValueError(f"Unknown type: {job.task_type}")
             await update_task(
                 db, job.task_id, job.user_id, status="completed", progress=1.0, result=result
             )
-        except TimeoutError:
-            # 看门狗：任务卡死（典型如模型下载被代理挂起）时转为可见失败，
+        except TimeoutError as te:
+            # 看门狗：任务卡死（如模型下载被代理挂起或外部服务停滞）时转为可见失败，
             # 而非永远停留在 running 让前端显示假进度。
             await db.rollback()  # 被取消的协程可能留下失效事务
-            logger.error("Task %s timed out after %ss", job.task_id, TASK_TIMEOUT_SEC)
+            logger.error("Task %s timed out after %ss", job.task_id, timeout)
+            custom_msg = str(te).strip()
+            if custom_msg and not custom_msg.isdigit():
+                err_msg = custom_msg
+            elif job.task_type == "document_process":
+                err_msg = (
+                    f"文档处理超时（超过 {timeout}s 未完成），已中止。"
+                    "常见原因：文档体积过大或 Embedding 模型下载受网络/代理限制。"
+                )
+            elif job.task_type == "quiz_generate":
+                err_msg = (
+                    f"智能测验生成超时（超过 {timeout}s 未完成），已中止。"
+                    "常见原因：大模型响应过慢或连接受阻，请稍后重试。"
+                )
+            elif job.task_type == "classroom_generate":
+                err_msg = (
+                    f"AI 互动课堂生成超时（超过 {timeout}s 未完成），已中止。"
+                    "常见原因：多幕音视频与 AI 生图耗时较长，或外部生图/语音模型响应超时。"
+                )
+            else:
+                err_msg = f"任务超时（超过 {timeout}s 未完成），已中止。"
+
             await update_task(
                 db,
                 job.task_id,
                 job.user_id,
                 status="failed",
                 progress=0.0,
-                error=(
-                    f"任务超时（超过 {TASK_TIMEOUT_SEC}s 未完成），已中止。"
-                    "常见原因：Embedding 模型下载受网络/代理限制。"
-                ),
+                error=err_msg,
             )
             if job.task_type == "document_process":
                 doc_id = job.payload.get("doc_id")
@@ -231,3 +262,108 @@ async def _run_quiz_generate(job, db):
         "choice_count": choice_cnt,
         "short_answer_count": short_cnt,
     }
+
+
+async def _run_classroom_generate(job, db):
+    """Background runner for classroom generation: poll OpenMAIC and track progress."""
+    from sqlalchemy import select
+
+    from app.db import User
+    from app.services import classroom_service
+
+    result = await db.execute(select(User).where(User.id == job.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise ValueError(f"User {job.user_id} not found")
+
+    job_id = job.payload.get("job_id")
+    if not job_id:
+        raise ValueError("Missing job_id for classroom generation")
+
+    course_id = job.payload.get("course_id")
+    title = job.payload.get("title", "AI 互动课堂")
+    poll_interval = 2.0
+
+    import time
+    last_active_time = time.time()
+    last_state = None
+
+    while True:
+        try:
+            status_info = await classroom_service.poll_generation_status(job_id)
+        except Exception as poll_err:
+            logger.warning("Failed to poll classroom job %s: %s", job_id, poll_err)
+            if time.time() - last_active_time > CLASSROOM_STALL_TIMEOUT_SEC:
+                raise TimeoutError(
+                    f"AI 互动课堂生成服务连续 {CLASSROOM_STALL_TIMEOUT_SEC}s 无法连接，可能服务已中断。"
+                )
+            await asyncio.sleep(poll_interval)
+            continue
+
+        raw_progress = status_info.get("progress", 0)
+        # OpenMAIC 返回 0-100，AsyncTask.progress 采用 0.0-1.0 浮点数
+        progress_val = min(0.99, max(0.05, float(raw_progress) / 100.0))
+
+        step_msg = status_info.get("message") or status_info.get("step") or "正在生成课堂场景..."
+        scenes_generated = status_info.get("scenes_generated", 0)
+        total_scenes = status_info.get("total_scenes", 0)
+
+        # 动态停滞（Stall）看门狗：只要阶段更新、分幕数推进或进度增加，即刷新活跃时钟
+        current_state = (raw_progress, step_msg, scenes_generated)
+        if current_state != last_state:
+            last_active_time = time.time()
+            last_state = current_state
+        elif time.time() - last_active_time > CLASSROOM_STALL_TIMEOUT_SEC:
+            raise TimeoutError(
+                f"AI 互动课堂生成在步骤「{step_msg}」停滞超过 {CLASSROOM_STALL_TIMEOUT_SEC}s 无响应，已中止。"
+            )
+
+        await update_task(
+            db,
+            job.task_id,
+            job.user_id,
+            status="running",
+            progress=progress_val,
+            result={
+                **job.payload,
+                "title": title,
+                "course_id": course_id,
+                "message": step_msg,
+                "step": status_info.get("step"),
+                "scenes_generated": scenes_generated,
+                "total_scenes": total_scenes,
+            },
+        )
+
+        if status_info.get("done"):
+            if status_info.get("status") == "failed":
+                err = status_info.get("error") or "AI 互动课堂引擎生成失败"
+                raise RuntimeError(err)
+
+            # 同步完成状态及测验结果至 CourseSpace
+            try:
+                await classroom_service.sync_completed_classroom_job(
+                    db, user, job_id, status_info
+                )
+            except Exception as sync_err:
+                logger.warning("Failed to sync completed classroom in worker: %s", sync_err)
+
+            res_data = status_info.get("result") or {}
+            cid = (
+                res_data.get("classroomId")
+                or res_data.get("id")
+                or job.payload.get("classroom_id")
+                or job_id
+            )
+            return {
+                **job.payload,
+                "title": title,
+                "course_id": course_id,
+                "classroom_id": cid,
+                "url": f"/courses/{course_id}/classroom" if course_id else f"/classroom-engine/classroom/{cid}",
+                "message": "互动课堂已生成完成，可打开播放",
+                "scenes_generated": status_info.get("scenes_generated", 0),
+                "total_scenes": status_info.get("total_scenes", 0),
+            }
+
+        await asyncio.sleep(poll_interval)

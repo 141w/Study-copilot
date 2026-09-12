@@ -147,7 +147,9 @@ class GrepChunksTool(Tool):
                 chunks = res.scalars().all()
 
                 if not chunks:
-                    return ToolResult(success=True, output=f"未找到包含关键词 '{keyword}' 的段落。", data=[])
+                    return ToolResult(
+                        success=True, output=f"未找到包含关键词 '{keyword}' 的段落。", data=[]
+                    )
 
                 filename_map = await _load_filename_map(db, list({c.document_id for c in chunks}))
                 entries = [_chunk_to_source_entry(c, filename_map, relevance=0.8) for c in chunks]
@@ -181,8 +183,16 @@ class ListDocumentChunksTool(Tool):
             "type": "object",
             "properties": {
                 "document_id": {"type": "string", "description": "目标文档 ID"},
-                "offset": {"type": "integer", "description": "切片起始偏移量，从 0 开始", "default": 0},
-                "limit": {"type": "integer", "description": "读取切片数量，默认 3，最大 10", "default": 3},
+                "offset": {
+                    "type": "integer",
+                    "description": "切片起始偏移量，从 0 开始",
+                    "default": 0,
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "读取切片数量，默认 3，最大 10",
+                    "default": 3,
+                },
             },
             "required": ["document_id"],
         }
@@ -213,7 +223,9 @@ class ListDocumentChunksTool(Tool):
                 filename_map = await _load_filename_map(db, list({c.document_id for c in chunks}))
                 # Sequential read: relevance decays slightly by offset so later pages rank lower
                 entries = [
-                    _chunk_to_source_entry(c, filename_map, relevance=max(0.55, 0.9 - 0.05 * (offset + i)))
+                    _chunk_to_source_entry(
+                        c, filename_map, relevance=max(0.55, 0.9 - 0.05 * (offset + i))
+                    )
                     for i, c in enumerate(chunks)
                 ]
 
@@ -221,7 +233,9 @@ class ListDocumentChunksTool(Tool):
                 for c, entry in zip(chunks, entries):
                     page = (c.chunk_metadata or {}).get("page", "")
                     src = entry["chunk"]["source"]
-                    lines.append(f"[切片 #{c.chunk_index} | 来自《{src}》 | 页码: {page}]\n{c.content}")
+                    lines.append(
+                        f"[切片 #{c.chunk_index} | 来自《{src}》 | 页码: {page}]\n{c.content}"
+                    )
 
                 return ToolResult(success=True, output="\n\n---\n\n".join(lines), data=entries)
         except Exception as e:
@@ -262,7 +276,9 @@ class GetDocumentInfoTool(Tool):
                 doc = res.scalar_one_or_none()
 
                 if not doc:
-                    return ToolResult(success=False, output=f"未找到 ID 为 {doc_id} 的文档", error="not_found")
+                    return ToolResult(
+                        success=False, output=f"未找到 ID 为 {doc_id} 的文档", error="not_found"
+                    )
 
                 info = {
                     "id": doc.id,
@@ -272,7 +288,9 @@ class GetDocumentInfoTool(Tool):
                     "status": doc.status,
                     "created_at": str(doc.created_at),
                 }
-                return ToolResult(success=True, output=json.dumps(info, ensure_ascii=False, indent=2), data=info)
+                return ToolResult(
+                    success=True, output=json.dumps(info, ensure_ascii=False, indent=2), data=info
+                )
         except Exception as e:
             logger.warning("[Tool:get_document_info] Failed: %s", e)
             return ToolResult(success=False, output=f"获取文档信息失败: {e}", error=str(e))
@@ -329,10 +347,15 @@ class SearchConversationsTool(Tool):
 
         try:
             from app.db import ChatSession, Message
+
             async with AsyncSessionLocal() as db:
                 stmt = select(Message).join(ChatSession, Message.session_id == ChatSession.id)
                 stmt = stmt.where(ChatSession.user_id == user_id)
-                stmt = stmt.where(Message.content.ilike(f"%{query}%")).order_by(Message.created_at.desc()).limit(limit)
+                stmt = (
+                    stmt.where(Message.content.ilike(f"%{query}%"))
+                    .order_by(Message.created_at.desc())
+                    .limit(limit)
+                )
 
                 res = await db.execute(stmt)
                 messages = res.scalars().all()
@@ -345,7 +368,9 @@ class SearchConversationsTool(Tool):
                     role_label = "用户" if m.role == "user" else "AI"
                     lines.append(f"[{role_label}]: {m.content[:200]}")
 
-                return ToolResult(success=True, output="\n\n".join(lines), data=[m.id for m in messages])
+                return ToolResult(
+                    success=True, output="\n\n".join(lines), data=[m.id for m in messages]
+                )
         except Exception as e:
             logger.warning("[Tool:search_conversations] Failed: %s", e)
             return ToolResult(success=False, output=f"搜索历史会话失败: {e}", error=str(e))
@@ -407,7 +432,9 @@ class SearchMemoryTool(Tool):
                     return ToolResult(success=True, output="长期记忆库中无匹配记录。", data=[])
 
                 lines = [f"- [{it.kind}] {it.content}" for it in items]
-                return ToolResult(success=True, output="\n".join(lines), data=[it.id for it in items])
+                return ToolResult(
+                    success=True, output="\n".join(lines), data=[it.id for it in items]
+                )
         except Exception as e:
             logger.warning("[Tool:search_memory] Failed: %s", e)
             return ToolResult(success=False, output=f"检索长期记忆失败: {e}", error=str(e))

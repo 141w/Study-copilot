@@ -207,6 +207,7 @@ async def get_learning_activity(
     counts = list(daily.values()) or [0]
     # 分位数阈值：空/全 0 时 level=0
     ordered = sorted(counts)
+
     def _pct(p: float) -> int:
         if not ordered:
             return 0

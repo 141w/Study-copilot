@@ -26,7 +26,9 @@ class BufferedStream:
 
 class StreamResumeBuffer:
     def __init__(self, ttl_seconds: int | None = None, max_events: int | None = None) -> None:
-        self.ttl_seconds = ttl_seconds if ttl_seconds is not None else settings.sse_resume_ttl_seconds
+        self.ttl_seconds = (
+            ttl_seconds if ttl_seconds is not None else settings.sse_resume_ttl_seconds
+        )
         self.max_events = max_events if max_events is not None else settings.sse_resume_max_events
         self._streams: dict[str, BufferedStream] = {}
 
@@ -60,7 +62,9 @@ class StreamResumeBuffer:
             return None
         return stream
 
-    def slice_after(self, stream: BufferedStream, last_event_id: int | None) -> list[dict[str, Any]]:
+    def slice_after(
+        self, stream: BufferedStream, last_event_id: int | None
+    ) -> list[dict[str, Any]]:
         if last_event_id is None:
             return list(stream.events)
         return [e for e in stream.events if int(e.get("id", 0)) > last_event_id]

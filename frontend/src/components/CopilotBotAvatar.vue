@@ -2,7 +2,8 @@
 /**
  * CopilotBotAvatar（P8 全面接线版）
  *
- * bloub 引擎的完整客户端：15 个状态中编排 12 个、16 表情按 mood 换脸、
+ * bloub 引擎的完整客户端：15 个状态中编排 13 个（alert/swirl 已接线；
+ * hexagon 无自然产品语义，暂不接）、16 表情按 mood 换脸、
  * 指针注视跟随（gaze.ts 规则）。引擎契约不变：sample(t) 纯函数、
  * 外部状态只经 setter 进（setLook/setExpression/setState）。
  *
@@ -25,10 +26,12 @@ const emit = defineEmits<{ interact: [mood: BotMood] }>()
 const SCENE_MS: Partial<Record<BotMood, number>> = {
   acknowledge: 2500,
   exclaim: 4200,
+  alert: 4200,
   cancelled: 4200,
   comet: 4800,
   burst: 5000,
-  arrive: 6000
+  arrive: 6000,
+  swirl: 2500
 }
 
 /**
@@ -43,8 +46,10 @@ export type BotMood =
   | 'done'
   /** 等待首 token（蛋形收紧） */
   | 'egg'
-  /** 错误（"！" 竖立造型） */
+  /** 请求被拒/启动失败（静止竖「！」） */
   | 'exclaim'
+  /** 飞行中出事：流式中断、讨论失败（斜体「！」冲入） */
+  | 'alert'
   /** 用户中止流式（眨眼示意"好吧"） */
   | 'cancelled'
   /** 空闲打瞌睡（循环） */
@@ -55,6 +60,8 @@ export type BotMood =
   | 'burst'
   /** 导出/长任务完成（彗尾飘移） */
   | 'comet'
+  /** 设置页入场（轻量圆环扫过，保留自定义脸型） */
+  | 'swirl'
 
 const { prefs } = useUserPrefs()
 
@@ -153,6 +160,13 @@ function moodBlocks(mood: BotMood): Block[] {
         { state: 'exclaim', duration: 2.0 },
         { state: 'idle', duration: 1.5 }
       ]
+    case 'alert':
+      // minDuration=2：截断会让「！」停在半路，保持与 exclaim 同量级的完整冲程
+      return [
+        { state: 'idle', duration: 0.3 },
+        { state: 'alert', duration: 2.0 },
+        { state: 'idle', duration: 1.5 }
+      ]
     case 'cancelled':
       return [
         { state: 'idle', duration: 0.3 },
@@ -183,6 +197,13 @@ function moodBlocks(mood: BotMood): Block[] {
         { state: 'comet', duration: 2.4 },
         { state: 'idle', duration: 1.5 }
       ]
+    case 'swirl':
+      // 原设计即设置页转场：短、轻、baseBody/baseFace 保留自定义脸
+      return [
+        { state: 'idle', duration: 0.2 },
+        { state: 'swirl', duration: 1.3 },
+        { state: 'idle', duration: 1.0 }
+      ]
   }
 }
 
@@ -209,7 +230,7 @@ const loopingMoods: BotMood[] = ['idle', 'thinking', 'answering', 'egg', 'sleep'
  * 装饰性大戏（一次性事件）：reduced-motion 下整段跳过——
  * 直接停在 idle 呼吸，不损失信息（这些是庆祝/仪式，不是状态表达）。
  */
-const decorativeMoods: BotMood[] = ['arrive', 'burst', 'comet', 'done', 'acknowledge', 'exclaim', 'cancelled']
+const decorativeMoods: BotMood[] = ['arrive', 'burst', 'comet', 'done', 'acknowledge', 'exclaim', 'alert', 'cancelled', 'swirl']
 
 function effectiveMood(): BotMood {
   if (props.isStreaming) return 'thinking'

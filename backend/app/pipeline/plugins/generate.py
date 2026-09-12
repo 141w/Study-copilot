@@ -51,7 +51,9 @@ class GeneratePlugin(Plugin):
             if isinstance(chunk, dict):
                 ctype = chunk.get("type")
                 if ctype == "reasoning":
-                    await emit_event(state, {"type": "reasoning", "content": chunk.get("content", "")})
+                    await emit_event(
+                        state, {"type": "reasoning", "content": chunk.get("content", "")}
+                    )
                 elif ctype == "token":
                     content = chunk.get("content", "")
                     answer_parts.append(content)

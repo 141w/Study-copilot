@@ -1,6 +1,9 @@
 # Study Copilot - AI 互动课堂引擎 (Classroom Engine)
 
-本目录为 Study Copilot 内置的 **AI 互动课堂引擎**，基于 Next.js 15 开发，提供多智能体互动教学、演示幻灯片动态渲染、虚拟教师/助教语音讲解与交互式自测播放器。
+> **归属说明**：本目录是 **[THU-MAIC/OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) 的 vendored 运行时**（整体拷贝入库），**不是** Study Copilot 从零自研的引擎。基线 commit、耦合面与升级流程见 [`VENDORED.md`](./VENDORED.md)。  
+> Study Copilot 侧自研的是**集成层**（`backend/app/services/classroom_service.py`、`classroom_api.py`、前端桥接、双通道自愈轮询与课程/测验入库）。
+
+本目录作为 Study Copilot 可选启动的 **AI 互动课堂引擎运行时**（默认端口 3001），基于 Next.js 15，提供多智能体互动教学、演示幻灯片动态渲染、虚拟教师/助教语音讲解与交互式自测播放器。
 
 ---
 

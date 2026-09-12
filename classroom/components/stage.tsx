@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { useStageStore } from '@/lib/store';
 import {
@@ -64,6 +64,8 @@ export function Stage({
 }) {
   const { mode, setMode, scenes, currentSceneId, generatingOutlines, stage } = useStageStore();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isEmbedded = searchParams?.get('embedded') === 'true';
   const enteringWorkbench = useRef(false);
   const proWorkbenchFlag = isProWorkbenchEnabled();
   const editorEnabled = isMaicEditorEnabled();
@@ -350,9 +352,9 @@ export function Stage({
               classroomBackControl === 'workbench-return' ? <WorkbenchReturnControl /> : undefined
             }
             hideHeaderBackControl={classroomBackControl === 'hidden'}
-            hideHeader={!classroomHeaderControls.showHeader}
-            hideHeaderGlobalControls={!classroomHeaderControls.showGlobalControls}
-            hideHeaderCourseActions={!classroomHeaderControls.showCourseActions}
+            hideHeader={isEmbedded || !classroomHeaderControls.showHeader}
+            hideHeaderGlobalControls={isEmbedded || !classroomHeaderControls.showGlobalControls}
+            hideHeaderCourseActions={isEmbedded || !classroomHeaderControls.showCourseActions}
           />
         </motion.div>
       ) : (

@@ -48,7 +48,7 @@ def _short_item(q="简述过拟合的含义。", ans="模型在训练集表现�
 def test_extract_json_object_and_array():
     obj = _extract_json_payload('前置说明\n{"quizzes": []}\n后记')
     assert obj == {"quizzes": []}
-    arr = _extract_json_payload("```json\n[{\"a\": 1}]\n```")
+    arr = _extract_json_payload('```json\n[{"a": 1}]\n```')
     assert arr == [{"a": 1}]
     assert _extract_json_payload("没有 JSON") is None
 
@@ -117,12 +117,18 @@ async def test_generate_quizzes_single_mixed_call():
     payload = {
         "quizzes": [
             _choice_item(),
-            _choice_item(q="反向传播用于计算什么量？", ans="A", options=["梯度", "损失值", "学习率", "权重初始化"]),
+            _choice_item(
+                q="反向传播用于计算什么量？",
+                ans="A",
+                options=["梯度", "损失值", "学习率", "权重初始化"],
+            ),
             _short_item(),
         ]
     }
     with patch("app.core.quiz_generator.LLM") as MockLLM:
-        MockLLM.return_value.generate = AsyncMock(return_value=json.dumps(payload, ensure_ascii=False))
+        MockLLM.return_value.generate = AsyncMock(
+            return_value=json.dumps(payload, ensure_ascii=False)
+        )
         gen = QuizGenerator({"api_key": "k", "base_url": "http://x", "model_name": "m"})
         # Re-bind after mock
         gen.llm = MockLLM.return_value
@@ -137,7 +143,9 @@ async def test_generate_quizzes_single_mixed_call():
 async def test_generate_choice_compat_wrapper():
     payload = {"quizzes": [_choice_item()]}
     with patch("app.core.quiz_generator.LLM") as MockLLM:
-        MockLLM.return_value.generate = AsyncMock(return_value=json.dumps(payload, ensure_ascii=False))
+        MockLLM.return_value.generate = AsyncMock(
+            return_value=json.dumps(payload, ensure_ascii=False)
+        )
         gen = QuizGenerator()
         gen.llm = MockLLM.return_value
         out = await gen.generate_choice("ctx", 1)

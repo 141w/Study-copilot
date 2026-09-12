@@ -1,513 +1,386 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ClassroomPlayerView from '@/views/ClassroomPlayerView.vue'
-import { useClassroomStore } from '@/stores/classroom'
+import { useCourseStore } from '@/stores/course'
+import { ElMessage } from 'element-plus'
 
 const mockPush = vi.fn()
+const mockBack = vi.fn()
+
+let mockRoute = {
+  path: '/courses/course-101/classroom',
+  params: { id: 'course-101' },
+}
+
 vi.mock('vue-router', () => ({
-  useRoute: () => ({
-    params: { id: 'course-cls-101' }
-  }),
+  useRoute: () => mockRoute,
   useRouter: () => ({
     push: mockPush,
+    back: mockBack,
   }),
 }))
 
-const mockClassroomData = {
-  id: 'course-cls-101',
-  stage: {
-    name: 'Vue3 响应式原理深度微课',
-    description: '深入理解 Proxy 与 Reflect',
-    generatedAgentConfigs: [
-      { id: 'teacher', name: '苏老师', role: '主讲导师', color: '#3B82F6' },
-      { id: 'curious', name: '求知同学', role: '探索学员', color: '#F59E0B' },
-      { id: 'thinker', name: '学霸', role: '深度思考者', color: '#10B981' },
-    ]
-  },
-  scenes: [
-    {
-      id: 'sc-1',
-      title: '导论：响应式系统演进',
-      type: 'slide',
-      content: {
-        canvas: {
-          theme: { backgroundColor: '#0F172A', fontColor: '#FFFFFF' },
-          elements: [
-            { id: 'el-1', type: 'text', content: 'Vue3 响应式原理深度微课', fontSize: 28, left: 60, top: 60, width: 800, height: 60 },
-            { id: 'el-2', type: 'shape', text: '【学习目标】深入掌握 Proxy 机制', fill: '#1E293B', left: 60, top: 150, width: 800, height: 100 }
-          ]
-        }
-      },
-      actions: [
-        { id: 'act-1', type: 'speech', agentId: 'teacher', text: '欢迎来到本节微课，今天我们学习响应式原理。' },
-        { id: 'act-2', type: 'speech', agentId: 'curious', text: '请问老师，Proxy 和 defineProperty 相比优势在哪里？' }
-      ]
+vi.mock('element-plus', async () => {
+  const actual = await vi.importActual('element-plus')
+  return {
+    ...actual,
+    ElMessage: {
+      success: vi.fn(),
+      error: vi.fn(),
+      warning: vi.fn(),
     },
-    {
-      id: 'sc-2',
-      title: '随堂测验：Proxy 基础',
-      type: 'quiz',
-      quiz: {
-        question: 'Vue 3 为何使用 Proxy 替代 Object.defineProperty？',
-        type: 'single_choice',
-        options: [
-          '无法拦截属性的新增与删除',
-          '代码量更小',
-          '完全废弃了 JavaScript 对象',
-          '不需要浏览器支持'
-        ],
-        answer: '无法拦截属性的新增与删除',
-        explanation: 'Object.defineProperty 无法原生感知新增和删除属性，需要借助 $set API。'
-      },
-      actions: [
-        { id: 'act-q1', type: 'speech', agentId: 'teacher', text: '请根据前面的讲解完成这道测验题。' }
-      ]
-    }
-  ]
+  }
+})
+
+const defaultStubs = {
+  'el-button': { template: '<button v-bind="$attrs"><slot /></button>' },
+  'el-icon': { template: '<i><slot /></i>' },
+  'el-popover': { template: '<div><slot name="reference" /><slot /></div>' },
+  'el-dialog': { template: '<div class="el-dialog" v-if="$attrs.modelValue"><slot /></div>' },
+  'el-radio-group': { template: '<div class="el-radio-group"><slot /></div>' },
+  'el-radio-button': { template: '<button class="el-radio-button" v-bind="$attrs"><slot /></button>' },
+  'el-slider': { template: '<div class="el-slider"></div>' },
+  'el-switch': { template: '<input type="checkbox" class="el-switch" />' },
 }
 
-describe('ClassroomPlayerView', () => {
+describe('ClassroomPlayerView (OpenMAIC Embedded Host)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockPush.mockClear()
-    // 模拟 window.speechSynthesis
-    window.speechSynthesis = {
-      speak: vi.fn(),
-      cancel: vi.fn(),
-      pause: vi.fn(),
-      resume: vi.fn(),
+    mockBack.mockClear()
+    vi.clearAllMocks()
+
+    mockRoute = {
+      path: '/courses/course-101/classroom',
+      params: { id: 'course-101' },
     }
   })
 
-  it('正确加载并渲染微课标题与第一幕内容', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
-    })
-
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Vue3 响应式原理深度微课')
-    expect(wrapper.text()).toContain('第 1 / 2 幕')
-    expect(wrapper.text()).toContain('苏老师')
-    expect(wrapper.text()).toContain('欢迎来到本节微课，今天我们学习响应式原理。')
-    expect(wrapper.text()).toContain('【学习目标】深入掌握 Proxy 机制')
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  it('支持上一句/下一句动作切换与切幕', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
+  it('从课程路由 /courses/:id/classroom 加载：解析 classroomId 并渲染 OpenMAIC iframe', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '深度学习原理与实战',
+      description: JSON.stringify({
+        classroom_id: 'openmaic-stage-999',
+        classroom_url: '/courses/course-101/classroom',
+      }),
+      user_id: 'u-1',
+      color: '#409EFF',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([
+      { id: 'doc-1', filename: '深度学习.pdf', file_size: 1024 * 1024, user_id: 'u-1', file_path: '', status: 'ready', created_at: '', updated_at: '' },
+      { id: 'doc-2', filename: '神经网络.docx', file_size: 512 * 1024, user_id: 'u-1', file_path: '', status: 'ready', created_at: '', updated_at: '' },
+    ])
 
     const wrapper = mount(ClassroomPlayerView, {
       global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
+        stubs: defaultStubs,
+      },
     })
 
     await flushPromises()
 
-    // 初始处于 action 0 (苏老师)
+    expect(wrapper.text()).toContain('深度学习原理与实战')
+    expect(wrapper.text()).toContain('AI 互动微课')
+    expect(wrapper.text()).toContain('2 份参考文档')
+
+    const iframe = wrapper.find('iframe')
+    expect(iframe.exists()).toBe(true)
+    expect(iframe.attributes('src')).toBe('/classroom-engine/classroom/openmaic-stage-999?embedded=true&theme=light')
+  })
+
+  it('直接从 /classroom/:id 路由访问：将路由 ID 作为微课 ID 并渲染 iframe', async () => {
+    mockRoute = {
+      path: '/classroom/openmaic-direct-555',
+      params: { id: 'openmaic-direct-555' },
+    }
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: defaultStubs,
+      },
+    })
+
+    await flushPromises()
+
+    const iframe = wrapper.find('iframe')
+    expect(iframe.exists()).toBe(true)
+    expect(iframe.attributes('src')).toBe('/classroom-engine/classroom/openmaic-direct-555?embedded=true&theme=light')
+  })
+
+  it('响应 postMessage OPENMAIC_READY 事件更新加载状态', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '测试微课',
+      description: JSON.stringify({ classroom_id: 'stage-1' }),
+      user_id: 'u-1',
+      color: '',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([])
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: defaultStubs,
+      },
+    })
+
+    await flushPromises()
+
+    // 初始加载遮罩存在
+    expect(wrapper.text()).toContain('正在载入 OpenMAIC 画布与声学引擎')
+
+    // 触发 OPENMAIC_READY 跨窗口消息
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'OPENMAIC_READY', classroomId: 'stage-1' },
+    }))
+
+    await flushPromises()
+
+    // 遮罩消除
+    expect(wrapper.text()).not.toContain('正在载入 OpenMAIC 画布与声学引擎')
+  })
+
+  it('响应 postMessage OPENMAIC_EXIT 事件返回课程空间', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '测试微课',
+      description: JSON.stringify({ classroom_id: 'stage-exit-1' }),
+      user_id: 'u-1',
+      color: '',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([])
+
+    mount(ClassroomPlayerView, {
+      global: {
+        stubs: defaultStubs,
+      },
+    })
+
+    await flushPromises()
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'OPENMAIC_EXIT' },
+    }))
+
+    expect(mockPush).toHaveBeenCalledWith('/courses/course-101')
+  })
+
+  it('响应 postMessage OPENMAIC_QUIZ_COMPLETED 事件展示同步成功通知', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '测试微课',
+      description: JSON.stringify({ classroom_id: 'stage-quiz-1' }),
+      user_id: 'u-1',
+      color: '',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([])
+
+    mount(ClassroomPlayerView, {
+      global: {
+        stubs: defaultStubs,
+      },
+    })
+
+    await flushPromises()
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'OPENMAIC_QUIZ_COMPLETED', stageId: 'stage-quiz-1', results: [] },
+    }))
+
+    expect(ElMessage.success).toHaveBeenCalledWith(expect.stringContaining('随堂测验已完成'))
+  })
+
+  it('点击独立窗口演播按钮调用 window.open', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '测试微课',
+      description: JSON.stringify({ classroom_id: 'stage-pop-1' }),
+      user_id: 'u-1',
+      color: '',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([])
+
+    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: defaultStubs,
+      },
+    })
+
+    await flushPromises()
+
+    const openBtn = wrapper.findAll('button').find(b => b.attributes('title') === '在独立窗口中演播')
+    expect(openBtn).toBeDefined()
+    await openBtn?.trigger('click')
+
+    expect(windowOpenSpy).toHaveBeenCalledWith('/classroom-engine/classroom/stage-pop-1', '_blank')
+  })
+
+  it('课程未生成微课时渲染友好提示与返回按钮', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '空白课程',
+      description: '',
+      user_id: 'u-1',
+      color: '',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([])
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: defaultStubs,
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('未能载入互动微课')
+    expect(wrapper.text()).toContain('当前课程尚未生成完整的 AI 互动微课')
+
+    const backBtn = wrapper.findAll('button').find(b => b.text().includes('返回课程空间'))
+    expect(backBtn).toBeDefined()
+    await backBtn?.trigger('click')
+
+    expect(mockPush).toHaveBeenCalledWith('/courses/course-101')
+  })
+
+  it('点击微课设置按钮唤起设置面板并显示参会人设与主模型状态', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '微课设置测试',
+      description: JSON.stringify({ classroom_id: 'stage-settings-1' }),
+      user_id: 'u-1',
+      color: '',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([])
+
+    const wrapper = mount(ClassroomPlayerView, {
+      global: {
+        stubs: defaultStubs,
+      },
+    })
+
+    await flushPromises()
+
+    const settingBtn = wrapper.findAll('button').find(b => b.attributes('title') === '微课设置')
+    expect(settingBtn).toBeDefined()
+    await settingBtn?.trigger('click')
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('演播与语音控制')
+    expect(wrapper.text()).toContain('主模型与讨论引擎')
+    expect(wrapper.text()).toContain('已接入 · 无感直通')
+    expect(wrapper.text()).toContain('微课参会人设')
     expect(wrapper.text()).toContain('苏老师')
-
-    // 找到包含 下一句/下一幕 标题的按钮并触发
-    const buttons = wrapper.findAll('button')
-    const nextBtn = buttons.find(b => b.attributes('title') === '下一句/下一幕')
-    expect(nextBtn).toBeDefined()
-    await nextBtn.trigger('click')
-
-    // 切换到 action 1 (求知同学)
+    expect(wrapper.text()).toContain('学霸同学')
     expect(wrapper.text()).toContain('求知同学')
-    expect(wrapper.text()).toContain('请问老师，Proxy 和 defineProperty 相比优势在哪里？')
-
-    // 再次点击进入下一幕 (Quiz)
-    await nextBtn.trigger('click')
-    expect(wrapper.text()).toContain('随堂挑战')
-    expect(wrapper.text()).toContain('Vue 3 为何使用 Proxy 替代 Object.defineProperty？')
   })
 
-  it('测验场景支持答题、即时正误反馈与解析展开', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
+  it('接收 OPENMAIC_READY 中的 config 同步更新主模型与倍速', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '微课同步测试',
+      description: JSON.stringify({ classroom_id: 'stage-sync-1' }),
+      user_id: 'u-1',
+      color: '',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([])
 
     const wrapper = mount(ClassroomPlayerView, {
       global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
+        stubs: defaultStubs,
+      },
     })
 
     await flushPromises()
 
-    // 跳转到第二幕 (Quiz)
-    const sidebarItems = wrapper.findAll('aside .cursor-pointer')
-    if (sidebarItems.length > 1) {
-      await sidebarItems[1].trigger('click')
-    }
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'OPENMAIC_READY',
+        classroomId: 'stage-sync-1',
+        config: {
+          speed: 1.5,
+          volume: 0.8,
+          muted: false,
+          autoPlay: true,
+          modelId: 'step-3.7-flash',
+        },
+      },
+    }))
 
-    expect(wrapper.text()).toContain('Vue 3 为何使用 Proxy 替代 Object.defineProperty？')
+    await flushPromises()
 
-    // 查找选项按钮并点击正确选项
-    const optBtns = wrapper.findAll('main button').filter(b => b.text().includes('无法拦截属性的新增与删除'))
-    expect(optBtns.length).toBeGreaterThan(0)
-    await optBtns[0].trigger('click')
+    const settingBtn = wrapper.findAll('button').find(b => b.attributes('title') === '微课设置')
+    await settingBtn?.trigger('click')
+    await flushPromises()
 
-    // 验证反馈结果
-    expect(wrapper.text()).toContain('✓ 回答正确！')
-    expect(wrapper.text()).toContain('Object.defineProperty 无法原生感知新增和删除属性')
+    expect(wrapper.text()).toContain('step-3.7-flash')
   })
 
-  it('加载失败时渲染错误提示与重试按钮', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockRejectedValue(new Error('网络连接超时'))
+  it('随堂测验完成时携带 results 并展示正确题数', async () => {
+    const courseStore = useCourseStore()
+    vi.spyOn(courseStore, 'fetchCourse').mockResolvedValue({
+      id: 'course-101',
+      name: '测验得分测试',
+      description: JSON.stringify({ classroom_id: 'stage-score-1' }),
+      user_id: 'u-1',
+      color: '',
+      created_at: '',
+      updated_at: '',
+    })
+    vi.spyOn(courseStore, 'fetchCourseDocuments').mockResolvedValue([])
 
-    const wrapper = mount(ClassroomPlayerView, {
+    mount(ClassroomPlayerView, {
       global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
+        stubs: defaultStubs,
+      },
     })
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('课件未找到或已被移除')
-    expect(wrapper.text()).toContain('网络连接超时')
-  })
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'OPENMAIC_QUIZ_COMPLETED',
+        stageId: 'stage-score-1',
+        results: [
+          { questionId: 'q1', isCorrect: true },
+          { questionId: 'q2', isCorrect: false },
+          { questionId: 'q3', isCorrect: true },
+        ],
+      },
+    }))
 
-  it('支持播放倍速循环切换与语音静音切换（设置下拉）', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' },
-          'el-dropdown': {
-            template: `<div class="el-dropdown-stub">
-              <slot />
-              <div class="dropdown-menu-stub"><slot name="dropdown" /></div>
-            </div>`,
-            emits: ['command'],
-            provide() {
-              return {
-                dropdownEmit: (cmd) => this.$emit('command', cmd),
-              }
-            },
-          },
-          'el-dropdown-menu': { template: '<div><slot /></div>' },
-          'el-dropdown-item': {
-            props: { command: { type: [String, Number, Object], default: '' } },
-            inject: ['dropdownEmit'],
-            template: `<button type="button" class="el-dropdown-item" @click="dropdownEmit(command)"><slot /></button>`,
-          },
-        }
-      }
-    })
-
-    await flushPromises()
-
-    // 设置下拉中展示当前倍速与语音状态（1 在模板中渲染为 1x）
-    const items = wrapper.findAll('.el-dropdown-item')
-    expect(items.length).toBeGreaterThanOrEqual(3)
-    expect(items[0].text()).toMatch(/倍速 · 1(\.0)?x/)
-    expect(items[1].text()).toContain('已开启')
-
-    await items[0].trigger('click')
-    expect(wrapper.findAll('.el-dropdown-item')[0].text()).toContain('1.25x')
-
-    await wrapper.findAll('.el-dropdown-item')[1].trigger('click')
-    expect(wrapper.findAll('.el-dropdown-item')[1].text()).toContain('已静音')
-  })
-
-  it('画布使用 flex 槽位约束（无 100vh 魔法数）', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' },
-        }
-      }
-    })
-    await flushPromises()
-
-    const slot = wrapper.find('.stage-slot')
-    expect(slot.exists()).toBe(true)
-    expect(slot.classes()).toContain('flex-1')
-    expect(slot.classes()).toContain('min-h-0')
-
-    const frame = wrapper.find('.stage-frame')
-    expect(frame.exists()).toBe(true)
-    expect(frame.classes()).toContain('aspect-video')
-    expect(frame.classes()).toContain('max-h-full')
-    expect(frame.classes()).toContain('w-full')
-    // 不再依赖 calc(100vh - 240px)
-    expect(frame.attributes('style') || '').not.toContain('100vh')
-  })
-
-  it('验证舞台与台词控制台解耦布局及主题变量应用', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
-    })
-
-    await flushPromises()
-
-    // 验证根节点应用项目主题变量
-    expect(wrapper.classes()).toContain('bg-[var(--bg-primary)]')
-    expect(wrapper.classes()).toContain('text-[var(--text-primary)]')
-
-    // 验证视觉演播区 16:9 画布存在
-    const stageCanvas = wrapper.find('.aspect-video')
-    expect(stageCanvas.exists()).toBe(true)
-
-    // 验证画布内部已解耦，不再包含绝对定位的台词卡
-    const subtitleDockInside = stageCanvas.find('.absolute.bottom-2\\.5')
-    expect(subtitleDockInside.exists()).toBe(false)
-
-    // 验证台词正文存在且在独立控制台内
-    expect(wrapper.text()).toContain('欢迎来到本节微课，今天我们学习响应式原理。')
-  })
-
-  it('台词默认两行可点击展开/收起', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
-    })
-    await flushPromises()
-
-    const dialogue = wrapper.find('p.line-clamp-2')
-    expect(dialogue.exists()).toBe(true)
-    expect(dialogue.text()).toContain('欢迎来到本节微课')
-
-    await dialogue.trigger('click')
-    expect(wrapper.find('p.line-clamp-2').exists()).toBe(false)
-
-    await wrapper.findAll('p').find(p => p.text().includes('欢迎来到本节微课'))?.trigger('click')
-    expect(wrapper.find('p.line-clamp-2').exists()).toBe(true)
-  })
-
-  it('支持章节目录：桌面默认展开，可切换折叠', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
-    })
-
-    await flushPromises()
-
-    const aside = wrapper.find('aside')
-    expect(aside.exists()).toBe(true)
-    // 桌面端（jsdom 默认 1024px）默认打开
-    expect(aside.attributes('style') || '').not.toContain('display: none')
-
-    const dirBtn = wrapper.findAll('button').find(b => b.attributes('title') === '章节目录')
-    expect(dirBtn).toBeDefined()
-    await dirBtn.trigger('click')
-    await flushPromises()
-    expect(aside.attributes('style')).toContain('display: none')
-
-    await dirBtn.trigger('click')
-    await flushPromises()
-    expect(aside.attributes('style') || '').not.toContain('display: none')
-  })
-
-  it('验证侧边栏桌面端自适应平铺与移动端遮罩交互（彻底消除遮挡）', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
-    })
-
-    await flushPromises()
-
-    const dirBtn = wrapper.findAll('button').find(b => b.attributes('title') === '章节目录')
-    expect(dirBtn).toBeDefined()
-
-    const aside = wrapper.find('aside')
-    expect(aside.exists()).toBe(true)
-
-    // 验证 aside 具有桌面端自适应平铺样式（相对定位非绝对覆盖）
-    expect(aside.classes()).toContain('lg:relative')
-    expect(aside.classes()).toContain('lg:inset-auto')
-
-    // 验证 main 具有 flex-1 与 min-w-0 自适应缩放属性
-    const main = wrapper.find('main')
-    expect(main.classes()).toContain('min-w-0')
-    expect(main.classes()).toContain('flex-1')
-
-    // 验证画布槽位使用 flex 约束
-    expect(wrapper.find('.stage-slot').classes()).toContain('min-h-0')
-
-    // 确保目录打开后可点遮罩收起（移动端路径）
-    if ((aside.attributes('style') || '').includes('display: none')) {
-      await dirBtn.trigger('click')
-      await flushPromises()
-    }
-    const backdrop = wrapper.find('.lg\\:hidden.fixed.inset-0')
-    expect(backdrop.exists()).toBe(true)
-    await backdrop.trigger('click')
-    await flushPromises()
-    expect(aside.attributes('style')).toContain('display: none')
-  })
-
-  it('播放控制使用 el-button 主/次按钮态', async () => {
-    const classroomStore = useClassroomStore()
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(mockClassroomData)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': {
-            template: '<button :data-type="type"><slot /></button>',
-            props: ['type', 'size', 'disabled', 'title', 'circle', 'text', 'plain'],
-          },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
-    })
-    await flushPromises()
-
-    // 初始「播放」为 primary（el-button :type 映射到 data-type 避免与原生 type 冲突）
-    const playBtn = wrapper.findAll('button').find(b => b.text().trim() === '播放')
-    expect(playBtn).toBeDefined()
-    expect(playBtn.attributes('data-type')).toBe('primary')
-
-    await playBtn.trigger('click')
-    await flushPromises()
-    const pauseBtn = wrapper.findAll('button').find(b => b.text().trim() === '暂停')
-    expect(pauseBtn).toBeDefined()
-    expect(pauseBtn.attributes('data-type')).toBe('default')
-  })
-
-  it('讲解幕无课件主题时跟随亮暗令牌，浅填充卡片用深色字', async () => {
-    const classroomStore = useClassroomStore()
-    const data = JSON.parse(JSON.stringify(mockClassroomData))
-    delete data.scenes[0].content.canvas.theme
-    data.scenes[0].content.canvas.elements.push({
-      id: 'el-light',
-      type: 'shape',
-      text: '浅色卡片正文',
-      fill: '#F1F5F9',
-      left: 60,
-      top: 280,
-      width: 400,
-      height: 80,
-    })
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(data)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
-    })
-    await flushPromises()
-
-    const frame = wrapper.find('.stage-frame')
-    expect(frame.classes()).toContain('stage-default-theme')
-    expect(frame.attributes('style') || '').not.toContain('#0F172A')
-
-    const lightCard = wrapper.findAll('.stage-frame .rounded-xl').find(s => s.text().includes('浅色卡片正文'))
-    expect(lightCard).toBeDefined()
-    // 无自定义主题：浅 hex 填充映射为主题令牌，不再整卡发白
-    expect(lightCard.attributes('style')).toContain('var(--bg-tertiary)')
-    expect(lightCard.find('div').attributes('style')).toContain('inherit')
-  })
-
-  it('讲解幕有课件主题时保留浅填充与深色字', async () => {
-    const classroomStore = useClassroomStore()
-    const data = JSON.parse(JSON.stringify(mockClassroomData))
-    data.scenes[0].content.canvas.theme = { backgroundColor: '#FFFFFF', fontColor: '#111827' }
-    data.scenes[0].content.canvas.elements.push({
-      id: 'el-obj',
-      type: 'shape',
-      text: '🎯 【学习目标】: 掌握 Proxy',
-      fill: '#F1F5F9',
-      left: 60,
-      top: 280,
-      width: 800,
-      height: 60,
-    })
-    vi.spyOn(classroomStore, 'fetchClassroomDetail').mockResolvedValue(data)
-
-    const wrapper = mount(ClassroomPlayerView, {
-      global: {
-        stubs: {
-          'el-button': { template: '<button><slot /></button>' },
-          'el-icon': { template: '<i><slot /></i>' },
-          'el-drawer': { template: '<div><slot /></div>' }
-        }
-      }
-    })
-    await flushPromises()
-
-    const frame = wrapper.find('.stage-frame')
-    expect(frame.classes()).not.toContain('stage-default-theme')
-
-    const objCard = wrapper.findAll('.stage-frame .rounded-xl').find(s => s.text().includes('🎯'))
-    expect(objCard).toBeDefined()
-    expect(objCard.attributes('style')).toContain('rgb(241, 245, 249)')
-    expect(objCard.find('div').attributes('style')).toContain('rgb(17, 24, 39)')
+    expect(ElMessage.success).toHaveBeenCalledWith(expect.stringContaining('答对 2/3 题'))
   })
 })
-
-
-

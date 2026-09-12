@@ -56,7 +56,9 @@ async def test_onion_ordering_execution():
 
 @pytest.mark.asyncio
 async def test_pipeline_out_of_scope_short_circuit():
-    with patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze:
+    with patch(
+        "app.core.query_router.query_router.analyze", new_callable=AsyncMock
+    ) as mock_analyze:
         mock_analyze.return_value = QueryAnalysis(
             intent=QueryType.OUT_OF_SCOPE,
             standalone_query="明天天气如何？",
@@ -75,8 +77,12 @@ async def test_pipeline_out_of_scope_short_circuit():
 
 @pytest.mark.asyncio
 async def test_pipeline_direct_answer_short_circuit():
-    with patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze, \
-         patch("app.core.rag_engine.rag_engine._direct_answer", new_callable=AsyncMock) as mock_direct:
+    with (
+        patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze,
+        patch(
+            "app.core.rag_engine.rag_engine._direct_answer", new_callable=AsyncMock
+        ) as mock_direct,
+    ):
         mock_analyze.return_value = QueryAnalysis(
             intent=QueryType.DIRECT_ANSWER,
             standalone_query="1+1等于几？",
@@ -95,13 +101,23 @@ async def test_pipeline_direct_answer_short_circuit():
 
 @pytest.mark.asyncio
 async def test_pipeline_rag_flow_end_to_end():
-    with patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze, \
-         patch("app.core.adaptive_retriever.adaptive_retriever.select_strategy", new_callable=AsyncMock) as mock_strategy, \
-         patch("app.core.adaptive_retriever.adaptive_retriever.retrieve_adaptive", new_callable=AsyncMock) as mock_retrieve, \
-         patch("app.core.retrieval_grader.retrieval_grader.grade", new_callable=AsyncMock) as mock_grade, \
-         patch("app.core.rag_engine.rag_engine.generate_answer", new_callable=AsyncMock) as mock_gen, \
-         patch("app.core.answer_reflector.answer_reflector.evaluate", new_callable=AsyncMock) as mock_eval:
-
+    with (
+        patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze,
+        patch(
+            "app.core.adaptive_retriever.adaptive_retriever.select_strategy", new_callable=AsyncMock
+        ) as mock_strategy,
+        patch(
+            "app.core.adaptive_retriever.adaptive_retriever.retrieve_adaptive",
+            new_callable=AsyncMock,
+        ) as mock_retrieve,
+        patch(
+            "app.core.retrieval_grader.retrieval_grader.grade", new_callable=AsyncMock
+        ) as mock_grade,
+        patch("app.core.rag_engine.rag_engine.generate_answer", new_callable=AsyncMock) as mock_gen,
+        patch(
+            "app.core.answer_reflector.answer_reflector.evaluate", new_callable=AsyncMock
+        ) as mock_eval,
+    ):
         from app.core.adaptive_retriever import RetrievalStrategy
         from app.core.retrieval_grader import RetrievalQuality
 
@@ -160,7 +176,9 @@ async def _collect_stream(**kwargs):
 
 @pytest.mark.asyncio
 async def test_pipeline_stream_out_of_scope():
-    with patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze:
+    with patch(
+        "app.core.query_router.query_router.analyze", new_callable=AsyncMock
+    ) as mock_analyze:
         mock_analyze.return_value = QueryAnalysis(
             intent=QueryType.OUT_OF_SCOPE,
             standalone_query="明天天气如何？",
@@ -179,9 +197,10 @@ async def test_pipeline_stream_out_of_scope():
 
 @pytest.mark.asyncio
 async def test_pipeline_stream_direct_answer_tokens():
-    with patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze, \
-         patch("app.core.llm.LLM.chat_stream") as mock_stream:
-
+    with (
+        patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze,
+        patch("app.core.llm.LLM.chat_stream") as mock_stream,
+    ):
         mock_analyze.return_value = QueryAnalysis(
             intent=QueryType.DIRECT_ANSWER,
             standalone_query="1+1等于几？",
@@ -206,13 +225,23 @@ async def test_pipeline_stream_direct_answer_tokens():
 
 @pytest.mark.asyncio
 async def test_pipeline_stream_rag_full_flow():
-    with patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze, \
-         patch("app.core.adaptive_retriever.adaptive_retriever.select_strategy", new_callable=AsyncMock) as mock_strategy, \
-         patch("app.core.adaptive_retriever.adaptive_retriever.retrieve_adaptive", new_callable=AsyncMock) as mock_retrieve, \
-         patch("app.core.retrieval_grader.retrieval_grader.grade", new_callable=AsyncMock) as mock_grade, \
-         patch("app.core.rag_engine.rag_engine.generate_answer_stream") as mock_gen, \
-         patch("app.core.answer_reflector.answer_reflector.evaluate", new_callable=AsyncMock) as mock_eval:
-
+    with (
+        patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze,
+        patch(
+            "app.core.adaptive_retriever.adaptive_retriever.select_strategy", new_callable=AsyncMock
+        ) as mock_strategy,
+        patch(
+            "app.core.adaptive_retriever.adaptive_retriever.retrieve_adaptive",
+            new_callable=AsyncMock,
+        ) as mock_retrieve,
+        patch(
+            "app.core.retrieval_grader.retrieval_grader.grade", new_callable=AsyncMock
+        ) as mock_grade,
+        patch("app.core.rag_engine.rag_engine.generate_answer_stream") as mock_gen,
+        patch(
+            "app.core.answer_reflector.answer_reflector.evaluate", new_callable=AsyncMock
+        ) as mock_eval,
+    ):
         from app.core.adaptive_retriever import RetrievalStrategy
         from app.core.retrieval_grader import RetrievalQuality
 
@@ -263,10 +292,16 @@ async def test_pipeline_stream_rag_full_flow():
 
 @pytest.mark.asyncio
 async def test_pipeline_stream_empty_search_short_circuit():
-    with patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze, \
-         patch("app.core.adaptive_retriever.adaptive_retriever.select_strategy", new_callable=AsyncMock) as mock_strategy, \
-         patch("app.core.adaptive_retriever.adaptive_retriever.retrieve_adaptive", new_callable=AsyncMock) as mock_retrieve:
-
+    with (
+        patch("app.core.query_router.query_router.analyze", new_callable=AsyncMock) as mock_analyze,
+        patch(
+            "app.core.adaptive_retriever.adaptive_retriever.select_strategy", new_callable=AsyncMock
+        ) as mock_strategy,
+        patch(
+            "app.core.adaptive_retriever.adaptive_retriever.retrieve_adaptive",
+            new_callable=AsyncMock,
+        ) as mock_retrieve,
+    ):
         from app.core.adaptive_retriever import RetrievalStrategy
 
         mock_analyze.return_value = QueryAnalysis(
@@ -296,15 +331,18 @@ async def test_pipeline_stream_enabled_in_chat_service(monkeypatch):
     class FakeDB:
         pass
 
-    with patch.object(chat_service.settings, "pipeline_v2_enabled", True), \
-         patch.object(chat_service, "get_llm_config_with_secret", new_callable=AsyncMock) as mock_cfg, \
-         patch.object(chat_service, "_validate_document_ids", new_callable=AsyncMock) as mock_valid, \
-         patch.object(chat_service, "_ensure_session", new_callable=AsyncMock) as mock_sess, \
-         patch.object(chat_service, "_get_history", new_callable=AsyncMock) as mock_hist, \
-         patch.object(chat_service, "_embed_text", new_callable=AsyncMock) as mock_emb, \
-         patch.object(chat_service, "_insert_message", new_callable=AsyncMock) as mock_ins, \
-         patch.object(chat_service, "execute_chat_pipeline_stream") as mock_pipe:
-
+    with (
+        patch.object(chat_service.settings, "pipeline_v2_enabled", True),
+        patch.object(
+            chat_service, "get_llm_config_with_secret", new_callable=AsyncMock
+        ) as mock_cfg,
+        patch.object(chat_service, "_validate_document_ids", new_callable=AsyncMock) as mock_valid,
+        patch.object(chat_service, "_ensure_session", new_callable=AsyncMock) as mock_sess,
+        patch.object(chat_service, "_get_history", new_callable=AsyncMock) as mock_hist,
+        patch.object(chat_service, "_embed_text", new_callable=AsyncMock) as mock_emb,
+        patch.object(chat_service, "_insert_message", new_callable=AsyncMock) as mock_ins,
+        patch.object(chat_service, "execute_chat_pipeline_stream") as mock_pipe,
+    ):
         mock_cfg.return_value = {"model": "gpt-4o"}
         mock_valid.return_value = ["doc-1"]
         mock_sess.return_value = ("sess-1", None)
@@ -318,9 +356,7 @@ async def test_pipeline_stream_enabled_in_chat_service(monkeypatch):
         mock_pipe.side_effect = lambda **kwargs: fake_pipe(**kwargs)
 
         events = []
-        async for ev in chat_service.ask_question_stream(
-            FakeDB(), FakeUser(), "你好", ["doc-1"]
-        ):
+        async for ev in chat_service.ask_question_stream(FakeDB(), FakeUser(), "你好", ["doc-1"]):
             events.append(ev)
 
         assert mock_pipe.call_count == 1

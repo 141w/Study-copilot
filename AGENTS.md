@@ -10,7 +10,7 @@ This file provides architectural guidance for contributors working on Study Copi
 - **Agentic RAG**: 查询路由、上下文感知改写、自适应检索、纠错检索、会话摘要、答案自我反思、Hybrid检索（FAISS+BM25+RRF）
 - **笔记系统**: 手动/AI 笔记，标签管理，语义搜索（FAISS向量索引）
 - **课程空间**: 按课程组织文档和笔记，课程-文档关联管理
-- **内容转换**: 8 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/翻译/解释）
+- **内容转换**: 9 种转换类型（摘要/要点/大纲/卡片/思维导图/问答/中英互译/通俗解释）
 - **URL 导入**: 从网页链接提取内容
 - **TTS 语音**: Edge TTS 朗读答案和笔记
 - **异步任务**: 批量操作，持久化任务队列（pending 行落库、worker 轮询认领、看门狗超时、重启自动恢复孤儿任务）
@@ -19,26 +19,30 @@ This file provides architectural guidance for contributors working on Study Copi
 - **CI/CD**: GitHub Actions
 - **代码质量**: Ruff linter + TypeScript + vue-tsc
 
-### v4 Features（WeKnora 吸收升级 M1–M5）
+### v4 Features（参考 WeKnora 设计的 Python 落地）
 - **Langfuse 可观测**: 可选全链路追踪（关闭时 NoOp 零开销），覆盖 RAG/路由/检索/反思/LLM
-- **自适应分块链**: 文档画像 → 策略链选择 → WeKnora 五法则校验降级 → 面包屑上下文注入
+- **自适应分块链**: 文档画像 → 策略链选择 → 五法则校验降级 → 面包屑上下文注入
 - **长期记忆五分类**: profile/preference（常驻）+ fact/task（情境）+ interest（检索意图）；pending 隔离 + CJK 词法召回（0 LLM）
-- **洋葱聊天管线**: PipelineBuilder 插件编排；`PIPELINE_V2_ENABLED` 双轨；**流式 SSE 主路径已接入**
+- **洋葱聊天管线**: PipelineBuilder 插件编排；`PIPELINE_V2_ENABLED` 双轨（**默认关闭**，开启后流式 SSE 走管线；深度研究仍走 Agent）
 - **ReAct 深度研究**: 6 只读工具 + Think-Act-Observe 护栏；前端「快速 / 深度研究」切换
+
+### 第三方归属（对外文档勿写成自研）
+- **`classroom/`**: [THU-MAIC/OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) 整体 vendored（约 2k 文件 / 40 万+ 行）。自研部分仅为集成层（`classroom_service.py` / `classroom_api.py` / 前端桥接 / 双通道自愈 / 契约与漂移哨兵）。详见 `classroom/VENDORED.md`。
+- **Agent/管线/记忆/分块**: 参考 [TencentCloudADP/WeKnora](https://github.com/TencentCloudADP/WeKnora) 设计，在本仓库 Python 重写（约 3k 行），非 Go 源码拷贝。
 
 **Key Values**: Local-first embedding, multi-provider LLM support, Chinese-language optimized, self-hosted.
 
 ---
 
-## Current State (2026-09-10)
+## Current State (2026-09 文档核对)
 
-- **Git**: `master` 分支（WeKnora M1-M5 + 流式管线落地，未 push 远端）
-- **Tests**: 后端 **615 passed**（覆盖率 **72.57%**，门禁 65%）/ 前端 **290 passed** / mypy 0 / ruff 0 / vue-tsc 0
-- **Ports**: 前端 3000，后端 8000
+- **Git**: `master` 分支（WeKnora 设计落地 + 流式管线 + Agent；课堂引擎为 OpenMAIC vendored）
+- **Tests**（以源码计数为准，避免各文档数字漂移）: 后端 **55 个测试文件 / 634 个测试函数**（覆盖率门禁 `≥65%`）/ 前端 **约 298 用例**（28 个 SPA 测试文件约 207 + bot 引擎 91）/ mypy 0 / ruff 0 / vue-tsc 0
+- **Ports**: 前端 3000，后端 8000；课堂引擎（可选）3001
 - **Frontend**: Vue3 + Vite + TypeScript + Pinia + TailwindCSS + GSAP + Element Plus
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL 16+ + pgvector + sentence-transformers
-- **打包**: backend/pyproject.toml（hatchling）+ uv.lock（~484 TOML 条目）；requirements.txt 为兼容层
-- **CI**: uv 安装依赖 + ruff lint + mypy 类型门禁（渐进式棘轮配置）+ 覆盖率门禁 65% + 前端 vitest/vue-tsc 全链路
+- **打包**: backend/pyproject.toml（hatchling）+ uv.lock；requirements.txt 为兼容层
+- **CI**: uv 安装依赖 + ruff lint + mypy 类型门禁（渐进式棘轮）+ 覆盖率门禁 65% + 前端 vitest/vue-tsc；另有 OpenMAIC 上游漂移哨兵
 - **可观测性**: 结构化 JSON 日志 + X-Trace-ID ASGI 中间件 + 可选 Langfuse（`LANGFUSE_ENABLED`）+ /health DB 探测
 - **Docker**: 多阶段构建、非 root 运行、healthcheck；.dockerignore 收敛构建上下文
 

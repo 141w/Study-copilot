@@ -63,7 +63,9 @@ def source_overlap(sources: list[dict[str, Any]], expected: list[str]) -> float:
         for s in sources
         if isinstance(s, dict)
     }
-    hit = sum(1 for e in expected if e.lower() in " ".join(names) or any(e.lower() in n for n in names))
+    hit = sum(
+        1 for e in expected if e.lower() in " ".join(names) or any(e.lower() in n for n in names)
+    )
     return hit / len(expected)
 
 
@@ -76,7 +78,9 @@ def run_lexical(cases: list[dict[str, Any]]) -> dict[str, Any]:
     return {"mode": "lexical", "cases": len(rows), "pass": ok, "rows": rows}
 
 
-def run_live(cases: list[dict[str, Any]], base_url: str, token: str, doc_ids: list[str]) -> dict[str, Any]:
+def run_live(
+    cases: list[dict[str, Any]], base_url: str, token: str, doc_ids: list[str]
+) -> dict[str, Any]:
     import urllib.error
     import urllib.request
 

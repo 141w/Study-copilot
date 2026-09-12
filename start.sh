@@ -199,19 +199,24 @@ while [ $RETRIES -lt $MAX_RETRIES ]; do
 done
 
 # ----------------------------------------------------------
-# 5.5 启动 AI 互动课堂引擎（可选微服务，端口 $CLASSROOM_PORT）
+# 5.5 启动 AI 互动课堂引擎（OpenMAIC，端口 $CLASSROOM_PORT）
 # ----------------------------------------------------------
 CLASSROOM_PID=""
 if [ -d "$SCRIPT_DIR/classroom/node_modules" ]; then
-    info "启动 AI 互动课堂引擎 (端口 $CLASSROOM_PORT)..."
+    info "启动 AI 互动课堂引擎 OpenMAIC (端口 $CLASSROOM_PORT)..."
     cd "$SCRIPT_DIR/classroom"
     nohup npx pnpm dev -p $CLASSROOM_PORT > /tmp/study-copilot-classroom.log 2>&1 &
     CLASSROOM_PID=$!
     cd "$SCRIPT_DIR"
     ok "AI 互动课堂引擎已在后台启动 (PID: $CLASSROOM_PID)"
 else
-    info "AI 互动课堂引擎：已启用后端原生大纲与测验智能生成保底模式。"
-    info "（如需全功能互动课件渲染，可随时进入 classroom/ 执行 npx pnpm install && npx pnpm dev -p $CLASSROOM_PORT）"
+    info "正在为 AI 互动课堂引擎 OpenMAIC 安装依赖..."
+    cd "$SCRIPT_DIR/classroom"
+    pnpm install
+    nohup npx pnpm dev -p $CLASSROOM_PORT > /tmp/study-copilot-classroom.log 2>&1 &
+    CLASSROOM_PID=$!
+    cd "$SCRIPT_DIR"
+    ok "AI 互动课堂引擎已在后台启动 (PID: $CLASSROOM_PID)"
 fi
 
 # ----------------------------------------------------------

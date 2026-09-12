@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
 from app.config import settings
-from app.db import CourseSpace, User, get_db
+from app.db import CourseSpace, Document, User, get_db
 from app.services import classroom_service
 
 router = APIRouter(tags=["AI 互动课堂"])
@@ -41,6 +41,7 @@ class ClassroomCreateRequest(BaseModel):
 class ClassroomResponse(BaseModel):
     class_id: str
     job_id: str
+    task_id: str | None = None
     status: str
     poll_url: str
     course_id: str | None = None
@@ -149,9 +150,47 @@ async def create_classroom(
         except Exception as e:  # noqa: BLE001
             logger.warning("Placeholder course creation failed: %s", e)
 
+    # 创建异步后台任务，使之在“后台任务控制台”中实时呈现进度与状态
+    task_id = None
+    try:
+        from app.core import task_worker
+        from app.services import task_service
+
+        doc_titles = []
+        for d_id in req.doc_ids:
+            doc_obj = await db.get(Document, d_id)
+            if doc_obj and doc_obj.filename:
+                doc_titles.append(doc_obj.filename)
+
+        task_title = req.requirement.strip()[:40] or (doc_titles[0] if doc_titles else "AI 互动课堂")
+        task_metadata = {
+            "title": task_title,
+            "course_id": course_id,
+            "job_id": job_id,
+            "classroom_id": class_id,
+            "document_ids": req.doc_ids,
+            "document_names": doc_titles,
+            "message": "课堂生成已提交排队",
+        }
+        task = await task_service.create_task(
+            db,
+            user_id=current_user.id,
+            task_type="classroom_generate",
+            metadata=task_metadata,
+        )
+        task_id = task.id
+        try:
+            await task_worker.enqueue(task.id, current_user.id, "classroom_generate", task_metadata)
+        except RuntimeError:
+            pass  # Worker 未在当前进程运行（或测试环境），已落库 pending，由 worker 轮询认领
+        logger.info("Classroom async task created: %s", task.id)
+    except Exception as task_err:
+        logger.warning("Failed to create async task for classroom: %s", task_err)
+
     return ClassroomResponse(
         class_id=class_id,
         job_id=job_id,
+        task_id=task_id,
         status=result.get("status", "queued"),
         poll_url=result.get("pollUrl", ""),
         course_id=course_id,
@@ -320,43 +359,6 @@ async def _fetch_classroom_payload(
         try:
             desc_obj = json.loads(course.description or "{}")
             classroom_data = desc_obj.get("classroom_data")
-            if not classroom_data and desc_obj.get("outline"):
-                from app.core.course_generator import (
-                    build_classroom_dsl,
-                    save_classroom_dsl_to_disk,
-                )
-                from app.db import Document, Quiz
-
-                q_res = await db.execute(
-                    select(Quiz)
-                    .join(Document, Quiz.document_id == Document.id)
-                    .where(Document.user_id == user.id)
-                )
-                quizzes = [
-                    {
-                        "id": q.id,
-                        "question": q.question,
-                        "question_type": q.question_type,
-                        "options": q.options,
-                        "correct_answer": q.answer,
-                        "explanation": q.explanation,
-                    }
-                    for q in q_res.scalars().all()[:10]
-                ]
-                classroom_data = build_classroom_dsl(
-                    stage_id=course.id,
-                    outline=desc_obj.get("outline", {}),
-                    quizzes=quizzes,
-                )
-                desc_obj["classroom_data"] = classroom_data
-                desc_obj["classroom_id"] = course.id
-                desc_obj["classroom_url"] = f"/courses/{course.id}/classroom"
-                course.description = json.dumps(desc_obj, ensure_ascii=False)
-                await db.commit()
-                try:
-                    save_classroom_dsl_to_disk(classroom_data)
-                except Exception as disk_err:
-                    logger.warning("Failed to write updated classroom DSL to disk: %s", disk_err)
         except Exception as e:
             logger.warning("Failed to parse classroom data from course %s: %s", course.id, e)
 

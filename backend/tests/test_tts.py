@@ -114,3 +114,29 @@ async def test_generate_speech_speed_rate_calculation(tmp_path):
             # speed=1.0 → rate="+0%"
             await provider.generate_speech("测试", speed=1.0)
             assert captured_rate == "+0%"
+
+
+@pytest.mark.asyncio
+async def test_generate_speech_with_fallback(tmp_path):
+    from app.core.tts import generate_speech_with_fallback
+
+    fake_file = str(tmp_path / "fallback.mp3")
+    with open(fake_file, "wb") as f:
+        f.write(b"ID3" + b"\x00" * 20)
+
+    with patch(
+        "app.core.tts.edge_tts_provider.generate_speech", new_callable=AsyncMock
+    ) as mock_edge:
+        mock_edge.return_value = fake_file
+        # When custom config fails, fallback to edge
+        res = await generate_speech_with_fallback(
+            text="测试回退",
+            voice="alloy",
+            config={
+                "tts_provider": "custom",
+                "tts_base_url": "http://invalid",
+                "tts_api_key": "bad",
+            },
+        )
+        assert res == fake_file
+        assert mock_edge.called

@@ -113,9 +113,12 @@ async def test_agent_engine_tool_call_loop_with_sources_and_filtered():
         }
     ]
 
-    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
-         patch("app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock) as mock_exec:
-
+    with (
+        patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm,
+        patch(
+            "app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock
+        ) as mock_exec,
+    ):
         mock_llm.side_effect = [
             {
                 "content": "我先检索一下文档。",
@@ -146,9 +149,7 @@ async def test_agent_engine_tool_call_loop_with_sources_and_filtered():
         )
 
         events = []
-        async for ev in engine.execute_stream(
-            query="Transformer架构是什么？", doc_ids=["doc-1"]
-        ):
+        async for ev in engine.execute_stream(query="Transformer架构是什么？", doc_ids=["doc-1"]):
             events.append(ev)
 
         tool_call_events = [e for e in events if e.get("step") == "tool_call"]
@@ -170,8 +171,16 @@ async def test_agent_engine_tool_call_loop_with_sources_and_filtered():
         start_detail = start_events[0]["detail"]
         assert "doc-1" in start_detail or "AI.pdf" in start_detail
         # Knowledge observation rewritten with global citation label
-        tool_msgs = [m for m in []]  # messages not exposed; observation checked via tool_result detail
-        assert any("来源1" in e.get("detail", "") or "[来源1]" in e.get("detail", "") for e in tool_result_events) or True
+        tool_msgs = [
+            m for m in []
+        ]  # messages not exposed; observation checked via tool_result detail
+        assert (
+            any(
+                "来源1" in e.get("detail", "") or "[来源1]" in e.get("detail", "")
+                for e in tool_result_events
+            )
+            or True
+        )
 
 
 @pytest.mark.asyncio
@@ -201,9 +210,12 @@ async def test_agent_engine_merges_multiple_knowledge_searches():
         }
     ]
 
-    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
-         patch("app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock) as mock_exec:
-
+    with (
+        patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm,
+        patch(
+            "app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock
+        ) as mock_exec,
+    ):
         mock_llm.side_effect = [
             {
                 "content": "search a",
@@ -256,10 +268,11 @@ async def test_agent_engine_merges_multiple_knowledge_searches():
 async def test_agent_engine_synthesize_streams_tokens():
     engine = AgentEngine(max_iterations=2)
 
-    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
-         patch("app.core.llm.LLM.chat_stream") as mock_stream, \
-         patch("app.core.llm.LLM.chat", new_callable=AsyncMock) as mock_chat:
-
+    with (
+        patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm,
+        patch("app.core.llm.LLM.chat_stream") as mock_stream,
+        patch("app.core.llm.LLM.chat", new_callable=AsyncMock) as mock_chat,
+    ):
         mock_llm.return_value = {
             "content": "",
             "tool_calls": [
@@ -278,7 +291,9 @@ async def test_agent_engine_synthesize_streams_tokens():
 
         mock_stream.side_effect = lambda *a, **k: fake_stream(*a, **k)
 
-        with patch("app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock) as mock_exec:
+        with patch(
+            "app.agent.tools.definitions.KnowledgeSearchTool.execute", new_callable=AsyncMock
+        ) as mock_exec:
             mock_exec.return_value = ToolResult(success=False, output="empty", data=[])
 
             events = []
@@ -406,11 +421,13 @@ async def test_engine_overrides_model_supplied_user_id():
         captured.update(kwargs)
         return ToolResult(success=True, output="ok", data=[])
 
-    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
-         patch(
-             "app.agent.tools.definitions.SearchMemoryTool.execute",
-             fake_search_memory,
-         ):
+    with (
+        patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm,
+        patch(
+            "app.agent.tools.definitions.SearchMemoryTool.execute",
+            fake_search_memory,
+        ),
+    ):
         mock_llm.side_effect = [
             {
                 "content": "",
@@ -458,9 +475,11 @@ async def test_engine_tool_call_stall_fuse():
         "function": {"name": "search_memory", "arguments": '{"query":"loop"}'},
     }
 
-    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
-         patch("app.core.llm.LLM.chat_stream") as mock_stream, \
-         patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search):
+    with (
+        patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm,
+        patch("app.core.llm.LLM.chat_stream") as mock_stream,
+        patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search),
+    ):
         mock_llm.return_value = {
             "content": "",
             "tool_calls": [same_call],
@@ -498,9 +517,11 @@ async def test_engine_token_budget_stops_tool_loop():
             "function": {"name": "search_memory", "arguments": json.dumps({"query": f"q{i}"})},
         }
 
-    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
-         patch("app.core.llm.LLM.chat_stream") as mock_stream, \
-         patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search):
+    with (
+        patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm,
+        patch("app.core.llm.LLM.chat_stream") as mock_stream,
+        patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search),
+    ):
         mock_llm.side_effect = [
             {
                 "content": "",
@@ -558,8 +579,10 @@ def test_trim_history_respects_token_and_message_budgets():
 async def test_engine_nudge_exhausted_emits_fallback_and_notice():
     engine = AgentEngine(max_iterations=6)
 
-    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
-         patch("app.core.llm.LLM.chat_stream") as mock_stream:
+    with (
+        patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm,
+        patch("app.core.llm.LLM.chat_stream") as mock_stream,
+    ):
         mock_llm.return_value = {
             "content": "",
             "tool_calls": [],
@@ -596,9 +619,11 @@ async def test_engine_tool_stall_synthesis_gets_limited_info_notice():
         "function": {"name": "search_memory", "arguments": '{"query":"loop"}'},
     }
 
-    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm, \
-         patch("app.core.llm.LLM.chat_stream") as mock_stream, \
-         patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search):
+    with (
+        patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm,
+        patch("app.core.llm.LLM.chat_stream") as mock_stream,
+        patch("app.agent.tools.definitions.SearchMemoryTool.execute", fake_search),
+    ):
         mock_llm.return_value = {
             "content": "",
             "tool_calls": [same_call],

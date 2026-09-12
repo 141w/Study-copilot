@@ -87,9 +87,218 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
+      // 1. Next.js 静态资源与构建产物（OpenMAIC 渲染必需）
+      '/_next': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        ws: true,
+      },
+      // 1.1 OpenMAIC 静态公开资源代理（头像、图标、库文件、工作流）
+      '^/avatars/': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '^/logos/': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '^/vendor/': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/logo-icon.svg': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/logo-horizontal.png': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/comfyui-workflow.json': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      // 2. Study Copilot FastAPI 专属问答/研讨/会话子路由（优先于 OpenMAIC 根 chat 路由匹配）
+      '/api/chat/ask': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/chat/discuss': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/chat/history': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/chat/sessions': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/chat/personas': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/chat/search': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/chat/messages': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '^/api/chat/stream': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+
+      // 3. FastAPI 课堂业务路由（优先匹配）
+      '/api/classroom/generate': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/classroom/list': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/classroom/classrooms': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api/classroom/webhook': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '^/api/classroom/[^/]+/status': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+
+      // 4. OpenMAIC 课堂微前端专用 API 路由（转发至 3001 端口）
+      // 4.1 课件 DSL 数据主端点：仅精确匹配 /api/classroom 与 /api/classroom?id=...
+      '^/api/classroom(\\?.*)?$': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      // 4.2 服务端配置发现端点（关键：解决微课内提示“模型未配置”缺陷）
+      '/api/server-providers': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      // 4.3 课堂随堂问答与多角色圆桌讨论 SSE 路由
+      '/api/chat': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      // 4.4 课件生成、媒体、语音与沙箱业务路由
+      '/api/stage-meta': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/generate-classroom': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/classroom-media': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/proxy-media': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/agent': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/generate/': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/export-video': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/comfyui-workflows': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/access-code': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/pbl': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/quiz-grade': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/azure-voices': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/persistence': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/materials': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/folders': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '^/api/verify-': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/provider': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/stages': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/skills': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/transcription': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/usage': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/web-search': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/extract-document': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/parse-pdf': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+
+      // 5. 默认 Study Copilot FastAPI 后端 (8000)
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+      },
+      // 6. OpenMAIC 微前端页面代理
+      '/classroom-engine': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/classroom-engine/, ''),
+        ws: true,
       },
     },
   },

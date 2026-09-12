@@ -220,18 +220,64 @@ export default function ClassroomDetailPage() {
     }
   }, [loading, error, generateRemaining]);
 
+  useEffect(() => {
+    if (!loading && !error && classroomId) {
+      if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+        const settings = useSettingsStore.getState();
+        window.parent.postMessage(
+          {
+            type: 'OPENMAIC_READY',
+            classroomId,
+            config: {
+              speed: settings.playbackSpeed || 1,
+              volume: typeof settings.ttsVolume === 'number' ? settings.ttsVolume : 1,
+              muted: Boolean(settings.ttsMuted),
+              autoPlay: Boolean(settings.autoPlayLecture),
+              modelId: settings.modelId || 'step-3.7-flash',
+            },
+          },
+          '*',
+        );
+      }
+    }
+  }, [loading, error, classroomId]);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (!e.data || typeof e.data !== 'object') return;
+      if (e.data.type === 'SET_CONFIG') {
+        const { speed, volume, muted, autoPlay } = e.data;
+        const settings = useSettingsStore.getState();
+        if (typeof speed === 'number' && [1, 1.25, 1.5, 2].includes(speed)) {
+          settings.setPlaybackSpeed(speed as any);
+        }
+        if (typeof volume === 'number') {
+          settings.setTTSVolume(volume);
+        }
+        if (typeof muted === 'boolean') {
+          settings.setTTSMuted(muted);
+        }
+        if (typeof autoPlay === 'boolean') {
+          settings.setAutoPlayLecture(autoPlay);
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   return (
     <ThemeProvider>
       <MediaStageProvider value={classroomId}>
         <div className="h-screen flex flex-col overflow-hidden">
           {loading ? (
-            <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+            <div className="flex-1 flex items-center justify-center bg-background">
               <div className="text-center text-muted-foreground">
                 <p>Loading classroom...</p>
               </div>
             </div>
           ) : error ? (
-            <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+            <div className="flex-1 flex items-center justify-center bg-background">
               <div className="text-center">
                 <p className="text-destructive mb-4">Error: {error}</p>
                 <button

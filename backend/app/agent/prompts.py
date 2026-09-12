@@ -18,9 +18,7 @@ def build_agent_system_prompt(
             user-selected research scope. Injected so the model knows which
             ``doc_ids`` to pass to knowledge tools.
     """
-    tool_descriptions = "\n".join(
-        f"- `{t.name}`: {t.description}" for t in tools
-    )
+    tool_descriptions = "\n".join(f"- `{t.name}`: {t.description}" for t in tools)
 
     base_prompt = (
         "你是一个博学、严谨、具备自主研究能力的高级学习与知识助理（Deep Research Agent）。\n"
@@ -39,8 +37,7 @@ def build_agent_system_prompt(
     docs = documents or []
     if docs:
         doc_lines = "\n".join(
-            f"- 《{d.get('filename') or d.get('id')}》 id=`{d.get('id')}`"
-            for d in docs
+            f"- 《{d.get('filename') or d.get('id')}》 id=`{d.get('id')}`" for d in docs
         )
         doc_ids = ", ".join(f'"{d.get("id")}"' for d in docs)
         base_prompt += (

@@ -178,7 +178,8 @@
   /* Gradient Colors — 单色系自体深浅（白 → 灰白），与亮色镜像 */
   --color-brand-from: var(--color-primary);
   --color-brand-to: #a6a6ad;
-  --color-navy: #000000;
+  --color-navy: #ffffff;
+  --gradient-brand: linear-gradient(135deg, var(--color-brand-from) 0%, var(--color-brand-to) 100%);
   --gradient-surface: linear-gradient(180deg, #0a0a0a 0%, #000000 100%);
   /* 暗色侧栏渐变——顶接 header 卡片色，底接页面底色（令牌派生自动适配） */
   --gradient-sidebar: linear-gradient(180deg, var(--surface-card) 0%, var(--bg-primary) 30%, var(--bg-secondary) 100%);

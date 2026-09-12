@@ -34,7 +34,7 @@
 | **速率限制** | 自研滑动窗口 IPRateLimiter（内存实现） | ❌ 无内置速率限制 |
 | **迁移工具** | Alembic | AsyncMigrationManager（自研，自动运行） |
 | **日志** | 结构化 JSON（生产）/ 文本（开发）+ X-Trace-ID 追踪中间件 | loguru |
-| **测试** | pytest + pytest-asyncio + pytest-cov（39 个测试文件，490 用例，72.52% 覆盖率） | pytest + pytest-asyncio（15 个测试文件） |
+| **测试** | pytest + pytest-asyncio + pytest-cov（约 55 个测试文件 / 634 个测试函数，覆盖率门禁 ≥65%） | pytest + pytest-asyncio（15 个测试文件） |
 | **代码检查** | ruff linter + mypy 类型门禁 | ruff + mypy |
 | **包管理** | pyproject.toml + uv.lock + requirements.txt 兼容层 | pyproject.toml + uv |
 
@@ -53,7 +53,7 @@
 | **国际化** | ❌ 不支持（专注中文教学优化） | ✅ i18next（中/英/日/韩/德/法/西/葡/俄/意/土/孟加拉 等 13 种语言） |
 | **主题** | ✅ CSS Variables 驱动的 Light/Dark 双主题切换 | ✅ next-themes（暗色/亮色） |
 | **UI 组件** | Element Plus 2.14（按需自动导入）+ 20+ 业务定制组件 | Shadcn/ui（25+ 预制组件）+ Radix UI |
-| **开发工具** | Vite 5.2 + Vitest（24 测试文件，227 用例）+ vue-tsc + ESLint | Next.js + ESLint + Vitest |
+| **开发工具** | Vite 5.2 + Vitest（约 298 用例：28 个 SPA 测试文件 + bot 引擎）+ vue-tsc + ESLint | Next.js + ESLint + Vitest |
 | **组件数量** | 14 个视图 + 20+ 个组件 | ~20 个页面 + ~60 个组件 |
 | **代码规模** | ~13k LOC Python + ~9k LOC TS/Vue | ~23,569 行 Python + ~38,741 行 TS/TSX |
 

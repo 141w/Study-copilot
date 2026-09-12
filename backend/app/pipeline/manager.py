@@ -33,6 +33,7 @@ class EventManager:
 
         Each plugin executes its logic and decides when/whether to call await next_fn().
         """
+
         async def terminal_next(ev: EventType, st: PipelineState) -> None:
             return None
 

@@ -66,6 +66,13 @@ async def lifespan(app: FastAPI):
 
     async with AsyncSessionLocal() as db:
         await recover_interrupted_tasks(db)
+        try:
+            from app.services.classroom_service import sync_classroom_providers
+
+            await sync_classroom_providers(db)
+            logger.info("Classroom providers synchronized on startup.")
+        except Exception as e:
+            logger.warning("Classroom provider startup sync skipped: %s", e)
 
     # Start background task worker
     from app.core.task_worker import start_worker

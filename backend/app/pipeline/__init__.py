@@ -73,7 +73,9 @@ async def execute_chat_pipeline(
     builder.add(EventType.ANSWER_REFLECT)
 
     stages = builder.build()
-    logger.info("[Pipeline] Assembled pipeline (%d stages): %s", len(stages), [s.value for s in stages])
+    logger.info(
+        "[Pipeline] Assembled pipeline (%d stages): %s", len(stages), [s.value for s in stages]
+    )
 
     for stage in stages:
         if state.short_circuited:

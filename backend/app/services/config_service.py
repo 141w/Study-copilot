@@ -107,6 +107,13 @@ async def create_or_update_llm_config(
 
     await db.commit()
 
+    try:
+        from app.services.classroom_service import sync_classroom_providers
+
+        await sync_classroom_providers(db, user)
+    except Exception:
+        pass
+
     return _config_to_dict(target_config)
 
 
@@ -151,6 +158,13 @@ async def update_llm_config(
         config.extra_config = {**existing_extra, "classroom": processed_cls}
 
     await db.commit()
+
+    try:
+        from app.services.classroom_service import sync_classroom_providers
+
+        await sync_classroom_providers(db, user)
+    except Exception:
+        pass
 
     return _config_to_dict(config)
 
