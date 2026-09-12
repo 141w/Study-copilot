@@ -1,6 +1,6 @@
 <template>
   <div
-    class="relative max-w-full overflow-hidden rounded-[28px] bg-white p-4 dark:bg-black"
+    class="card relative max-w-full overflow-hidden !p-5"
     data-test="learning-activity"
     :style="{ minWidth: minCardWidth + 'px' }"
   >
