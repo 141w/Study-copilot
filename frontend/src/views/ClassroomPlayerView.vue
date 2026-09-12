@@ -4,7 +4,7 @@
     class="h-screen max-h-screen overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col select-none relative font-sans"
   >
     <!-- 顶栏导航与快捷控制条 (Clean Studio Header) -->
-    <header class="h-14 px-3 sm:px-6 bg-[var(--surface-card)]/90 backdrop-blur-md border-b border-[var(--border-default)] flex items-center justify-between z-20 flex-shrink-0 shadow-xs">
+    <header class="h-14 px-3 sm:px-6 bg-[var(--surface-card)]/90 backdrop-blur-md border-b border-[var(--border-default)] flex items-center justify-between z-20 flex-shrink-0 shadow-sm">
       <!-- 左侧：返回课程、微课标识、标题与幕进度 -->
       <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <el-button
@@ -118,14 +118,14 @@
             <!-- 幕顶微型信息栏 -->
             <div class="absolute top-3 left-4 right-4 flex items-center justify-between pointer-events-none z-10">
               <div class="flex items-center gap-2">
-                <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-xs">
+                <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-sm">
                   {{ currentScene?.type === 'quiz' ? '随堂交互测验' : `第 ${currentSceneIndex + 1} 幕 · 讲解` }}
                 </span>
-                <span class="text-xs text-white/90 font-medium truncate max-w-xs sm:max-w-md drop-shadow-xs">
+                <span class="text-xs text-white/90 font-medium truncate max-w-xs sm:max-w-md drop-shadow-sm">
                   {{ currentScene?.title }}
                 </span>
               </div>
-              <div class="text-[11px] text-white/70 font-mono bg-black/40 backdrop-blur-xs px-2 py-0.5 rounded-md border border-white/10">
+              <div class="text-[11px] text-white/70 font-mono bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-md border border-white/10">
                 Scene {{ currentSceneIndex + 1 }} / {{ totalScenes }}
               </div>
             </div>
@@ -211,25 +211,27 @@
                 </h2>
               </div>
 
-              <!-- 选项列表 -->
+              <!-- 选项列表：与站内一致的纯按钮风格 -->
               <div class="space-y-2.5 my-1">
-                <button
+                <el-button
                   v-for="(opt, oIdx) in currentQuizOptions"
                   :key="oIdx"
                   @click="selectQuizOption(opt)"
                   :disabled="quizSubmitted"
-                  class="w-full text-left p-3 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 flex items-center justify-between cursor-pointer"
+                  class="quiz-option-btn w-full !h-auto !px-3 !py-2.5 !justify-start !font-normal"
                   :class="getQuizOptionClass(opt)"
                 >
-                  <div class="flex items-center gap-2.5">
-                    <span class="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs" :class="getQuizOptionBadgeClass(opt)">
-                      {{ getOptionLetter(Number(oIdx)) }}
+                  <span class="flex items-center justify-between w-full gap-2.5">
+                    <span class="flex items-center gap-2.5 min-w-0">
+                      <span class="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0" :class="getQuizOptionBadgeClass(opt)">
+                        {{ getOptionLetter(Number(oIdx)) }}
+                      </span>
+                      <span class="text-left leading-normal text-xs sm:text-sm font-medium">{{ opt }}</span>
                     </span>
-                    <span class="leading-normal">{{ opt }}</span>
-                  </div>
-                  <el-icon v-if="quizSubmitted && isOptionCorrect(opt)" class="text-[var(--color-success)] text-base"><CircleCheckFilled /></el-icon>
-                  <el-icon v-else-if="quizSubmitted && selectedOption === opt && !isOptionCorrect(opt)" class="text-[var(--color-error)] text-base"><CircleCloseFilled /></el-icon>
-                </button>
+                    <el-icon v-if="quizSubmitted && isOptionCorrect(opt)" class="text-[var(--color-success)] text-base shrink-0"><CircleCheckFilled /></el-icon>
+                    <el-icon v-else-if="quizSubmitted && selectedOption === opt && !isOptionCorrect(opt)" class="text-[var(--color-error)] text-base shrink-0"><CircleCloseFilled /></el-icon>
+                  </span>
+                </el-button>
               </div>
 
               <!-- 测验解析与反馈 -->
@@ -261,11 +263,11 @@
         <!-- 课堂互动台词与控制总台 (Studio Deck - 位于画布下方，完全解耦不遮挡) -->
         <div class="w-full max-w-5xl flex flex-col gap-2.5 mt-2 flex-shrink-0">
           <!-- 上层：当前发言角色与剧本台词卡 -->
-          <div class="w-full rounded-2xl bg-[var(--surface-card)] border border-[var(--border-default)] px-4 py-2.5 sm:py-3 shadow-xs flex items-center gap-3.5 transition-colors">
+          <div class="w-full rounded-2xl bg-[var(--surface-card)] border border-[var(--border-default)] px-4 py-2.5 sm:py-3 shadow-sm flex items-center gap-3.5 transition-colors">
             <!-- 角色头像与徽章 -->
             <div class="flex items-center gap-2.5 flex-shrink-0">
               <div
-                class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 relative shadow-2xs"
+                class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 relative "
                 :style="{
                   backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'var(--color-primary-light)',
                   color: currentAgentConfig?.color || 'var(--color-primary)',
@@ -290,7 +292,7 @@
                     {{ currentAgentConfig?.name || '导师' }}
                   </span>
                   <span
-                    class="text-[10px] px-1.5 py-0.2 rounded-full font-medium"
+                    class="text-[10px] px-1.5 py-px rounded-full font-medium"
                     :style="{
                       backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'var(--color-primary-light)',
                       color: currentAgentConfig?.color || 'var(--color-primary)'
@@ -322,39 +324,42 @@
               </p>
             </div>
 
-            <!-- 步进操作 -->
+            <!-- 步进操作：circle small -->
             <div class="flex items-center gap-1.5 flex-shrink-0">
-              <button
+              <el-button
+                circle
+                size="small"
                 @click="prevActionOrScene"
                 :disabled="currentSceneIndex === 0 && currentActionIndex === 0"
                 title="上一句/上一幕"
-                class="w-8 h-8 rounded-lg bg-[var(--surface-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)] disabled:opacity-30 disabled:hover:bg-[var(--surface-card)] text-[var(--text-primary)] flex items-center justify-center transition-colors text-xs cursor-pointer shadow-2xs"
               >
                 <el-icon><ArrowLeft /></el-icon>
-              </button>
-              <button
+              </el-button>
+              <el-button
+                circle
+                size="small"
                 @click="nextActionOrScene"
                 :disabled="currentSceneIndex === totalScenes - 1 && currentActionIndex === totalActionsInScene - 1"
                 title="下一句/下一幕"
-                class="w-8 h-8 rounded-lg bg-[var(--surface-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)] disabled:opacity-30 disabled:hover:bg-[var(--surface-card)] text-[var(--text-primary)] flex items-center justify-center transition-colors text-xs cursor-pointer shadow-2xs"
               >
                 <el-icon><ArrowRight /></el-icon>
-              </button>
+              </el-button>
             </div>
           </div>
 
           <!-- 下层：统一核心播放控制与进度岛 -->
-          <div class="w-full px-4 py-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-between gap-4 shadow-xs">
+          <div class="w-full px-4 py-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-between gap-4 shadow-sm">
             <!-- 上一幕 -->
-            <button
+            <el-button
+              text
+              size="small"
               @click="prevScene"
               :disabled="currentSceneIndex === 0"
               title="上一幕"
-              class="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <el-icon><ArrowLeft /></el-icon>
+              <el-icon class="mr-1"><ArrowLeft /></el-icon>
               <span class="hidden sm:inline">上一幕</span>
-            </button>
+            </el-button>
 
             <!-- 核心播放/暂停控制与幕进度指示器 -->
             <div class="flex items-center gap-3.5">
@@ -386,15 +391,16 @@
             </div>
 
             <!-- 下一幕 -->
-            <button
+            <el-button
+              text
+              size="small"
               @click="nextScene"
               :disabled="currentSceneIndex === totalScenes - 1"
               title="下一幕"
-              class="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <span class="hidden sm:inline">下一幕</span>
-              <el-icon><ArrowRight /></el-icon>
-            </button>
+              <el-icon class="ml-1"><ArrowRight /></el-icon>
+            </el-button>
           </div>
         </div>
       </main>
@@ -402,7 +408,7 @@
       <!-- 移动端/平板遮罩 (点击收起侧边栏) -->
       <div
         v-if="showSidebar"
-        class="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-xs z-30 transition-opacity"
+                class="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity"
         @click="showSidebar = false"
       ></div>
 
@@ -431,7 +437,7 @@
             class="p-3 rounded-xl border transition-all cursor-pointer group"
             :class="[
               Number(sIdx) === currentSceneIndex
-                ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs font-medium'
+                ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm font-medium'
                 : 'border-[var(--border-default)] hover:border-[var(--border-hover)] bg-[var(--surface-card)] hover:bg-[var(--bg-secondary)]/70 text-[var(--text-primary)]'
             ]"
           >
@@ -806,15 +812,15 @@ function isOptionCorrect(opt: string): boolean {
 
 function getQuizOptionClass(opt: string): string {
   if (!quizSubmitted.value) {
-    return 'bg-[var(--surface-card)] hover:bg-[var(--bg-hover)] border-[var(--border-default)] text-[var(--text-primary)]'
+    return '!bg-[var(--surface-card)] hover:!bg-[var(--bg-hover)] !border-[var(--border-default)] !text-[var(--text-primary)]'
   }
   if (isOptionCorrect(opt)) {
-    return 'bg-[var(--color-success-light)] border-[var(--color-success)] text-[var(--color-success)] font-medium'
+    return '!bg-[var(--color-success-light)] !border-[var(--color-success)] !text-[var(--color-success)]'
   }
   if (selectedOption.value === opt) {
-    return 'bg-[var(--color-error-light)] border-[var(--color-error)] text-[var(--color-error)] font-medium'
+    return '!bg-[var(--color-error-light)] !border-[var(--color-error)] !text-[var(--color-error)]'
   }
-  return 'bg-[var(--bg-secondary)] border-[var(--border-default)] opacity-60 text-[var(--text-muted)]'
+  return '!bg-[var(--bg-secondary)] !border-[var(--border-default)] opacity-60 !text-[var(--text-muted)]'
 }
 
 function getQuizOptionBadgeClass(opt: string): string {
@@ -1173,5 +1179,16 @@ onUnmounted(() => {
 }
 html.dark .stage-default-theme {
   box-shadow: inset 0 0 0 1px var(--border-default);
+}
+
+/* 测验选项：EP 按钮底座 */
+.quiz-option-btn {
+  border-radius: var(--radius-sm);
+  text-align: left;
+  white-space: normal;
+  height: auto;
+}
+.quiz-option-btn:not(.is-disabled):active {
+  transform: scale(0.995);
 }
 </style>
