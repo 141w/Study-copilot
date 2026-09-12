@@ -383,7 +383,11 @@ class SearchMemoryTool(Tool):
                 "[Tool:search_memory] denied: missing user_id (query_len=%d)",
                 len(query),
             )
-            return ToolResult(success=True, output="当前未绑定用户身份，无法读取长期记忆。", data=[])
+            return ToolResult(
+                success=False,
+                output="当前未绑定用户身份，无法读取长期记忆。",
+                error="missing_user_id",
+            )
 
         logger.info(
             "[Tool:search_memory] user_id=%s query_len=%d limit=%s",

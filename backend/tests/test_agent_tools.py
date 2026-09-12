@@ -256,7 +256,7 @@ async def test_search_conversations_hits():
 async def test_search_memory_no_user():
     tool = SearchMemoryTool()
     res = await tool.execute(query="偏好")
-    assert res.success is True
+    assert res.success is False
     assert "未绑定" in res.output
 
 

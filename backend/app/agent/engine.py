@@ -331,12 +331,8 @@ class AgentEngine:
             tool_calls = llm_res.get("tool_calls") or []
             finish_reason = llm_res.get("finish_reason") or "stop"
 
-            # Incremental token spend: this turn's output + later tool observations
-            turn_out = len(content or "")
-            for _tc in tool_calls or []:
-                fn_args = (_tc.get("function") or {}).get("arguments") or ""
-                turn_out += len(fn_args if isinstance(fn_args, str) else json.dumps(fn_args))
-            token_usage += int(turn_out * 0.8) + 8
+            # Incremental token spend via shared estimator (output + tool-call args)
+            token_usage += estimate_tokens([{"role": "assistant", "content": content, "tool_calls": tool_calls or []}])
 
             # 真实模型原生 CoT（若供应商在非流式 tool-use 响应中返回 reasoning_content）
             reasoning_text = (llm_res.get("reasoning") or "").strip()
@@ -431,7 +427,7 @@ class AgentEngine:
                             "step": "agent_stall",
                             "detail": (
                                 f"检测到连续 {repeated_tool_calls} 次相同工具调用 `{fn_name}`"
-                                "（同参数），触发工具熔断并转入终答汇总。"
+                                "（同参数，本次已拦截），触发工具熔断并转入终答汇总。"
                             ),
                         }
                         terminate_reason = "tool_stall"
@@ -454,7 +450,26 @@ class AgentEngine:
                     tool_res = await tool_impl.execute(**args)
 
                 observation = tool_res.output
-                token_usage += int(len(observation or "") * 0.8)
+                token_usage += estimate_tokens([{"role": "tool", "content": observation or ""}])
+                if token_usage >= self.max_token_budget:
+                    # Still record this observation so synthesis can use it
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": fn_name,
+                        "content": observation,
+                    })
+                    terminate_reason = "token_budget_exhausted"
+                    yield {
+                        "type": "thinking",
+                        "step": "agent_budget",
+                        "detail": (
+                            f"累计新增 token 预算已达 {token_usage}/{self.max_token_budget}，"
+                            "提前终止工具循环并汇总已有证据生成终答。"
+                        ),
+                    }
+                    tool_loop_break = True
+                    break
                 if tool_res.success and fn_name in (
                     "knowledge_search",
                     "grep_chunks",

@@ -1,14 +1,25 @@
 ---
 feature: agent-p0-hardening
-status: in-progress
+status: delivered
 updated: 2026-09-12
 branch: feat/agent-p0-hardening
-commits: 996623e..<head> # filled at delivery
+commits: 996623e..<head>
 ---
 
 # Agent P0 Hardening
 
 ## Report
+
+**What was built** — 代码校准版优化计划 + Batch1 四项硬化：引擎强制绑定 `user_id`/`doc_ids`（模型不可覆盖）；`search_conversations`/`search_memory` 无身份拒绝并写审计日志；`(tool_name, args_hash)` 连续相同调用熔断；SSE `error` 契约扩展为 `{code,message,recoverable}` 并经 chat_service/API 全链路转发；Agent 步数与 `max_token_budget` 双阈值，轮内超预算即停。
+
+**Verification** — `pytest tests/test_agent_engine.py test_agent_tools.py test_chat_service.py test_error_visibility_fixes.py test_pipeline_parity.py test_rag_engine.py` → 144 passed（复检 agent 子集 46 passed）；`ruff` / `mypy`（engine、definitions、chat_service）通过；`vitest chat.sse-error.test.js` 4 passed；`vue-tsc --noEmit` 通过。
+
+**Journey log** —
+1. 原计划 P0-3「纠检无上限」与代码不符：`_corrective_retrieve` 已硬限 1 次重试，降级为埋点项。
+2. 原计划 P0-5 半属实：前后端已有 `type:error`，真正缺口是 `chat_service` 不转发 + 缺 `code/recoverable`。
+3. Token 预算用 `estimate_tokens` 做**增量**累计，避免每轮重复计入整段上下文导致过早熔断。
+4. 审查后将预算检查下沉到单次 tool observation 之后，防止单轮多大结果打爆预算。
+5. KMS/OTel/SSE Resume 有意后置，见校准版计划 Batch2/3。
 
 ## [S1] Problem
 
@@ -38,7 +49,7 @@ commits: 996623e..<head> # filled at delivery
 统一事件契约：
 
 ```json
-{"type":"error","code":"llm_error|rate_limit|timeout|tool_error|internal_error","message":"...","recoverable":true}
+{"type":"error","code":"llm_error|rate_limit|timeout|internal_error","message":"...","recoverable":true}
 ```
 
 - `AgentEngine` LLM 调用失败时：发 `thinking/agent_error` **并**发结构化 `error`，随后走已有降级 synthesis。
@@ -49,7 +60,7 @@ commits: 996623e..<head> # filled at delivery
 ### S2.4 Agent Token 双阈值
 
 - 新增 `AgentEngine.max_token_budget`（默认 48000，估算口径沿用 `estimate_tokens`）。
-- 每轮 Think 后累计「输入 messages 估算 + 输出 content/tool_calls 估算」。
+- 累计口径：`estimate_tokens` 统计每轮 assistant/tool 新增内容（增量），不重复计入整段历史。
 - 任一触发即终止循环并 synthesis：步数耗尽（现有）或预算耗尽（新 `thinking/agent_budget`）。
 - 日志与 thinking detail 区分 `iterations_exhausted` / `token_budget_exhausted`。
 
@@ -69,8 +80,8 @@ commits: 996623e..<head> # filled at delivery
 
 ## Tasks
 
-- [ ] T1: 强制绑定 user_id/doc_ids + 隐私工具拒绝无身份查询 + 审计日志 — acceptance: 越权/缺身份场景单测通过 (covers: S2.1)
-- [ ] T2: 工具调用 Stall Fuse — acceptance: 连续同参调用在 N 次内熔断并进入 synthesis (covers: S2.2; depends: T1)
-- [ ] T3: 结构化 SSE error 全链路 — acceptance: 引擎/service/API 产出含 code/recoverable 的 error，前端展示可重试态 (covers: S2.3)
-- [ ] T4: Token 预算双阈值 — acceptance: 可配置阈值；超预算停止调工具并区分终止原因 (covers: S2.4; depends: T2)
-- [ ] T5: 优化计划文档校准版 — acceptance: 根目录计划与代码现状一致、优先级可执行 (covers: S1)
+- [x] T1: 强制绑定 user_id/doc_ids + 隐私工具拒绝无身份查询 + 审计日志 — acceptance: 越权/缺身份场景单测通过 (covers: S2.1)
+- [x] T2: 工具调用 Stall Fuse — acceptance: 连续同参调用在 N 次内熔断并进入 synthesis (covers: S2.2; depends: T1)
+- [x] T3: 结构化 SSE error 全链路 — acceptance: 引擎/service/API 产出含 code/recoverable 的 error，前端展示可重试态 (covers: S2.3)
+- [x] T4: Token 预算双阈值 — acceptance: 可配置阈值；超预算停止调工具并区分终止原因 (covers: S2.4; depends: T2)
+- [x] T5: 优化计划文档校准版 — acceptance: 根目录计划与代码现状一致、优先级可执行 (covers: S1)
