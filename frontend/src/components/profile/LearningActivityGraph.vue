@@ -162,7 +162,8 @@ const weeks = computed(() => {
   return out
 })
 
-const MONTH_NAMES = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+// 与 rare-ui/github-activity 一致：英文月份简写
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const monthLabels = computed(() => {
   const cols = weeks.value
@@ -232,6 +233,9 @@ async function load() {
 }
 
 onMounted(load)
+
+/** 供父组件/外部手动刷新（页面整刷也会走 onMounted） */
+defineExpose({ refresh: load })
 </script>
 
 <style scoped>
