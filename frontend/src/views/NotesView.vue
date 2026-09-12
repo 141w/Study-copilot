@@ -86,7 +86,17 @@
     </div>
 
     <!-- Loading（P1-2：骨架屏匹配笔记卡片网格形状） -->
-    <SkeletonList v-if="noteStore.loading" variant="cards" :count="6" />
+    <SkeletonList v-if="noteStore.loading && !viewingNote && !editingNoteId" variant="cards" :count="6" />
+
+    <!-- 阅读态：渲染后的 Markdown + 编辑按钮 -->
+    <div v-else-if="viewingNote" class="mb-6">
+      <NoteViewer
+        :note="viewingNote"
+        :course-name="courseNameFor(viewingNote)"
+        @edit="enterEditMode(viewingNote)"
+        @close="closeViewer"
+      />
+    </div>
 
     <!-- Empty State（P2-2：EmptyState） -->
     <EmptyState
@@ -124,8 +134,8 @@
           v-else
           :note="note"
           :course-name="courseNameFor(note)"
-          @click="openEditNote(note)"
-          @edit="openEditNote(note)"
+          @click="openViewer(note)"
+          @edit="enterEditMode(note)"
           @delete="confirmDeleteNote(note)"
         />
       </template>
@@ -153,6 +163,7 @@ import { useNoteDraft, writeNoteDraft, readNoteDraft, removeNoteDraft } from '..
 import type { NoteDraftData } from '../composables/useNoteDraft'
 import NoteCard from '../components/NoteCard.vue'
 import NoteEditor from '../components/NoteEditor.vue'
+import NoteViewer from '../components/NoteViewer.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import EmptyState from '../components/common/EmptyState.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
@@ -193,6 +204,8 @@ const newNote = ref<NoteFormState>({ title: '', content: '', tags: [], course_id
 // Edit note
 const editingNoteId = ref<string | null>(null)
 const editNote = ref<NoteFormState>({ title: '', content: '', tags: [], course_id: '' })
+// 阅读态（默认点开卡片进入；再点「编辑」进入编辑）
+const viewingNoteId = ref<string | null>(null)
 
 // Delete note
 const showDeleteConfirm = ref(false)
@@ -297,6 +310,34 @@ async function saveNewNote(): Promise<void> {
 }
 
 // Edit
+async function openViewer(note: NoteDetail): Promise<void> {
+  editingNoteId.value = null
+  viewingNoteId.value = note.id
+  try {
+    const full = await noteStore.fetchNote(note.id)
+    const idx = noteStore.notes.findIndex(n => n.id === note.id)
+    if (idx !== -1 && full) {
+      noteStore.notes[idx] = { ...noteStore.notes[idx], ...full }
+    }
+  } catch (_e) {
+    // 详情失败时用列表数据展示
+  }
+}
+
+function closeViewer(): void {
+  viewingNoteId.value = null
+}
+
+const viewingNote = computed<NoteDetail | null>(() => {
+  if (!viewingNoteId.value) return null
+  return noteStore.notes.find(n => n.id === viewingNoteId.value) || null
+})
+
+async function enterEditMode(note: NoteDetail): Promise<void> {
+  viewingNoteId.value = null
+  await openEditNote(note)
+}
+
 async function openEditNote(note: NoteDetail): Promise<void> {
   editingNoteId.value = note.id
   // 列表接口可能只有摘要；编辑前拉详情，避免正文被当成空
@@ -335,7 +376,7 @@ function cancelEdit(): void {
 async function saveEditNote(): Promise<void> {
   if (!editingNoteId.value) return
   try {
-    await noteStore.updateNote(editingNoteId.value, {
+    const saved = await noteStore.updateNote(editingNoteId.value, {
       title: editNote.value.title,
       content: editNote.value.content,
       tags: editNote.value.tags,
@@ -348,7 +389,14 @@ async function saveEditNote(): Promise<void> {
       clearTimeout(editDraftTimer)
       editDraftTimer = null
     }
+    const savedId = editingNoteId.value
     editingNoteId.value = null
+    // 保存后回到阅读态
+    viewingNoteId.value = savedId
+    if (saved) {
+      const idx = noteStore.notes.findIndex(n => n.id === savedId)
+      if (idx !== -1) noteStore.notes[idx] = saved
+    }
   } catch (_e) {
     toast.error('更新失败')
   }
@@ -378,12 +426,12 @@ onMounted(async () => {
     courseStore.fetchCourses()
   ])
 
-  // 从「存为笔记」跳转：/notes?id=xxx 自动打开该笔记
+  // 从「存为笔记」跳转：/notes?id=xxx 自动打开阅读视图
   const qid = route.query.id
   if (typeof qid === 'string' && qid) {
     const target = noteStore.notes.find(n => n.id === qid)
     if (target) {
-      await openEditNote(target)
+      await openViewer(target)
     }
   }
 
