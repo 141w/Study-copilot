@@ -205,7 +205,7 @@ export const useChatStore = defineStore('chat', () => {
 
       const savedNote = response.data.saved_note || response.data.savedNote
       messages.value.push({
-        id: Date.now() + 1,
+        id: response.data.message_id || Date.now() + 1,
         role: 'assistant' as const,
         content: response.data.answer,
         sources: response.data.sources,
@@ -401,6 +401,11 @@ export const useChatStore = defineStore('chat', () => {
               const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
               if (msgIdx !== -1) {
                 messages.value[msgIdx].isStreaming = false
+                // 用后端真实 Message.id 替换本地临时 id，否则「存为笔记」会 404
+                const serverMsgId = (data as { message_id?: string }).message_id
+                if (serverMsgId) {
+                  messages.value[msgIdx].id = serverMsgId
+                }
                 const doneNote = (data.saved_note || data.savedNote) as { id: string; title: string; tags: string[] } | undefined
                 if (doneNote) {
                   messages.value[msgIdx].saved_note = doneNote

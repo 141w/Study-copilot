@@ -8,6 +8,7 @@ vi.mock('@/services/api', () => ({
     put: vi.fn(),
     delete: vi.fn(),
   },
+  cancelAll: vi.fn(),
 }))
 
 import { setActivePinia, createPinia } from 'pinia'
@@ -145,6 +146,39 @@ describe('Chat Store', () => {
     expect(res.title).toBe('测试笔记标题')
     expect(store.messages[0].saved_note).toEqual(mockNoteResp.data.note)
     expect(store.messages[0].savedNote).toEqual(mockNoteResp.data.note)
+  })
+
+  it('stream done replaces local temp id with backend message_id (存为笔记 404 fix)', async () => {
+    const encoder = new TextEncoder()
+    const sse = [
+      'data: ' + JSON.stringify({ type: 'session', session_id: 'sess-x' }) + '\n\n',
+      'data: ' + JSON.stringify({ type: 'token', content: '你好' }) + '\n\n',
+      'data: ' + JSON.stringify({ type: 'done', message_id: 'db-msg-uuid-1' }) + '\n\n',
+    ].join('')
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => {
+          let sent = false
+          return {
+            read: async () => {
+              if (sent) return { done: true, value: undefined }
+              sent = true
+              return { done: false, value: encoder.encode(sse) }
+            }
+          }
+        }
+      }
+    })
+    localStorage.setItem('token', 'tok')
+
+    await store.askQuestionStream('你好', [])
+
+    const assistant = store.messages.find(m => m.role === 'assistant')
+    expect(assistant).toBeTruthy()
+    expect(assistant.id).toBe('db-msg-uuid-1')
+    expect(assistant.isStreaming).toBe(false)
   })
 
   it('fetchHistory normalizes saved_note into savedNote', async () => {
