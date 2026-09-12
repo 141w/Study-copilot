@@ -352,6 +352,8 @@ async def get_result_history(
             {
                 "quiz_id": r.quiz_id,
                 "question": quiz.question if quiz else "",
+                "question_type": (quiz.question_type if quiz else "choice"),
+                "options": json.loads(quiz.options) if quiz and quiz.options else None,
                 "user_answer": r.user_answer,
                 "correct_answer": quiz.answer if quiz else "",
                 "is_correct": r.is_correct,

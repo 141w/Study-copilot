@@ -235,8 +235,39 @@
               </span>
             </div>
             <div class="mt-2 space-y-1 text-sm text-[var(--text-secondary)]">
-              <p>你的答案：{{ item.user_answer || '—' }}</p>
-              <p v-if="!item.is_correct">正确答案：{{ item.correct_answer }}</p>
+              <!-- Full option list so history is reviewable (not just letters) -->
+              <div
+                v-if="item.question_type === 'choice' && item.options?.length"
+                class="space-y-1 mb-2"
+              >
+                <div
+                  v-for="(opt, oi) in item.options"
+                  :key="oi"
+                  class="flex items-start gap-2 px-2 py-1 rounded"
+                  :class="OPTION_LETTERS[oi] === (item.correct_answer || '').toUpperCase()
+                    ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                    : OPTION_LETTERS[oi] === (item.user_answer || '').toUpperCase()
+                      ? 'bg-[var(--color-error)]/10 text-[var(--color-error)]'
+                      : ''"
+                >
+                  <span class="font-medium shrink-0">{{ OPTION_LETTERS[oi] }}.</span>
+                  <span>{{ displayOption(opt) }}</span>
+                  <span
+                    v-if="OPTION_LETTERS[oi] === (item.correct_answer || '').toUpperCase()"
+                    class="text-xs shrink-0 ml-auto"
+                  >正确</span>
+                  <span
+                    v-else-if="OPTION_LETTERS[oi] === (item.user_answer || '').toUpperCase()"
+                    class="text-xs shrink-0 ml-auto"
+                  >你的选择</span>
+                </div>
+              </div>
+              <p>
+                你的答案：{{ formatHistoryAnswer(item, item.user_answer) || '—' }}
+              </p>
+              <p v-if="!item.is_correct">
+                正确答案：{{ formatHistoryAnswer(item, item.correct_answer) }}
+              </p>
               <p class="text-xs text-[var(--text-muted)]">{{ formatSubmittedAt(item.submitted_at) }}</p>
             </div>
           </div>
@@ -466,6 +497,17 @@ function formatAnswer(
   const idx = OPTION_LETTERS.indexOf(answer.toUpperCase())
   if (idx === -1 || !quiz.options[idx]) return answer
   return `${OPTION_LETTERS[idx]}. ${quiz.options[idx]}`
+}
+
+/** History items carry question_type/options from result-history API. */
+function formatHistoryAnswer(
+  item: { question_type?: string | null; options?: string[] | null },
+  answer: string
+): string {
+  return formatAnswer(
+    { question_type: item.question_type || undefined, options: item.options },
+    answer || ''
+  )
 }
 
 async function submitAnswer(quiz: RuntimeQuiz): Promise<void> {

@@ -16,6 +16,8 @@ export interface QuizSubmitResult {
 export interface QuizHistoryItem {
   quiz_id: string
   question: string
+  question_type?: string | null
+  options?: string[] | null
   user_answer: string
   correct_answer: string
   is_correct: boolean

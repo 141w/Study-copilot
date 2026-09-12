@@ -62,6 +62,8 @@ class QuizSubmitResp(BaseModel):
 class QuizResultResp(BaseModel):
     quiz_id: str
     question: str
+    question_type: str | None = "choice"
+    options: list[str] | None = None
     user_answer: str
     correct_answer: str
     is_correct: bool
