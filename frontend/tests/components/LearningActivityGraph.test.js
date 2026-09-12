@@ -15,29 +15,48 @@ describe('LearningActivityGraph', () => {
     vi.clearAllMocks()
   })
 
-  it('加载并渲染贡献图摘要与格子', async () => {
-    const contributions = Array.from({ length: 28 }, (_, i) => ({
-      date: `2026-08-${String((i % 28) + 1).padStart(2, '0')}`,
-      count: i % 5,
-      level: i % 5,
-    }))
+  it('无数据时仍渲染满年灰底格（对齐原组件 emptyDays）', async () => {
     api.get.mockResolvedValue({
-      data: { days: 28, total: 42, active_days: 12, contributions },
+      data: { days: 365, total: 0, active_days: 0, contributions: [] },
     })
 
     const wrapper = mount(LearningActivityGraph, {
-      props: { days: 28, cellSize: 10 },
+      props: { days: 365, cellSize: 11 },
       global: { stubs: { Teleport: true } },
     })
     await flushPromises()
 
-    expect(api.get).toHaveBeenCalledWith('/analysis/activity', { params: { days: 28 } })
-    expect(wrapper.text()).toContain('学习活动')
-    expect(wrapper.text()).toContain('42 次学习行为')
     expect(wrapper.find('[data-test="learning-activity"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('0 contributions')
+    // 每一格都是灰底 + 透明度 0 叠层
+    const cells = wrapper.findAll('.rounded-\\[3px\\].bg-\\[var\\(--text-primary\\)\\]\\/\\[0\\.08\\]')
+    expect(cells.length).toBeGreaterThanOrEqual(365)
   })
 
-  it('接口失败时静默为空图', async () => {
+  it('有贡献时叠层透明度非 0，标题含总数', async () => {
+    const contributions = Array.from({ length: 28 }, (_, i) => ({
+      date: `2026-08-${String((i % 28) + 1).padStart(2, '0')}`,
+      count: i === 27 ? 5 : 0,
+      level: i === 27 ? 4 : 0,
+    }))
+    api.get.mockResolvedValue({
+      data: { days: 28, total: 5, active_days: 1, contributions },
+    })
+
+    const wrapper = mount(LearningActivityGraph, {
+      props: { days: 28, cellSize: 10, accent: '#39d353' },
+      global: { stubs: { Teleport: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('5 contributions')
+    const overlays = wrapper.findAll('[data-test="activity-level"]')
+    expect(overlays.length).toBeGreaterThanOrEqual(28)
+    const opacities = overlays.map(el => el.attributes('style') || '')
+    expect(opacities.some(s => /opacity:\s*1(?:;|$)/.test(s))).toBe(true)
+  })
+
+  it('接口失败时静默用 emptyDays', async () => {
     api.get.mockRejectedValue(new Error('network'))
     const wrapper = mount(LearningActivityGraph, {
       props: { days: 30 },
@@ -45,6 +64,6 @@ describe('LearningActivityGraph', () => {
     })
     await flushPromises()
     expect(wrapper.find('[data-test="learning-activity"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('0 次学习行为')
+    expect(wrapper.text()).toContain('0 contributions')
   })
 })

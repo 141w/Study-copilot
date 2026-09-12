@@ -1,93 +1,76 @@
 <template>
-  <div class="card p-5" data-test="learning-activity">
-    <div class="flex items-start justify-between gap-3 mb-4">
-      <div>
-        <h3 class="text-sm font-semibold text-[var(--text-primary)]">学习活动</h3>
-        <p class="text-xs text-[var(--text-muted)] mt-0.5">
-          近 {{ days }} 天 · {{ total }} 次学习行为 · {{ activeDays }} 天活跃
-        </p>
-      </div>
-      <div class="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] shrink-0">
-        <span>少</span>
-        <span
-          v-for="lv in 5"
-          :key="lv"
-          class="w-2.5 h-2.5 rounded-[3px] border border-[var(--border-default)]"
-          :style="levelStyle(lv - 1)"
-        />
-        <span>多</span>
-      </div>
-    </div>
+  <div
+    class="relative max-w-full overflow-hidden rounded-[28px] bg-white p-4 dark:bg-black"
+    data-test="learning-activity"
+    :style="{ minWidth: minCardWidth + 'px' }"
+  >
+    <p class="mb-4 px-1.5 text-base font-medium text-[var(--text-primary)]">
+      {{ heading }}
+    </p>
 
     <div class="overflow-x-auto pb-1">
-      <div class="inline-flex flex-col gap-1 min-w-full">
-        <!-- 月份标签 -->
-        <div v-if="monthLabels.length" class="flex" :style="{ gap: gapPx + 'px', paddingLeft: dayLabelWidth }">
-          <div
-            v-for="(m, i) in monthLabels"
-            :key="i"
-            class="h-3 shrink-0 text-[10px] leading-none text-[var(--text-muted)]"
-            :style="{ width: cellPx + 'px' }"
+      <div class="flex justify-center" :style="{ gap: gapPx + 'px', marginBottom: gapPx + 'px' }">
+        <div
+          v-for="(month, index) in monthLabels"
+          :key="index"
+          class="relative h-3 shrink-0"
+          :style="{ width: cellPx + 'px' }"
+        >
+          <span
+            v-if="month"
+            class="absolute left-0 top-0 text-[10px] leading-none text-[var(--text-muted)]"
           >
-            {{ m }}
-          </div>
+            {{ month }}
+          </span>
         </div>
+      </div>
 
-        <div class="flex" :style="{ gap: gapPx + 'px' }">
-          <!-- 周几标签 -->
+      <div
+        class="flex justify-center overflow-hidden"
+        :style="{ gap: gapPx + 'px' }"
+        @pointerleave="hovered = null"
+      >
+        <div
+          v-for="(week, weekIndex) in weeks"
+          :key="weekIndex"
+          class="flex flex-col"
+          :style="{ gap: gapPx + 'px' }"
+        >
           <div
-            class="flex flex-col shrink-0"
-            :style="{ gap: gapPx + 'px', width: dayLabelWidth }"
+            v-for="day in week"
+            :key="day.date"
+            class="shrink-0 rounded-[3px] bg-[var(--text-primary)]/[0.08] cursor-default"
+            :style="{ width: cellPx + 'px', height: cellPx + 'px' }"
+            :title="describeDay(day)"
+            @pointerenter="onHover(day, $event)"
           >
+            <!-- 叠层：贡献色 + 透明度；level 0 仅露灰底 -->
             <div
-              v-for="(lab, i) in dayLabels"
-              :key="i"
-              class="text-[10px] leading-none text-[var(--text-muted)] flex items-center"
-              :style="{ height: cellPx + 'px' }"
-            >
-              {{ lab }}
-            </div>
-          </div>
-
-          <!-- 周列 -->
-          <div
-            v-for="(week, wi) in weeks"
-            :key="wi"
-            class="flex flex-col shrink-0"
-            :style="{ gap: gapPx + 'px' }"
-          >
-            <div
-              v-for="(day, di) in week"
-              :key="day?.date || wi + '-' + di"
-              class="rounded-[3px] border border-[var(--border-default)] cursor-default"
-              :style="{
-                width: cellPx + 'px',
-                height: cellPx + 'px',
-                ...(day ? levelStyle(day.level) : emptyStyle)
-              }"
-              :title="day ? describeDay(day) : undefined"
-              @pointerenter="onHover(day, $event)"
-              @pointerleave="hovered = null"
+              class="h-full w-full rounded-[3px]"
+              data-test="activity-level"
+              :style="levelOverlay(day.level)"
             />
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 浮层提示 -->
     <Teleport to="body">
       <div
         v-if="hovered"
-        class="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full px-2 py-1 rounded-lg text-[11px] font-medium shadow-md whitespace-nowrap"
-        :style="{
-          left: hovered.x + 'px',
-          top: hovered.y - 8 + 'px',
-          backgroundColor: 'var(--text-primary)',
-          color: 'var(--bg-primary)',
-        }"
+        class="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full"
+        :style="{ left: hovered.x + 'px', top: hovered.y + 'px' }"
         data-test="activity-tooltip"
       >
-        {{ describeDay(hovered.day) }}
+        <div
+          class="whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-medium shadow-md"
+          :style="{
+            backgroundColor: 'var(--text-primary)',
+            color: 'var(--bg-primary)',
+          }"
+        >
+          {{ describeDay(hovered.day) }}
+        </div>
       </div>
     </Teleport>
   </div>
@@ -97,107 +80,153 @@
 import { computed, onMounted, ref } from 'vue'
 import api from '@/services/api'
 
+/** 对齐 rare-ui/github-activity：灰底格 + 贡献色透明度叠层 */
+export type ContributionLevel = 0 | 1 | 2 | 3 | 4
+
 export type Contribution = {
   date: string
   count: number
-  level: number
+  level: ContributionLevel
 }
 
 const props = withDefaults(
   defineProps<{
     days?: number
     cellSize?: number
+    accent?: string
   }>(),
   {
     days: 365,
     cellSize: 11,
+    // 原组件 DEFAULT_ACCENT
+    accent: '#39d353',
   }
 )
 
-const contributions = ref<Contribution[]>([])
+const LEVEL_OPACITY: Record<ContributionLevel, number> = {
+  0: 0,
+  1: 0.3,
+  2: 0.52,
+  3: 0.76,
+  4: 1,
+}
+
+const MIN_CARD_WIDTH = 320
+const CARD_PADDING = 32
+
+const loaded = ref<Contribution[]>([])
 const total = ref(0)
 const activeDays = ref(0)
 const hovered = ref<{ day: Contribution; x: number; y: number } | null>(null)
 
 const cellPx = computed(() => props.cellSize)
 const gapPx = computed(() => Math.max(2, Math.round(props.cellSize / 4)))
-const dayLabelWidth = '22px'
+const minCardWidth = MIN_CARD_WIDTH
 
-const dayLabels = ['', '一', '', '三', '', '五', '']
-
-const emptyStyle = { backgroundColor: 'transparent' }
-
-function levelStyle(level: number): Record<string, string> {
-  // 设计令牌：主色在亮/暗下自动反转；用透明度分档
-  const opacity = [0, 0.22, 0.42, 0.68, 1][Math.min(4, Math.max(0, level))]
-  if (level <= 0) {
-    return { backgroundColor: 'var(--bg-tertiary)', opacity: '1' }
-  }
-  return { backgroundColor: 'var(--color-primary)', opacity: String(opacity) }
+/** 无数据时也铺满灰格（对齐原组件 emptyDays） */
+function emptyDays(days: number): Contribution[] {
+  const today = new Date()
+  return Array.from({ length: days }, (_, i) => {
+    const date = new Date(today)
+    date.setDate(date.getDate() - (days - 1 - i))
+    const iso = date.toISOString().slice(0, 10)
+    return { date: iso, count: 0, level: 0 as ContributionLevel }
+  })
 }
 
-function describeDay(day: Contribution): string {
-  const d = new Date(day.date + 'T00:00:00')
-  const label = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
-  if (!day.count) return `${label}：无学习记录`
-  return `${label}：${day.count} 次学习`
-}
+const contributions = computed<Contribution[]>(() => {
+  if (loaded.value.length) return loaded.value
+  return emptyDays(props.days)
+})
 
 const weeks = computed(() => {
   const list = contributions.value
-  if (!list.length) return []
-  // 对齐到周日为一列起点
+  // 对齐周日为一列起点（原组件 fetchCalendar 同样对齐 Sunday）
   let startIdx = 0
-  const first = new Date(list[0].date + 'T00:00:00')
-  startIdx = first.getDay()
-  const padded: (Contribution | null)[] = [
-    ...Array.from({ length: startIdx }, () => null),
-    ...list,
-  ]
-  const out: (Contribution | null)[][] = []
+  if (list.length) {
+    startIdx = new Date(list[0].date + 'T00:00:00Z').getUTCDay()
+    if (startIdx < 0) startIdx = 0
+  }
+  const padded: Contribution[] = Array.from({ length: startIdx }, (_, i) => {
+    const d = new Date(list[0].date + 'T00:00:00Z')
+    d.setUTCDate(d.getUTCDate() - (startIdx - i))
+    const iso = d.toISOString().slice(0, 10)
+    return { date: iso, count: 0, level: 0 as ContributionLevel }
+  }).concat(list)
+
+  const out: Contribution[][] = []
   for (let i = 0; i < padded.length; i += 7) {
-    const week = padded.slice(i, i + 7)
-    while (week.length < 7) week.push(null)
-    out.push(week)
+    out.push(padded.slice(i, i + 7))
   }
   return out
 })
 
+const MONTH_NAMES = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+
 const monthLabels = computed(() => {
   const cols = weeks.value
   const labels: (string | null)[] = cols.map(() => null)
-  const names = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
-  const monthAt = (i: number) => cols[i]?.find(d => d)?.date.slice(5, 7)
+  const monthAt = (i: number) => cols[i]?.[0]?.date.slice(5, 7)
   let start = 0
   for (let i = 1; i <= cols.length; i++) {
     if (i < cols.length && monthAt(i) === monthAt(start)) continue
     if (i - start >= 3 && monthAt(start)) {
-      labels[start] = names[Number(monthAt(start)) - 1] ?? null
+      labels[start] = MONTH_NAMES[Number(monthAt(start)) - 1] ?? null
     }
     start = i
   }
   return labels
 })
 
-function onHover(day: Contribution | null, e: PointerEvent) {
-  if (!day) return
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  hovered.value = {
-    day,
-    x: rect.left + rect.width / 2,
-    y: rect.top,
+function levelOverlay(level: number): { backgroundColor: string; opacity: number } {
+  const lv = (Math.min(4, Math.max(0, level)) as ContributionLevel)
+  return {
+    backgroundColor: props.accent,
+    opacity: LEVEL_OPACITY[lv],
   }
+}
+
+const heading = computed(() => {
+  const list = contributions.value
+  const year = list.length ? list[list.length - 1].date.slice(0, 4) : ''
+  const y = year ? ` in ${year}` : ''
+  return `${total.value} contributions${y}`
+})
+
+const widthHint = computed(() => {
+  const columns = Math.max(1, Math.ceil(contributions.value.length / 7))
+  return Math.max(MIN_CARD_WIDTH, columns * (cellPx.value + gapPx.value) - gapPx.value + CARD_PADDING)
+})
+// 宽度在 overflow-x 容器内自然伸展；minWidth 保证卡片形态
+void widthHint
+
+function describeDay(day: Contribution): string {
+  const noun = day.count === 1 ? 'contribution' : 'contributions'
+  const d = new Date(day.date + 'T00:00:00')
+  const fmt = `${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}, ${d.getFullYear()}`
+  return `${day.count} ${noun} on ${fmt}`
+}
+
+function onHover(day: Contribution, e: PointerEvent) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  hovered.value = { day, x: rect.left + rect.width / 2, y: rect.top }
 }
 
 async function load() {
   try {
     const res = await api.get('/analysis/activity', { params: { days: props.days } })
     const data = res.data
-    contributions.value = Array.isArray(data?.contributions) ? data.contributions : []
+    loaded.value = Array.isArray(data?.contributions)
+      ? data.contributions.map((d: any) => ({
+          date: d.date,
+          count: Number(d.count) || 0,
+          level: Math.min(4, Math.max(0, Number(d.level) || 0)) as ContributionLevel,
+        }))
+      : []
     total.value = data?.total ?? 0
     activeDays.value = data?.active_days ?? 0
   } catch {
-    contributions.value = []
+    loaded.value = []
   }
 }
 
