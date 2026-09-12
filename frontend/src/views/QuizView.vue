@@ -111,7 +111,7 @@
             >
               {{ optionLetter(idx) }}
             </span>
-            <span class="text-[var(--text-primary)]">{{ option }}</span>
+            <span class="text-[var(--text-primary)]">{{ displayOption(option) }}</span>
           </label>
         </div>
 
@@ -182,34 +182,95 @@
       <p>点击"生成题目"开始练习</p>
     </div>
 
-    <!-- Wrong Questions Section -->
+    <!-- Practice Records: history + wrong book (always visible entry) -->
     <div class="mt-10">
-      <el-button
-        @click="loadWrongQuestions"
-        :loading="loadingWrong"
-      >
-        {{ loadingWrong ? '加载中...' : '加载错题' }}
-      </el-button>
-
-      <div v-if="wrongQuestions.length > 0" class="space-y-4 mt-6">
-        <h2 class="text-xl font-semibold text-[var(--text-primary)]">错题本</h2>
-        <div
-          v-for="q in wrongQuestions"
-          :key="q.id"
-          class="card p-5 border-l-4 border-[var(--color-error)]"
-        >
-          <h3 class="text-base font-medium text-[var(--text-primary)] mb-3">{{ q.question }}</h3>
-          <div class="space-y-1 text-sm">
-            <p class="text-[var(--color-error)]">你的答案: {{ formatAnswer(q, q.user_answer) }}</p>
-            <p class="text-[var(--color-success)]">正确答案: {{ formatAnswer(q, q.correct_answer) }}</p>
-            <p v-if="q.explanation" class="text-[var(--text-muted)]">解析: {{ q.explanation }}</p>
-          </div>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 class="text-xl font-semibold text-[var(--text-primary)]">练习记录</h2>
+        <div class="flex flex-wrap gap-2">
           <el-button
-            @click="redoQuestion(q)"
-            type="primary"
+            :type="recordTab === 'history' ? 'primary' : 'default'"
+            @click="openRecordTab('history')"
+            :loading="loadingHistory && recordTab === 'history'"
           >
-            重做此题
+            做题记录
+            <span v-if="historyCount > 0" class="ml-1 text-xs opacity-80">({{ historyCount }})</span>
           </el-button>
+          <el-button
+            :type="recordTab === 'wrong' ? 'primary' : 'default'"
+            @click="openRecordTab('wrong')"
+            :loading="loadingWrong && recordTab === 'wrong'"
+          >
+            错题本
+            <span v-if="wrongQuestions.length > 0" class="ml-1 text-xs opacity-80">({{ wrongQuestions.length }})</span>
+          </el-button>
+        </div>
+      </div>
+
+      <!-- Result history -->
+      <div v-if="recordTab === 'history'">
+        <div v-if="loadingHistory" class="text-center text-[var(--text-muted)] py-8">
+          加载做题记录中...
+        </div>
+        <div v-else-if="historyItems.length === 0" class="text-center text-[var(--text-muted)] py-8 card">
+          暂无做题记录。生成并提交答案后，这里会显示最近的作答历史。
+        </div>
+        <div v-else class="space-y-3">
+          <div
+            v-for="(item, idx) in historyItems"
+            :key="item.quiz_id + '-' + idx"
+            class="card p-4 border-l-4"
+            :class="item.is_correct
+              ? 'border-[var(--color-success)]'
+              : 'border-[var(--color-error)]'"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <h3 class="text-sm font-medium text-[var(--text-primary)] flex-1">{{ item.question }}</h3>
+              <span
+                class="shrink-0 text-xs px-2 py-0.5 rounded-full"
+                :class="item.is_correct
+                  ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                  : 'bg-[var(--color-error)]/10 text-[var(--color-error)]'"
+              >
+                {{ item.is_correct ? '正确' : '错误' }}
+              </span>
+            </div>
+            <div class="mt-2 space-y-1 text-sm text-[var(--text-secondary)]">
+              <p>你的答案：{{ item.user_answer || '—' }}</p>
+              <p v-if="!item.is_correct">正确答案：{{ item.correct_answer }}</p>
+              <p class="text-xs text-[var(--text-muted)]">{{ formatSubmittedAt(item.submitted_at) }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wrong questions -->
+      <div v-else-if="recordTab === 'wrong'">
+        <div v-if="loadingWrong" class="text-center text-[var(--text-muted)] py-8">
+          加载错题中...
+        </div>
+        <div v-else-if="wrongQuestions.length === 0" class="text-center text-[var(--text-muted)] py-8 card">
+          暂无错题。答错的题目会自动收录到这里。
+        </div>
+        <div v-else class="space-y-4">
+          <div
+            v-for="q in wrongQuestions"
+            :key="q.id"
+            class="card p-5 border-l-4 border-[var(--color-error)]"
+          >
+            <h3 class="text-base font-medium text-[var(--text-primary)] mb-3">{{ q.question }}</h3>
+            <div class="space-y-1 text-sm">
+              <p class="text-[var(--color-error)]">你的答案: {{ formatAnswer(q, q.user_answer) }}</p>
+              <p class="text-[var(--color-success)]">正确答案: {{ formatAnswer(q, q.correct_answer) }}</p>
+              <p v-if="q.explanation" class="text-[var(--text-muted)]">解析: {{ q.explanation }}</p>
+            </div>
+            <el-button
+              @click="redoQuestion(q)"
+              type="primary"
+              class="mt-3"
+            >
+              重做此题
+            </el-button>
+          </div>
         </div>
       </div>
     </div>
@@ -271,6 +332,36 @@ const wrongQuestions = ref<WrongQuestion[]>([])
 
 const loadingWrong = ref(false)
 
+const recordTab = ref<'history' | 'wrong' | null>(null)
+const loadingHistory = ref(false)
+const historyItems = computed(() => quizStore.quizResults)
+const historyCount = computed(() => quizStore.quizResults.length)
+
+async function openRecordTab(tab: 'history' | 'wrong'): Promise<void> {
+  if (recordTab.value === tab) {
+    recordTab.value = null
+    return
+  }
+  recordTab.value = tab
+  if (tab === 'history') {
+    loadingHistory.value = true
+    try {
+      await quizStore.fetchQuizHistory(true)
+    } finally {
+      loadingHistory.value = false
+    }
+  } else {
+    await loadWrongQuestions()
+  }
+}
+
+function formatSubmittedAt(raw: string): string {
+  if (!raw) return ''
+  const d = new Date(String(raw).replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return raw
+  return d.toLocaleString()
+}
+
 const ctx = gsap.context(() => {})
 const animatedResults = new Set<string>()
 
@@ -286,6 +377,16 @@ const availableDocs = computed(() => {
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
 function optionLetter(idx: number): string {
   return OPTION_LETTERS[idx] || String(idx)
+}
+
+/** Strip LLM-injected "A." / "选项B" prefixes — UI already shows a letter badge. */
+function displayOption(text: string): string {
+  let t = (text || '').trim()
+  t = t.replace(/^选项\s*[A-Fa-f]\s*[.、．,，:：)）]?\s*/, '')
+  t = t.replace(/^[（(][A-Fa-f][）)]\s*[.、．:：]?\s*/, '')
+  t = t.replace(/^[A-Fa-f]\s*[.、．,，:：)）]\s*/, '')
+  t = t.replace(/^[A-Fa-f](?=\s|$)\s+/, '')
+  return t.trim() || (text || '').trim()
 }
 
 watch(() => quizStore.quizzes.length, (newLen, oldLen) => {
