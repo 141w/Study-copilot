@@ -111,7 +111,7 @@
             >
               {{ optionLetter(idx) }}
             </span>
-            <span class="text-[var(--text-primary)]">{{ option }}</span>
+            <span class="text-[var(--text-primary)]">{{ displayOption(option) }}</span>
           </label>
         </div>
 
@@ -286,6 +286,16 @@ const availableDocs = computed(() => {
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
 function optionLetter(idx: number): string {
   return OPTION_LETTERS[idx] || String(idx)
+}
+
+/** Strip LLM-injected "A." / "选项B" prefixes — UI already shows a letter badge. */
+function displayOption(text: string): string {
+  let t = (text || '').trim()
+  t = t.replace(/^选项\s*[A-Fa-f]\s*[.、．,，:：)）]?\s*/, '')
+  t = t.replace(/^[（(][A-Fa-f][）)]\s*[.、．:：]?\s*/, '')
+  t = t.replace(/^[A-Fa-f]\s*[.、．,，:：)）]\s*/, '')
+  t = t.replace(/^[A-Fa-f](?=\s|$)\s+/, '')
+  return t.trim() || (text || '').trim()
 }
 
 watch(() => quizStore.quizzes.length, (newLen, oldLen) => {

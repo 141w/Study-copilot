@@ -227,6 +227,28 @@ def test_assemble_quiz_context_budget_and_source_labels():
     assert ctx.startswith("【来源】doc0.pdf")
 
 
+def test_validate_strips_option_letter_prefixes():
+    """UI already shows A/B badges — option bodies must not repeat labels."""
+    item = _choice_item()
+    item["options"] = ["A. 最大化损失", "选项B 最小化损失函数", "（C）增加噪声", "D、固定步长"]
+    out = validate_and_normalize([item], choice_count=1, short_answer_count=0)
+    assert out[0]["options"] == [
+        "最大化损失",
+        "最小化损失函数",
+        "增加噪声",
+        "固定步长",
+    ]
+
+
+def test_strip_option_label_keeps_plain_text():
+    from app.core.quiz_generator import _strip_option_label
+
+    assert _strip_option_label("梯度是向量") == "梯度是向量"
+    assert _strip_option_label("BCE Loss") == "BCE Loss"  # don't eat "B"
+    assert _strip_option_label("A. 正确表述") == "正确表述"
+    assert _strip_option_label("选项 C：另一种写法") == "另一种写法"
+
+
 def test_service_labels_and_samples_together():
     from app.services.quiz_service import assemble_quiz_context, sample_chunk_indexes
 

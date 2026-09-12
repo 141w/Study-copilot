@@ -16,6 +16,25 @@ _MIN_QUESTION_LEN = 4
 _DEDUP_JACCARD = 0.85
 _DEFAULT_CONTEXT_BUDGET = 4800
 
+# UI already renders a letter badge; strip LLM-injected option labels like
+# "A.", "选项B", "（C）", "D、" so users don't see "A 选项A...".
+_OPTION_LABEL_RE = re.compile(
+    r"^(?:"
+    r"选项\s*[A-Da-d]\s*[.、．,，:：)）]?"  # 选项A / 选项 B.
+    r"|[（(][A-Da-d][）)]\s*[.、．:：]?"  # （A） / (B).
+    r"|[A-Da-d]\s*[.、．,，:：)）]"  # A. / B、 / C)
+    r"|[A-Da-d](?=\s|$)"  # bare letter + space/end
+    r")\s*"
+)
+
+
+def _strip_option_label(text: str) -> str:
+    """Remove a leading choice-letter label from option body text."""
+    t = (text or "").strip()
+    # Apply once; labels are at the start only.
+    stripped = _OPTION_LABEL_RE.sub("", t, count=1).strip()
+    return stripped if stripped else t
+
 
 def _extract_json_payload(text: str) -> Any | None:
     """Parse first complete JSON value from LLM output (tolerates fences and prose)."""
@@ -50,6 +69,7 @@ def _normalize_choice(item: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(options, list):
         return None
     options = [str(o).strip() for o in options]
+    options = [_strip_option_label(o) for o in options]
     if len(question) < _MIN_QUESTION_LEN or len(options) != 4:
         return None
     if any(not o for o in options):
@@ -171,7 +191,7 @@ def build_mixed_prompt(context: str, choice_count: int, short_answer_count: int)
 出题要求：
 1. 共 {total} 道题：选择题 {choice_count} 道，简答题 {short_answer_count} 道。
 2. 尽量覆盖材料中 **不同知识点**，避免多题考同一句话。
-3. 选择题：恰好 4 个选项；干扰项要「似是而非」（常见误解/相近概念），不能一眼排除；answer 只写单个字母 A/B/C/D。
+3. 选择题：恰好 4 个选项；干扰项要「似是而非」（常见误解/相近概念），不能一眼排除；answer 只写单个字母 A/B/C/D；options 数组里**只写选项正文**，不要写 "A."、"选项A"、"（B）" 等字母前缀。
 4. 简答题：考察理解与简要推导，答案用 1–3 句可评分表述。
 5. 每题给出 difficulty：easy|medium|hard；并给出 knowledge_point（短语）。
 6. explanation 要说明「为什么对、干扰项为何错」（简答则说明评分要点）。
