@@ -272,14 +272,25 @@ async function generateCourse(): Promise<void> {
   genLoading.value = true
   genError.value = ''
   try {
-    const { data } = await api.post('/courses/generate', {
+    // 走互动课堂引擎（OpenMAIC），而不是本地简化大纲模板
+    const { data } = await api.post('/classroom/generate', {
       doc_ids: genDocIds.value,
-      requirement: genRequirement.value.trim(),
+      requirement: genRequirement.value.trim() || '请根据文档生成互动微课',
+      enable_tts: true,
+      enable_image_generation: false,
+      agent_mode: 'default',
     })
-    toast.success(`课程「${data.title}」生成完成！`)
+    const courseId = data.course_id || data.class_id
+    if (data.degraded) {
+      toast.warning(data.message || '引擎不可用，已生成简化课程')
+    } else {
+      toast.success('课堂生成任务已提交（引擎约需数分钟），可稍后在课程中打开播放')
+    }
     showGenDialog.value = false
     courseStore.fetchCourses()
-    router.push(`/courses/${data.course_id}`)
+    if (courseId) {
+      router.push(`/courses/${courseId}`)
+    }
   }
   catch (e: any) {
     genError.value = e?.response?.data?.detail || e?.message || '生成失败'
