@@ -3,7 +3,7 @@ feature: quiz-quality
 status: delivered
 updated: 2026-09-12
 branch: feat/quiz-quality
-commits: 05b0309..dd9a957
+commits: 05b0309..b3acf98
 ---
 
 # Quiz Generation Quality

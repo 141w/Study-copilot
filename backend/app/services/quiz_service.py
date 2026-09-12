@@ -33,18 +33,19 @@ def sample_chunk_indexes(total: int, sample_n: int = _CHUNKS_PER_DOC) -> list[in
 
 
 def assemble_quiz_context(labeled_parts: list[str], budget: int = _QUIZ_CONTEXT_BUDGET) -> str:
-    """Join labeled snippets under a character budget."""
+    """Join labeled snippets under a character budget (separators included)."""
     ctx_parts: list[str] = []
     used = 0
     for part in labeled_parts:
-        if used >= budget:
+        sep = 2 if ctx_parts else 0  # "\n\n"
+        room = budget - used - sep
+        if room <= 0:
             break
-        room = budget - used
         take = part if len(part) <= room else part[:room]
         if not take.strip():
             continue
         ctx_parts.append(take)
-        used += len(take)
+        used += sep + len(take)
     return "\n\n".join(ctx_parts)
 
 
