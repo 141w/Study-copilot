@@ -1,14 +1,23 @@
 ---
 feature: quiz-quality
-status: designed
+status: delivered
 updated: 2026-09-12
 branch: feat/quiz-quality
-commits: # filled at delivery
+commits: 05b0309..dd9a957
 ---
 
 # Quiz Generation Quality
 
 ## Report
+
+**What was built** — 出题链路质量升级：service 跨前/中/后采样最多 8 chunk/文档并标注来源，预算约 4800 字；`QuizGenerator` 改为**单次混合生成**（选择+简答），prompt 要求知识点覆盖与高质量干扰项；JSON 用 `raw_decode` 稳健解析；`validate_and_normalize` 校验 4 选项/答案字母/题干去重；不足时补生成一轮。保留 `generate_choice`/`generate_short_answer` 兼容包装，前端 `/quiz/generate` 契约不变。
+
+**Verification** — `pytest test_quiz_quality.py test_quiz_generator.py test_quiz.py test_quiz_task_e2e.py test_course_generator.py` → 59 passed；全量后端 629 passed（classroom contract 5 失败为 PRE-EXISTING 脏文件依赖）；ruff/mypy 通过。
+
+**Journey log** —
+1. 旧 `context[:500]` 与前 5 段是题质差主因，采样+预算是收益最大的改动。
+2. JSON 抽取不能“先找 `[` 再 rfind `]`”——对象内空数组会误解析。
+3. 旧单测大量依赖超短题干与无校验路径，按新质量门重写而非放宽门禁。
 
 ## [S1] Problem
 
@@ -68,7 +77,7 @@ commits: # filled at delivery
 
 ## Tasks
 
-- [ ] T1: 上下文采样与预算 — acceptance: 多 chunk 跨文档拼接含来源 (covers: S2.1)
-- [ ] T2: 单次混合生成 + 解析 — acceptance: mock LLM 混合 JSON 产出两类题 (covers: S2.2)
-- [ ] T3: 校验去重 — acceptance: 坏题被过滤，相似题干去重 (covers: S2.3)
-- [ ] T4: service 接线 + 旧测试修复 — acceptance: generate 路径与 course 路径单测绿 (covers: S2.4)
+- [x] T1: 上下文采样与预算 — acceptance: 多 chunk 跨文档拼接含来源 (covers: S2.1)
+- [x] T2: 单次混合生成 + 解析 — acceptance: mock LLM 混合 JSON 产出两类题 (covers: S2.2)
+- [x] T3: 校验去重 — acceptance: 坏题被过滤，相似题干去重 (covers: S2.3)
+- [x] T4: service 接线 + 旧测试修复 — acceptance: generate 路径与 course 路径单测绿 (covers: S2.4)
