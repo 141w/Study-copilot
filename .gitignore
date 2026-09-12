@@ -119,3 +119,7 @@ icon-style-compare.html
 
 # Claude skills lock
 skills-lock.json
+
+# Local tool/preview noise (not product)
+.preview/
+.zcode/

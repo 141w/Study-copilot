@@ -35,7 +35,7 @@ commits: b344135..3135f13
 
 ## [S2] Design
 
-见各模块 docstring 与 `study-copilot-optimization-plan.md` 对应小节。
+见各模块 docstring 与 `docs/archive/plans/study-copilot-optimization-plan.md` 对应小节。
 
 ## [S3] Out of Scope
 

@@ -599,7 +599,7 @@ async def discuss(
             doc_ids = []
     if doc_ids and req.context_mode == "full_docs":
         # 全文打包：多文档合并 + CJK 预算 + 来源标注（此前为孤儿模块，按
-        # docs/5-INTEGRATION §3.3 设计意图接入）
+        # docs/6-INTEGRATION §3.3 设计意图接入）
         try:
             from app.core.document_bundle import build_bundle_from_doc_ids
 
