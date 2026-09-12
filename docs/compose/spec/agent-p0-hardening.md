@@ -3,7 +3,7 @@ feature: agent-p0-hardening
 status: delivered
 updated: 2026-09-12
 branch: feat/agent-p0-hardening
-commits: 996623e..<head>
+commits: 996623e..5514d3d
 ---
 
 # Agent P0 Hardening
