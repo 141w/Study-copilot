@@ -123,3 +123,8 @@ skills-lock.json
 # Local tool/preview noise (not product)
 .preview/
 .zcode/
+
+# Local run artifacts / tool skill copies
+*.mp3
+.agents/skills/fluid-orb/
+.claude/skills/fluid-orb/
