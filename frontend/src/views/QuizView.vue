@@ -182,100 +182,29 @@
       <p>点击"生成题目"开始练习</p>
     </div>
 
-    <!-- Practice Records: history + wrong book (always visible entry) -->
+    <!-- Wrong book only — full history lives on 学习分析 -->
     <div class="mt-10">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h2 class="text-xl font-semibold text-[var(--text-primary)]">练习记录</h2>
-        <div class="flex flex-wrap gap-2">
+        <h2 class="text-xl font-semibold text-[var(--text-primary)]">错题本</h2>
+        <div class="flex flex-wrap items-center gap-2">
           <el-button
-            :type="recordTab === 'history' ? 'primary' : 'default'"
-            @click="openRecordTab('history')"
-            :loading="loadingHistory && recordTab === 'history'"
+            size="small"
+            @click="$router.push('/analysis')"
           >
-            做题记录
-            <span v-if="historyCount > 0" class="ml-1 text-xs opacity-80">({{ historyCount }})</span>
+            完整做题历史（学习分析）
           </el-button>
           <el-button
-            :type="recordTab === 'wrong' ? 'primary' : 'default'"
-            @click="openRecordTab('wrong')"
-            :loading="loadingWrong && recordTab === 'wrong'"
+            :type="showWrongBook ? 'primary' : 'default'"
+            @click="toggleWrongBook"
+            :loading="loadingWrong && !showWrongBook"
           >
-            错题本
+            {{ showWrongBook ? '收起错题' : '加载错题' }}
             <span v-if="wrongQuestions.length > 0" class="ml-1 text-xs opacity-80">({{ wrongQuestions.length }})</span>
           </el-button>
         </div>
       </div>
 
-      <!-- Result history -->
-      <div v-if="recordTab === 'history'">
-        <div v-if="loadingHistory" class="text-center text-[var(--text-muted)] py-8">
-          加载做题记录中...
-        </div>
-        <div v-else-if="historyItems.length === 0" class="text-center text-[var(--text-muted)] py-8 card">
-          暂无做题记录。生成并提交答案后，这里会显示最近的作答历史。
-        </div>
-        <div v-else class="space-y-3">
-          <div
-            v-for="(item, idx) in historyItems"
-            :key="item.quiz_id + '-' + idx"
-            class="card p-4 border-l-4"
-            :class="item.is_correct
-              ? 'border-[var(--color-success)]'
-              : 'border-[var(--color-error)]'"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <h3 class="text-sm font-medium text-[var(--text-primary)] flex-1">{{ item.question }}</h3>
-              <span
-                class="shrink-0 text-xs px-2 py-0.5 rounded-full"
-                :class="item.is_correct
-                  ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
-                  : 'bg-[var(--color-error)]/10 text-[var(--color-error)]'"
-              >
-                {{ item.is_correct ? '正确' : '错误' }}
-              </span>
-            </div>
-            <div class="mt-2 space-y-1 text-sm text-[var(--text-secondary)]">
-              <!-- Full option list so history is reviewable (not just letters) -->
-              <div
-                v-if="item.question_type === 'choice' && item.options?.length"
-                class="space-y-1 mb-2"
-              >
-                <div
-                  v-for="(opt, oi) in item.options"
-                  :key="oi"
-                  class="flex items-start gap-2 px-2 py-1 rounded"
-                  :class="OPTION_LETTERS[oi] === (item.correct_answer || '').toUpperCase()
-                    ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
-                    : OPTION_LETTERS[oi] === (item.user_answer || '').toUpperCase()
-                      ? 'bg-[var(--color-error)]/10 text-[var(--color-error)]'
-                      : ''"
-                >
-                  <span class="font-medium shrink-0">{{ OPTION_LETTERS[oi] }}.</span>
-                  <span>{{ displayOption(opt) }}</span>
-                  <span
-                    v-if="OPTION_LETTERS[oi] === (item.correct_answer || '').toUpperCase()"
-                    class="text-xs shrink-0 ml-auto"
-                  >正确</span>
-                  <span
-                    v-else-if="OPTION_LETTERS[oi] === (item.user_answer || '').toUpperCase()"
-                    class="text-xs shrink-0 ml-auto"
-                  >你的选择</span>
-                </div>
-              </div>
-              <p>
-                你的答案：{{ formatHistoryAnswer(item, item.user_answer) || '—' }}
-              </p>
-              <p v-if="!item.is_correct">
-                正确答案：{{ formatHistoryAnswer(item, item.correct_answer) }}
-              </p>
-              <p class="text-xs text-[var(--text-muted)]">{{ formatSubmittedAt(item.submitted_at) }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Wrong questions -->
-      <div v-else-if="recordTab === 'wrong'">
+      <div v-if="showWrongBook">
         <div v-if="loadingWrong" class="text-center text-[var(--text-muted)] py-8">
           加载错题中...
         </div>
@@ -363,34 +292,15 @@ const wrongQuestions = ref<WrongQuestion[]>([])
 
 const loadingWrong = ref(false)
 
-const recordTab = ref<'history' | 'wrong' | null>(null)
-const loadingHistory = ref(false)
-const historyItems = computed(() => quizStore.quizResults)
-const historyCount = computed(() => quizStore.quizResults.length)
+const showWrongBook = ref(false)
 
-async function openRecordTab(tab: 'history' | 'wrong'): Promise<void> {
-  if (recordTab.value === tab) {
-    recordTab.value = null
+async function toggleWrongBook(): Promise<void> {
+  if (showWrongBook.value) {
+    showWrongBook.value = false
     return
   }
-  recordTab.value = tab
-  if (tab === 'history') {
-    loadingHistory.value = true
-    try {
-      await quizStore.fetchQuizHistory(true)
-    } finally {
-      loadingHistory.value = false
-    }
-  } else {
-    await loadWrongQuestions()
-  }
-}
-
-function formatSubmittedAt(raw: string): string {
-  if (!raw) return ''
-  const d = new Date(String(raw).replace(' ', 'T'))
-  if (Number.isNaN(d.getTime())) return raw
-  return d.toLocaleString()
+  showWrongBook.value = true
+  await loadWrongQuestions()
 }
 
 const ctx = gsap.context(() => {})
@@ -496,18 +406,7 @@ function formatAnswer(
   if (quiz.question_type !== 'choice' || !quiz.options?.length) return answer
   const idx = OPTION_LETTERS.indexOf(answer.toUpperCase())
   if (idx === -1 || !quiz.options[idx]) return answer
-  return `${OPTION_LETTERS[idx]}. ${quiz.options[idx]}`
-}
-
-/** History items carry question_type/options from result-history API. */
-function formatHistoryAnswer(
-  item: { question_type?: string | null; options?: string[] | null },
-  answer: string
-): string {
-  return formatAnswer(
-    { question_type: item.question_type || undefined, options: item.options },
-    answer || ''
-  )
+  return `${OPTION_LETTERS[idx]}. ${displayOption(quiz.options[idx])}`
 }
 
 async function submitAnswer(quiz: RuntimeQuiz): Promise<void> {

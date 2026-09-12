@@ -94,24 +94,63 @@
             </span>
           </div>
 
-          <div class="space-y-2">
+          <div class="space-y-3">
             <div
               v-for="item in group.items"
-              :key="item.quiz_id"
-              class="flex items-start gap-3 p-3 bg-[var(--bg-secondary)] rounded-lg"
+              :key="item.quiz_id + '-' + item.submitted_at"
+              class="p-3 bg-[var(--bg-secondary)] rounded-lg border-l-4"
+              :class="item.is_correct
+                ? 'border-[var(--color-success)]'
+                : 'border-[var(--color-error)]'"
             >
-              <span
-                class="w-6 h-6 rounded-full text-xs flex items-center justify-center flex-shrink-0"
-                :class="item.is_correct ? 'bg-[var(--color-success-light)] text-[var(--color-success)]' : 'bg-[var(--color-error-light)] text-[var(--color-error)]'"
+              <div class="flex items-start justify-between gap-3">
+                <p class="text-sm font-medium text-[var(--text-primary)] flex-1">
+                  {{ item.question }}
+                </p>
+                <span
+                  class="shrink-0 text-xs px-2 py-0.5 rounded-full"
+                  :class="item.is_correct
+                    ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                    : 'bg-[var(--color-error)]/10 text-[var(--color-error)]'"
+                >
+                  {{ item.is_correct ? '正确' : '错误' }}
+                </span>
+              </div>
+
+              <!-- 选择题：完整选项列表 + 正确/你的选择高亮 -->
+              <div
+                v-if="item.question_type === 'choice' && item.options?.length"
+                class="mt-2 space-y-1"
               >
-                {{ item.is_correct ? '✓' : '✗' }}
-              </span>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm text-[var(--text-primary)] truncate">{{ item.question }}</p>
-                <div class="flex gap-4 mt-1 text-xs text-[var(--text-muted)]">
-                  <span>你的答案: {{ item.user_answer }}</span>
-                  <span v-if="!item.is_correct">正确答案: {{ item.correct_answer }}</span>
+                <div
+                  v-for="(opt, oi) in item.options"
+                  :key="oi"
+                  class="flex items-start gap-2 px-2 py-1 rounded text-sm"
+                  :class="OPTION_LETTERS[oi] === (item.correct_answer || '').toUpperCase()
+                    ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                    : OPTION_LETTERS[oi] === (item.user_answer || '').toUpperCase()
+                      ? 'bg-[var(--color-error)]/10 text-[var(--color-error)]'
+                      : 'text-[var(--text-secondary)]'"
+                >
+                  <span class="font-medium shrink-0">{{ OPTION_LETTERS[oi] }}.</span>
+                  <span class="flex-1">{{ stripOptionLabel(opt) }}</span>
+                  <span
+                    v-if="OPTION_LETTERS[oi] === (item.correct_answer || '').toUpperCase()"
+                    class="text-xs shrink-0"
+                  >正确</span>
+                  <span
+                    v-else-if="OPTION_LETTERS[oi] === (item.user_answer || '').toUpperCase()"
+                    class="text-xs shrink-0"
+                  >你的选择</span>
                 </div>
+              </div>
+
+              <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
+                <span>你的答案: {{ formatHistoryAnswer(item, item.user_answer) || '—' }}</span>
+                <span v-if="!item.is_correct">
+                  正确答案: {{ formatHistoryAnswer(item, item.correct_answer) }}
+                </span>
+                <span>{{ formatSubmittedAt(item.submitted_at) }}</span>
               </div>
             </div>
           </div>
@@ -351,6 +390,35 @@ function accuracyColor(rate: number): string {
   if (rate < 50) return 'text-[var(--color-error)]'
   if (rate < 70) return 'text-[var(--color-warning)]'
   return 'text-[var(--color-success)]'
+}
+
+const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
+
+function stripOptionLabel(text: string): string {
+  let t = (text || '').trim()
+  t = t.replace(/^选项\s*[A-Fa-f]\s*[.、．,，:：)）]?\s*/, '')
+  t = t.replace(/^[（(][A-Fa-f][）)]\s*[.、．:：]?\s*/, '')
+  t = t.replace(/^[A-Fa-f]\s*[.、．,，:：)）]\s*/, '')
+  t = t.replace(/^[A-Fa-f](?=\s|$)\s+/, '')
+  return t.trim() || (text || '').trim()
+}
+
+function formatHistoryAnswer(
+  item: { question_type?: string | null; options?: string[] | null },
+  answer: string
+): string {
+  if (!answer) return ''
+  if (item.question_type !== 'choice' || !item.options?.length) return answer
+  const idx = OPTION_LETTERS.indexOf(answer.toUpperCase())
+  if (idx === -1 || !item.options[idx]) return answer
+  return `${OPTION_LETTERS[idx]}. ${stripOptionLabel(item.options[idx])}`
+}
+
+function formatSubmittedAt(raw: string): string {
+  if (!raw) return ''
+  const d = new Date(String(raw).replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return raw
+  return d.toLocaleString()
 }
 
 // ── AI 互动课堂数据 ─────────────────────────────────────────────────────────

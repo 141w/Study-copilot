@@ -59,7 +59,8 @@ export const useQuizStore = defineStore('quiz', () => {
   const analyzing = ref(false)
 
   function isCacheFresh(): boolean {
-    return Date.now() - lastFetched.value < 30_000 && quizResults.value.length > 0
+    // Keep short: analysis page should show newly submitted answers quickly
+    return Date.now() - lastFetched.value < 5_000 && quizResults.value.length > 0
   }
 
   async function fetchKnowledgeStats(): Promise<void> {
