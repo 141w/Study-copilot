@@ -214,6 +214,30 @@ class QuizGenerator:
     def __init__(self, llm_config=None):
         self.llm = LLM.from_config(llm_config)
 
+    def _max_tokens_for(self, choice_count: int, short_answer_count: int) -> int:
+        """Thinking models (StepFun/DeepSeek-R1 style) burn tokens on reasoning first.
+
+        A tight budget leaves finish_reason=length with empty content — no JSON.
+        """
+        total = max(int(choice_count) + int(short_answer_count), 1)
+        return min(8000, 2500 + 600 * total)
+
+    async def _generate_text(
+        self, prompt: str, *, temperature: float, max_tokens: int
+    ) -> str:
+        resp = await self.llm.generate(prompt, temperature=temperature, max_tokens=max_tokens) or ""
+        if (resp or "").strip():
+            return resp
+        # Empty content after a 200: usually reasoning exhausted max_tokens.
+        larger = min(8000, max(max_tokens * 2, 4000))
+        logger.warning(
+            "QuizGenerator empty LLM content (max_tokens=%s), retrying with max_tokens=%s",
+            max_tokens,
+            larger,
+        )
+        resp2 = await self.llm.generate(prompt, temperature=temperature, max_tokens=larger) or ""
+        return resp2 or ""
+
     async def _generate_mixed(
         self,
         context: str,
@@ -227,9 +251,9 @@ class QuizGenerator:
         if len(ctx) > 12000:
             ctx = ctx[:12000]
         prompt = build_mixed_prompt(ctx, choice_count, short_answer_count)
-        max_tokens = min(3000, 400 + 220 * (choice_count + short_answer_count))
+        max_tokens = self._max_tokens_for(choice_count, short_answer_count)
         try:
-            resp = await self.llm.generate(prompt, temperature=0.5, max_tokens=max_tokens) or ""
+            resp = await self._generate_text(prompt, temperature=0.5, max_tokens=max_tokens)
         except Exception as e:
             logger.error("generate_quizzes LLM call failed: %s", e)
             raise
@@ -241,7 +265,9 @@ class QuizGenerator:
         elif isinstance(payload, list):
             items = payload
         else:
-            logger.error("generate_quizzes parse failed, no JSON in response: %s", (resp or "")[:200])
+            logger.error(
+                "generate_quizzes parse failed, no JSON in response: %s", (resp or "")[:200]
+            )
             items = []
 
         normalized = validate_and_normalize(items, choice_count, short_answer_count)
@@ -255,13 +281,15 @@ class QuizGenerator:
 
         # One recovery pass if under-delivered (including total first-pass failure)
         need_choice = choice_count - sum(1 for q in normalized if q["question_type"] == "choice")
-        need_short = short_answer_count - sum(1 for q in normalized if q["question_type"] == "short_answer")
+        need_short = short_answer_count - sum(
+            1 for q in normalized if q["question_type"] == "short_answer"
+        )
         if need_choice > 0 or need_short > 0:
             try:
                 retry_prompt = build_mixed_prompt(ctx, max(need_choice, 0), max(need_short, 0))
-                retry_resp = await self.llm.generate(
+                retry_resp = await self._generate_text(
                     retry_prompt, temperature=0.6, max_tokens=max_tokens
-                ) or ""
+                )
                 retry_payload = _extract_json_payload(retry_resp)
                 retry_items = (
                     retry_payload.get("quizzes", [])
@@ -291,7 +319,9 @@ class QuizGenerator:
 
         # Stable order: all choices then shorts (matches historical API)
         choices = [q for q in normalized if q["question_type"] == "choice"][:choice_count]
-        shorts = [q for q in normalized if q["question_type"] == "short_answer"][:short_answer_count]
+        shorts = [q for q in normalized if q["question_type"] == "short_answer"][
+            :short_answer_count
+        ]
         return [*choices, *shorts]
 
     async def generate_choice(self, context, count=1):
