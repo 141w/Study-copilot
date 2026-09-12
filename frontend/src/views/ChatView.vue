@@ -192,6 +192,7 @@
             <ChatMessageItem
               v-else
               :message="msg"
+              :data-msg-role="msg.role"
               :rendered-markdown="renderMarkdown(msg.content, msg.isStreaming)"
               :rendered-reasoning="msg.reasoning ? renderMarkdown(msg.reasoning, false) : undefined"
               :show-avatar="idx === lastAssistantIdx"
@@ -208,7 +209,7 @@
 
       <!-- Input Area -->
       <div class="border-t border-[var(--border-default)] bg-[var(--bg-primary)]/80 backdrop-blur-md">
-        <div class="max-w-3xl mx-auto px-4 py-2.5 sm:py-3">
+        <div class="max-w-3xl mx-auto px-4 pt-2.5 pb-4 sm:pt-3 sm:pb-5">
           <ChatInput
             @send="handleSend"
             @stop="handleStop"
@@ -592,20 +593,20 @@ function renderMarkdown(text: string, isStreaming = false): string {
 }
 
 function scrollToSource(index: number): void {
-  const lastMsg = chatStore.messages[chatStore.messages.length - 1]
-  if (lastMsg && lastMsg.role === 'assistant') {
-    // 点击来源条目时展开该消息的完整来源卡（由 ChatMessageItem 内部 isSourcesOpen 控制）
-    const msgIndex = chatStore.messages.length - 1
-    chatStore.messages[msgIndex].expandedSources = true
-    setTimeout(() => {
-      const card = document.getElementById(`source-card-${index}`)
-      if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        card.classList.add('ring-2', 'ring-[var(--color-navy)]', 'bg-[var(--color-primary-light)]')
-        setTimeout(() => card.classList.remove('ring-2', 'ring-[var(--color-navy)]', 'bg-[var(--color-primary-light)]'), 3000)
-      }
-    }, 100)
+  // 展开包含该来源的所有消息的完整来源卡
+  for (const m of chatStore.messages) {
+    if (m.sources && m.sources.some(s => s.index === index)) {
+      m.expandedSources = true
+    }
   }
+  setTimeout(() => {
+    const card = document.getElementById(`source-card-${index}`)
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      card.classList.add('source-card-highlighted')
+      setTimeout(() => card.classList.remove('source-card-highlighted'), 2500)
+    }
+  }, 100)
 }
 
 async function handleSend(content: string): Promise<void> {
@@ -621,13 +622,16 @@ async function handleSend(content: string): Promise<void> {
     return
   }
   await nextTick()
-  scrollToBottom()
+  // 刚发出的消息对齐可视区顶部（长历史回看时也能立刻看到自己的问题）
+  scrollLatestUserMessageIntoView()
 }
 
 async function handleDiscuss(content: string): Promise<void> {
   // 使用原生 fetch 调用 /chat/discuss SSE 端点
   const controller = new AbortController()
   const token = localStorage.getItem('token')
+  // 失败时等 isStreaming 落下后再播 alert：avatarMood 在 streaming 期间锁死 thinking
+  let pendingAlert = false
 
   chatStore.isStreaming = true
 
@@ -832,7 +836,7 @@ async function handleDiscuss(content: string): Promise<void> {
             _msg.content += '\n\n---\n\n**讨论总结**\n\n' + event.content
           }
           else if (event.type === 'error') {
-            // 讨论失败 → 保留后端友好错误信息
+            // 讨论失败 → 保留后端友好错误信息 + 球体 alert（飞行中出事）
             const errText = String(event.message || '讨论生成失败，请稍后重试')
             _msg.isStreaming = false
             _msg.currentSpeaker = null
@@ -840,6 +844,7 @@ async function handleDiscuss(content: string): Promise<void> {
             _msg.content = _msg.content
               ? _msg.content + '\n\n---\n\n' + errText
               : errText
+            pendingAlert = true
           }
           else if (event.type === 'done') {
             _msg.isStreaming = false
@@ -872,10 +877,12 @@ async function handleDiscuss(content: string): Promise<void> {
         msg.isStreaming = false
         msg.currentSpeaker = null
       }
+      pendingAlert = true
     }
   }
   finally {
     chatStore.isStreaming = false
+    if (pendingAlert) playScene('alert')
   }
 }
 
@@ -905,8 +912,11 @@ function newChat(): void {
 }
 
 function onSessionLoaded(_sessionId: string): void {
-  nextTick(() => scrollToBottom())
   showHistory.value = false
+  // 历史载入后强制滚到底部（scrollToBottom 的 nearBottom 守卫会拦住「从顶部载入」）
+  nextTick(() => forceScrollToBottom())
+  // 图片/Markdown 高度稳定后再补一次，避免落在中间
+  setTimeout(() => forceScrollToBottom(), 80)
   // P8：载入历史会话 → orbit 入场
   playScene('arrive')
 }
@@ -924,6 +934,37 @@ function scrollToBottom(): void {
     if (nearBottom) {
       el.scrollTop = el.scrollHeight
     }
+  }
+}
+
+/** 无条件滚到底：历史载入 / 用户主动发送后使用（不受 nearBottom 限制） */
+function forceScrollToBottom(): void {
+  if (!messagesRef.value) return
+  const el = messagesRef.value
+  el.scrollTop = el.scrollHeight
+}
+
+/**
+ * 发送后把刚发出的 user 消息滚到可视区顶部附近。
+ * 历史很长时用户在上方回看，「贴底」会看不到自己刚发的那条；
+ * 以最后一条 user 消息为锚，block:'start' 对齐容器顶。
+ */
+function scrollLatestUserMessageIntoView(): void {
+  const container = messagesRef.value
+  if (!container) {
+    forceScrollToBottom()
+    return
+  }
+  const items = container.querySelectorAll('[data-msg-role="user"]')
+  const target = items[items.length - 1] as HTMLElement | undefined
+  if (target) {
+    // 容器内滚动：相对 container 定位，避免整页跳动
+    const cRect = container.getBoundingClientRect()
+    const tRect = target.getBoundingClientRect()
+    const delta = tRect.top - cRect.top - 12
+    container.scrollTop += delta
+  } else {
+    forceScrollToBottom()
   }
 }
 
@@ -952,6 +993,7 @@ const SCENE_DURATION: Partial<Record<BotMood, number>> = {
   burst: 5000,
   comet: 4800,
   exclaim: 4200,
+  alert: 4200,
   cancelled: 4200
 }
 
@@ -981,6 +1023,7 @@ const avatarExpr = computed<ExpressionId>(() => {
     case 'thinking': return 'mefiant'
     case 'egg': return 'confus'
     case 'exclaim': return 'surpris'
+    case 'alert': return 'surpris'
     case 'cancelled': return 'blase'
     default: return 'neutre'
   }
@@ -1261,6 +1304,30 @@ onUnmounted(() => {
 .prose .source-badge:hover {
   transform: scale(1.1);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--color-brand-from) 40%, transparent);
+}
+.dark .prose .source-badge {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.dark .prose .source-badge:hover {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
+/* 来源卡高亮动效：解决暗色模式下纯黑 ring 隐形缺陷 */
+.source-card-highlighted {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 2px var(--color-primary), 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  background-color: var(--bg-hover) !important;
+  transition: all 0.3s ease;
+}
+.dark .source-card-highlighted {
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4), 0 0 16px rgba(255, 255, 255, 0.14) !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  transition: all 0.3s ease;
 }
 
 /* 思考过程折叠区 */
