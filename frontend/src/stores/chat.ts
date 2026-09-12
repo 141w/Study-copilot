@@ -80,12 +80,17 @@ export interface ChatSessionSummary {
 interface SseEvent {
   type: string
   session_id?: string
+  stream_id?: string
+  id?: number
   sources?: Source[]
   filtered_sources?: Source[]
   content?: string
   step?: number | string
   detail?: string
   reasoning?: string
+  code?: string
+  message?: string
+  recoverable?: boolean
   [key: string]: unknown
 }
 
@@ -264,6 +269,118 @@ export const useChatStore = defineStore('chat', () => {
     })
 
     const { prefs } = useUserPrefs()
+    let activeStreamId: string | null = null
+    let lastEventId = 0
+
+    const applyEvent = (data: SseEvent): boolean => {
+      if (typeof data.id === 'number') lastEventId = data.id
+      if (data.type === 'session') {
+        if (data.session_id) currentSession.value = data.session_id
+        if (typeof data.stream_id === 'string') activeStreamId = data.stream_id
+        return false
+      }
+      if (data.type === 'sources') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) {
+          const nextSources = Array.isArray(data.sources) ? data.sources : []
+          const nextFiltered = Array.isArray(data.filtered_sources) ? data.filtered_sources : []
+          messages.value[msgIdx].sources = [...nextSources]
+          messages.value[msgIdx].filtered_sources = [...nextFiltered]
+        }
+        return false
+      }
+      if (data.type === 'token') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) messages.value[msgIdx].content += data.content ?? ''
+        return false
+      }
+      if (data.type === 'answer') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) messages.value[msgIdx].content = data.content || ''
+        return false
+      }
+      if (data.type === 'thinking') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) {
+          const m = messages.value[msgIdx]
+          if (!Array.isArray(m.thinking)) m.thinking = []
+          m.thinking.push({ step: data.step!, detail: data.detail! })
+        }
+        return false
+      }
+      if (data.type === 'reasoning') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) {
+          const m = messages.value[msgIdx]
+          m.reasoning = (m.reasoning || '') + (data.content || '')
+        }
+        return false
+      }
+      if (data.type === 'answer_refined') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) {
+          messages.value[msgIdx].content = data.content || messages.value[msgIdx].content
+        }
+        return false
+      }
+      if (data.type === 'error') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) {
+          const m = messages.value[msgIdx] as {
+            content: string
+            isStreaming?: boolean
+            error_code?: string
+            error_recoverable?: boolean
+          }
+          m.isStreaming = false
+          const errCode = typeof data.code === 'string' ? data.code : 'internal_error'
+          const recoverable = data.recoverable !== false
+          m.error_code = errCode
+          m.error_recoverable = recoverable
+          const errText = typeof data.message === 'string' ? data.message : ''
+          const fallback = recoverable
+            ? '回答生成失败，请稍后重试'
+            : '回答生成失败，需要检查模型或网络配置后重试'
+          const body = errText || fallback
+          const hint = recoverable ? '（可重试）' : '（需检查配置）'
+          m.content = m.content ? m.content + '\n\n---\n\n' + body + hint : body + hint
+        }
+        return false
+      }
+      if (data.type === 'note_saved') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1 && data.note) {
+          const noteInfo = data.note as { id: string; title: string; tags: string[] }
+          messages.value[msgIdx].saved_note = noteInfo
+          messages.value[msgIdx].savedNote = noteInfo
+        }
+        return false
+      }
+      if (data.type === 'done') {
+        const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+        if (msgIdx !== -1) {
+          messages.value[msgIdx].isStreaming = false
+          const serverMsgId = (data as { message_id?: string }).message_id
+          if (serverMsgId) messages.value[msgIdx].id = serverMsgId
+          const doneNote = (data.saved_note || data.savedNote) as
+            | { id: string; title: string; tags: string[] }
+            | undefined
+          if (doneNote) {
+            messages.value[msgIdx].saved_note = doneNote
+            messages.value[msgIdx].savedNote = doneNote
+          }
+        }
+        if (
+          currentSession.value &&
+          !sessions.value.some(s => s.session_id === currentSession.value)
+        ) {
+          fetchSessions().catch(() => {})
+        }
+        return true
+      }
+      return false
+    }
+
     async function doFetch(token: string | null): Promise<Response> {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
@@ -322,116 +439,7 @@ export const useChatStore = defineStore('chat', () => {
               console.warn('Malformed SSE data, skipping line:', line, e)
               continue
             }
-
-            if (data.type === 'session') {
-              // 后端下发的会话 ID —— 多轮追问的关键：
-              // 新对话时后端创建 session 后立即通知前端，
-              // 后续消息才能带上同一 session_id 形成上下文
-              if (data.session_id) {
-                currentSession.value = data.session_id
-              }
-            } else if (data.type === 'sources') {
-              // 更新临时消息的来源信息（深度研究可能在正文出现前就推 sources）
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1) {
-                const nextSources = Array.isArray(data.sources) ? data.sources : []
-                const nextFiltered = Array.isArray(data.filtered_sources) ? data.filtered_sources : []
-                // 整体替换，确保 Vue 能侦测到变化
-                messages.value[msgIdx].sources = [...nextSources]
-                messages.value[msgIdx].filtered_sources = [...nextFiltered]
-                // 展开态由 ChatMessageItem 控制：流式研究阶段仅摘要，结束后可折叠完整卡
-              }
-            } else if (data.type === 'token') {
-              // 实时更新临时消息内容（增量累加）
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1) {
-                messages.value[msgIdx].content += data.content ?? ''
-              }
-            } else if (data.type === 'answer') {
-              // 非流式答案（DIRECT_ANSWER / OUT_OF_SCOPE / SUMMARY 路径）
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1) {
-                messages.value[msgIdx].content = data.content || ''
-              }
-            } else if (data.type === 'thinking') {
-              // 思考过程事件（Agentic RAG / Deep Research 决策轨）
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1) {
-                const m = messages.value[msgIdx]
-                if (!Array.isArray(m.thinking)) m.thinking = []
-                m.thinking.push({ step: data.step!, detail: data.detail! })
-                // 注意：不再把决策步骤伪造成 reasoning。reasoning 只接受模型原生 CoT 事件。
-              }
-            } else if (data.type === 'reasoning') {
-              // 模型原生 CoT 深度思考流 (DeepSeek-R1 / o1 / QwQ 等)
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1) {
-                const m = messages.value[msgIdx]
-                m.reasoning = (m.reasoning || '') + (data.content || '')
-              }
-            } else if (data.type === 'answer_refined') {
-              // 答案反思后修正（替换已流式输出的内容）
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1) {
-                messages.value[msgIdx].content = data.content || messages.value[msgIdx].content
-              }
-            } else if (data.type === 'error') {
-              // 后端 LLM/检索失败 → 把友好错误写入气泡（此前被静默丢弃，
-              // 用户只看到空白回答停止加载）
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1) {
-                const m = messages.value[msgIdx] as {
-                  content: string
-                  isStreaming?: boolean
-                  error_code?: string
-                  error_recoverable?: boolean
-                }
-                m.isStreaming = false
-                const errCode = typeof data.code === 'string' ? data.code : 'internal_error'
-                const recoverable = data.recoverable !== false
-                m.error_code = errCode
-                m.error_recoverable = recoverable
-                const errText = typeof data.message === 'string' ? data.message : ''
-                const fallback = recoverable
-                  ? '回答生成失败，请稍后重试'
-                  : '回答生成失败，需要检查模型或网络配置后重试'
-                const body = errText || fallback
-                const hint = recoverable ? '（可重试）' : '（需检查配置）'
-                m.content = m.content
-                  ? m.content + '\n\n---\n\n' + body + hint
-                  : body + hint
-              }
-            } else if (data.type === 'note_saved') {
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1 && data.note) {
-                const noteInfo = data.note as { id: string; title: string; tags: string[] }
-                messages.value[msgIdx].saved_note = noteInfo
-                messages.value[msgIdx].savedNote = noteInfo
-              }
-            } else if (data.type === 'done') {
-              // 流式结束，更新最终状态
-              const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
-              if (msgIdx !== -1) {
-                messages.value[msgIdx].isStreaming = false
-                // 用后端真实 Message.id 替换本地临时 id，否则「存为笔记」会 404
-                const serverMsgId = (data as { message_id?: string }).message_id
-                if (serverMsgId) {
-                  messages.value[msgIdx].id = serverMsgId
-                }
-                const doneNote = (data.saved_note || data.savedNote) as { id: string; title: string; tags: string[] } | undefined
-                if (doneNote) {
-                  messages.value[msgIdx].saved_note = doneNote
-                  messages.value[msgIdx].savedNote = doneNote
-                }
-              }
-              // 新会话首次回答完成后，刷新历史列表让侧栏能看到它
-              if (
-                currentSession.value &&
-                !sessions.value.some(s => s.session_id === currentSession.value)
-              ) {
-                fetchSessions().catch(() => {})
-              }
-            }
+            applyEvent(data)
           }
         }
       }
@@ -455,6 +463,45 @@ export const useChatStore = defineStore('chat', () => {
         }
         return { success: false, cancelled: true }
       }
+
+      // 网络中断时尝试 SSE Resume（Last-Event-ID）
+      if (activeStreamId) {
+        try {
+          const token = localStorage.getItem('token')
+          const headers: Record<string, string> = {}
+          if (token) headers['Authorization'] = `Bearer ${token}`
+          if (lastEventId > 0) headers['Last-Event-ID'] = String(lastEventId)
+          const resumeUrl = `/api/chat/stream/${activeStreamId}/resume?last_event_id=${lastEventId}`
+          const resumeRes = await fetch(resumeUrl, { headers, signal: controller.signal })
+          if (resumeRes.ok && resumeRes.body) {
+            const rReader = resumeRes.body.getReader()
+            const rDecoder = new TextDecoder()
+            let rBuf = ''
+            while (true) {
+              const { done, value } = await rReader.read()
+              if (done) break
+              rBuf += rDecoder.decode(value, { stream: true })
+              const rLines = rBuf.split('\n')
+              rBuf = rLines.pop()!
+              for (const line of rLines) {
+                if (!line.startsWith('data: ')) continue
+                try {
+                  applyEvent(JSON.parse(line.slice(6)) as SseEvent)
+                } catch {
+                  /* skip */
+                }
+              }
+            }
+            const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
+            if (msgIdx !== -1) messages.value[msgIdx].isStreaming = false
+            if (sessionId) currentSession.value = sessionId
+            return { success: true }
+          }
+        } catch (resumeErr) {
+          console.warn('SSE resume failed:', resumeErr)
+        }
+      }
+
       console.error('Error in streaming ask:', error)
       // 移除临时消息
       messages.value = messages.value.filter(m => m.id !== tempMsgId)

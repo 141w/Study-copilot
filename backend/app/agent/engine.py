@@ -23,6 +23,7 @@ from app.agent.tools.definitions import (
 from app.agent.tools.policy import can_run_concurrently
 from app.core.llm import LLM
 from app.core.rag_engine import extract_source_indices
+from app.core.tracing import async_trace_span_ctx, trace_span_ctx
 from app.services.memory_service import memory_service
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,31 @@ def _bind_trusted_tool_args(
     if user_id:
         args["user_id"] = user_id
     return args
+
+
+def _shingle_set(text: str, n: int = 10) -> set[str]:
+    norm = "".join((text or "").split())
+    if len(norm) < n:
+        return {norm} if norm else set()
+    return {norm[i : i + n] for i in range(0, len(norm) - n + 1, max(1, n // 2))}
+
+
+def _observation_novelty(new_obs: str, prior_obs: list[str]) -> float:
+    """1.0 = fully novel, 0.0 = duplicate of prior context. Uses shingle Jaccard."""
+    new_s = _shingle_set(new_obs)
+    if not new_s:
+        return 0.0
+    if not prior_obs:
+        return 1.0
+    prior: set[str] = set()
+    for p in prior_obs:
+        prior |= _shingle_set(p)
+    if not prior:
+        return 1.0
+    inter = len(new_s & prior)
+    union = len(new_s | prior)
+    jaccard = inter / union if union else 0.0
+    return 1.0 - jaccard
 
 
 def _sources_from_tool_result(data: Any) -> list[dict[str, Any]]:
@@ -320,6 +346,8 @@ class AgentEngine:
         last_tool_key = ""
         repeated_tool_calls = 0
         terminate_reason = "iterations_exhausted"
+        prior_observations: list[str] = []
+        low_novelty_nudged = False
 
         # Main ReAct iteration loop
         for iteration in range(1, self.max_iterations + 1):
@@ -334,11 +362,16 @@ class AgentEngine:
 
             # ── Think: Call LLM with tool schemas ──
             try:
-                llm_res = await llm.chat_with_tools(
-                    messages=messages,
-                    tools=schemas,
-                    temperature=0.4,
-                )
+                async with async_trace_span_ctx(
+                    "agent.llm.chat_with_tools",
+                    metadata={"iteration": iteration},
+                    input_data={"query": query[:200]},
+                ):
+                    llm_res = await llm.chat_with_tools(
+                        messages=messages,
+                        tools=schemas,
+                        temperature=0.4,
+                    )
             except Exception as e:
                 logger.error("[AgentEngine] LLM invocation error: %s", e)
                 err_text = str(e)
@@ -493,10 +526,35 @@ class AgentEngine:
                 if not tool_impl:
                     tool_res = ToolResult(success=False, output=f"未知工具: {fn_name}", error="unknown_tool")
                 else:
-                    tool_res = await tool_impl.execute(**args)
+                    with trace_span_ctx(
+                        f"agent.tool.{fn_name}",
+                        metadata={"tool": fn_name},
+                        input_data={k: v for k, v in args.items() if k not in ("user_id",)},
+                    ):
+                        tool_res = await tool_impl.execute(**args)
 
                 observation = tool_res.output
                 token_usage += estimate_tokens([{"role": "tool", "content": observation or ""}])
+                # Marginal information gain: soft-converge when observations stop being novel
+                novelty = _observation_novelty(observation or "", prior_observations)
+                prior_observations.append(observation or "")
+                if novelty < 0.15 and not low_novelty_nudged and len(prior_observations) >= 2:
+                    low_novelty_nudged = True
+                    yield {
+                        "type": "thinking",
+                        "step": "agent_low_novelty",
+                        "detail": (
+                            f"最新工具结果与已有上下文高度重叠（新颖度 {novelty:.2f}），"
+                            "已提示模型可考虑收敛给出结论。"
+                        ),
+                    }
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "最近的检索结果与已有上下文重叠度很高，边际信息有限。"
+                            "若证据已足够，请停止继续调用工具并直接给出最终回答。"
+                        ),
+                    })
                 if token_usage >= self.max_token_budget:
                     # Still record this observation so synthesis can use it
                     messages.append({

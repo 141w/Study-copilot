@@ -60,6 +60,7 @@ class LLM:
         api_key: str | None = None,
         base_url: str | None = None,
         model: str | None = None,
+        reasoning_fields: list[str] | None = None,
     ) -> None:
         # 创建不使用代理的 httpx 客户端（避免 VPN 劫持）
         http_client = httpx.AsyncClient(
@@ -77,6 +78,14 @@ class LLM:
             http_client=cast(Any, http_client),
         )
         self.model = model or settings.openai_model
+        if reasoning_fields:
+            self.reasoning_fields = list(reasoning_fields)
+        else:
+            self.reasoning_fields = [
+                f.strip()
+                for f in (settings.reasoning_content_fields or "reasoning_content").split(",")
+                if f.strip()
+            ] or ["reasoning_content"]
 
     async def generate(
         self,
@@ -185,12 +194,17 @@ class LLM:
                     if not delta:
                         continue
 
-                    # 1. 尝试提取 API 标准 reasoning_content (DeepSeek-R1 / SiliconFlow / StepFun 等)
-                    reasoning = getattr(delta, "reasoning_content", None)
-                    if not reasoning:
+                    # 1. Configurable reasoning fields (provider-specific delta attributes)
+                    reasoning = None
+                    for field_name in self.reasoning_fields:
+                        val = getattr(delta, field_name, None)
+                        if val:
+                            reasoning = val
+                            break
                         model_extra = getattr(delta, "model_extra", None)
-                        if isinstance(model_extra, dict):
-                            reasoning = model_extra.get("reasoning_content")
+                        if isinstance(model_extra, dict) and model_extra.get(field_name):
+                            reasoning = model_extra.get(field_name)
+                            break
 
                     if reasoning:
                         has_yielded = True
@@ -336,10 +350,18 @@ class LLM:
     def from_config(cls, cfg: dict | None = None) -> "LLM":
         """从配置 dict 创建 LLM 实例（统一入口）。"""
         c = cfg or {}
+        rf = c.get("reasoning_fields")
+        if isinstance(rf, str):
+            rf = [x.strip() for x in rf.split(",") if x.strip()]
+        elif isinstance(rf, list):
+            rf = [str(x) for x in rf]
+        else:
+            rf = None
         return cls(
             api_key=c.get("api_key"),
             base_url=c.get("base_url"),
             model=c.get("model_name") or c.get("model"),
+            reasoning_fields=rf,
         )
 
     def format_messages(

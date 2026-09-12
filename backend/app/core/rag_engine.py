@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 from app.agent.context import trim_history
 from app.config import settings
+from app.core import metrics_counters
 from app.core.adaptive_retriever import adaptive_retriever
 from app.core.answer_reflector import answer_reflector
 from app.core.embedder import embedder
@@ -141,12 +142,14 @@ class RAGEngine:
                 "detail": f"检索到 {len(retrieved)} 条结果，质量：{quality.quality}（{quality.reason}，得分 {quality.score:.2f}）",
             }
         )
-
+        metrics_counters.incr("rag.retrieval_check")
         if quality.is_good:
+            metrics_counters.incr("rag.retrieval_good")
             return retrieved, thinking_events
 
         # 检索质量差 → 改写查询重试一次
         logger.info("Retrieval quality poor (%s), rewriting query...", quality.reason)
+        metrics_counters.incr("rag.retrieval_retry")
         thinking_events.append(
             {
                 "type": "thinking",

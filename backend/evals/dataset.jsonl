@@ -1,0 +1,5 @@
+{"id": "q1", "question": "什么是梯度下降？", "expected_sources": ["ml_intro.pdf"], "must_contain": ["梯度"], "gold_answer": "梯度下降是通过沿负梯度方向迭代更新参数以最小化损失函数的优化算法。"}
+{"id": "q2", "question": "Transformer 的核心机制是什么？", "expected_sources": ["dl_book.pdf"], "must_contain": ["注意力", "self-attention", "自注意力"], "gold_answer": "Transformer 依赖自注意力机制建模序列依赖。"}
+{"id": "q3", "question": "过拟合有哪些常见缓解手段？", "expected_sources": ["ml_intro.pdf"], "must_contain": ["正则", "dropout", "早停", "数据增强"], "gold_answer": "常见手段包括 L2 正则化、Dropout、早停与数据增强。"}
+{"id": "q4", "question": "课程空间如何组织文档？", "expected_sources": ["product_guide.md"], "must_contain": ["课程", "文档"], "gold_answer": "课程空间按课程关联多份文档与笔记。"}
+{"id": "q5", "question": "RAG 流程包含哪些阶段？", "expected_sources": ["rag_notes.md"], "must_contain": ["检索", "生成", "路由"], "gold_answer": "典型 RAG 包含路由、检索、质检纠错、生成与反思。"}

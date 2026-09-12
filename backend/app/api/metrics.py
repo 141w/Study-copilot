@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import metrics_counters
 from app.db import AsyncTask, get_db
 
 router = APIRouter()
@@ -52,4 +53,5 @@ async def get_metrics(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
             "failed": counts.get("failed", 0),
             "cancelled": counts.get("cancelled", 0),
         },
+        "rag": metrics_counters.snapshot(),
     }
