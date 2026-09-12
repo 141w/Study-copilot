@@ -52,3 +52,13 @@ async def get_progress(
     current_user: User = Depends(get_current_user),
 ):
     return await analysis_service.get_progress(db, current_user)
+
+
+@router.get("/activity")
+async def get_learning_activity(
+    days: int = 365,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """每日学习活动热力图数据（消息/测验/笔记）."""
+    return await analysis_service.get_learning_activity(db, current_user, days=days)

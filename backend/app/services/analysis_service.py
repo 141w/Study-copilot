@@ -142,3 +142,102 @@ async def get_progress(
 
     total_exercises = sum(r.total for r in rows)
     return {"total_exercises": total_exercises, "progress_data": progress_data[-7:]}
+
+
+async def get_learning_activity(
+    db: AsyncSession,
+    user: User,
+    days: int = 365,
+) -> dict:
+    """Daily learning activity for contribution-style heatmap.
+
+    统计：聊天消息（经会话归属用户）、测验提交、笔记创建。
+    返回按日 count + level（0-4），供前端 GitHub 风格热力图渲染。
+    """
+    from datetime import date, timedelta
+
+    from app.db import ChatSession, Message, Note
+
+    days = max(30, min(int(days or 365), 730))
+    today = date.today()
+    start = today - timedelta(days=days - 1)
+
+    # 聊天：Message 经 ChatSession 归属
+    msg_stmt = (
+        select(
+            func.date(Message.created_at).label("d"),
+            func.count(Message.id).label("c"),
+        )
+        .join(ChatSession, Message.session_id == ChatSession.id)
+        .where(
+            ChatSession.user_id == user.id,
+            Message.created_at >= start,
+        )
+        .group_by(func.date(Message.created_at))
+    )
+    quiz_stmt = (
+        select(
+            func.date(QuizResult.submitted_at).label("d"),
+            func.count(QuizResult.id).label("c"),
+        )
+        .where(
+            QuizResult.user_id == user.id,
+            QuizResult.submitted_at >= start,
+        )
+        .group_by(func.date(QuizResult.submitted_at))
+    )
+    note_stmt = (
+        select(
+            func.date(Note.created_at).label("d"),
+            func.count(Note.id).label("c"),
+        )
+        .where(
+            Note.user_id == user.id,
+            Note.created_at >= start,
+        )
+        .group_by(func.date(Note.created_at))
+    )
+
+    daily: dict[str, int] = {}
+    for stmt in (msg_stmt, quiz_stmt, note_stmt):
+        for row in (await db.execute(stmt)).all():
+            key = str(row.d)
+            daily[key] = daily.get(key, 0) + int(row.c or 0)
+
+    counts = list(daily.values()) or [0]
+    # 分位数阈值：空/全 0 时 level=0
+    ordered = sorted(counts)
+    def _pct(p: float) -> int:
+        if not ordered:
+            return 0
+        idx = min(len(ordered) - 1, max(0, int(round(p * (len(ordered) - 1)))))
+        return ordered[idx]
+
+    t1, t2, t3 = _pct(0.25), _pct(0.5), _pct(0.75)
+
+    def _level(n: int) -> int:
+        if n <= 0:
+            return 0
+        if t1 and n <= t1:
+            return 1
+        if t2 and n <= t2:
+            return 2
+        if t3 and n <= t3:
+            return 3
+        return 4
+
+    contributions = []
+    for i in range(days):
+        d = start + timedelta(days=i)
+        key = d.isoformat()
+        count = daily.get(key, 0)
+        contributions.append({"date": key, "count": count, "level": _level(count)})
+
+    total = sum(daily.values())
+    active_days = sum(1 for v in daily.values() if v > 0)
+    return {
+        "days": days,
+        "total": total,
+        "active_days": active_days,
+        "contributions": contributions,
+    }

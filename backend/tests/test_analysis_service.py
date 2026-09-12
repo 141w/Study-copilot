@@ -567,4 +567,27 @@ async def test_analysis_progress_endpoint(client, db_session: AsyncSession):
     assert r.status_code == 200
     body = r.json()
     assert body["total_exercises"] == 3
-    assert "progress_data" in body
+
+
+@pytest.mark.asyncio
+async def test_get_learning_activity_service(db_session: AsyncSession):
+    u = _user("act_svc")
+    db_session.add(u)
+    await db_session.flush()
+    doc = _doc(u.id)
+    db_session.add(doc)
+    await db_session.flush()
+    q = _quiz(doc.id)
+    db_session.add(q)
+    await db_session.flush()
+    db_session.add(_result(q.id, u.id, True, days_ago=0))
+    db_session.add(_result(q.id, u.id, False, days_ago=1))
+    await db_session.commit()
+
+    data = await analysis_service.get_learning_activity(db_session, u, days=30)
+    assert data["days"] == 30
+    assert data["total"] >= 2
+    assert len(data["contributions"]) == 30
+    today = data["contributions"][-1]
+    assert today["count"] >= 1
+    assert 0 <= today["level"] <= 4

@@ -24,7 +24,7 @@
               class="w-16 h-16 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-default)]
                      flex items-center justify-center shadow-md transition-transform group-hover:scale-105"
             >
-              <CopilotBotAvatar :size="52" mood="idle" :gaze="userPrefs.botGaze" />
+              <CopilotBotAvatar ref="profileBot" :size="52" mood="idle" :gaze="userPrefs.botGaze" />
             </div>
             <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-center text-[10px] text-[var(--text-muted)] shadow-sm group-hover:text-[var(--text-primary)]">
               <el-icon><Edit /></el-icon>
@@ -143,6 +143,11 @@
           </div>
         </div>
       </router-link>
+    </div>
+
+    <!-- ── 每日学习活动热力图（GitHub 贡献图风格） ── -->
+    <div class="mb-8">
+      <LearningActivityGraph :days="365" :cell-size="11" />
     </div>
 
     <!-- ── 标签分类设置卡片 ── -->
@@ -514,7 +519,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useDocumentStore } from '../stores/document'
@@ -529,6 +534,7 @@ import { useReducedMotion } from '../composables/useReducedMotion'
 import { formatSize } from '../composables/useFormat'
 import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
 import MemoryManager from '@/components/profile/MemoryManager.vue'
+import LearningActivityGraph from '@/components/profile/LearningActivityGraph.vue'
 import { useUserPrefs } from '@/composables/useUserPrefs'
 import {
   Document, Reading, EditPen, ChatDotSquare, TrendCharts,
@@ -550,6 +556,12 @@ const { prefersReduced } = useReducedMotion()
 const { prefs: userPrefs, savePreferences, setCustomAvatar, removeCustomAvatar } = useUserPrefs()
 
 const activeTab = ref('profile')
+const profileBot = ref<InstanceType<typeof CopilotBotAvatar> | null>(null)
+
+// 切到「界面与伴侣」时用 swirl 呼应设置转场语义（reduced-motion 由组件内部降级）
+watch(activeTab, (tab) => {
+  if (tab === 'appearance') profileBot.value?.play('swirl')
+})
 
 const llmModelName = computed(() => chatStore.config.modelName || '默认推理模型')
 const embeddingModelName = ref('shibing624/text2vec-base-chinese (768维)')
