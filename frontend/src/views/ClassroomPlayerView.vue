@@ -1,10 +1,10 @@
 <template>
   <div
     ref="playerContainer"
-    class="h-screen max-h-screen overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col relative font-sans"
+    class="h-screen max-h-screen overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col select-none relative font-sans"
   >
     <!-- 顶栏导航与快捷控制条 (Clean Studio Header) -->
-    <header class="h-14 px-3 sm:px-6 bg-[var(--surface-card)]/90 backdrop-blur-md border-b border-[var(--border-default)] flex items-center justify-between z-20 flex-shrink-0 shadow-sm">
+    <header class="h-14 px-3 sm:px-6 bg-[var(--surface-card)]/90 backdrop-blur-md border-b border-[var(--border-default)] flex items-center justify-between z-20 flex-shrink-0 shadow-xs">
       <!-- 左侧：返回课程、微课标识、标题与幕进度 -->
       <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <el-button
@@ -35,8 +35,42 @@
         </div>
       </div>
 
-      <!-- 右侧控制组：核心快捷 + 次级设置收纳 -->
+      <!-- 右侧控制组：倍速、语音、连播、台词记录、目录与全屏 -->
       <div class="flex items-center gap-1.5 sm:gap-2">
+        <!-- 倍速切换 -->
+        <el-button
+          size="small"
+          @click="cyclePlaybackRate"
+          title="点击切换播放倍速"
+        >
+          <span class="text-xs font-mono font-medium">{{ playbackRate }}x</span>
+        </el-button>
+
+        <!-- 语音朗读开关 -->
+        <el-button
+          size="small"
+          :type="audioEnabled ? 'primary' : 'default'"
+          plain
+          @click="toggleAudio"
+          :title="audioEnabled ? '语音朗读已开启' : '语音朗读已静音'"
+        >
+          <el-icon><Reading /></el-icon>
+          <span class="text-xs ml-1 hidden md:inline">{{ audioEnabled ? '语音开启' : '已静音' }}</span>
+        </el-button>
+
+        <!-- 自动连播开关 -->
+        <el-button
+          size="small"
+          :type="autoAdvance ? 'primary' : 'default'"
+          plain
+          @click="autoAdvance = !autoAdvance"
+          :title="autoAdvance ? '自动切幕已开启' : '手动切幕'"
+          class="hidden sm:inline-flex"
+        >
+          <el-icon><Promotion /></el-icon>
+          <span class="text-xs ml-1 hidden lg:inline">{{ autoAdvance ? '自动连播' : '单幕暂停' }}</span>
+        </el-button>
+
         <!-- 研讨台词记录抽屉 -->
         <el-button
           circle
@@ -58,26 +92,6 @@
           <el-icon><List /></el-icon>
         </el-button>
 
-        <!-- 次级设置：倍速 / 语音 / 连播 -->
-        <el-dropdown trigger="click" @command="handleQuickCommand">
-          <el-button circle size="small" title="播放设置">
-            <el-icon><Setting /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="rate">
-                倍速 · {{ playbackRate }}x
-              </el-dropdown-item>
-              <el-dropdown-item command="audio">
-                语音朗读 · {{ audioEnabled ? '已开启' : '已静音' }}
-              </el-dropdown-item>
-              <el-dropdown-item command="auto">
-                自动连播 · {{ autoAdvance ? '已开启' : '单幕暂停' }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
         <!-- 全屏按钮 -->
         <el-button
           circle
@@ -85,7 +99,7 @@
           @click="toggleFullscreen"
           title="全屏切换"
         >
-          <el-icon><View /></el-icon>
+          <el-icon><Fold /></el-icon>
         </el-button>
       </div>
     </header>
@@ -114,24 +128,28 @@
     <!-- 主演播视口 (Visual Stage + Studio Deck) -->
     <div v-else class="flex-1 flex overflow-hidden relative min-h-0">
       <main class="flex-1 flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-y-auto lg:overflow-hidden relative min-h-0 min-w-0 transition-all duration-300">
-        <!-- 16:9 画布：flex 槽位约束，去掉 100vh 魔法数 -->
-        <div class="stage-slot w-full max-w-5xl flex-1 min-h-0 min-w-0 relative flex items-center justify-center">
+        <!-- 16:9 画布纯净演播区 (Visual Stage - 100% 内容无遮挡与自适应缩放) -->
+        <div class="w-full max-w-5xl flex-1 flex flex-col justify-center items-center min-h-0 min-w-0 relative">
           <div
-            class="stage-frame relative w-full max-h-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
-            :class="hasCustomCanvasTheme ? '' : 'stage-default-theme'"
-            :style="stageFrameStyle"
+            class="relative w-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
+            :style="{
+              maxHeight: 'min(560px, calc(100vh - 240px))',
+              maxWidth: 'min(100%, calc((100vh - 240px) * 16 / 9))',
+              backgroundColor: canvasTheme.backgroundColor || 'var(--surface-card)',
+              color: canvasTheme.fontColor || 'var(--text-primary)'
+            }"
           >
-            <!-- 幕顶微型信息栏（深色玻璃底，保证任意画布主题下可读） -->
+            <!-- 幕顶微型信息栏 -->
             <div class="absolute top-3 left-4 right-4 flex items-center justify-between pointer-events-none z-10">
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-black/55 text-white/95 border border-white/10 shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-xs">
                   {{ currentScene?.type === 'quiz' ? '随堂交互测验' : `第 ${currentSceneIndex + 1} 幕 · 讲解` }}
                 </span>
-                <span class="text-xs text-white/90 font-medium truncate max-w-xs sm:max-w-md">
+                <span class="text-xs text-white/90 font-medium truncate max-w-xs sm:max-w-md drop-shadow-xs">
                   {{ currentScene?.title }}
                 </span>
               </div>
-              <div class="text-[11px] text-white/75 font-mono bg-black/45 px-2 py-0.5 rounded-md border border-white/10 shrink-0 ml-2">
+              <div class="text-[11px] text-white/70 font-mono bg-black/40 backdrop-blur-xs px-2 py-0.5 rounded-md border border-white/10">
                 Scene {{ currentSceneIndex + 1 }} / {{ totalScenes }}
               </div>
             </div>
@@ -147,13 +165,23 @@
                 class="absolute transition-all duration-300 flex flex-col justify-center"
                 :style="getElementStyle(el)"
               >
-                <!-- 文本元素 -->
+                <!-- 文本元素：OpenMAIC 常输出 HTML（<p>/<strong>），简化 DSL 为纯文本 -->
                 <template v-if="el.type === 'text'">
                   <div
-                    class="font-semibold leading-tight tracking-wide"
+                    v-if="isRichHtml(el.content)"
+                    class="font-semibold leading-tight tracking-wide drop-shadow-xs slide-html"
                     :style="{
                       fontSize: `clamp(13px, ${(el.fontSize || 20) / 10}vw, ${el.fontSize || 24}px)`,
-                      color: getTextColorStyle(el)
+                      color: el.defaultColor || 'inherit'
+                    }"
+                    v-html="el.content"
+                  />
+                  <div
+                    v-else
+                    class="font-semibold leading-tight tracking-wide drop-shadow-xs whitespace-pre-wrap"
+                    :style="{
+                      fontSize: `clamp(13px, ${(el.fontSize || 20) / 10}vw, ${el.fontSize || 24}px)`,
+                      color: el.defaultColor || 'inherit'
                     }"
                   >
                     {{ el.content }}
@@ -162,7 +190,7 @@
 
                 <!-- 图片元素（概念插图） -->
                 <template v-else-if="el.type === 'image'">
-                  <div class="w-full h-full rounded-xl overflow-hidden shadow-sm border border-[var(--border-default)] relative group bg-black/10">
+                  <div class="w-full h-full rounded-xl overflow-hidden shadow-xs border border-[var(--border-default)] relative group bg-black/10">
                     <img
                       :src="el.src"
                       alt="Illustration"
@@ -174,17 +202,20 @@
                 <!-- 图形/卡片容器元素 -->
                 <template v-else-if="el.type === 'shape'">
                   <div
-                    class="w-full h-full rounded-xl p-4 sm:p-5 shadow-sm border transition-all duration-300 flex flex-col overflow-hidden"
+                    class="w-full h-full rounded-xl p-4 sm:p-5 shadow-xs border transition-all duration-300 flex flex-col overflow-hidden backdrop-blur-sm"
                     :class="[
                       isElementHighlighted(el.id)
-                        ? 'ring-2 ring-[var(--color-primary)] scale-[1.01] shadow-md'
-                        : ''
+                        ? 'ring-2 ring-[var(--color-primary)] border-[var(--color-primary)] bg-[var(--color-primary-light)]/20 scale-[1.01] shadow-md'
+                        : 'border-[var(--border-default)]'
                     ]"
-                    :style="getShapeStyle(el)"
+                    :style="{
+                      backgroundColor: el.fill || 'var(--bg-secondary)',
+                      borderColor: el.outline?.color || 'var(--border-default)'
+                    }"
                   >
                     <div
                       class="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed overflow-y-auto"
-                      :style="{ color: getShapeTextColor(el) }"
+                      :style="{ color: el.fill?.startsWith('#F') || el.fill?.startsWith('#E') || el.fill?.startsWith('#fff') ? '#1E293B' : 'inherit' }"
                     >
                       {{ el.text }}
                     </div>
@@ -207,27 +238,25 @@
                 </h2>
               </div>
 
-              <!-- 选项列表：与站内一致的纯按钮风格 -->
+              <!-- 选项列表 -->
               <div class="space-y-2.5 my-1">
-                <el-button
+                <button
                   v-for="(opt, oIdx) in currentQuizOptions"
                   :key="oIdx"
                   @click="selectQuizOption(opt)"
                   :disabled="quizSubmitted"
-                  class="quiz-option-btn w-full !h-auto !px-3 !py-2.5 !justify-start !font-normal"
+                  class="w-full text-left p-3 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 flex items-center justify-between cursor-pointer"
                   :class="getQuizOptionClass(opt)"
                 >
-                  <span class="flex items-center justify-between w-full gap-2.5">
-                    <span class="flex items-center gap-2.5 min-w-0">
-                      <span class="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0" :class="getQuizOptionBadgeClass(opt)">
-                        {{ getOptionLetter(Number(oIdx)) }}
-                      </span>
-                      <span class="text-left leading-normal text-xs sm:text-sm font-medium">{{ opt }}</span>
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs" :class="getQuizOptionBadgeClass(opt)">
+                      {{ getOptionLetter(Number(oIdx)) }}
                     </span>
-                    <el-icon v-if="quizSubmitted && isOptionCorrect(opt)" class="text-[var(--color-success)] text-base shrink-0"><CircleCheckFilled /></el-icon>
-                    <el-icon v-else-if="quizSubmitted && selectedOption === opt && !isOptionCorrect(opt)" class="text-[var(--color-error)] text-base shrink-0"><CircleCloseFilled /></el-icon>
-                  </span>
-                </el-button>
+                    <span class="leading-normal">{{ opt }}</span>
+                  </div>
+                  <el-icon v-if="quizSubmitted && isOptionCorrect(opt)" class="text-[var(--color-success)] text-base"><CircleCheckFilled /></el-icon>
+                  <el-icon v-else-if="quizSubmitted && selectedOption === opt && !isOptionCorrect(opt)" class="text-[var(--color-error)] text-base"><CircleCloseFilled /></el-icon>
+                </button>
               </div>
 
               <!-- 测验解析与反馈 -->
@@ -236,7 +265,7 @@
                   <span class="text-xs font-bold" :class="isCurrentAnswerCorrect ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'">
                     {{ isCurrentAnswerCorrect ? '✓ 回答正确！' : '✗ 回答有误' }}
                   </span>
-                  <span class="text-xs text-[var(--text-secondary)]">正确答案是：{{ currentQuiz?.answer }}</span>
+                  <span class="text-xs text-[var(--text-secondary)]">正确答案是：{{ currentQuiz?.correctValues?.[0] || '—' }}</span>
                 </div>
                 <p v-if="currentQuiz?.explanation" class="text-xs text-[var(--text-muted)] leading-relaxed">
                   💡 {{ currentQuiz.explanation }}
@@ -259,11 +288,11 @@
         <!-- 课堂互动台词与控制总台 (Studio Deck - 位于画布下方，完全解耦不遮挡) -->
         <div class="w-full max-w-5xl flex flex-col gap-2.5 mt-2 flex-shrink-0">
           <!-- 上层：当前发言角色与剧本台词卡 -->
-          <div class="w-full rounded-2xl bg-[var(--surface-card)] border border-[var(--border-default)] px-4 py-2.5 sm:py-3 shadow-sm flex items-center gap-3.5 transition-colors">
+          <div class="w-full rounded-2xl bg-[var(--surface-card)] border border-[var(--border-default)] px-4 py-2.5 sm:py-3 shadow-xs flex items-center gap-3.5 transition-colors">
             <!-- 角色头像与徽章 -->
             <div class="flex items-center gap-2.5 flex-shrink-0">
               <div
-                class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 relative"
+                class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 relative shadow-2xs"
                 :style="{
                   backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'var(--color-primary-light)',
                   color: currentAgentConfig?.color || 'var(--color-primary)',
@@ -288,7 +317,7 @@
                     {{ currentAgentConfig?.name || '导师' }}
                   </span>
                   <span
-                    class="text-[10px] px-1.5 py-px rounded-full font-medium"
+                    class="text-[10px] px-1.5 py-0.2 rounded-full font-medium"
                     :style="{
                       backgroundColor: currentAgentConfig?.color ? `${currentAgentConfig.color}15` : 'var(--color-primary-light)',
                       color: currentAgentConfig?.color || 'var(--color-primary)'
@@ -308,66 +337,59 @@
               </div>
             </div>
 
-            <!-- 台词正文（默认两行，点击展开） -->
+            <!-- 台词正文 -->
             <div class="flex-1 min-w-0 px-2">
-              <p
-                class="text-xs sm:text-sm text-[var(--text-primary)] font-normal leading-relaxed cursor-pointer select-none"
-                :class="dialogueExpanded ? '' : 'line-clamp-2'"
-                :title="dialogueExpanded ? '点击收起' : '点击展开全文'"
-                @click="dialogueExpanded = !dialogueExpanded"
-              >
+              <p class="text-xs sm:text-sm text-[var(--text-primary)] font-normal leading-relaxed line-clamp-2">
                 {{ currentAction?.text || '（微课剧本正在就位...）' }}
               </p>
             </div>
 
-            <!-- 步进操作：与站内一致的 circle small 按钮 -->
+            <!-- 步进操作 -->
             <div class="flex items-center gap-1.5 flex-shrink-0">
-              <el-button
-                circle
-                size="small"
+              <button
                 @click="prevActionOrScene"
                 :disabled="currentSceneIndex === 0 && currentActionIndex === 0"
                 title="上一句/上一幕"
+                class="w-8 h-8 rounded-lg bg-[var(--surface-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)] disabled:opacity-30 disabled:hover:bg-[var(--surface-card)] text-[var(--text-primary)] flex items-center justify-center transition-colors text-xs cursor-pointer shadow-2xs"
               >
                 <el-icon><ArrowLeft /></el-icon>
-              </el-button>
-              <el-button
-                circle
-                size="small"
+              </button>
+              <button
                 @click="nextActionOrScene"
                 :disabled="currentSceneIndex === totalScenes - 1 && currentActionIndex === totalActionsInScene - 1"
                 title="下一句/下一幕"
+                class="w-8 h-8 rounded-lg bg-[var(--surface-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-default)] disabled:opacity-30 disabled:hover:bg-[var(--surface-card)] text-[var(--text-primary)] flex items-center justify-center transition-colors text-xs cursor-pointer shadow-2xs"
               >
                 <el-icon><ArrowRight /></el-icon>
-              </el-button>
+              </button>
             </div>
           </div>
 
           <!-- 下层：统一核心播放控制与进度岛 -->
-          <div class="w-full px-4 py-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-between gap-4 shadow-sm">
+          <div class="w-full px-4 py-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-between gap-4 shadow-xs">
             <!-- 上一幕 -->
-            <el-button
-              text
-              size="small"
+            <button
               @click="prevScene"
               :disabled="currentSceneIndex === 0"
               title="上一幕"
+              class="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <el-icon class="mr-1"><ArrowLeft /></el-icon>
+              <el-icon><ArrowLeft /></el-icon>
               <span class="hidden sm:inline">上一幕</span>
-            </el-button>
+            </button>
 
             <!-- 核心播放/暂停控制与幕进度指示器 -->
             <div class="flex items-center gap-3.5">
-              <el-button
-                :type="isPlaying ? 'default' : 'primary'"
-                size="default"
+              <button
                 @click="togglePlay"
-                class="!px-5"
+                class="px-5 py-2 rounded-full font-medium text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+                :class="isPlaying
+                  ? 'bg-[var(--surface-card)] text-[var(--text-primary)] border border-[var(--border-default)] hover:bg-[var(--bg-hover)]'
+                  : 'bg-[var(--color-primary)] text-[var(--text-inverse)] hover:bg-[var(--color-primary-hover)]'"
               >
-                <el-icon class="mr-1.5"><VideoPause v-if="isPlaying" /><VideoPlay v-else /></el-icon>
+                <el-icon class="text-base"><VideoPause v-if="isPlaying" /><VideoPlay v-else /></el-icon>
                 <span>{{ isPlaying ? '暂停' : '播放' }}</span>
-              </el-button>
+              </button>
 
               <!-- 幕切换胶囊指示器 -->
               <div class="hidden sm:flex items-center gap-1.5 pl-3 border-l border-[var(--border-default)]">
@@ -387,16 +409,15 @@
             </div>
 
             <!-- 下一幕 -->
-            <el-button
-              text
-              size="small"
+            <button
               @click="nextScene"
               :disabled="currentSceneIndex === totalScenes - 1"
               title="下一幕"
+              class="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <span class="hidden sm:inline">下一幕</span>
-              <el-icon class="ml-1"><ArrowRight /></el-icon>
-            </el-button>
+              <el-icon><ArrowRight /></el-icon>
+            </button>
           </div>
         </div>
       </main>
@@ -404,7 +425,7 @@
       <!-- 移动端/平板遮罩 (点击收起侧边栏) -->
       <div
         v-if="showSidebar"
-        class="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity"
+        class="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-xs z-30 transition-opacity"
         @click="showSidebar = false"
       ></div>
 
@@ -433,7 +454,7 @@
             class="p-3 rounded-xl border transition-all cursor-pointer group"
             :class="[
               Number(sIdx) === currentSceneIndex
-                ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm font-medium'
+                ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs font-medium'
                 : 'border-[var(--border-default)] hover:border-[var(--border-hover)] bg-[var(--surface-card)] hover:bg-[var(--bg-secondary)]/70 text-[var(--text-primary)]'
             ]"
           >
@@ -522,6 +543,9 @@ import {
   ArrowRight,
   VideoPlay,
   VideoPause,
+  Reading,
+  Promotion,
+  Fold,
   List,
   Close,
   Loading,
@@ -532,8 +556,6 @@ import {
   Brain,
   User,
   ChatLineRound,
-  Setting,
-  View,
 } from '../components/icons'
 
 const route = useRoute()
@@ -553,9 +575,7 @@ const currentActionIndex = ref(0)
 const isPlaying = ref(false)
 const audioEnabled = ref(true)
 const autoAdvance = ref(true)
-const dialogueExpanded = ref(false)
-// 桌面端默认打开章节目录，移动端保持抽屉关闭
-const showSidebar = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false)
+const showSidebar = ref(false)
 const showHistoryDrawer = ref(false)
 
 // 播放倍速
@@ -569,12 +589,6 @@ function cyclePlaybackRate() {
   if (currentAudio) {
     currentAudio.playbackRate = playbackRate.value
   }
-}
-
-function handleQuickCommand(command: string | number | object): void {
-  if (command === 'rate') cyclePlaybackRate()
-  else if (command === 'audio') toggleAudio()
-  else if (command === 'auto') autoAdvance.value = !autoAdvance.value
 }
 
 // 测验场景专用状态
@@ -606,88 +620,6 @@ function formatSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 const canvasTheme = computed(() => currentScene.value?.content?.canvas?.theme || {})
-
-/** 课件是否自带画布主题色；否则整幕跟随应用亮暗主题 */
-const hasCustomCanvasTheme = computed(() => {
-  const t = canvasTheme.value
-  return Boolean(t?.backgroundColor || t?.fontColor)
-})
-
-const stageFrameStyle = computed(() => {
-  if (hasCustomCanvasTheme.value) {
-    return {
-      backgroundColor: canvasTheme.value.backgroundColor || 'var(--surface-card)',
-      color: canvasTheme.value.fontColor || 'var(--text-primary)',
-    }
-  }
-  // 默认：完全走设计令牌，暗色/亮色自动切换
-  return {
-    backgroundColor: 'var(--surface-card)',
-    color: 'var(--text-primary)',
-  }
-})
-
-/** 近似相对亮度（#rgb / #rrggbb） */
-function hexLuminance(color: string): number | null {
-  const hex = color.trim().replace('#', '')
-  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(hex)) return null
-  const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex
-  const r = parseInt(full.slice(0, 2), 16) / 255
-  const g = parseInt(full.slice(2, 4), 16) / 255
-  const b = parseInt(full.slice(4, 6), 16) / 255
-  // sRGB 近似
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-function getTextColorStyle(el: any): string {
-  // 无课件画布主题时忽略硬编码 defaultColor（生成器多为亮色深字 #1E293B，
-  // 暗色下会变成深字贴深底），交给画布/主题令牌
-  if (!hasCustomCanvasTheme.value) return 'inherit'
-  return el.defaultColor || 'inherit'
-}
-
-function getShapeStyle(el: any): Record<string, string> {
-  const fill = typeof el.fill === 'string' ? el.fill : ''
-  const outline = el.outline?.color
-  // 课件自带画布主题：保留作者配色（浅卡贴在深画布上是刻意设计）
-  // 无自定义主题：浅色 hex 填充改走主题令牌，避免暗色下整卡发白
-  let background: string
-  if (!fill) {
-    background = 'var(--bg-tertiary)'
-  } else if (!hasCustomCanvasTheme.value && hexLuminance(fill) !== null && hexLuminance(fill)! > 0.55) {
-    background = 'var(--bg-tertiary)'
-  } else {
-    background = fill
-  }
-  const border = outline && !( !hasCustomCanvasTheme.value && hexLuminance(outline) !== null && hexLuminance(outline)! > 0.7)
-    ? outline
-    : 'var(--border-default)'
-  return {
-    backgroundColor: background,
-    borderColor: border,
-  }
-}
-
-function getShapeTextColor(el: any): string {
-  if (el.defaultColor) return el.defaultColor
-  const fill = typeof el.fill === 'string' ? el.fill : ''
-  // 无自定义主题且浅填充已映射为令牌底：字色跟随画布/主题
-  if (!hasCustomCanvasTheme.value) {
-    const lum = fill ? hexLuminance(fill) : null
-    if (lum === null || lum > 0.55) {
-      return 'inherit'
-    }
-  }
-  // 课件自定义配色：按卡片底色亮度定字色
-  const lum = fill ? hexLuminance(fill) : null
-  if (lum !== null && lum > 0.55) {
-    return '#111827'
-  }
-  if (lum !== null && lum < 0.2) {
-    return '#F8FAFC'
-  }
-  return 'inherit'
-}
 const canvasElements = computed(() => currentScene.value?.content?.canvas?.elements || [])
 const currentActions = computed(() => currentScene.value?.actions || [])
 const totalActionsInScene = computed(() => currentActions.value.length)
@@ -708,20 +640,96 @@ function getAgentConfig(agentId: string) {
   return agentConfigs.value.find((a: any) => a.id === agentId)
 }
 
-// 测验场景相关
+// 测验场景相关 — 兼容两种 DSL：
+// A) OpenMAIC: content.questions[] {question, options:[{label,value}], answer:[..], analysis}
+// B) 站内简化: scene.quiz / content.quiz {question, options:string[], answer, explanation}
+interface NormalizedQuiz {
+  question: string
+  options: string[]
+  correctValues: string[]
+  explanation: string
+}
+
+function normalizeOptionLabel(opt: any): { text: string; value: string } {
+  if (typeof opt === 'string') {
+    // "A. xxx" 或纯文案
+    const m = opt.match(/^([A-Da-d])[.、)\s]\s*(.*)$/)
+    return { text: m ? m[2] || opt : opt, value: m ? m[1].toUpperCase() : opt }
+  }
+  const label = String(opt?.label ?? opt?.text ?? '')
+  const value = String(opt?.value ?? label)
+  // label 可能自带 "A. " 前缀
+  const m = label.match(/^([A-Da-d])[.、)\s]\s*(.*)$/)
+  return { text: m ? m[2] || label : label, value: (opt?.value || (m ? m[1].toUpperCase() : value)) }
+}
+
+function normalizeQuiz(raw: any): NormalizedQuiz | null {
+  if (!raw) return null
+  // questions 数组：取第一题（播放器按幕一题）
+  const q = raw.question
+    ? raw
+    : Array.isArray(raw.questions) && raw.questions.length
+      ? raw.questions[0]
+      : null
+  if (!q) return null
+
+  const rawOpts = (q.options || []) as any[]
+  const opts = rawOpts.map((o: any) => normalizeOptionLabel(o))
+  const answerRaw = q.answer
+  let answerVals: string[] = []
+  if (Array.isArray(answerRaw)) {
+    answerVals = answerRaw.map((a: any) => String(a))
+  } else if (answerRaw != null && answerRaw !== '') {
+    answerVals = [String(answerRaw)]
+  }
+  // 同时接受 "A" 与选项全文两种答案写法
+  const correctValues = new Set<string>()
+  for (const a of answerVals) {
+    correctValues.add(a)
+    const hit = opts.find((o: { text: string; value: string }) => o.value === a || o.text === a)
+    if (hit) {
+      correctValues.add(hit.value)
+      correctValues.add(hit.text)
+    }
+  }
+  return {
+    question: String(q.question || q.prompt || ''),
+    options: opts.map((o: { text: string }) => o.text),
+    correctValues: [...correctValues],
+    explanation: String(q.analysis || q.explanation || q.feedback || ''),
+  }
+}
+
 const currentQuiz = computed(() => {
   if (currentScene.value?.type !== 'quiz') return null
-  return currentScene.value?.quiz || currentScene.value?.content?.quiz || null
+  const raw =
+    currentScene.value?.content?.questions ||
+    currentScene.value?.content?.quiz ||
+    currentScene.value?.quiz ||
+    currentScene.value?.content ||
+    null
+  return normalizeQuiz(raw)
 })
 
 const currentQuizOptions = computed(() => {
-  return currentQuiz.value?.options || ['选项 A', '选项 B', '选项 C', '选项 D']
+  return currentQuiz.value?.options?.length
+    ? currentQuiz.value.options
+    : ['选项 A', '选项 B', '选项 C', '选项 D']
 })
+
+function isAnswerMatch(optText: string): boolean {
+  if (!currentQuiz.value) return false
+  const t = optText.trim()
+  return currentQuiz.value.correctValues.some(a => {
+    const ans = String(a).trim()
+    if (!ans) return false
+    return t === ans || t.startsWith(ans) || ans === t.slice(0, 1)
+  })
+}
 
 const isCurrentAnswerCorrect = computed(() => {
   if (!currentQuiz.value || !selectedOption.value) return false
-  const ans = (currentQuiz.value.answer || '').trim()
-  return selectedOption.value.trim() === ans || selectedOption.value.startsWith(ans)
+  return isAnswerMatch(selectedOption.value)
 })
 
 function getOptionLetter(idx: number | string): string {
@@ -735,21 +743,20 @@ function selectQuizOption(opt: string) {
 }
 
 function isOptionCorrect(opt: string): boolean {
-  const ans = (currentQuiz.value?.answer || '').trim()
-  return opt.trim() === ans || opt.startsWith(ans)
+  return isAnswerMatch(opt)
 }
 
 function getQuizOptionClass(opt: string): string {
   if (!quizSubmitted.value) {
-    return '!bg-[var(--surface-card)] hover:!bg-[var(--bg-hover)] !border-[var(--border-default)] !text-[var(--text-primary)]'
+    return 'bg-[var(--surface-card)] hover:bg-[var(--bg-hover)] border-[var(--border-default)] text-[var(--text-primary)]'
   }
   if (isOptionCorrect(opt)) {
-    return '!bg-[var(--color-success-light)] !border-[var(--color-success)] !text-[var(--color-success)]'
+    return 'bg-[var(--color-success-light)] border-[var(--color-success)] text-[var(--color-success)] font-medium'
   }
   if (selectedOption.value === opt) {
-    return '!bg-[var(--color-error-light)] !border-[var(--color-error)] !text-[var(--color-error)]'
+    return 'bg-[var(--color-error-light)] border-[var(--color-error)] text-[var(--color-error)] font-medium'
   }
-  return '!bg-[var(--bg-secondary)] !border-[var(--border-default)] opacity-60 !text-[var(--text-muted)]'
+  return 'bg-[var(--bg-secondary)] border-[var(--border-default)] opacity-60 text-[var(--text-muted)]'
 }
 
 function getQuizOptionBadgeClass(opt: string): string {
@@ -766,6 +773,10 @@ function getQuizOptionBadgeClass(opt: string): string {
 }
 
 // 16:9 画布坐标换算（基准 1000 x 562.5）
+function isRichHtml(s: any): boolean {
+  return typeof s === 'string' && /<\/?[a-z][\s\S]*>/i.test(s)
+}
+
 function getElementStyle(el: any) {
   const leftPct = (el.left / 1000) * 100
   const topPct = (el.top / 562.5) * 100
@@ -1072,40 +1083,21 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 测验选项：EP 按钮底座 + 自定义边框态（覆盖 default button 的灰底/圆角节奏） */
-.quiz-option-btn {
-  border-radius: var(--radius-sm);
-  text-align: left;
-  white-space: normal;
-  height: auto;
-}
-.quiz-option-btn:not(.is-disabled):active {
-  transform: scale(0.995);
-}
-
-/* 16:9 画布槽位：父级 flex-1 min-h-0 约束高度，子级 aspect-video 适配，
-   max-h/max-w 避免越界——替代原 calc(100vh - 240px) 魔法数 */
-.stage-slot {
-  min-height: 0;
-  min-width: 0;
-}
-.stage-frame {
-  /* width 100% + max-height 100% + aspect-ratio：高度不够时自动收窄宽度 */
-  margin: 0 auto;
-}
-/* 无课件自定义主题时：画布与内嵌卡片完全跟随应用亮暗令牌 */
-.stage-default-theme {
-  background-color: var(--surface-card);
-  color: var(--text-primary);
-}
-html.dark .stage-default-theme {
-  /* 暗色下略抬一档，避免与页面画布纯黑糊在一起 */
-  box-shadow: inset 0 0 0 1px var(--border-default);
-}
-</style>
-
-<style scoped>
 .aspect-video {
   aspect-ratio: 16 / 9;
+}
+.slide-html :deep(p) {
+  margin: 0.15em 0;
+}
+.slide-html :deep(strong) {
+  font-weight: 700;
+}
+.slide-html :deep(ul),
+.slide-html :deep(ol) {
+  margin: 0.2em 0;
+  padding-left: 1.1em;
+}
+.slide-html :deep(li) {
+  margin: 0.1em 0;
 }
 </style>
