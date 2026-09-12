@@ -128,3 +128,4 @@ skills-lock.json
 *.mp3
 .agents/skills/fluid-orb/
 .claude/skills/fluid-orb/
+.mimocode/
