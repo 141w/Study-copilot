@@ -466,6 +466,287 @@
               </div>
             </div>
           </div>
+
+          <!-- 模块 4：联网检索服务 (Web Search) -->
+          <div class="mt-4 p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-sm text-[var(--text-primary)]">联网检索服务 (Web Search)</span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+                  事实引证增强
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-[var(--text-muted)]">开启课堂联网实时搜索</span>
+                <el-switch v-model="classroomForm.web_search_enabled" />
+              </div>
+            </div>
+
+            <div v-show="classroomForm.web_search_enabled" class="space-y-4">
+              <!-- 服务商预设组 -->
+              <div>
+                <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">检索服务商预设 (Search Provider)</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.web_search_provider === 'bocha' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectWebSearchPreset('bocha')"
+                  >
+                    博查 AI (Bocha·国内免梯·推荐)
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.web_search_provider === 'tavily' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectWebSearchPreset('tavily')"
+                  >
+                    Tavily (全球搜索·代码学术)
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.web_search_provider === 'baidu' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectWebSearchPreset('baidu')"
+                  >
+                    百度千帆 (Baidu)
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.web_search_provider === 'searxng' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectWebSearchPreset('searxng')"
+                  >
+                    SearXNG (自建开源)
+                  </button>
+                </div>
+              </div>
+
+              <!-- 参数表单 -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4 pt-1">
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">检索接口地址 (Base URL)</label>
+                  <el-input v-model="classroomForm.web_search_base_url" placeholder="例如：https://api.bocha.cn/v1" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">检索 API 密钥 (API Key)</label>
+                  <el-input
+                    v-model="classroomForm.web_search_api_key"
+                    type="password"
+                    show-password
+                    :placeholder="savedWebSearchKeyMasked ? `已保存: ${savedWebSearchKeyMasked}` : '请输入检索 API Key'"
+                  />
+                </div>
+              </div>
+
+              <!-- 连通性测试反馈条 -->
+              <transition name="el-fade-in">
+                <div
+                  v-if="webSearchTestResult"
+                  class="p-3 rounded-xl text-xs flex items-start justify-between gap-3 border"
+                  :class="webSearchTestResult.success ? 'bg-[var(--color-success-light)] border-[var(--color-success)] text-[var(--color-success)]' : 'bg-[var(--color-danger-light)] border-[var(--color-danger)] text-[var(--color-danger)]'"
+                >
+                  <div class="flex items-start gap-2">
+                    <el-icon class="mt-0.5 text-base">
+                      <CircleCheck v-if="webSearchTestResult.success" />
+                      <WarningFilled v-else />
+                    </el-icon>
+                    <div>
+                      <p class="font-medium">{{ webSearchTestResult.message }}</p>
+                      <p v-if="webSearchTestResult.latency_ms" class="mt-0.5 text-[11px] opacity-80 font-mono">
+                        检索延迟: {{ webSearchTestResult.latency_ms }}ms
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="opacity-60 hover:opacity-100 p-1"
+                    @click="webSearchTestResult = null"
+                  >
+                    <el-icon><Close /></el-icon>
+                  </button>
+                </div>
+              </transition>
+
+              <!-- 测试检索接口按钮 -->
+              <div class="flex items-center gap-3 pt-1">
+                <el-button
+                  size="small"
+                  :loading="testingWebSearch"
+                  @click="handleTestWebSearch"
+                >
+                  <el-icon class="mr-1"><Search /></el-icon>测试检索接口
+                </el-button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模块 5：随堂语音交互识别 (ASR / Voice Recognition) -->
+          <div class="mt-4 p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-sm text-[var(--text-primary)]">随堂语音交互识别 (ASR / Voice Recognition)</span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+                  课中麦克风问答
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-[var(--text-muted)]">开启随堂语音交互</span>
+                <el-switch v-model="classroomForm.asr_enabled" />
+              </div>
+            </div>
+
+            <div v-show="classroomForm.asr_enabled" class="space-y-4">
+              <!-- 服务商预设 -->
+              <div>
+                <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">语音识别引擎 (ASR Provider)</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.asr_provider === 'browser-native' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectASRPreset('browser-native')"
+                  >
+                    浏览器原生 (免密·零成本推荐)
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.asr_provider === 'openai-whisper' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectASRPreset('openai-whisper')"
+                  >
+                    OpenAI Whisper (高精度通用)
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.asr_provider === 'qwen-asr' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectASRPreset('qwen-asr')"
+                  >
+                    通义千问 (Qwen ASR)
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    :class="classroomForm.asr_provider === 'custom' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-transparent' : 'bg-[var(--surface-card)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--color-primary)]'"
+                    @click="selectASRPreset('custom')"
+                  >
+                    自定义兼容端点
+                  </button>
+                </div>
+              </div>
+
+              <!-- 浏览器免密提示卡片 -->
+              <div
+                v-if="classroomForm.asr_provider === 'browser-native'"
+                class="p-3 rounded-lg bg-[var(--surface-card)] border border-[var(--border-default)] text-xs text-[var(--text-secondary)] leading-relaxed flex items-center gap-2.5"
+              >
+                <el-icon class="text-base text-[var(--color-primary)] shrink-0"><Microphone /></el-icon>
+                <span>已启用现代浏览器原生 Web Speech API。学员在互动课堂或角色研讨中点击麦克风即可实时语音问答，纯本地端侧识别，开箱即用且零 Token 开销。</span>
+              </div>
+
+              <!-- 外部服务端点配置表单 -->
+              <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4 pt-1">
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">识别模型名称 (Model)</label>
+                  <el-input v-model="classroomForm.asr_model" placeholder="例如：whisper-1 或 paraformer-realtime-v2" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">识别接口地址 (Base URL)</label>
+                  <el-input v-model="classroomForm.asr_base_url" placeholder="https://api.openai.com/v1" />
+                </div>
+
+                <div class="md:col-span-2">
+                  <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">识别 API 密钥 (API Key)</label>
+                  <el-input
+                    v-model="classroomForm.asr_api_key"
+                    type="password"
+                    show-password
+                    :placeholder="savedASRKeyMasked ? `已保存: ${savedASRKeyMasked}` : '留空将自动复用主模型或默认 API Key'"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模块 6：课堂智能体阵容模式 (Classroom Agent Mode) -->
+          <div class="mt-4 p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-sm text-[var(--text-primary)]">课堂智能体阵容模式 (Classroom Agent Mode)</span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-muted)] border border-[var(--border-default)]">
+                  教学角色自适应
+                </span>
+              </div>
+            </div>
+            <p class="text-xs text-[var(--text-muted)] mb-4">
+              设定 AI 互动微课生成时参与剧本演播与互动的智能体构成
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <!-- 模式 1: 经典苏老师三人组 -->
+              <div
+                class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between"
+                :class="classroomForm.agent_mode === 'default' ? 'bg-[var(--surface-card)] border-[var(--color-primary)] ring-1 ring-[var(--color-primary)] shadow-sm' : 'bg-[var(--surface-card)] border-[var(--border-default)] hover:border-[var(--color-primary)]/50 opacity-80 hover:opacity-100'"
+                @click="classroomForm.agent_mode = 'default'"
+              >
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                      <div class="w-6 h-6 rounded-md flex items-center justify-center" :class="classroomForm.agent_mode === 'default' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)]' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]'">
+                        <el-icon :size="14"><GraduationCap /></el-icon>
+                      </div>
+                      <span class="text-xs font-semibold text-[var(--text-primary)]">经典苏老师三人组</span>
+                    </div>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-muted)] font-mono">
+                      固定阵容
+                    </span>
+                  </div>
+                  <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+                    导师苏老师 (启发引申) + 求知同学 (生动发问) + 思辨学霸 (严格推导)。三位一体互相补充，教学节奏最稳定。
+                  </p>
+                </div>
+                <div class="mt-3 pt-2 border-t border-[var(--border-default)] flex items-center justify-between text-[11px]">
+                  <span class="text-[var(--text-muted)]">标准稳定闭环</span>
+                  <span v-if="classroomForm.agent_mode === 'default'" class="font-medium text-[var(--color-primary)] flex items-center gap-1">
+                    <el-icon><Check /></el-icon>已选用
+                  </span>
+                </div>
+              </div>
+
+              <!-- 模式 2: AI 随课动态生成 -->
+              <div
+                class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between"
+                :class="classroomForm.agent_mode === 'generate' ? 'bg-[var(--surface-card)] border-[var(--color-primary)] ring-1 ring-[var(--color-primary)] shadow-sm' : 'bg-[var(--surface-card)] border-[var(--border-default)] hover:border-[var(--color-primary)]/50 opacity-80 hover:opacity-100'"
+                @click="classroomForm.agent_mode = 'generate'"
+              >
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                      <div class="w-6 h-6 rounded-md flex items-center justify-center" :class="classroomForm.agent_mode === 'generate' ? 'bg-[var(--color-primary)] text-[var(--text-inverse)]' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]'">
+                        <el-icon :size="14"><MagicStick /></el-icon>
+                      </div>
+                      <span class="text-xs font-semibold text-[var(--text-primary)]">AI 随课动态生成</span>
+                    </div>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-primary-light)] text-[var(--color-primary)] font-mono">
+                      自适应定制
+                    </span>
+                  </div>
+                  <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+                    大模型深度理解教材专业领域后自动生成专属角色阵容 (如医学课自适应生成主治医师与住院医师，法学课生成主审法官与辩护人)。
+                  </p>
+                </div>
+                <div class="mt-3 pt-2 border-t border-[var(--border-default)] flex items-center justify-between text-[11px]">
+                  <span class="text-[var(--text-muted)]">教材主题深度契合</span>
+                  <span v-if="classroomForm.agent_mode === 'generate'" class="font-medium text-[var(--color-primary)] flex items-center gap-1">
+                    <el-icon><Check /></el-icon>已选用
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 按钮操作栏 -->
@@ -587,11 +868,15 @@ import {
   WarningFilled,
   Close,
   MagicStick,
-  Reading
+  Reading,
+  Search,
+  Microphone,
+  GraduationCap,
+  Check
 } from '../components/icons'
 import { useConfigStore } from '../stores/config'
 import { useToastStore } from '../stores/toast'
-import type { SystemStatus, LLMCapabilities, ImageTestResult, TTSTestResult } from '../types/models'
+import type { SystemStatus, LLMCapabilities, ImageTestResult, TTSTestResult, WebSearchTestResult } from '../types/models'
 import CopilotBotAvatar from '../components/CopilotBotAvatar.vue'
 
 type MessageFormat = 'openai' | 'anthropic' | 'gemini' | 'ollama'
@@ -654,15 +939,30 @@ const classroomForm = ref({
   voice_teacher: 'zh-CN-YunxiNeural',
   voice_curious: 'zh-CN-XiaoxiaoNeural',
   voice_thinker: 'zh-CN-YunjianNeural',
+  web_search_enabled: false,
+  web_search_provider: 'bocha',
+  web_search_base_url: 'https://api.bocha.cn/v1',
+  web_search_api_key: '',
+  asr_enabled: true,
+  asr_provider: 'browser-native',
+  asr_model: 'whisper-1',
+  asr_base_url: 'https://api.openai.com/v1',
+  asr_api_key: '',
+  agent_mode: 'default' as 'default' | 'generate',
 })
 
 const savedImageKeyMasked = ref('')
 const savedClassroomLLMKeyMasked = ref('')
 const savedTTSKeyMasked = ref('')
+const savedWebSearchKeyMasked = ref('')
+const savedASRKeyMasked = ref('')
+
 const testingImage = ref(false)
 const imageTestResult = ref<ImageTestResult | null>(null)
 const testingTTS = ref(false)
 const ttsTestResult = ref<TTSTestResult | null>(null)
+const testingWebSearch = ref(false)
+const webSearchTestResult = ref<WebSearchTestResult | null>(null)
 
 function selectTTSPreset(provider: string): void {
   classroomForm.value.tts_provider = provider
@@ -844,6 +1144,62 @@ async function handleTestImage(): Promise<void> {
     toast.error(imageTestResult.value.message)
   } finally {
     testingImage.value = false
+  }
+}
+
+function selectWebSearchPreset(provider: string): void {
+  classroomForm.value.web_search_provider = provider
+  if (provider === 'bocha') {
+    classroomForm.value.web_search_base_url = 'https://api.bocha.cn/v1'
+  } else if (provider === 'tavily') {
+    classroomForm.value.web_search_base_url = 'https://api.tavily.com'
+  } else if (provider === 'baidu') {
+    classroomForm.value.web_search_base_url = 'https://qianfan.baidubce.com'
+  } else if (provider === 'searxng') {
+    classroomForm.value.web_search_base_url = 'http://localhost:8080'
+  }
+}
+
+function selectASRPreset(provider: string): void {
+  classroomForm.value.asr_provider = provider
+  if (provider === 'browser-native') {
+    classroomForm.value.asr_model = ''
+    classroomForm.value.asr_base_url = ''
+  } else if (provider === 'openai-whisper') {
+    classroomForm.value.asr_model = 'whisper-1'
+    classroomForm.value.asr_base_url = 'https://api.openai.com/v1'
+  } else if (provider === 'qwen-asr') {
+    classroomForm.value.asr_model = 'paraformer-realtime-v2'
+    classroomForm.value.asr_base_url = 'https://dashscope.aliyuncs.com/api/v1'
+  } else if (provider === 'custom') {
+    classroomForm.value.asr_model = ''
+    classroomForm.value.asr_base_url = ''
+  }
+}
+
+async function handleTestWebSearch(): Promise<void> {
+  testingWebSearch.value = true
+  webSearchTestResult.value = null
+  try {
+    const res = await configStore.testWebSearchConfig({
+      web_search_provider: classroomForm.value.web_search_provider,
+      web_search_api_key: classroomForm.value.web_search_api_key || undefined,
+      web_search_base_url: classroomForm.value.web_search_base_url || undefined,
+    })
+    webSearchTestResult.value = res
+    if (res.success) {
+      toast.success(res.message)
+    } else {
+      toast.error(res.message || '检索接口测试失败')
+    }
+  } catch (err: any) {
+    webSearchTestResult.value = {
+      success: false,
+      message: err.message || '网络连接异常'
+    }
+    toast.error(webSearchTestResult.value.message)
+  } finally {
+    testingWebSearch.value = false
   }
 }
 
@@ -1041,6 +1397,16 @@ async function saveConfig(): Promise<void> {
         voice_teacher: classroomForm.value.voice_teacher,
         voice_curious: classroomForm.value.voice_curious,
         voice_thinker: classroomForm.value.voice_thinker,
+        web_search_enabled: classroomForm.value.web_search_enabled,
+        web_search_provider: classroomForm.value.web_search_provider,
+        web_search_base_url: classroomForm.value.web_search_base_url,
+        web_search_api_key: classroomForm.value.web_search_api_key || undefined,
+        asr_enabled: classroomForm.value.asr_enabled,
+        asr_provider: classroomForm.value.asr_provider,
+        asr_model: classroomForm.value.asr_model,
+        asr_base_url: classroomForm.value.asr_base_url,
+        asr_api_key: classroomForm.value.asr_api_key || undefined,
+        agent_mode: classroomForm.value.agent_mode,
       },
     })
     const latest = await configStore.fetchLLMConfig()
@@ -1052,9 +1418,13 @@ async function saveConfig(): Promise<void> {
       savedImageKeyMasked.value = latest.classroom_config.image_api_key_masked || ''
       savedClassroomLLMKeyMasked.value = latest.classroom_config.classroom_llm_api_key_masked || ''
       savedTTSKeyMasked.value = latest.classroom_config.tts_api_key_masked || ''
+      savedWebSearchKeyMasked.value = latest.classroom_config.web_search_api_key_masked || ''
+      savedASRKeyMasked.value = latest.classroom_config.asr_api_key_masked || ''
       classroomForm.value.image_api_key = ''
       classroomForm.value.classroom_llm_api_key = ''
       classroomForm.value.tts_api_key = ''
+      classroomForm.value.web_search_api_key = ''
+      classroomForm.value.asr_api_key = ''
     }
 
     toast.success('配置已保存')
@@ -1104,9 +1474,20 @@ function resetConfig(): void {
     voice_teacher: 'zh-CN-YunxiNeural',
     voice_curious: 'zh-CN-XiaoxiaoNeural',
     voice_thinker: 'zh-CN-YunjianNeural',
+    web_search_enabled: false,
+    web_search_provider: 'bocha',
+    web_search_base_url: 'https://api.bocha.cn/v1',
+    web_search_api_key: '',
+    asr_enabled: true,
+    asr_provider: 'browser-native',
+    asr_model: 'whisper-1',
+    asr_base_url: 'https://api.openai.com/v1',
+    asr_api_key: '',
+    agent_mode: 'default',
   }
   imageTestResult.value = null
   ttsTestResult.value = null
+  webSearchTestResult.value = null
 
   toast.info('已重置为默认值（尚未保存）')
 }
@@ -1153,6 +1534,19 @@ onMounted(async () => {
       classroomForm.value.voice_curious = cc.voice_curious || 'zh-CN-XiaoxiaoNeural'
       classroomForm.value.voice_thinker = cc.voice_thinker || 'zh-CN-YunjianNeural'
       savedTTSKeyMasked.value = cc.tts_api_key_masked || ''
+
+      classroomForm.value.web_search_enabled = !!cc.web_search_enabled
+      classroomForm.value.web_search_provider = cc.web_search_provider || 'bocha'
+      classroomForm.value.web_search_base_url = cc.web_search_base_url || 'https://api.bocha.cn/v1'
+      savedWebSearchKeyMasked.value = cc.web_search_api_key_masked || ''
+
+      classroomForm.value.asr_enabled = cc.asr_enabled !== false
+      classroomForm.value.asr_provider = cc.asr_provider || 'browser-native'
+      classroomForm.value.asr_model = cc.asr_model || 'whisper-1'
+      classroomForm.value.asr_base_url = cc.asr_base_url || 'https://api.openai.com/v1'
+      savedASRKeyMasked.value = cc.asr_api_key_masked || ''
+
+      classroomForm.value.agent_mode = (cc.agent_mode as 'default' | 'generate') || 'default'
     }
   } else {
     const defaults = formatDefaults.openai

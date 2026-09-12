@@ -179,6 +179,20 @@ export interface ClassroomModelConfig {
   voice_thinker?: string
   tts_voice?: string
   enable_web_search?: boolean
+  web_search_enabled?: boolean
+  web_search_provider?: string
+  web_search_base_url?: string
+  web_search_api_key?: string
+  has_web_search_api_key?: boolean
+  web_search_api_key_masked?: string
+  asr_enabled?: boolean
+  asr_provider?: string
+  asr_model?: string
+  asr_base_url?: string
+  asr_api_key?: string
+  has_asr_api_key?: boolean
+  asr_api_key_masked?: string
+  agent_mode?: 'default' | 'generate'
 }
 
 export interface ImageTestResult {
@@ -192,6 +206,13 @@ export interface TTSTestResult {
   message: string
   latency_ms?: number
   audio_base64?: string | null
+}
+
+export interface WebSearchTestResult {
+  success: boolean
+  message: string
+  latency_ms?: number
+  result_count?: number
 }
 
 export interface SystemStatus {

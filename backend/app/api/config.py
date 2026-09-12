@@ -580,6 +580,44 @@ async def test_tts_connection(
     return TTSTestResp(**res)
 
 
+class WebSearchTestReq(BaseModel):
+    web_search_provider: str = "bocha"
+    web_search_api_key: str | None = None
+    web_search_base_url: str | None = None
+
+
+class WebSearchTestResp(BaseModel):
+    success: bool
+    message: str
+    latency_ms: int = 0
+    result_count: int = 0
+
+
+@router.post("/test-web-search", response_model=WebSearchTestResp)
+async def test_web_search_connection(
+    req: WebSearchTestReq,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """测试联网检索服务连通性与 API 密钥有效性。"""
+    effective_key = req.web_search_api_key.strip() if req.web_search_api_key else None
+    if not effective_key:
+        secret_cfg = await config_service.get_llm_config_with_secret(db, current_user)
+        cls_cfg = secret_cfg.get("classroom_config") or {}
+        effective_key = cls_cfg.get("web_search_api_key")
+
+    from app.core.web_search import test_web_search_connectivity
+
+    res = await test_web_search_connectivity(
+        {
+            "web_search_provider": req.web_search_provider,
+            "web_search_api_key": effective_key,
+            "web_search_base_url": req.web_search_base_url,
+        }
+    )
+    return WebSearchTestResp(**res)
+
+
 # 安全修复（2026-08-19）：移除 GET /llm/with-secret 端点。
 # 该端点会把解密后的 API Key 明文返回给前端（经浏览器/扩展/日志可截获）。
 # 后端内部仍通过 config_service.get_llm_config_with_secret() 获取明文（chat/quiz/transform），

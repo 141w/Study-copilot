@@ -189,6 +189,32 @@ export const useConfigStore = defineStore('config', () => {
     }
   }
 
+  async function testWebSearchConfig(testData: {
+    web_search_provider: string
+    web_search_api_key?: string
+    web_search_base_url?: string
+  }): Promise<{
+    success: boolean
+    message: string
+    latency_ms?: number
+    result_count?: number
+  }> {
+    try {
+      const response = await api.post<{
+        success: boolean
+        message: string
+        latency_ms?: number
+        result_count?: number
+      }>('/config/test-web-search', testData)
+      return response.data
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || '网络连接异常'
+      }
+    }
+  }
+
   return {
     loading,
     fetchLLMConfig,
@@ -197,6 +223,7 @@ export const useConfigStore = defineStore('config', () => {
     testLLMConfig,
     testImageConfig,
     testTTSConfig,
+    testWebSearchConfig,
     getSystemStatus,
     detectLLMCapabilities
   }

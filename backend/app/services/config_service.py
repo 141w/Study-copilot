@@ -195,6 +195,10 @@ async def get_llm_config_with_secret(
         decrypted_cls["classroom_llm_api_key"] = enc.decrypt(raw_cls["classroom_llm_api_key"])
     if raw_cls.get("tts_api_key"):
         decrypted_cls["tts_api_key"] = enc.decrypt(raw_cls["tts_api_key"])
+    if raw_cls.get("web_search_api_key"):
+        decrypted_cls["web_search_api_key"] = enc.decrypt(raw_cls["web_search_api_key"])
+    if raw_cls.get("asr_api_key"):
+        decrypted_cls["asr_api_key"] = enc.decrypt(raw_cls["asr_api_key"])
 
     return {
         **_config_to_dict(config),
@@ -213,7 +217,7 @@ def _process_classroom_config(
     existing_classroom_cfg: dict | None,
     enc: Any,
 ) -> dict:
-    """处理课堂与多模态配置，对 image_api_key, classroom_llm_api_key, tts_api_key 采用 Fernet 安全加密。"""
+    """处理课堂与多模态配置，对各类 API Key 采用 Fernet 安全加密。"""
     if not raw_classroom_cfg:
         return existing_classroom_cfg or {}
 
@@ -241,6 +245,20 @@ def _process_classroom_config(
         processed["tts_api_key"] = enc.encrypt(tts_key)
     else:
         processed["tts_api_key"] = existing.get("tts_api_key")
+
+    # 处理联网检索 Web Search API Key 加密
+    ws_key = raw_classroom_cfg.get("web_search_api_key")
+    if ws_key:
+        processed["web_search_api_key"] = enc.encrypt(ws_key)
+    else:
+        processed["web_search_api_key"] = existing.get("web_search_api_key")
+
+    # 处理语音交互识别 ASR API Key 加密
+    asr_key = raw_classroom_cfg.get("asr_api_key")
+    if asr_key:
+        processed["asr_api_key"] = enc.encrypt(asr_key)
+    else:
+        processed["asr_api_key"] = existing.get("asr_api_key")
 
     return processed
 
@@ -274,6 +292,18 @@ def _mask_classroom_config(cfg: dict | None, enc: Any) -> dict:
         "voice_thinker": "zh-CN-YunjianNeural",
         "tts_voice": "zh-CN-XiaoxiaoNeural",
         "enable_web_search": False,
+        "web_search_enabled": False,
+        "web_search_provider": "bocha",
+        "web_search_base_url": "https://api.bocha.cn/v1",
+        "has_web_search_api_key": False,
+        "web_search_api_key_masked": None,
+        "asr_enabled": True,
+        "asr_provider": "browser-native",
+        "asr_model": "whisper-1",
+        "asr_base_url": "https://api.openai.com/v1",
+        "has_asr_api_key": False,
+        "asr_api_key_masked": None,
+        "agent_mode": "default",
     }
     if not cfg:
         return defaults
@@ -308,6 +338,26 @@ def _mask_classroom_config(cfg: dict | None, enc: Any) -> dict:
         masked["has_tts_api_key"] = False
         masked["tts_api_key_masked"] = None
     masked.pop("tts_api_key", None)
+
+    ws_enc = cfg.get("web_search_api_key")
+    if ws_enc:
+        plain_ws = enc.decrypt(ws_enc)
+        masked["has_web_search_api_key"] = bool(plain_ws)
+        masked["web_search_api_key_masked"] = mask_api_key(plain_ws)
+    else:
+        masked["has_web_search_api_key"] = False
+        masked["web_search_api_key_masked"] = None
+    masked.pop("web_search_api_key", None)
+
+    asr_enc = cfg.get("asr_api_key")
+    if asr_enc:
+        plain_asr = enc.decrypt(asr_enc)
+        masked["has_asr_api_key"] = bool(plain_asr)
+        masked["asr_api_key_masked"] = mask_api_key(plain_asr)
+    else:
+        masked["has_asr_api_key"] = False
+        masked["asr_api_key_masked"] = None
+    masked.pop("asr_api_key", None)
 
     return masked
 

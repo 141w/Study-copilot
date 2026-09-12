@@ -227,4 +227,23 @@ describe('Config Store', () => {
     expect(api.post).toHaveBeenCalledWith('/config/test-image', payload)
     expect(res).toEqual(mockRes)
   })
+
+  it('testWebSearchConfig calls POST /config/test-web-search', async () => {
+    const mockRes = {
+      success: true,
+      message: '博查 AI 检索服务连接正常！(45ms)',
+      latency_ms: 45,
+      result_count: 1
+    }
+    api.post.mockResolvedValue({ data: mockRes })
+
+    const payload = {
+      web_search_provider: 'bocha',
+      web_search_api_key: 'sk-test-bocha',
+      web_search_base_url: 'https://api.bocha.cn/v1'
+    }
+    const res = await store.testWebSearchConfig(payload)
+    expect(api.post).toHaveBeenCalledWith('/config/test-web-search', payload)
+    expect(res).toEqual(mockRes)
+  })
 })

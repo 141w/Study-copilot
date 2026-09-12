@@ -146,6 +146,7 @@ const selectedDocs = ref<string[]>([])
 const enableWebSearch = ref(false)
 const enableTTS = ref(true)
 const enableImageGeneration = ref(false)
+const userAgentMode = ref('default')
 const generating = ref(false)
 const error = ref('')
 const generated = ref(false)
@@ -163,6 +164,12 @@ watch(() => props.modelValue, async (v) => {
         }
         if (cfg.classroom_config.tts_enabled !== undefined) {
           enableTTS.value = !!cfg.classroom_config.tts_enabled
+        }
+        if (cfg.classroom_config.web_search_enabled !== undefined) {
+          enableWebSearch.value = !!cfg.classroom_config.web_search_enabled
+        }
+        if (cfg.classroom_config.agent_mode) {
+          userAgentMode.value = cfg.classroom_config.agent_mode
         }
       }
     } catch {
@@ -197,7 +204,7 @@ async function generate(): Promise<void> {
       enable_web_search: enableWebSearch.value,
       enable_tts: enableTTS.value,
       enable_image_generation: enableImageGeneration.value,
-      agent_mode: 'default',
+      agent_mode: userAgentMode.value || 'default',
       ...(props.courseId ? { course_id: props.courseId } : {}),
     })
     generated.value = true

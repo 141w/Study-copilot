@@ -160,6 +160,38 @@ async def sync_classroom_providers(db: AsyncSession, user: User | None = None) -
                 }
             }
 
+        # 4. 联网检索配置 (Web Search)
+        ws_enabled = cls_cfg.get("web_search_enabled", False)
+        ws_provider = (cls_cfg.get("web_search_provider") or "bocha").strip()
+        ws_key = cls_cfg.get("web_search_api_key") or ""
+        ws_base_url = (cls_cfg.get("web_search_base_url") or "").strip()
+        if (ws_enabled or ws_key) and ws_provider:
+            ws_entry: dict[str, Any] = {}
+            if ws_key:
+                ws_entry["apiKey"] = ws_key
+            if ws_base_url:
+                ws_entry["baseUrl"] = ws_base_url
+            yaml_data["web-search"] = {
+                ws_provider: ws_entry
+            }
+
+        # 5. 随堂语音识别 (ASR) 配置
+        asr_enabled = cls_cfg.get("asr_enabled", True)
+        asr_provider = (cls_cfg.get("asr_provider") or "browser-native").strip()
+        asr_key = cls_cfg.get("asr_api_key") or ""
+        asr_base_url = (cls_cfg.get("asr_base_url") or "").strip()
+        asr_model = (cls_cfg.get("asr_model") or "whisper-1").strip()
+        if asr_enabled and asr_provider != "browser-native" and asr_key:
+            asr_entry: dict[str, Any] = {
+                "apiKey": asr_key,
+                "models": [asr_model],
+            }
+            if asr_base_url:
+                asr_entry["baseUrl"] = asr_base_url
+            yaml_data["asr"] = {
+                asr_provider: asr_entry
+            }
+
         classroom_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "../../../classroom")
         )
@@ -203,7 +235,8 @@ async def build_classroom_request(
     """组装课堂生成请求体。最多带 5 篇文档文本内容。"""
     _check_enabled()
 
-    # 自动对齐用户在模型配置中保存的生图与 TTS 开关
+    cls_cfg: dict[str, Any] = {}
+    # 自动对齐用户在模型配置中保存的生图、TTS、联网检索与阵容模式
     try:
         from app.services.config_service import get_llm_config_with_secret
 
@@ -213,6 +246,10 @@ async def build_classroom_request(
             enable_image_generation = True
         if cls_cfg.get("tts_enabled") is not None:
             enable_tts = bool(cls_cfg.get("tts_enabled"))
+        if not enable_web_search and cls_cfg.get("web_search_enabled"):
+            enable_web_search = True
+        if agent_mode == "default" and cls_cfg.get("agent_mode"):
+            agent_mode = cls_cfg.get("agent_mode")
     except Exception as e:
         logger.debug("Failed to read user classroom config: %s", e)
 
@@ -236,7 +273,7 @@ async def build_classroom_request(
         else None
     )
 
-    return {
+    req_payload: dict[str, Any] = {
         "requirement": requirement or "请根据提供的材料生成课程",
         "pdfContent": pdf_content,
         "enableWebSearch": enable_web_search,
@@ -245,6 +282,13 @@ async def build_classroom_request(
         "agentMode": agent_mode,
         "doc_ids": doc_ids,
     }
+    if enable_web_search:
+        req_payload["webSearchProviderId"] = cls_cfg.get("web_search_provider") or "bocha"
+        ws_key = cls_cfg.get("web_search_api_key")
+        if ws_key:
+            req_payload["webSearchApiKey"] = ws_key
+
+    return req_payload
 
 
 async def submit_classroom_generation(
