@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     # SSE resume buffer TTL (seconds)
     sse_resume_ttl_seconds: int = 120
     sse_resume_max_events: int = 2000
+    # memory | (future: redis/pg for multi-replica)
+    sse_resume_backend: str = "memory"
 
     # 洋葱聊天管线 V2：生产默认开启；回滚可设 PIPELINE_V2_ENABLED=false
     pipeline_v2_enabled: bool = True
