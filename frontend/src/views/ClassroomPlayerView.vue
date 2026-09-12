@@ -35,42 +35,8 @@
         </div>
       </div>
 
-      <!-- 右侧控制组：倍速、语音、连播、台词记录、目录与全屏 -->
+      <!-- 右侧控制组：核心快捷 + 次级设置收纳 -->
       <div class="flex items-center gap-1.5 sm:gap-2">
-        <!-- 倍速切换 -->
-        <el-button
-          size="small"
-          @click="cyclePlaybackRate"
-          title="点击切换播放倍速"
-        >
-          <span class="text-xs font-mono font-medium">{{ playbackRate }}x</span>
-        </el-button>
-
-        <!-- 语音朗读开关 -->
-        <el-button
-          size="small"
-          :type="audioEnabled ? 'primary' : 'default'"
-          plain
-          @click="toggleAudio"
-          :title="audioEnabled ? '语音朗读已开启' : '语音朗读已静音'"
-        >
-          <el-icon><Reading /></el-icon>
-          <span class="text-xs ml-1 hidden md:inline">{{ audioEnabled ? '语音开启' : '已静音' }}</span>
-        </el-button>
-
-        <!-- 自动连播开关 -->
-        <el-button
-          size="small"
-          :type="autoAdvance ? 'primary' : 'default'"
-          plain
-          @click="autoAdvance = !autoAdvance"
-          :title="autoAdvance ? '自动切幕已开启' : '手动切幕'"
-          class="hidden sm:inline-flex"
-        >
-          <el-icon><Promotion /></el-icon>
-          <span class="text-xs ml-1 hidden lg:inline">{{ autoAdvance ? '自动连播' : '单幕暂停' }}</span>
-        </el-button>
-
         <!-- 研讨台词记录抽屉 -->
         <el-button
           circle
@@ -92,6 +58,26 @@
           <el-icon><List /></el-icon>
         </el-button>
 
+        <!-- 次级设置：倍速 / 语音 / 连播 -->
+        <el-dropdown trigger="click" @command="handleQuickCommand">
+          <el-button circle size="small" title="播放设置">
+            <el-icon><Setting /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="rate">
+                倍速 · {{ playbackRate }}x
+              </el-dropdown-item>
+              <el-dropdown-item command="audio">
+                语音朗读 · {{ audioEnabled ? '已开启' : '已静音' }}
+              </el-dropdown-item>
+              <el-dropdown-item command="auto">
+                自动连播 · {{ autoAdvance ? '已开启' : '单幕暂停' }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
         <!-- 全屏按钮 -->
         <el-button
           circle
@@ -99,7 +85,7 @@
           @click="toggleFullscreen"
           title="全屏切换"
         >
-          <el-icon><Fold /></el-icon>
+          <el-icon><View /></el-icon>
         </el-button>
       </div>
     </header>
@@ -128,13 +114,11 @@
     <!-- 主演播视口 (Visual Stage + Studio Deck) -->
     <div v-else class="flex-1 flex overflow-hidden relative min-h-0">
       <main class="flex-1 flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-y-auto lg:overflow-hidden relative min-h-0 min-w-0 transition-all duration-300">
-        <!-- 16:9 画布纯净演播区 (Visual Stage - 100% 内容无遮挡与自适应缩放) -->
-        <div class="w-full max-w-5xl flex-1 flex flex-col justify-center items-center min-h-0 min-w-0 relative">
+        <!-- 16:9 画布：flex 槽位约束，去掉 100vh 魔法数 -->
+        <div class="stage-slot w-full max-w-5xl flex-1 min-h-0 min-w-0 relative flex items-center justify-center">
           <div
-            class="relative w-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
+            class="stage-frame relative w-full max-h-full aspect-video rounded-2xl overflow-hidden border border-[var(--border-default)] shadow-sm flex flex-col justify-center transition-all duration-300"
             :style="{
-              maxHeight: 'min(560px, calc(100vh - 240px))',
-              maxWidth: 'min(100%, calc((100vh - 240px) * 16 / 9))',
               backgroundColor: canvasTheme.backgroundColor || 'var(--surface-card)',
               color: canvasTheme.fontColor || 'var(--text-primary)'
             }"
@@ -329,9 +313,14 @@
               </div>
             </div>
 
-            <!-- 台词正文 -->
+            <!-- 台词正文（默认两行，点击展开） -->
             <div class="flex-1 min-w-0 px-2">
-              <p class="text-xs sm:text-sm text-[var(--text-primary)] font-normal leading-relaxed line-clamp-2">
+              <p
+                class="text-xs sm:text-sm text-[var(--text-primary)] font-normal leading-relaxed cursor-pointer select-none"
+                :class="dialogueExpanded ? '' : 'line-clamp-2'"
+                :title="dialogueExpanded ? '点击收起' : '点击展开全文'"
+                @click="dialogueExpanded = !dialogueExpanded"
+              >
                 {{ currentAction?.text || '（微课剧本正在就位...）' }}
               </p>
             </div>
@@ -538,9 +527,6 @@ import {
   ArrowRight,
   VideoPlay,
   VideoPause,
-  Reading,
-  Promotion,
-  Fold,
   List,
   Close,
   Loading,
@@ -551,6 +537,8 @@ import {
   Brain,
   User,
   ChatLineRound,
+  Setting,
+  View,
 } from '../components/icons'
 
 const route = useRoute()
@@ -570,7 +558,9 @@ const currentActionIndex = ref(0)
 const isPlaying = ref(false)
 const audioEnabled = ref(true)
 const autoAdvance = ref(true)
-const showSidebar = ref(false)
+const dialogueExpanded = ref(false)
+// 桌面端默认打开章节目录，移动端保持抽屉关闭
+const showSidebar = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false)
 const showHistoryDrawer = ref(false)
 
 // 播放倍速
@@ -584,6 +574,12 @@ function cyclePlaybackRate() {
   if (currentAudio) {
     currentAudio.playbackRate = playbackRate.value
   }
+}
+
+function handleQuickCommand(command: string | number | object): void {
+  if (command === 'rate') cyclePlaybackRate()
+  else if (command === 'audio') toggleAudio()
+  else if (command === 'auto') autoAdvance.value = !autoAdvance.value
 }
 
 // 测验场景专用状态
@@ -1008,6 +1004,17 @@ onUnmounted(() => {
 }
 .quiz-option-btn:not(.is-disabled):active {
   transform: scale(0.995);
+}
+
+/* 16:9 画布槽位：父级 flex-1 min-h-0 约束高度，子级 aspect-video 适配，
+   max-h/max-w 避免越界——替代原 calc(100vh - 240px) 魔法数 */
+.stage-slot {
+  min-height: 0;
+  min-width: 0;
+}
+.stage-frame {
+  /* width 100% + max-height 100% + aspect-ratio：高度不够时自动收窄宽度 */
+  margin: 0 auto;
 }
 </style>
 
