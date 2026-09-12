@@ -144,7 +144,7 @@ async function handleLogin(): Promise<void> {
   }
 }
 
-/** 登录成功：卡片向四周扩散 → 捕获 bot 位置 → 路由进首页，由顶栏 FLIP 落位 logo */
+/** 登录成功：bot 成功动作 → 登录卡扩散扫出视口 → 捕获 bot 位置 → 首页顶栏 FLIP */
 async function playLoginSuccessHandoff(target: string): Promise<void> {
   successAnimating.value = true
   loading.value = false
@@ -155,7 +155,6 @@ async function playLoginSuccessHandoff(target: string): Promise<void> {
     return
   }
 
-  // 标题 / 副标题 / 页脚淡出（bot 保留在画面中）
   const chrome: HTMLElement[] = []
   const titleEl = brandBlock.value?.querySelector('.auth-title') as HTMLElement | null
   const subEl = brandBlock.value?.querySelector('.auth-subtitle') as HTMLElement | null
@@ -165,44 +164,74 @@ async function playLoginSuccessHandoff(target: string): Promise<void> {
 
   const card = cardShell.value
   const botEl = document.querySelector('.auth-bot-flip') as HTMLElement | null
+  // el-card 组件 ref 可能不是 DOM：优先从 shell 内取真实节点
+  const innerCard = (card?.querySelector('.el-card') as HTMLElement | null) ?? null
 
-  // 卡片向四周放大并淡出
-  if (card) {
-    gsap.to(card, {
-      scale: 1.55,
+  // ── 阶段 1：小球先播成功动作（burst 粒子爆散重组），停顿让人看清 ──
+  botLogo.value?.play?.('burst')
+  await new Promise<void>((resolve) => {
+    gsap.delayedCall(0.95, resolve)
+  })
+
+  // ── 阶段 2：登录卡慢速放大，直到扫出视口边缘；内容先淡，外壳后淡 ──
+  if (innerCard) {
+    gsap.to(innerCard, {
       opacity: 0,
-      duration: 0.55,
-      ease: 'power2.in',
-      transformOrigin: '50% 50%',
+      duration: 0.35,
+      ease: 'power1.out',
     })
   }
   if (chrome.length) {
     gsap.to(chrome, {
       opacity: 0,
-      y: -18,
-      duration: 0.32,
-      ease: 'power2.in',
-      stagger: 0.03,
+      y: -12,
+      duration: 0.4,
+      ease: 'power1.out',
+      stagger: 0.04,
     })
   }
-  // 装饰层同步收束，避免黑底残影
+  // 装饰层略晚收束，先让卡片「撑满」
   gsap.to('.auth-page .bg-glow, .auth-page .bg-ring, .auth-page .bg-particle, .auth-page .bg-grid', {
     opacity: 0,
-    duration: 0.45,
+    duration: 0.9,
     ease: 'power1.in',
+    delay: 0.15,
   })
 
-  // 扩散过程中 bot 轻微上浮 + 点头，提示「交接」
+  if (card) {
+    const rect = card.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    // 放大到能覆盖视口对角线，确保「推到边缘」而不是中途溶解
+    const coverX = (vw * 1.2) / Math.max(rect.width, 1)
+    const coverY = (vh * 1.2) / Math.max(rect.height, 1)
+    const targetScale = Math.max(coverX, coverY, 2.8)
+
+    gsap.to(card, {
+      scale: targetScale,
+      duration: 1.35,
+      ease: 'power1.in',
+      transformOrigin: '50% 50%',
+    })
+    // 透明度几乎到最后才掉，避免中段就「化掉」
+    gsap.to(card, {
+      opacity: 0,
+      duration: 0.4,
+      delay: 1.05,
+      ease: 'power1.in',
+    })
+  }
+
+  // 小球在扩散期保持悬浮，成功动作后轻浮起准备交接
   if (botEl) {
-    gsap.to(botEl, { y: -28, scale: 1.06, duration: 0.5, ease: 'power2.inOut' })
-    botLogo.value?.play?.('arrive')
+    gsap.to(botEl, { y: -20, scale: 1.04, duration: 1.0, ease: 'power1.inOut', delay: 0.2 })
   }
 
   await new Promise<void>((resolve) => {
-    gsap.delayedCall(0.48, resolve)
+    gsap.delayedCall(1.25, resolve)
   })
 
-  // 记录 bot 最终 rect（供顶栏 FLIP），再隐藏避免路由切换时闪一下
+  // ── 阶段 3：记录 rect → 路由进首页 → 顶栏 FLIP ──
   if (botEl) {
     setLoginHandoffRect(botEl.getBoundingClientRect())
     gsap.set(botEl, { opacity: 0 })
