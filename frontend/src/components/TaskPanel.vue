@@ -522,8 +522,6 @@ function goToDocument(docId: string): void {
 function goToClassroom(courseId: string): void {
   router.push(`/courses/${courseId}/classroom`)
 }
-  router.push({ path: '/document', query: { docId } })
-}
 
 async function fetchTasks(): Promise<void> {
   isLoading.value = true
