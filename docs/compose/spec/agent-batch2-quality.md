@@ -3,7 +3,7 @@ feature: agent-batch2-quality
 status: delivered
 updated: 2026-09-12
 branch: feat/agent-p0-hardening
-commits: 5514d3d..<head>
+commits: 3ce4ae0..d72700e
 ---
 
 # Agent Batch2 — Quality Guards
