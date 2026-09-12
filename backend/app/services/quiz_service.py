@@ -7,7 +7,7 @@ import logging
 import re
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.quiz_generator import QuizGenerator
@@ -16,6 +16,9 @@ from app.exceptions import ExternalServiceError, NotFoundError, ValidationError
 from app.services.config_service import get_llm_config_with_secret
 
 logger = logging.getLogger(__name__)
+
+_QUIZ_CONTEXT_BUDGET = 4800
+_CHUNKS_PER_DOC = 8
 
 
 async def generate_quizzes(
@@ -83,31 +86,60 @@ async def _do_generate_quiz(
     logger.debug(f"document_ids: {document_ids}")
     logger.debug(f"choice_count: {choice_count}, short_answer_count: {short_answer_count}")
 
-    chunks_list = []
+    chunks_list: list[str] = []
     for did in document_ids:
         result = await db.execute(
             select(Document).where(Document.id == did, Document.user_id == user.id)
         )
         doc = result.scalar_one_or_none()
         logger.debug(f"doc found: {doc}, status: {doc.status if doc else 'None'}")
-        if doc and doc.status == "ready":
-            # Query chunks from database (replaces file-based DocumentVectorStore)
-            chunk_result = await db.execute(
-                select(DocumentChunk)
-                .where(DocumentChunk.document_id == did)
-                .order_by(DocumentChunk.chunk_index)
-                .limit(10)
-            )
-            chunks = chunk_result.scalars().all()
-            logger.debug(f"chunks count: {len(chunks)}")
-            if chunks:
-                chunks_list.extend([c.content for c in chunks])
+        if not doc or doc.status != "ready":
+            continue
+
+        count_stmt = (
+            select(func.count()).select_from(DocumentChunk).where(DocumentChunk.document_id == did)
+        )
+        total_chunks = (await db.execute(count_stmt)).scalar() or 0
+        if total_chunks <= 0:
+            continue
+
+        chunk_result = await db.execute(
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == did)
+            .order_by(DocumentChunk.chunk_index)
+        )
+        all_chunks = list(chunk_result.scalars().all())
+        sample_n = min(_CHUNKS_PER_DOC, len(all_chunks))
+        if sample_n <= 0:
+            continue
+        if len(all_chunks) <= sample_n:
+            indexes = list(range(len(all_chunks)))
+        else:
+            # Sample across head / middle / tail so quizzes are not limited to the intro
+            step = (len(all_chunks) - 1) / (sample_n - 1)
+            indexes = sorted({int(round(i * step)) for i in range(sample_n)})
+
+        for i in indexes:
+            if i < len(all_chunks) and all_chunks[i].content:
+                chunks_list.append(f"【来源】{doc.filename}\n{all_chunks[i].content}")
+        logger.debug(f"doc {did}: sampled {len(indexes)}/{total_chunks} chunks")
 
     if not chunks_list:
         raise ValidationError("文档内容不足")
 
-    ctx = "\n\n".join(chunks_list[:5])
-    logger.debug(f"context length: {len(ctx)}")
+    ctx_parts: list[str] = []
+    used = 0
+    for part in chunks_list:
+        if used >= _QUIZ_CONTEXT_BUDGET:
+            break
+        room = _QUIZ_CONTEXT_BUDGET - used
+        take = part if len(part) <= room else part[:room]
+        if not take.strip():
+            continue
+        ctx_parts.append(take)
+        used += len(take)
+    ctx = "\n\n".join(ctx_parts)
+    logger.debug(f"context length: {len(ctx)} parts: {len(ctx_parts)}")
 
     user_config = await get_llm_config_with_secret(db, user)
     llm_config = dict(user_config)
