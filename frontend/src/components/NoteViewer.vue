@@ -36,6 +36,7 @@
         v-if="html"
         class="note-md prose prose-sm max-w-none text-[var(--text-primary)]"
         v-html="html"
+        @click="onBodyClick"
       />
       <EmptyState
         v-else
@@ -51,6 +52,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { Edit, Close, EditPen } from '@/components/icons'
 import EmptyState from './common/EmptyState.vue'
 import { useMarkdown } from '../composables/useMarkdown'
@@ -67,8 +69,20 @@ defineEmits<{
   close: []
 }>()
 
+const router = useRouter()
 const { renderMarkdown } = useMarkdown()
 const formatDate = formatRelativeTime
+
+interface NoteSourceMeta {
+  index: number
+  document_id?: string | null
+  page?: string | null
+  source?: string | null
+  snippet?: string | null
+}
+
+const NOTE_SOURCES_META_RE = /<!--\s*note-sources:([\s\S]*?)-->/i
+const SOURCE_MARK_RE = /\[来源\s*(\d+)\]/g
 
 const normalizedTags = computed<string[]>(() =>
   (props.note.tags || [])
@@ -76,7 +90,53 @@ const normalizedTags = computed<string[]>(() =>
     .filter(Boolean) as string[]
 )
 
-const html = computed(() => renderMarkdown(props.note.content || ''))
+/** 从正文剥离 note-sources 元数据块，并解析出来源表 */
+function parseNoteContent(content: string): { body: string; sources: Map<number, NoteSourceMeta> } {
+  const map = new Map<number, NoteSourceMeta>()
+  let body = content || ''
+  const m = body.match(NOTE_SOURCES_META_RE)
+  if (m) {
+    body = body.replace(NOTE_SOURCES_META_RE, '')
+    try {
+      const arr = JSON.parse(m[1])
+      if (Array.isArray(arr)) {
+        for (const it of arr) {
+          if (it && typeof it.index === 'number') map.set(it.index, it as NoteSourceMeta)
+        }
+      }
+    } catch {
+      // ignore malformed meta
+    }
+  }
+  return { body: body.trim(), sources: map }
+}
+
+const parsed = computed(() => parseNoteContent(props.note.content || ''))
+
+const html = computed(() => {
+  const raw = parsed.value.body
+  if (!raw) return ''
+  const rendered = renderMarkdown(raw)
+  // [来源N] → 可点角标（与聊天一致的视觉语义，跳文档阅读页）
+  return rendered.replace(SOURCE_MARK_RE, (_all, num: string) => {
+    return `<sup class="note-source-badge" data-index="${num}" title="查看原文">[${num}]</sup>`
+  })
+})
+
+function onBodyClick(e: MouseEvent): void {
+  const target = (e.target as HTMLElement | null)?.closest?.('.note-source-badge') as HTMLElement | null
+  if (!target) return
+  const idx = Number(target.dataset.index)
+  if (!Number.isFinite(idx)) return
+  const meta = parsed.value.sources.get(idx)
+  const query: Record<string, string> = {}
+  if (meta?.document_id) query.doc = meta.document_id
+  if (meta?.page) query.page = String(meta.page)
+  // 优先用片段前缀在文档内搜索定位；无元数据时至少打开文档页
+  const q = (meta?.snippet || meta?.source || '').trim().slice(0, 40)
+  if (q) query.q = q
+  router.push({ path: '/documents', query })
+}
 </script>
 
 <style scoped>
@@ -175,6 +235,24 @@ const html = computed(() => renderMarkdown(props.note.content || ''))
 }
 .note-md :deep(a) {
   color: var(--color-primary);
+  text-decoration: underline;
+}
+.note-md :deep(.note-source-badge) {
+  display: inline-block;
+  margin: 0 0.15em;
+  padding: 0 0.35em;
+  border-radius: 4px;
+  font-size: 0.7em;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-primary);
+  background: var(--color-primary-light, var(--bg-tertiary));
+  cursor: pointer;
+  vertical-align: super;
+  user-select: none;
+}
+.note-md :deep(.note-source-badge:hover) {
+  filter: brightness(0.95);
   text-decoration: underline;
 }
 </style>

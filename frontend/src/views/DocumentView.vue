@@ -225,8 +225,8 @@
 
 <script setup lang="ts">
 import { Document, Switch, CopyDocument, ChatLineRound, EditPen, Top, VideoPlay, Search, ChatDotSquare, Loading } from '@/components/icons'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useQuizStore } from '../stores/quiz'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
@@ -245,6 +245,7 @@ interface DocChunk {
 }
 
 const router = useRouter()
+const route = useRoute()
 const quizStore = useQuizStore()
 // P1-4：文档列表统一走 document store（原先本地 documents 副本 + 自行 fetch，
 // 与 store 数据源分裂）；提示统一走 toast store（原本地 toast 双轨）
@@ -320,10 +321,10 @@ function getHighlightedSegments(text: string, query: string): Array<{ text: stri
   return segments
 }
 
-async function selectDocument(doc: DocumentModel): Promise<void> {
+async function selectDocument(doc: DocumentModel, opts?: { highlight?: string; page?: string }): Promise<void> {
   selectedDoc.value = doc
   chunks.value = []
-  searchQuery.value = ''
+  searchQuery.value = opts?.highlight?.trim() || ''
   currentPage.value = 1
   showBackToTop.value = false
   // 同步选中态到 store（供侧栏等处联动）
@@ -339,12 +340,51 @@ async function selectDocument(doc: DocumentModel): Promise<void> {
     if (response.data.chunks) {
       chunks.value = response.data.chunks.map((c, i) => ({ ...c, idx: i }))
     }
+    // 深链：按页码把列表滚到该页附近（页码在 chunk.page 元数据上）
+    if (opts?.page) {
+      const page = String(opts.page)
+      const idx = chunks.value.findIndex(c => String(c.page ?? '') === page)
+      if (idx >= 0) {
+        currentPage.value = Math.floor(idx / pageSize) + 1
+      }
+    }
+    if (searchQuery.value) {
+      await nextTick()
+      scrollToFirstMatch()
+    }
   } catch (error) {
     console.error('Failed to load document:', error)
     toast.error('文档内容加载失败')
   } finally {
     isLoadingContent.value = false
   }
+}
+
+/** 搜索定位后滚到第一个高亮段（阅读区内部滚动容器） */
+function scrollToFirstMatch(): void {
+  nextTick(() => {
+    const el = contentRef.value?.querySelector('mark')
+    const fallback = contentRef.value?.querySelector('.space-y-4 > div')
+    const target = el || fallback
+    if (target && contentRef.value) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
+}
+
+/** 笔记/聊天深链：/documents?doc=&page=&q= */
+async function applyDeepLinkFromRoute(): Promise<void> {
+  const docId = route.query.doc
+  if (typeof docId !== 'string' || !docId) return
+  await documentStore.fetchDocuments()
+  const doc = documentStore.documents.find(d => d.id === docId)
+  if (!doc) {
+    toast.error('未找到对应文档')
+    return
+  }
+  const page = typeof route.query.page === 'string' ? route.query.page : undefined
+  const q = typeof route.query.q === 'string' ? route.query.q : undefined
+  await selectDocument(doc, { highlight: q, page })
 }
 
 // 当选中的文档在后台完成解析切片后，自动加载内容
@@ -432,6 +472,7 @@ function onClassroomGenerated(_result: { jobId: string; courseId?: string }): vo
 
 onMounted(() => {
   documentStore.fetchDocuments()
+  applyDeepLinkFromRoute()
   window.addEventListener('scroll', updateScrollVisibility, { passive: true })
 })
 
