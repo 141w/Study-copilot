@@ -27,7 +27,7 @@ describe('LearningActivityGraph', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="learning-activity"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('0 contributions')
+    expect(wrapper.text()).toContain('还没有学习记录')
     // 每一格都是灰底 + 透明度 0 叠层
     const cells = wrapper.findAll('[data-test="activity-cell"]')
     expect(cells.length).toBeGreaterThanOrEqual(365)
@@ -50,7 +50,7 @@ describe('LearningActivityGraph', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('5 contributions')
+    expect(wrapper.text()).toContain('5 次学习')
     const overlays = wrapper.findAll('[data-test="activity-level"]')
     expect(overlays.length).toBeGreaterThanOrEqual(28)
     const opacities = overlays.map(el => el.attributes('style') || '')
@@ -65,6 +65,6 @@ describe('LearningActivityGraph', () => {
     })
     await flushPromises()
     expect(wrapper.find('[data-test="learning-activity"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('0 contributions')
+    expect(wrapper.text()).toContain('还没有学习记录')
   })
 })

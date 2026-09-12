@@ -191,8 +191,11 @@ function levelOverlay(level: number): { backgroundColor: string; opacity: number
 const heading = computed(() => {
   const list = contributions.value
   const year = list.length ? list[list.length - 1].date.slice(0, 4) : ''
-  const y = year ? ` in ${year}` : ''
-  return `${total.value} contributions${y}`
+  // 产品语境：学习行为（问答/测验/笔记），而非 GitHub「贡献」
+  if (total.value === 0) {
+    return year ? `${year} 年 · 还没有学习记录` : '还没有学习记录'
+  }
+  return `${total.value} 次学习${year ? ` · ${year}` : ''}`
 })
 
 const widthHint = computed(() => {
@@ -203,10 +206,10 @@ const widthHint = computed(() => {
 void widthHint
 
 function describeDay(day: Contribution): string {
-  const noun = day.count === 1 ? 'contribution' : 'contributions'
   const d = new Date(day.date + 'T00:00:00')
-  const fmt = `${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}, ${d.getFullYear()}`
-  return `${day.count} ${noun} on ${fmt}`
+  const fmt = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
+  if (!day.count) return `${fmt}：无学习记录`
+  return `${fmt}：${day.count} 次学习`
 }
 
 function onHover(day: Contribution, e: PointerEvent) {
