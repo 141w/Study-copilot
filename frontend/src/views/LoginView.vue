@@ -25,8 +25,8 @@
       <!-- 品牌标识 -->
       <div class="text-center mb-8">
         <CopilotBotAvatar ref="botLogo" :size="80" mood="idle" class="mx-auto mb-5 block" />
-        <h1 class="text-2xl font-semibold text-white tracking-tight">Study Copilot</h1>
-        <p class="text-white/70 mt-2 text-sm"><span class="slogan-a">让每一份学习资料</span><span class="slogan-b">都被充分理解</span></p>
+        <h1 class="auth-title text-2xl font-semibold tracking-tight">Study Copilot</h1>
+        <p class="auth-subtitle mt-2 text-sm"><span class="slogan-a">让每一份学习资料</span><span class="slogan-b">都被充分理解</span></p>
       </div>
 
       <!-- 登录卡片 -->
@@ -70,9 +70,9 @@
       </div>
       </form>
 
-      <p class="text-center mt-6 text-sm text-white/70">
+      <p class="auth-footer text-center mt-6 text-sm">
         还没有账户?
-        <router-link to="/register" class="text-white font-medium hover:underline">
+        <router-link to="/register" class="auth-link font-medium hover:underline">
           立即注册
         </router-link>
       </p>
@@ -162,34 +162,38 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* ── 全屏品牌背景层（DESIGN.md 黑白单色系：纯黑画布） ── */
+/* ── 全屏品牌背景层：跟随主题令牌（亮色冷调画布 / 暗色纯黑营销画布） ── */
 .bg-base {
   position: absolute;
   inset: 0;
-  background: #000000;
+  background: var(--bg-primary);
 }
 .bg-grid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(0, 0, 0, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.055) 1px, transparent 1px);
   background-size: 38px 38px;
   -webkit-mask-image: radial-gradient(ellipse at 50% 42%, black, transparent 72%);
   mask-image: radial-gradient(ellipse at 50% 42%, black, transparent 72%);
+}
+html.dark .bg-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
 .bg-glow {
   position: absolute;
   border-radius: 9999px;
   filter: blur(80px);
-  opacity: 0.45;
+  opacity: 0.4;
   will-change: transform;
 }
 .bg-glow-1 {
   width: 440px;
   height: 440px;
-  /* 单色系光晕：墨色发光体，替代原品牌蓝 */
-  background: #3f3f44;
+  background: #c9c9d4;
   top: -120px;
   left: -100px;
   animation: glow-drift-1 26s ease-in-out infinite;
@@ -197,16 +201,24 @@ onUnmounted(() => {
 .bg-glow-2 {
   width: 400px;
   height: 400px;
-  /* 单色系光晕：hairline 灰，替代原紫 */
-  background: #5a5a5f;
+  background: #d4d4de;
   bottom: -140px;
   right: -80px;
   animation: glow-drift-2 32s ease-in-out infinite;
 }
+html.dark .bg-glow-1 {
+  background: #3f3f44;
+}
+html.dark .bg-glow-2 {
+  background: #5a5a5f;
+}
 .bg-ring {
   position: absolute;
   border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+html.dark .bg-ring {
+  border-color: rgba(255, 255, 255, 0.09);
 }
 .bg-ring-1 {
   width: 520px;
@@ -228,18 +240,39 @@ onUnmounted(() => {
   position: absolute;
   bottom: -12px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.4);
   opacity: 0;
   animation: rise linear infinite;
   will-change: transform, opacity;
 }
+html.dark .bg-particle {
+  background: rgba(255, 255, 255, 0.55);
+}
 
-/* ── 悬浮卡片外壳（单色系发丝线描边 + 阴影） ── */
+/* ── 品牌文案 ── */
+.auth-title {
+  color: var(--text-primary);
+}
+.auth-subtitle {
+  color: var(--text-muted);
+}
+.auth-footer {
+  color: var(--text-secondary);
+}
+.auth-link {
+  color: var(--text-primary);
+}
+
+/* ── 悬浮卡片外壳 ── */
 .card-shell {
   position: relative;
   padding: 1px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.05));
   border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(15, 15, 25, 0.12), 0 4px 14px rgba(15, 15, 25, 0.06);
+}
+html.dark .card-shell {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1));
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 6px 18px rgba(0, 0, 0, 0.4);
 }
 .card-shell :deep(.el-card) {
@@ -254,6 +287,9 @@ onUnmounted(() => {
 .login-btn:hover {
   transform: translateY(-1px);
   filter: brightness(1.06);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+html.dark .login-btn:hover {
   box-shadow: 0 6px 16px rgba(255, 255, 255, 0.25);
 }
 .login-btn:active {
