@@ -188,12 +188,6 @@
         <h2 class="text-xl font-semibold text-[var(--text-primary)]">错题本</h2>
         <div class="flex flex-wrap items-center gap-2">
           <el-button
-            size="small"
-            @click="$router.push('/analysis')"
-          >
-            完整做题历史（学习分析）
-          </el-button>
-          <el-button
             :type="showWrongBook ? 'primary' : 'default'"
             @click="toggleWrongBook"
             :loading="loadingWrong && !showWrongBook"
