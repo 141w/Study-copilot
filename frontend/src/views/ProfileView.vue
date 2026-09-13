@@ -71,7 +71,7 @@
     </div>
 
     <!-- ── 学习资产数据看板 ── -->
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3.5 mb-8">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-8">
       <router-link
         to="/documents"
         class="card p-4 hover:border-[var(--color-primary)] transition-all group flex flex-col justify-between"
@@ -130,7 +130,7 @@
 
       <router-link
         to="/analysis"
-        class="card p-4 hover:border-[var(--color-primary)] transition-all group flex flex-col justify-between col-span-2 sm:col-span-1"
+        class="card p-4 hover:border-[var(--color-primary)] transition-all group flex flex-col justify-between"
       >
         <div class="flex items-center justify-between text-[var(--text-muted)] group-hover:text-[var(--text-primary)]">
           <span class="text-xs font-medium">练习巩固</span>
@@ -143,6 +143,23 @@
           </div>
         </div>
       </router-link>
+
+      <div
+        class="card p-4 hover:border-[var(--color-primary)] transition-all group flex flex-col justify-between cursor-pointer"
+        title="点击查看 Token 与多模态资源消耗看板"
+        @click="activeTab = 'usage'"
+      >
+        <div class="flex items-center justify-between text-[var(--text-muted)] group-hover:text-[var(--text-primary)]">
+          <span class="text-xs font-medium">Token 消耗</span>
+          <el-icon class="w-4 h-4"><Cpu /></el-icon>
+        </div>
+        <div class="mt-3">
+          <div class="text-2xl font-bold text-[var(--text-primary)] tabular-nums">
+            {{ formatTokenNum(usageStore.totals.total_tokens) }}
+          </div>
+          <div class="text-[11px] text-[var(--text-muted)] mt-0.5">全模态总览</div>
+        </div>
+      </div>
     </div>
 
     <!-- ── 每日学习活动热力图（GitHub 贡献图风格） ── -->
@@ -513,6 +530,12 @@
             <MemoryManager />
           </div>
         </el-tab-pane>
+        <!-- ── TAB 6: Token 消耗 ── -->
+        <el-tab-pane label="Token 消耗" name="usage" lazy>
+          <div class="py-2">
+            <TokenUsageDashboard />
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
   </div>
@@ -530,16 +553,19 @@ import { useQuizStore } from '../stores/quiz'
 import { useThemeStore } from '../stores/theme'
 import { useConfigStore } from '../stores/config'
 import { useToastStore } from '../stores/toast'
+import { useUsageStore } from '../stores/usage'
 import { useReducedMotion } from '../composables/useReducedMotion'
 import { formatSize } from '../composables/useFormat'
 import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
 import MemoryManager from '@/components/profile/MemoryManager.vue'
+import TokenUsageDashboard from '@/components/profile/TokenUsageDashboard.vue'
 import LearningActivityGraph from '@/components/profile/LearningActivityGraph.vue'
 import { useUserPrefs } from '@/composables/useUserPrefs'
 import {
   Document, Reading, EditPen, ChatDotSquare, TrendCharts,
   Sunny, Moon, Edit, Setting
 } from '@/components/icons'
+import { Cpu } from '@element-plus/icons-vue'
 import type { AxiosError } from 'axios'
 
 const authStore = useAuthStore()
@@ -550,10 +576,18 @@ const chatStore = useChatStore()
 const quizStore = useQuizStore()
 const themeStore = useThemeStore()
 const configStore = useConfigStore()
+const usageStore = useUsageStore()
 const toast = useToastStore()
 const router = useRouter()
 const { prefersReduced } = useReducedMotion()
 const { prefs: userPrefs, savePreferences, setCustomAvatar, removeCustomAvatar } = useUserPrefs()
+
+function formatTokenNum(n: number | undefined): string {
+  if (!n) return '0'
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(Math.round(n))
+}
 
 const activeTab = ref('profile')
 const profileBot = ref<InstanceType<typeof CopilotBotAvatar> | null>(null)
@@ -561,6 +595,9 @@ const profileBot = ref<InstanceType<typeof CopilotBotAvatar> | null>(null)
 // 切到「界面与伴侣」时用 swirl 呼应设置转场语义（reduced-motion 由组件内部降级）
 watch(activeTab, (tab) => {
   if (tab === 'appearance') profileBot.value?.play('swirl')
+  if (tab === 'usage') {
+    usageStore.fetchDashboard(undefined, 'all').catch(() => {})
+  }
 })
 
 const llmModelName = computed(() => chatStore.config.modelName || '默认推理模型')
@@ -716,6 +753,7 @@ onMounted(async () => {
       noteStore.fetchNotes(),
       chatStore.fetchSessions(),
       quizStore.fetchKnowledgeStats(),
+      usageStore.fetchDashboard(undefined, 'all'),
       configStore.fetchLLMConfig().then(cfg => {
         if (cfg) {
           if (cfg.embedding_model) {

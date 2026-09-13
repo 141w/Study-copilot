@@ -9,6 +9,7 @@ Column[str] vs str 误报由此根除）。
 """
 
 import os
+import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
@@ -289,6 +290,8 @@ class AsyncTask(Base):
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # 通知：NULL=未读；非空=已读（仅终态任务产生通知）
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
 
 
 class DocumentChunk(Base):
@@ -378,6 +381,49 @@ class MemorySubject(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow_naive, onupdate=_utcnow_naive
     )
+
+
+class TokenUsage(Base):
+    """Tracks token consumption across AI Chat, Classroom Generation, and other tasks."""
+
+    __tablename__ = "token_usages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, index=True)
+    # 业务来源: chat, classroom, agent, quiz, transform, note
+    source: Mapped[str] = mapped_column(String(50), default="chat", index=True)
+    # 模态: llm, image, tts, asr
+    kind: Mapped[str] = mapped_column(String(20), default="llm", index=True)
+    provider: Mapped[str] = mapped_column(String(50), default="openai")
+    model_name: Mapped[str] = mapped_column(String(100), default="unknown", index=True)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    quantity: Mapped[int] = mapped_column(Integer, default=0)
+    unit: Mapped[str] = mapped_column(String(20), default="token")  # token, image, character, second
+    extra_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
+
+    user: Mapped["User"] = relationship()
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "source": self.source,
+            "kind": self.kind,
+            "provider": self.provider,
+            "model_name": self.model_name,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+            "quantity": self.quantity,
+            "unit": self.unit,
+            "extra_meta": self.extra_meta or {},
+        }
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:

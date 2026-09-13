@@ -756,6 +756,27 @@ async def discuss(
             except Exception as save_err:
                 logger.warning("Failed to save discussion message to DB: %s", save_err)
 
+            try:
+                from app.services.usage_service import record_usage
+
+                model_name = user_config.get("model_name") or user_config.get("model") or "unknown"
+                provider = user_config.get("provider", "openai")
+                prompt_est = int(len(req.question) * 0.8) + int(len(context) * 0.8) + 50
+                comp_est = int(len(full_content) * 0.8) + 1
+                await record_usage(
+                    db=db,
+                    user_id=current_user.id,
+                    source="chat",
+                    kind="llm",
+                    provider=provider,
+                    model_name=model_name,
+                    prompt_tokens=prompt_est,
+                    completion_tokens=comp_est,
+                    extra_meta={"session_id": session_id, "mode": "persona_discussion", "turns": len(collected_turns)},
+                )
+            except Exception as usage_err:
+                logger.warning("Failed to record discussion usage: %s", usage_err)
+
         try:
             from app.core.persona_discussion import discuss
 

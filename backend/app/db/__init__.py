@@ -14,6 +14,7 @@ from app.db.database import (
     Quiz,
     QuizResult,
     Tag,
+    TokenUsage,
     User,
     UserLLMConfig,
     engine,

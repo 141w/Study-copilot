@@ -221,6 +221,27 @@ async def ask_question(
         db, str(uuid.uuid4()), session_id, "assistant", result["answer"], sources_json, a_emb
     )
 
+    try:
+        from app.services.usage_service import record_usage
+
+        model_name = llm_config.get("model_name") or llm_config.get("model") or "unknown"
+        provider = llm_config.get("provider", "openai")
+        prompt_est = int(len(question) * 0.8) + sum(int(len(s.get("content", "")) * 0.8) for s in result.get("sources", [])) + 20
+        comp_est = int(len(result.get("answer", "")) * 0.8) + 1
+        await record_usage(
+            db=db,
+            user_id=user.id,
+            source="chat",
+            kind="llm",
+            provider=provider,
+            model_name=model_name,
+            prompt_tokens=prompt_est,
+            completion_tokens=comp_est,
+            extra_meta={"session_id": session_id, "mode": "rag_ask"},
+        )
+    except Exception as e:
+        logger.debug("[ChatService] Failed to record usage in ask_question: %s", e)
+
     return {
         "answer": result["answer"],
         "sources": result.get("sources", []),
@@ -380,6 +401,27 @@ async def ask_question_stream(
                 sources_json,
                 a_emb,
             )
+            try:
+                from app.services.usage_service import record_usage
+
+                model_name = llm_config.get("model_name") or llm_config.get("model") or "unknown"
+                provider = llm_config.get("provider", "openai")
+                prompt_est = int(len(question) * 0.8) + sum(int(len(s.get("content", "")) * 0.8) for s in collected_sources) + 20
+                comp_est = int(len(full_answer) * 0.8) + 1
+                source_name = "agent" if mode == "deep_research" else "chat"
+                await record_usage(
+                    db=db,
+                    user_id=user.id,
+                    source=source_name,
+                    kind="llm",
+                    provider=provider,
+                    model_name=model_name,
+                    prompt_tokens=prompt_est,
+                    completion_tokens=comp_est,
+                    extra_meta={"session_id": session_id, "mode": mode, "partial": True},
+                )
+            except Exception as e:
+                logger.debug("[ChatService] Failed to record usage in GeneratorExit: %s", e)
         done_yielded = True
         return
     finally:
@@ -430,6 +472,28 @@ async def ask_question_stream(
                     sources_json,
                     a_emb,
                 )
+                try:
+                    from app.services.usage_service import record_usage
+
+                    model_name = llm_config.get("model_name") or llm_config.get("model") or "unknown"
+                    provider = llm_config.get("provider", "openai")
+                    prompt_est = int(len(question) * 0.8) + sum(int(len(s.get("content", "")) * 0.8) for s in collected_sources) + 20
+                    comp_est = int(len(full_answer) * 0.8) + 1
+                    source_name = "agent" if mode == "deep_research" else "chat"
+                    await record_usage(
+                        db=db,
+                        user_id=user.id,
+                        source=source_name,
+                        kind="llm",
+                        provider=provider,
+                        model_name=model_name,
+                        prompt_tokens=prompt_est,
+                        completion_tokens=comp_est,
+                        extra_meta={"session_id": session_id, "mode": mode},
+                    )
+                except Exception as e:
+                    logger.debug("[ChatService] Failed to record usage in stream completion: %s", e)
+
             done_yielded = True
             done_payload: dict[str, Any] = {"type": "done"}
             if saved_note_data:
