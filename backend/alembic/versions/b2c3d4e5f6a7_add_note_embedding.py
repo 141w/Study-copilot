@@ -27,11 +27,19 @@ def upgrade() -> None:
             dim = int(settings.embedding_dimension or 768)
         except Exception:
             pass
-        op.add_column(
-            "notes",
-            sa.Column("embedding", sa.Text(), nullable=True),  # placeholder; set type below
-        )
-        op.execute(f"ALTER TABLE notes ALTER COLUMN embedding TYPE vector({dim})")
+        op.execute(f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'notes' AND column_name = 'embedding'
+                ) THEN
+                    ALTER TABLE notes ADD COLUMN embedding vector({dim});
+                ELSE
+                    ALTER TABLE notes ALTER COLUMN embedding TYPE vector({dim}) USING embedding::vector({dim});
+                END IF;
+            END $$;
+        """)
     else:
         # SQLite / test dialects: store JSON-encoded list
         op.add_column("notes", sa.Column("embedding", sa.Text(), nullable=True))
