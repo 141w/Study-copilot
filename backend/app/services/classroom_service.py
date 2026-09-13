@@ -18,7 +18,7 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-import yaml  # type: ignore[import-untyped]
+import yaml
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
