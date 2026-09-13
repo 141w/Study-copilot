@@ -64,6 +64,15 @@
         <div class="flex items-center gap-2">
           <el-button
             size="small"
+            type="success"
+            plain
+            @click="openOriginalFile"
+          >
+            <el-icon class="w-4 h-4 mr-1"><View /></el-icon>
+            查看原文件
+          </el-button>
+          <el-button
+            size="small"
             type="primary"
             @click="askAboutDoc"
           >
@@ -224,7 +233,7 @@
 </template>
 
 <script setup lang="ts">
-import { Document, Switch, CopyDocument, ChatLineRound, EditPen, Top, VideoPlay, Search, ChatDotSquare, Loading } from '@/components/icons'
+import { Document, Switch, CopyDocument, ChatLineRound, EditPen, Top, VideoPlay, Search, ChatDotSquare, Loading, View } from '@/components/icons'
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuizStore } from '../stores/quiz'
@@ -432,6 +441,31 @@ function copyAllText(): void {
   const text = chunks.value.map(c => c.text).join('\n\n')
   navigator.clipboard.writeText(text)
   toast.success('全文已复制到剪贴板')
+}
+
+/** 查看/下载原始上传文件（阅读页默认只展示解析切片） */
+async function openOriginalFile(): Promise<void> {
+  if (!selectedDoc.value) return
+  try {
+    const resp = await api.get(`/documents/${selectedDoc.value.id}/file`, {
+      responseType: 'blob',
+    })
+    const mime = (resp.headers['content-type'] as string) || 'application/octet-stream'
+    const blob = new Blob([resp.data], { type: mime })
+    const url = URL.createObjectURL(blob)
+    if (mime.includes('pdf')) {
+      window.open(url, '_blank')
+    } else {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = selectedDoc.value.filename || 'document'
+      a.click()
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (e: any) {
+    const detail = e?.response?.data?.detail
+    toast.error(typeof detail === 'string' ? detail : '原始文件不可用')
+  }
 }
 
 function explainChunk(chunk: DocChunk): void {
