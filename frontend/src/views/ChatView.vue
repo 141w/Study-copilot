@@ -154,7 +154,15 @@
       </div>
 
       <!-- Messages Area -->
-      <div ref="messagesRef" class="flex-1 overflow-y-auto">
+      <div class="flex-1 min-h-0 overflow-hidden relative">
+        <!-- 固定在视口右侧的定位轨，不随对话滚动 -->
+        <ProximitySidebar
+          v-if="proximitySections.length"
+          :sections="proximitySections"
+          :active-offset="0.4"
+          @navigate="onProximityNavigate"
+        />
+        <div ref="messagesRef" class="h-full overflow-y-auto">
         <div v-if="chatStore.messages.length === 0" class="max-w-2xl mx-auto text-center py-16">
           <CopilotBotAvatar class="bot-avatar-flip" :size="120" :mood="avatarMood" :expression="avatarExpr" />
           <h2 class="text-2xl font-semibold text-[var(--text-primary)] mb-2">你好，我是 Study Copilot</h2>
@@ -183,29 +191,41 @@
 
           <template v-for="(msg, idx) in chatStore.messages" :key="idx">
             <!-- Discussion mode -->
-            <ChatDiscussionItem
+            <div
               v-if="msg.role === 'discussion'"
-              :message="msg"
-            />
+              :id="`msg-${msg.id}`"
+              :data-msg-id="String(msg.id)"
+              data-msg-role="discussion"
+            >
+              <ChatDiscussionItem
+                :message="msg"
+              />
+            </div>
 
             <!-- Regular Assistant / User message -->
-            <ChatMessageItem
+            <div
               v-else
-              :message="msg"
+              :id="`msg-${msg.id}`"
+              :data-msg-id="String(msg.id)"
               :data-msg-role="msg.role"
-              :rendered-markdown="renderMarkdown(msg.content, msg.isStreaming)"
-              :rendered-reasoning="msg.reasoning ? renderMarkdown(msg.reasoning, false) : undefined"
-              :show-avatar="idx === lastAssistantIdx"
-              :is-latest-assistant="msg === chatStore.messages[chatStore.messages.length - 1]"
-              :avatar-mood="avatarMood"
-              :avatar-expr="avatarExpr"
-              :is-copied="copiedMsgId === msg.id"
-              @copy="copyMessage"
-              @scroll-to-source="scrollToSource"
-            />
+            >
+              <ChatMessageItem
+                :message="msg"
+                :rendered-markdown="renderMarkdown(msg.content, msg.isStreaming)"
+                :rendered-reasoning="msg.reasoning ? renderMarkdown(msg.reasoning, false) : undefined"
+                :show-avatar="idx === lastAssistantIdx"
+                :is-latest-assistant="msg === chatStore.messages[chatStore.messages.length - 1]"
+                :avatar-mood="avatarMood"
+                :avatar-expr="avatarExpr"
+                :is-copied="copiedMsgId === msg.id"
+                @copy="copyMessage"
+                @scroll-to-source="scrollToSource"
+              />
+            </div>
           </template>
         </div>
-      </div>
+        </div><!-- /messagesRef -->
+      </div><!-- /Messages Area -->
 
       <!-- Input Area -->
       <div class="border-t border-[var(--border-default)] bg-[var(--bg-primary)]/80 backdrop-blur-md">
@@ -252,6 +272,7 @@ import ChatHistoryPanel from '../components/chat/ChatHistoryPanel.vue'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
 import ChatMessageItem from '../components/chat/ChatMessageItem.vue'
 import ChatDiscussionItem from '../components/chat/ChatDiscussionItem.vue'
+import ProximitySidebar from '../components/chat/ProximitySidebar.vue'
 import PersonaManageDialog from '../components/chat/PersonaManageDialog.vue'
 import { useVisualViewport } from '../composables/useVisualViewport'
 import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatExport'
@@ -294,6 +315,33 @@ const researchMode = ref<'fast' | 'deep_research'>('fast')
 // 讨论上下文模式（rag_snippets=检索片段 / full_docs=全文打包）
 const discussContextMode = ref<'rag_snippets' | 'full_docs'>('rag_snippets')
 const discussMaxTurns = ref<number>(2)
+
+// ── Proximity sidebar：消息快速定位（rare-ui 横向短划线轨） ─────────────
+const proximitySections = computed(() => {
+  return chatStore.messages.map((m: any) => {
+    const raw = String(m.content || m.summary || '')
+    const preview = raw.replace(/\s+/g, ' ').trim().slice(0, 120) || '（空消息）'
+    const role =
+      m.role === 'user' ? '我' : m.role === 'discussion' ? '研讨' : 'Copilot'
+    const kind =
+      m.role === 'discussion'
+        ? ('title' as const)
+        : m.role === 'user'
+          ? ('section' as const)
+          : ('body' as const)
+    return {
+      id: `msg-${m.id}`,
+      label: `${role}：${preview}`,
+      preview,
+      role,
+      kind,
+    }
+  })
+})
+
+function onProximityNavigate(_id: string): void {
+  // 组件内部已 scrollIntoView；此处保留 hook 供后续埋点
+}
 
 // AI 研讨多 Agent 讨论角色库
 interface AvailablePersona {
@@ -1172,6 +1220,9 @@ onMounted(async () => {
   window.addEventListener('pointerdown', _onPointer, { passive: true })
   window.addEventListener('keydown', _onKey, { passive: true })
   onActivity()
+
+  await nextTick()
+  // 消息 DOM id 与 proximity sections 对齐：msg-${id}
 
   await chatStore.fetchSessions()
   await documentStore.fetchDocuments()
