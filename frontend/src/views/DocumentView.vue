@@ -229,6 +229,63 @@
       :documents="documentStore.documents"
       @generated="onClassroomGenerated"
     />
+
+    <!-- 原始文件本页预览 -->
+    <el-dialog
+      v-model="showOriginalPreview"
+      :title="originalPreviewTitle"
+      width="86%"
+      top="4vh"
+      destroy-on-close
+      class="original-file-dialog"
+      @closed="closeOriginalPreview"
+    >
+      <div class="original-preview-body">
+        <div v-if="originalPreviewLoading" class="py-16 text-center text-sm text-[var(--text-muted)]">
+          正在加载原始文件…
+        </div>
+        <template v-else>
+          <!-- PDF：内嵌浏览器原生预览 -->
+          <iframe
+            v-if="originalPreviewMime.includes('pdf') && originalPreviewUrl"
+            :src="originalPreviewUrl"
+            class="w-full h-[72vh] border-0 rounded-lg bg-white"
+            title="PDF 预览"
+          />
+          <!-- 图片 -->
+          <img
+            v-else-if="originalPreviewMime.startsWith('image/') && originalPreviewUrl"
+            :src="originalPreviewUrl"
+            class="max-w-full max-h-[72vh] mx-auto rounded-lg"
+            alt="文档图片"
+          />
+          <!-- Markdown / 文本：站内渲染 -->
+          <div
+            v-else-if="originalPreviewHtml"
+            class="prose prose-sm max-w-none overflow-y-auto max-h-[72vh] px-2 text-[var(--text-primary)]"
+            v-html="originalPreviewHtml"
+          />
+          <!-- 其它类型：提示下载 -->
+          <div v-else class="py-12 text-center space-y-3">
+            <p class="text-sm text-[var(--text-muted)]">
+              该文件类型（{{ originalPreviewMime || '未知' }}）暂不支持站内预览
+            </p>
+            <el-button type="primary" @click="downloadOriginalFile">下载原文件</el-button>
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-[var(--text-muted)]">
+            {{ originalPreviewMime }}
+          </span>
+          <div class="flex gap-2">
+            <el-button @click="downloadOriginalFile">下载</el-button>
+            <el-button type="primary" @click="showOriginalPreview = false">关闭</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -240,6 +297,7 @@ import { useQuizStore } from '../stores/quiz'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
 import { formatSize, cleanPdfText } from '../composables/useFormat'
+import { useMarkdown } from '../composables/useMarkdown'
 import type { Document as DocumentModel } from '../types/models'
 import TransformDialog from '../components/TransformDialog.vue'
 import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
@@ -265,9 +323,18 @@ function askAboutDoc(): void {
   router.push({ path: '/chat', query: { docId: selectedDoc.value.id } })
 }
 const toast = useToastStore()
+const { renderMarkdown } = useMarkdown()
 
 const selectedDoc = ref<DocumentModel | null>(null)
 const chunks = ref<DocChunk[]>([])
+// 原始文件本页预览
+const showOriginalPreview = ref(false)
+const originalPreviewUrl = ref('')
+const originalPreviewMime = ref('')
+const originalPreviewTitle = ref('')
+const originalPreviewHtml = ref('')
+const originalPreviewLoading = ref(false)
+const originalPreviewError = ref('')
 const searchQuery = ref('')
 // P3-5：文档内容加载态（区分"加载中"与"搜索无结果"）
 const isLoadingContent = ref(false)
@@ -443,29 +510,59 @@ function copyAllText(): void {
   toast.success('全文已复制到剪贴板')
 }
 
-/** 查看/下载原始上传文件（阅读页默认只展示解析切片） */
+/** 在本页弹层预览原始文件（PDF/图片/Markdown/文本）；其它类型提供下载 */
 async function openOriginalFile(): Promise<void> {
   if (!selectedDoc.value) return
+  originalPreviewLoading.value = true
+  originalPreviewError.value = ''
   try {
     const resp = await api.get(`/documents/${selectedDoc.value.id}/file`, {
       responseType: 'blob',
     })
     const mime = (resp.headers['content-type'] as string) || 'application/octet-stream'
     const blob = new Blob([resp.data], { type: mime })
-    const url = URL.createObjectURL(blob)
-    if (mime.includes('pdf')) {
-      window.open(url, '_blank')
+    originalPreviewMime.value = mime
+    originalPreviewUrl.value = URL.createObjectURL(blob)
+
+    const isTextish =
+      mime.includes('markdown') ||
+      mime.includes('text/') ||
+      mime.includes('json') ||
+      /\.(md|txt|json|csv)$/i.test(selectedDoc.value.filename || '')
+
+    if (isTextish) {
+      const text = await blob.text()
+      originalPreviewHtml.value = renderMarkdown(text)
     } else {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = selectedDoc.value.filename || 'document'
-      a.click()
+      originalPreviewHtml.value = ''
     }
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+
+    originalPreviewTitle.value = selectedDoc.value.filename || '原始文件'
+    showOriginalPreview.value = true
   } catch (e: any) {
     const detail = e?.response?.data?.detail
     toast.error(typeof detail === 'string' ? detail : '原始文件不可用')
+  } finally {
+    originalPreviewLoading.value = false
   }
+}
+
+function downloadOriginalFile(): void {
+  if (!originalPreviewUrl.value) return
+  const a = document.createElement('a')
+  a.href = originalPreviewUrl.value
+  a.download = originalPreviewTitle.value || 'document'
+  a.click()
+}
+
+function closeOriginalPreview(): void {
+  showOriginalPreview.value = false
+  if (originalPreviewUrl.value) {
+    URL.revokeObjectURL(originalPreviewUrl.value)
+    originalPreviewUrl.value = ''
+  }
+  originalPreviewHtml.value = ''
+  originalPreviewMime.value = ''
 }
 
 function explainChunk(chunk: DocChunk): void {
