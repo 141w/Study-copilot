@@ -759,8 +759,9 @@ async def discuss(
             try:
                 from app.services.usage_service import record_usage
 
-                model_name = user_config.get("model_name") or user_config.get("model") or "unknown"
-                provider = user_config.get("provider", "openai")
+                ucfg = user_config or {}
+                model_name = ucfg.get("model_name") or ucfg.get("model") or "unknown"
+                provider = ucfg.get("provider", "openai")
                 prompt_est = int(len(req.question) * 0.8) + int(len(context) * 0.8) + 50
                 comp_est = int(len(full_content) * 0.8) + 1
                 await record_usage(

@@ -570,10 +570,13 @@ class AgentEngine:
                     *(_run_one(e) for e in concurrent), return_exceptions=True
                 )
                 for entry, res in zip(concurrent, gathered):
-                    if isinstance(res, Exception):
+                    if isinstance(res, BaseException):
                         logger.warning("[AgentEngine] parallel tool %s failed: %s", entry["name"], res)
-                        res = ToolResult(success=False, output=f"工具执行失败: {res}", error=str(res))
-                    results_by_call[entry["call_id"] or entry["name"]] = res
+                        results_by_call[entry["call_id"] or entry["name"]] = ToolResult(
+                            success=False, output=f"工具执行失败: {res}", error=str(res)
+                        )
+                    else:
+                        results_by_call[entry["call_id"] or entry["name"]] = res
             else:
                 for entry in concurrent:
                     results_by_call[entry["call_id"] or entry["name"]] = await _run_one(entry)

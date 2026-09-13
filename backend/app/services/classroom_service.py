@@ -18,7 +18,7 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-import yaml
+import yaml  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -249,7 +249,7 @@ async def build_classroom_request(
         if not enable_web_search and cls_cfg.get("web_search_enabled"):
             enable_web_search = True
         if agent_mode == "default" and cls_cfg.get("agent_mode"):
-            agent_mode = cls_cfg.get("agent_mode")
+            agent_mode = str(cls_cfg.get("agent_mode") or agent_mode)
     except Exception as e:
         logger.debug("Failed to read user classroom config: %s", e)
 

@@ -160,5 +160,6 @@ async def mark_all_read(db: AsyncSession, user_id: str) -> int:
         )
         .values(read_at=now)
     )
+    rowcount = getattr(res, "rowcount", None) or 0
     await db.commit()
-    return int(res.rowcount or 0)
+    return int(rowcount)

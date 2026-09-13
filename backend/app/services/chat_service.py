@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import TextClause
 
 from app.agent import default_agent_engine
 from app.config import settings
@@ -27,7 +28,7 @@ from app.services.config_service import get_llm_config_with_secret
 logger = logging.getLogger(__name__)
 
 
-def _embedding_insert_sql() -> str:
+def _embedding_insert_sql() -> TextClause:
     """Build INSERT with CAST dimension from settings (not hardcoded 768)."""
     from app.config import settings
 

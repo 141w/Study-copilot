@@ -57,6 +57,8 @@ async def generate_speech(
     try:
         from app.services.config_service import get_llm_config_with_secret
 
+        if not current_user:
+            raise RuntimeError("auth required for user TTS config")
         secret_cfg = await get_llm_config_with_secret(db, current_user)
         cls_cfg = secret_cfg.get("classroom_config") or {}
         tts_config = {

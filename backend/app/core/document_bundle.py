@@ -87,19 +87,20 @@ def allocate_document_text_budgets(
             if remaining_budget == 0:
                 break
             share = int(remaining_budget * (entry["remaining"] * entry["weight"]) / total_weighted)
-            allocation = min(entry["remaining"], max(share, 1), remaining_budget)
-            budgets[entry["index"]] += allocation
-            entry["remaining"] -= allocation
-            remaining_budget -= allocation
+            allocation = int(min(entry["remaining"], max(share, 1), remaining_budget))
+            doc_idx = int(entry["index"])
+            budgets[doc_idx] += allocation
+            entry["remaining"] = int(entry["remaining"]) - allocation
+            remaining_budget = int(remaining_budget) - allocation
             distributed += allocation
 
         if distributed == 0:
             target = next((e for e in unmet if e["remaining"] > 0), None)
             if not target:
                 break
-            budgets[target["index"]] += 1
-            target["remaining"] -= 1
-            remaining_budget -= 1
+            budgets[int(target["index"])] += 1
+            target["remaining"] = int(target["remaining"]) - 1
+            remaining_budget = int(remaining_budget) - 1
 
         unmet = [e for e in unmet if e["remaining"] > 0]
 
