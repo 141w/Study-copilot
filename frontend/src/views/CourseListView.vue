@@ -43,63 +43,12 @@
       <el-button @click="openCreateModal">新建课程</el-button>
     </EmptyState>
 
-    <!-- AI 课程生成弹窗 -->
-    <el-dialog
+    <!-- AI 课堂生成（与课程详情 / 文档页同一组件，同一后端链路） -->
+    <GenerateClassroomDialog
       v-model="showGenDialog"
-      title="AI 生成课程"
-      width="480px"
-      :close-on-click-modal="false"
-    >
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">课程主题/要求</label>
-          <el-input
-            v-model="genRequirement"
-            type="textarea"
-            :rows="2"
-            placeholder="e.g. 线性代数第一章：向量空间基础"
-            maxlength="500"
-            show-word-limit
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">选择参考文档（最多 5 篇）</label>
-          <div class="border border-[var(--border-default)] rounded-lg p-2 max-h-40 overflow-y-auto">
-            <label
-              v-for="doc in readyDocs"
-              :key="doc.id"
-              class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-colors text-sm"
-              :class="genDocIds.includes(doc.id)
-                ? 'bg-[var(--color-primary)] text-[var(--text-inverse)]'
-                : 'bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
-            >
-              <input
-                type="checkbox"
-                :value="doc.id"
-                :checked="genDocIds.includes(doc.id)"
-                class="hidden"
-                @change="toggleGenDoc(doc.id)"
-              />
-              <span class="truncate">{{ doc.filename }}</span>
-            </label>
-            <p v-if="readyDocs.length === 0" class="text-sm text-[var(--text-muted)] text-center py-3">暂无文档</p>
-          </div>
-        </div>
-        <div v-if="genLoading" class="text-sm text-[var(--color-primary)]">正在生成课程，请稍候…</div>
-        <div v-if="genError" class="p-3 rounded-lg text-sm bg-[var(--color-error-light)] text-[var(--color-error)]">{{ genError }}</div>
-      </div>
-      <template #footer>
-        <el-button @click="showGenDialog = false">取消</el-button>
-        <el-button
-          type="primary"
-          :disabled="!genRequirement.trim() || genDocIds.length === 0 || genLoading"
-          :loading="genLoading"
-          @click="generateCourse"
-        >
-          {{ genLoading ? '生成中…' : '生成课程' }}
-        </el-button>
-      </template>
-    </el-dialog>
+      :documents="readyDocs"
+      @generated="onClassroomGenerated"
+    />
 
     <!-- Course Grid -->
     <div v-if="filteredCourses.length > 0" ref="courseGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -179,10 +128,10 @@ import { Plus, Reading, Search } from '@/components/icons'
 import { useCourseStore } from '../stores/course'
 import { useDocumentStore } from '../stores/document'
 import { useToastStore } from '../stores/toast'
-import api from '../services/api'
 import type { Course } from '../types/models'
 import { parseCourseDescription } from '../utils/course'
 import CourseCard from '../components/CourseCard.vue'
+import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import EmptyState from '../components/common/EmptyState.vue'
 import SkeletonList from '../components/common/SkeletonList.vue'
@@ -204,10 +153,6 @@ const editingCourse = ref<Course | null>(null)
 const deletingCourse = ref<Course | null>(null)
 const saving = ref(false)
 const showGenDialog = ref(false)
-const genRequirement = ref('')
-const genDocIds = ref<string[]>([])
-const genLoading = ref(false)
-const genError = ref('')
 
 interface CourseForm {
   name: string
@@ -255,48 +200,15 @@ function openCreateModal(): void {
 function onCreateAction(cmd: string): void {
   if (cmd === 'manual') openCreateModal()
   else if (cmd === 'generate') {
-    genRequirement.value = ''
-    genDocIds.value = []
-    genError.value = ''
     showGenDialog.value = true
   }
 }
 
-function toggleGenDoc(docId: string): void {
-  const idx = genDocIds.value.indexOf(docId)
-  if (idx >= 0) genDocIds.value.splice(idx, 1)
-  else if (genDocIds.value.length < 5) genDocIds.value.push(docId)
-}
-
-async function generateCourse(): Promise<void> {
-  genLoading.value = true
-  genError.value = ''
-  try {
-    // 走互动课堂引擎（OpenMAIC），而不是本地简化大纲模板
-    const { data } = await api.post('/classroom/generate', {
-      doc_ids: genDocIds.value,
-      requirement: genRequirement.value.trim() || '请根据文档生成互动微课',
-      enable_tts: true,
-      enable_image_generation: false,
-      agent_mode: 'default',
-    })
-    const courseId = data.course_id || data.class_id
-    if (data.degraded) {
-      toast.warning(data.message || '引擎不可用，已生成简化课程')
-    } else {
-      toast.success('课堂生成任务已提交（引擎约需数分钟），可稍后在课程中打开播放')
-    }
-    showGenDialog.value = false
-    courseStore.fetchCourses()
-    if (courseId) {
-      router.push(`/courses/${courseId}`)
-    }
-  }
-  catch (e: any) {
-    genError.value = e?.response?.data?.detail || e?.message || '生成失败'
-  }
-  finally {
-    genLoading.value = false
+/** 与 GenerateClassroomDialog 对齐：提交后刷新列表并跳转课程 */
+function onClassroomGenerated(result: { jobId: string; courseId?: string }): void {
+  courseStore.fetchCourses()
+  if (result.courseId) {
+    router.push(`/courses/${result.courseId}`)
   }
 }
 
