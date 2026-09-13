@@ -8,6 +8,7 @@ Create Date: 2026-09-13
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "b2c3d4e5f6a7"
@@ -31,7 +32,7 @@ def upgrade() -> None:
             DO $$
             BEGIN
                 IF NOT EXISTS (
-                    SELECT 1 FROM information_schema.columns 
+                    SELECT 1 FROM information_schema.columns
                     WHERE table_name = 'notes' AND column_name = 'embedding'
                 ) THEN
                     ALTER TABLE notes ADD COLUMN embedding vector({dim});
