@@ -13,7 +13,8 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # Need pgvector for messages/document_chunks/notes embedding columns
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: study_user
           POSTGRES_PASSWORD: study123
@@ -32,6 +33,9 @@ jobs:
       OPENAI_API_KEY: sk-dummy
       OPENAI_BASE_URL: https://api.openai.com/v1
       OPENAI_MODEL: gpt-3.5-turbo
+      # Valid Fernet key (tests must not depend on a developer machine secret)
+      ENCRYPTION_KEY: m6577GFSHBCYck63gksojMSWoolIXIRMIi8jEWiULTo=
+      HF_HUB_OFFLINE: "1"
 
     steps:
       - name: Checkout code
