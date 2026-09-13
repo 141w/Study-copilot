@@ -14,10 +14,12 @@ from app.api.document import router as document_router
 from app.api.memory import router as memory_router
 from app.api.metrics import router as metrics_router
 from app.api.notes import router as notes_router
+from app.api.notifications import router as notifications_router
 from app.api.quiz import router as quiz_router
 from app.api.tasks import router as tasks_router
 from app.api.transform import router as transform_router
 from app.api.tts import router as tts_router
+from app.api.usage import router as usage_router
 from app.config import settings
 from app.core.logger import setup_logging
 from app.db import ensure_current_schema, get_current_revision, run_migrations, stamp_head
@@ -131,9 +133,11 @@ app.include_router(notes_router, prefix="/api")
 app.include_router(transform_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
 app.include_router(metrics_router, prefix="/api")
 app.include_router(classroom_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
+app.include_router(usage_router, prefix="/api")
 
 
 @app.get("/")

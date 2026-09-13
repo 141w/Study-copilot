@@ -30,6 +30,8 @@
           </el-icon>
         </el-button>
 
+        <NotificationBell v-if="authStore.isAuthenticated" />
+
         <template v-if="authStore.isAuthenticated">
           <el-dropdown trigger="click" @command="handleCommand">
             <span
@@ -89,6 +91,7 @@ import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
 import { User, Sunny, Moon, Setting, Fold } from '@/components/icons'
 import CopilotBotAvatar, { type BotMood } from '@/components/CopilotBotAvatar.vue'
+import NotificationBell from '@/components/common/NotificationBell.vue'
 import { useUserPrefs } from '@/composables/useUserPrefs'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 import { takeLoginHandoffRect } from '@/utils/loginHandoff'

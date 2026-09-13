@@ -280,4 +280,9 @@ export const Microphone = makeIcon({
   inner: `<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
 })
 
-export default { Search, User, Document, Close, EditPen, ChatDotSquare, DocumentChecked, Edit, Delete, Tickets, Upload, CopyDocument, TrendCharts, Plus, VideoPlay, VideoPause, Promotion, HomeFilled, Setting, Download, WarningFilled, DocumentAdd, List, Switch, CircleCheckFilled, CircleCloseFilled, Clock, Loading, ArrowRight, View, Sunny, Moon, Fold, ChatLineRound, Top, CircleCheck, Link, DocumentCopy, MagicStick, ArrowLeft, Reading, Check, GraduationCap, Lightning, Brain, Microphone }
+export const Bell = makeIcon({
+  name: 'Bell',
+  inner: `<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
+})
+
+export default { Search, User, Document, Close, EditPen, ChatDotSquare, DocumentChecked, Edit, Delete, Tickets, Upload, CopyDocument, TrendCharts, Plus, VideoPlay, VideoPause, Promotion, HomeFilled, Setting, Download, WarningFilled, DocumentAdd, List, Switch, CircleCheckFilled, CircleCloseFilled, Clock, Loading, ArrowRight, View, Sunny, Moon, Fold, ChatLineRound, Top, CircleCheck, Link, DocumentCopy, MagicStick, ArrowLeft, Reading, Check, GraduationCap, Lightning, Brain, Microphone, Bell }
