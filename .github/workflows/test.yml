@@ -90,8 +90,13 @@ jobs:
           status=${PIPESTATUS[0]}
           {
             echo "### Backend pytest exit=$status"
+            echo '#### Failed tests'
             echo '```'
-            tail -n 120 /tmp/pytest-out.txt
+            grep -E '^(FAILED|ERROR)|assert |Error:|coverage' /tmp/pytest-out.txt | tail -n 80 || true
+            echo '```'
+            echo '#### Tail'
+            echo '```'
+            tail -n 40 /tmp/pytest-out.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
