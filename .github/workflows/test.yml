@@ -57,22 +57,25 @@ jobs:
       - name: Install Python dependencies with uv
         working-directory: backend
         run: |
+          # Install into the setup-python environment (not a separate uv venv)
           uv pip install --system -e '.[dev]'
 
       - name: Ruff lint check
         working-directory: backend
         run: |
-          uv run ruff check app/ --output-format=github
+          # Use the same interpreter that received --system installs.
+          # `uv run` would prefer a project .venv and may not see system packages.
+          python -m ruff check app/ --output-format=github
 
       - name: Type check with mypy
         working-directory: backend
         run: |
-          uv run mypy app
+          python -m mypy app
 
       - name: Run backend tests with coverage
         working-directory: backend
         run: |
-          uv run pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=65
+          python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=65
 
       - name: Upload backend coverage to Codecov
         if: always()
