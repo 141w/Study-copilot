@@ -646,6 +646,26 @@ async def test_engine_tool_stall_synthesis_gets_limited_info_notice():
 
 
 @pytest.mark.asyncio
+async def test_engine_emits_real_usage_event():
+    """Provider usage from chat_with_tools is surfaced as a usage SSE event."""
+    engine = AgentEngine(max_iterations=3)
+    with patch("app.core.llm.LLM.chat_with_tools", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = {
+            "content": "根据资料，答案是 A。",
+            "tool_calls": [],
+            "finish_reason": "stop",
+            "usage": {"prompt_tokens": 120, "completion_tokens": 40, "total_tokens": 160},
+        }
+        events = []
+        async for ev in engine.execute_stream(query="q", user_id="u1"):
+            events.append(ev)
+    usage_events = [e for e in events if e.get("type") == "usage"]
+    assert usage_events, "expected usage event"
+    assert usage_events[0]["prompt_tokens"] == 120
+    assert usage_events[0]["completion_tokens"] == 40
+
+
+@pytest.mark.asyncio
 async def test_engine_parallel_safe_tools_execute_both():
     """Two concurrent-safe tools in one turn must both run (asyncio.gather path)."""
     engine = AgentEngine(max_iterations=3)

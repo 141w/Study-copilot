@@ -345,6 +345,8 @@ class AgentEngine:
         accumulated_answer = ""
         source_pool: list[dict[str, Any]] = []
         token_usage = 0
+        real_prompt_tokens = 0
+        real_completion_tokens = 0
         last_tool_key = ""
         repeated_tool_calls = 0
         terminate_reason = "iterations_exhausted"
@@ -399,6 +401,12 @@ class AgentEngine:
             content = llm_res.get("content") or ""
             tool_calls = llm_res.get("tool_calls") or []
             finish_reason = llm_res.get("finish_reason") or "stop"
+
+            # 累计 provider 真实用量（优先于启发式 estimate）
+            _u = llm_res.get("usage") or {}
+            if _u:
+                real_prompt_tokens += int(_u.get("prompt_tokens") or 0)
+                real_completion_tokens += int(_u.get("completion_tokens") or 0)
 
             # Incremental token spend via shared estimator (output + tool-call args)
             token_usage += estimate_tokens([{"role": "assistant", "content": content, "tool_calls": tool_calls or []}])
@@ -689,6 +697,15 @@ class AgentEngine:
             token_usage,
             self.max_token_budget,
         )
+
+        # ── Emit real provider usage for dashboards (chat_service prefers this) ──
+        if real_prompt_tokens or real_completion_tokens:
+            yield {
+                "type": "usage",
+                "prompt_tokens": real_prompt_tokens,
+                "completion_tokens": real_completion_tokens,
+                "estimated_budget": token_usage,
+            }
 
         # ── Surface cumulative sources + emit answer as progressive tokens ──
         if accumulated_answer:

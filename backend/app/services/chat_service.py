@@ -286,6 +286,8 @@ async def ask_question_stream(
     detected_intent: str | None = None
     saved_note_data: dict | None = None
     done_yielded = False
+    # provider 真实用量（Agent 会发 usage 事件；无则回落字符估算）
+    real_usage: dict[str, int] | None = None
 
     stream_generator: AsyncIterator[dict[str, Any]]
     if mode == "deep_research":
@@ -320,6 +322,11 @@ async def ask_question_stream(
                 }
             elif chunk["type"] == "intent":
                 detected_intent = chunk.get("intent")
+            elif chunk["type"] == "usage":
+                p = int(chunk.get("prompt_tokens") or 0)
+                c = int(chunk.get("completion_tokens") or 0)
+                if p or c:
+                    real_usage = {"prompt_tokens": p, "completion_tokens": c}
             elif chunk["type"] == "thinking":
                 step_data = {
                     "step": chunk.get("step", ""),
@@ -406,8 +413,12 @@ async def ask_question_stream(
 
                 model_name = llm_config.get("model_name") or llm_config.get("model") or "unknown"
                 provider = llm_config.get("provider", "openai")
-                prompt_est = int(len(question) * 0.8) + sum(int(len(s.get("content", "")) * 0.8) for s in collected_sources) + 20
-                comp_est = int(len(full_answer) * 0.8) + 1
+                if real_usage:
+                    prompt_tokens = real_usage["prompt_tokens"]
+                    completion_tokens = real_usage["completion_tokens"]
+                else:
+                    prompt_tokens = int(len(question) * 0.8) + sum(int(len(s.get("content", "")) * 0.8) for s in collected_sources) + 20
+                    completion_tokens = int(len(full_answer) * 0.8) + 1
                 source_name = "agent" if mode == "deep_research" else "chat"
                 await record_usage(
                     db=db,
@@ -416,8 +427,8 @@ async def ask_question_stream(
                     kind="llm",
                     provider=provider,
                     model_name=model_name,
-                    prompt_tokens=prompt_est,
-                    completion_tokens=comp_est,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
                     extra_meta={"session_id": session_id, "mode": mode, "partial": True},
                 )
             except Exception as e:
@@ -477,8 +488,12 @@ async def ask_question_stream(
 
                     model_name = llm_config.get("model_name") or llm_config.get("model") or "unknown"
                     provider = llm_config.get("provider", "openai")
-                    prompt_est = int(len(question) * 0.8) + sum(int(len(s.get("content", "")) * 0.8) for s in collected_sources) + 20
-                    comp_est = int(len(full_answer) * 0.8) + 1
+                    if real_usage:
+                        prompt_tokens = real_usage["prompt_tokens"]
+                        completion_tokens = real_usage["completion_tokens"]
+                    else:
+                        prompt_tokens = int(len(question) * 0.8) + sum(int(len(s.get("content", "")) * 0.8) for s in collected_sources) + 20
+                        completion_tokens = int(len(full_answer) * 0.8) + 1
                     source_name = "agent" if mode == "deep_research" else "chat"
                     await record_usage(
                         db=db,
@@ -487,8 +502,8 @@ async def ask_question_stream(
                         kind="llm",
                         provider=provider,
                         model_name=model_name,
-                        prompt_tokens=prompt_est,
-                        completion_tokens=comp_est,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
                         extra_meta={"session_id": session_id, "mode": mode},
                     )
                 except Exception as e:
