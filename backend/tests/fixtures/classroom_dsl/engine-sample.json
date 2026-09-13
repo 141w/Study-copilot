@@ -1,0 +1,897 @@
+{
+  "id": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+  "url": "/courses/81421979-d4ae-4c8f-bb0a-18b6a86f7217/classroom",
+  "stage": {
+    "id": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+    "name": "未命名课程",
+    "description": "基于文档自动生成的课程",
+    "createdAt": 1788757753022,
+    "updatedAt": 1788757753022,
+    "style": "academic",
+    "languageDirective": "zh-CN",
+    "generatedAgentConfigs": [
+      {
+        "id": "teacher",
+        "name": "苏老师",
+        "role": "主讲导师",
+        "persona": "温和耐心的学术导师，擅长提纲挈领与深入浅出，引导思考",
+        "avatar": "GraduationCap",
+        "color": "#3B82F6",
+        "priority": 1,
+        "voiceConfig": {
+          "providerId": "edge-tts",
+          "voiceId": "zh-CN-YunxiNeural"
+        }
+      },
+      {
+        "id": "curious",
+        "name": "求知同学",
+        "role": "探索学员",
+        "persona": "好奇心强，善于提出初学者最容易遇到的困惑、边界问题和应用难点",
+        "avatar": "User",
+        "color": "#F59E0B",
+        "priority": 2,
+        "voiceConfig": {
+          "providerId": "edge-tts",
+          "voiceId": "zh-CN-XiaoxiaoNeural"
+        }
+      },
+      {
+        "id": "thinker",
+        "name": "学霸",
+        "role": "深度思考者",
+        "persona": "逻辑严密，善于结构化提炼、对比分析与寻找底层规律",
+        "avatar": "Brain",
+        "color": "#10B981",
+        "priority": 3,
+        "voiceConfig": {
+          "providerId": "edge-tts",
+          "voiceId": "zh-CN-YunjianNeural"
+        }
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": "scene-intro-9a1a7559",
+      "stageId": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+      "title": "导论：未命名课程",
+      "order": 0,
+      "type": "slide",
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "slide-intro-7ab0ad",
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625,
+          "theme": {
+            "backgroundColor": "#F8FAFC",
+            "themeColors": [
+              "#3B82F6",
+              "#10B981",
+              "#F59E0B",
+              "#6366F1"
+            ],
+            "fontColor": "#1E293B",
+            "fontName": "PingFang SC, Microsoft YaHei, sans-serif"
+          },
+          "elements": [
+            {
+              "id": "el-badge-814b9f",
+              "type": "shape",
+              "left": 60,
+              "top": 45,
+              "width": 110,
+              "height": 30,
+              "fill": "#EFF6FF",
+              "outline": {
+                "color": "#3B82F6",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "AI 互动微课"
+            },
+            {
+              "id": "el-title-9a335b",
+              "type": "text",
+              "left": 60,
+              "top": 85,
+              "width": 880,
+              "height": 55,
+              "content": "未命名课程",
+              "fontSize": 28,
+              "defaultColor": "#1E293B",
+              "lineHeight": 1.2
+            },
+            {
+              "id": "el-desc-card-1df391",
+              "type": "shape",
+              "left": 60,
+              "top": 150,
+              "width": 880,
+              "height": 85,
+              "fill": "#F8FAFC",
+              "outline": {
+                "color": "#E2E8F0",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "【课程目标】\n基于文档自动生成的课程"
+            },
+            {
+              "id": "el-catalog-dd6eea",
+              "type": "shape",
+              "left": 60,
+              "top": 250,
+              "width": 880,
+              "height": 260,
+              "fill": "#FFFFFF",
+              "outline": {
+                "color": "#E2E8F0",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "【本课章节演播目录】\n• 第 1 幕：第 1 部分 (入门)\n• 第 2 幕：第 2 部分 (入门)\n• 第 3 幕：第 3 部分 (入门)"
+            }
+          ]
+        }
+      },
+      "actions": [
+        {
+          "id": "act-intro-1-699498",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "同学们好！欢迎来到本节 AI 互动微课《未命名课程》。本课将通过多角色研讨与随堂检测，帮助大家系统掌握核心知识。",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-intro-2-95dedc",
+          "type": "speech",
+          "agentId": "curious",
+          "text": "苏老师，这门课主要涉及哪些核心要点？我们应该如何抓住关键脉络？",
+          "voice": "zh-CN-XiaoxiaoNeural"
+        },
+        {
+          "id": "act-intro-3-d04a06",
+          "type": "speech",
+          "agentId": "thinker",
+          "text": "从大纲编排来看，课程由浅入深，涵盖了关键原理与实际应用。建议大家在每幕随堂测验时重点验证理解。",
+          "voice": "zh-CN-YunjianNeural"
+        },
+        {
+          "id": "act-intro-4-537b8f",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "学霸总结得很清晰。下面我们正式进入第一幕的学习！",
+          "voice": "zh-CN-YunxiNeural"
+        }
+      ],
+      "createdAt": 1788757753022,
+      "updatedAt": 1788757753022
+    },
+    {
+      "id": "scene-1-46579cf3",
+      "stageId": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+      "title": "第 1 幕：第 1 部分",
+      "order": 1,
+      "type": "slide",
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "slide-1-e9bbb5",
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625,
+          "theme": {
+            "backgroundColor": "#F8FAFC",
+            "themeColors": [
+              "#3B82F6",
+              "#10B981",
+              "#F59E0B",
+              "#6366F1"
+            ],
+            "fontColor": "#1E293B",
+            "fontName": "PingFang SC, Microsoft YaHei, sans-serif"
+          },
+          "elements": [
+            {
+              "id": "el-badge-s-0",
+              "type": "shape",
+              "left": 60,
+              "top": 40,
+              "width": 140,
+              "height": 28,
+              "fill": "#EFF6FF",
+              "outline": {
+                "color": "#3B82F6",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "第 1 幕 · 入门"
+            },
+            {
+              "id": "el-title-s-0",
+              "type": "text",
+              "left": 60,
+              "top": 76,
+              "width": 880,
+              "height": 48,
+              "content": "第 1 部分",
+              "fontSize": 24,
+              "defaultColor": "#1E293B",
+              "lineHeight": 1.2
+            },
+            {
+              "id": "el-obj-s-0",
+              "type": "shape",
+              "left": 60,
+              "top": 132,
+              "width": 880,
+              "height": 60,
+              "fill": "#F1F5F9",
+              "outline": {
+                "color": "#CBD5E1",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "🎯 【学习目标】: 学习核心概念"
+            },
+            {
+              "id": "el-card-1-0747d5",
+              "type": "shape",
+              "left": 60,
+              "top": 210,
+              "width": 420,
+              "height": 300,
+              "fill": "#FFFFFF",
+              "outline": {
+                "color": "#3B82F6",
+                "width": 2,
+                "style": "solid"
+              },
+              "text": "💡 【重点一】\n\n要点\n\n• 核心要义与关键逻辑\n• 系统架构中的作用与地位"
+            },
+            {
+              "id": "el-card-2-bae73f",
+              "type": "shape",
+              "left": 520,
+              "top": 210,
+              "width": 420,
+              "height": 300,
+              "fill": "#FFFFFF",
+              "outline": {
+                "color": "#10B981",
+                "width": 2,
+                "style": "solid"
+              },
+              "text": "🔍 【重点二】\n\n应用实践与常见难点\n\n• 实践落地规范与注意要点\n• 常见误区与深度辨析"
+            }
+          ]
+        }
+      },
+      "actions": [
+        {
+          "id": "act-s0-1",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "现在我们进入第 1 幕：《第 1 部分》。本幕的目标是：学习核心概念。",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-s0-2",
+          "type": "spotlight",
+          "elementId": "el-card-1-0747d5",
+          "dimOpacity": 0.35
+        },
+        {
+          "id": "act-s0-3",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "首先看左侧核心重点：“要点”。大家注意把握它的基础机制与来龙去脉。",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-s0-4",
+          "type": "speech",
+          "agentId": "curious",
+          "text": "苏老师，关于“要点”，如果遇到复杂场景，最关键的切入点是什么？",
+          "voice": "zh-CN-XiaoxiaoNeural"
+        },
+        {
+          "id": "act-s0-5",
+          "type": "spotlight",
+          "elementId": "el-card-2-bae73f",
+          "dimOpacity": 0.35
+        },
+        {
+          "id": "act-s0-6",
+          "type": "speech",
+          "agentId": "thinker",
+          "text": "可以结合右侧的“应用实践与常见难点”来看。两者互为补充，理解了规范与应用边界，就不容易踩坑。",
+          "voice": "zh-CN-YunjianNeural"
+        },
+        {
+          "id": "act-s0-7",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "学霸讲得切中要害。让我们巩固这两点，准备进入本幕的挑战练习。",
+          "voice": "zh-CN-YunxiNeural"
+        }
+      ],
+      "createdAt": 1788757753022,
+      "updatedAt": 1788757753022
+    },
+    {
+      "id": "scene-quiz-1-38bfb8f0",
+      "stageId": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+      "title": "随堂挑战 · 第 1 部分",
+      "order": 2,
+      "type": "quiz",
+      "content": {
+        "type": "quiz",
+        "questions": [
+          {
+            "id": "6ae24baa-203c-4358-ad81-f6378aba3612",
+            "type": "single",
+            "question": "eGMP QMS系统配置说明的验证项目名称是什么？",
+            "options": [
+              {
+                "label": "康希诺生物股份公司",
+                "value": "A"
+              },
+              {
+                "label": "eGMP QMS系统配置说明",
+                "value": "B"
+              },
+              {
+                "label": "重庆阿克索信息科技有限公司",
+                "value": "C"
+              },
+              {
+                "label": "eGMP QMS System Configuration Specification",
+                "value": "D"
+              }
+            ],
+            "answer": [
+              "B"
+            ],
+            "analysis": "根据文档中「验证项目」字段内容，该配置说明的验证项目名称为eGMP QMS系统配置说明。",
+            "points": 10
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "act-qz-0-1",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "学习完《第 1 部分》，苏老师为大家准备了随堂挑战，请在屏幕上直接作答！",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-qz-0-2",
+          "type": "speech",
+          "agentId": "curious",
+          "text": "这道题很有针对性，我也来做一下，看看理解到位了没有！",
+          "voice": "zh-CN-XiaoxiaoNeural"
+        }
+      ],
+      "createdAt": 1788757753022,
+      "updatedAt": 1788757753022
+    },
+    {
+      "id": "scene-2-6a0b108d",
+      "stageId": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+      "title": "第 2 幕：第 2 部分",
+      "order": 3,
+      "type": "slide",
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "slide-2-3ea9de",
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625,
+          "theme": {
+            "backgroundColor": "#F8FAFC",
+            "themeColors": [
+              "#3B82F6",
+              "#10B981",
+              "#F59E0B",
+              "#6366F1"
+            ],
+            "fontColor": "#1E293B",
+            "fontName": "PingFang SC, Microsoft YaHei, sans-serif"
+          },
+          "elements": [
+            {
+              "id": "el-badge-s-1",
+              "type": "shape",
+              "left": 60,
+              "top": 40,
+              "width": 140,
+              "height": 28,
+              "fill": "#EFF6FF",
+              "outline": {
+                "color": "#3B82F6",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "第 2 幕 · 入门"
+            },
+            {
+              "id": "el-title-s-1",
+              "type": "text",
+              "left": 60,
+              "top": 76,
+              "width": 880,
+              "height": 48,
+              "content": "第 2 部分",
+              "fontSize": 24,
+              "defaultColor": "#1E293B",
+              "lineHeight": 1.2
+            },
+            {
+              "id": "el-obj-s-1",
+              "type": "shape",
+              "left": 60,
+              "top": 132,
+              "width": 880,
+              "height": 60,
+              "fill": "#F1F5F9",
+              "outline": {
+                "color": "#CBD5E1",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "🎯 【学习目标】: 学习核心概念"
+            },
+            {
+              "id": "el-card-1-54d2d6",
+              "type": "shape",
+              "left": 60,
+              "top": 210,
+              "width": 420,
+              "height": 300,
+              "fill": "#FFFFFF",
+              "outline": {
+                "color": "#3B82F6",
+                "width": 2,
+                "style": "solid"
+              },
+              "text": "💡 【重点一】\n\n要点\n\n• 核心要义与关键逻辑\n• 系统架构中的作用与地位"
+            },
+            {
+              "id": "el-card-2-65d69c",
+              "type": "shape",
+              "left": 520,
+              "top": 210,
+              "width": 420,
+              "height": 300,
+              "fill": "#FFFFFF",
+              "outline": {
+                "color": "#10B981",
+                "width": 2,
+                "style": "solid"
+              },
+              "text": "🔍 【重点二】\n\n应用实践与常见难点\n\n• 实践落地规范与注意要点\n• 常见误区与深度辨析"
+            }
+          ]
+        }
+      },
+      "actions": [
+        {
+          "id": "act-s1-1",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "现在我们进入第 2 幕：《第 2 部分》。本幕的目标是：学习核心概念。",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-s1-2",
+          "type": "spotlight",
+          "elementId": "el-card-1-54d2d6",
+          "dimOpacity": 0.35
+        },
+        {
+          "id": "act-s1-3",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "首先看左侧核心重点：“要点”。大家注意把握它的基础机制与来龙去脉。",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-s1-4",
+          "type": "speech",
+          "agentId": "curious",
+          "text": "苏老师，关于“要点”，如果遇到复杂场景，最关键的切入点是什么？",
+          "voice": "zh-CN-XiaoxiaoNeural"
+        },
+        {
+          "id": "act-s1-5",
+          "type": "spotlight",
+          "elementId": "el-card-2-65d69c",
+          "dimOpacity": 0.35
+        },
+        {
+          "id": "act-s1-6",
+          "type": "speech",
+          "agentId": "thinker",
+          "text": "可以结合右侧的“应用实践与常见难点”来看。两者互为补充，理解了规范与应用边界，就不容易踩坑。",
+          "voice": "zh-CN-YunjianNeural"
+        },
+        {
+          "id": "act-s1-7",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "学霸讲得切中要害。让我们巩固这两点，准备进入本幕的挑战练习。",
+          "voice": "zh-CN-YunxiNeural"
+        }
+      ],
+      "createdAt": 1788757753022,
+      "updatedAt": 1788757753022
+    },
+    {
+      "id": "scene-quiz-2-ec692c79",
+      "stageId": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+      "title": "随堂挑战 · 第 2 部分",
+      "order": 4,
+      "type": "quiz",
+      "content": {
+        "type": "quiz",
+        "questions": [
+          {
+            "id": "cdf809cd-5535-4f0f-b9c2-70d410b5db14",
+            "type": "single",
+            "question": "eGMP QMS系统的使用公司是？",
+            "options": [
+              {
+                "label": "重庆阿克索信息科技有限公司",
+                "value": "A"
+              },
+              {
+                "label": "康希诺生物股份公司",
+                "value": "B"
+              },
+              {
+                "label": "CanSino Biologic Inc",
+                "value": "C"
+              },
+              {
+                "label": "eGMP QMS System Configuration Specification",
+                "value": "D"
+              }
+            ],
+            "answer": [
+              "B"
+            ],
+            "analysis": "文档中「使用公司」字段明确标注该系统使用公司为康希诺生物股份公司，CanSino Biologic Inc为其对应英文名称。",
+            "points": 10
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "act-qz-1-1",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "学习完《第 2 部分》，苏老师为大家准备了随堂挑战，请在屏幕上直接作答！",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-qz-1-2",
+          "type": "speech",
+          "agentId": "curious",
+          "text": "这道题很有针对性，我也来做一下，看看理解到位了没有！",
+          "voice": "zh-CN-XiaoxiaoNeural"
+        }
+      ],
+      "createdAt": 1788757753022,
+      "updatedAt": 1788757753022
+    },
+    {
+      "id": "scene-3-db1a6295",
+      "stageId": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+      "title": "第 3 幕：第 3 部分",
+      "order": 5,
+      "type": "slide",
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "slide-3-401073",
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625,
+          "theme": {
+            "backgroundColor": "#F8FAFC",
+            "themeColors": [
+              "#3B82F6",
+              "#10B981",
+              "#F59E0B",
+              "#6366F1"
+            ],
+            "fontColor": "#1E293B",
+            "fontName": "PingFang SC, Microsoft YaHei, sans-serif"
+          },
+          "elements": [
+            {
+              "id": "el-badge-s-2",
+              "type": "shape",
+              "left": 60,
+              "top": 40,
+              "width": 140,
+              "height": 28,
+              "fill": "#EFF6FF",
+              "outline": {
+                "color": "#3B82F6",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "第 3 幕 · 入门"
+            },
+            {
+              "id": "el-title-s-2",
+              "type": "text",
+              "left": 60,
+              "top": 76,
+              "width": 880,
+              "height": 48,
+              "content": "第 3 部分",
+              "fontSize": 24,
+              "defaultColor": "#1E293B",
+              "lineHeight": 1.2
+            },
+            {
+              "id": "el-obj-s-2",
+              "type": "shape",
+              "left": 60,
+              "top": 132,
+              "width": 880,
+              "height": 60,
+              "fill": "#F1F5F9",
+              "outline": {
+                "color": "#CBD5E1",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "🎯 【学习目标】: 学习核心概念"
+            },
+            {
+              "id": "el-card-1-a95c44",
+              "type": "shape",
+              "left": 60,
+              "top": 210,
+              "width": 420,
+              "height": 300,
+              "fill": "#FFFFFF",
+              "outline": {
+                "color": "#3B82F6",
+                "width": 2,
+                "style": "solid"
+              },
+              "text": "💡 【重点一】\n\n要点\n\n• 核心要义与关键逻辑\n• 系统架构中的作用与地位"
+            },
+            {
+              "id": "el-card-2-e5fdc6",
+              "type": "shape",
+              "left": 520,
+              "top": 210,
+              "width": 420,
+              "height": 300,
+              "fill": "#FFFFFF",
+              "outline": {
+                "color": "#10B981",
+                "width": 2,
+                "style": "solid"
+              },
+              "text": "🔍 【重点二】\n\n应用实践与常见难点\n\n• 实践落地规范与注意要点\n• 常见误区与深度辨析"
+            }
+          ]
+        }
+      },
+      "actions": [
+        {
+          "id": "act-s2-1",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "现在我们进入第 3 幕：《第 3 部分》。本幕的目标是：学习核心概念。",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-s2-2",
+          "type": "spotlight",
+          "elementId": "el-card-1-a95c44",
+          "dimOpacity": 0.35
+        },
+        {
+          "id": "act-s2-3",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "首先看左侧核心重点：“要点”。大家注意把握它的基础机制与来龙去脉。",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-s2-4",
+          "type": "speech",
+          "agentId": "curious",
+          "text": "苏老师，关于“要点”，如果遇到复杂场景，最关键的切入点是什么？",
+          "voice": "zh-CN-XiaoxiaoNeural"
+        },
+        {
+          "id": "act-s2-5",
+          "type": "spotlight",
+          "elementId": "el-card-2-e5fdc6",
+          "dimOpacity": 0.35
+        },
+        {
+          "id": "act-s2-6",
+          "type": "speech",
+          "agentId": "thinker",
+          "text": "可以结合右侧的“应用实践与常见难点”来看。两者互为补充，理解了规范与应用边界，就不容易踩坑。",
+          "voice": "zh-CN-YunjianNeural"
+        },
+        {
+          "id": "act-s2-7",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "学霸讲得切中要害。让我们巩固这两点，准备进入本幕的挑战练习。",
+          "voice": "zh-CN-YunxiNeural"
+        }
+      ],
+      "createdAt": 1788757753022,
+      "updatedAt": 1788757753022
+    },
+    {
+      "id": "scene-quiz-3-3b9a2ad0",
+      "stageId": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+      "title": "随堂挑战 · 第 3 部分",
+      "order": 6,
+      "type": "quiz",
+      "content": {
+        "type": "quiz",
+        "questions": [
+          {
+            "id": "84b07419-1536-4a9f-9c5e-a190367bd294",
+            "type": "single",
+            "question": "eGMP QMS系统的系统供应商是？",
+            "options": [
+              {
+                "label": "康希诺生物股份公司",
+                "value": "A"
+              },
+              {
+                "label": "重庆阿克索信息科技有限公司",
+                "value": "B"
+              },
+              {
+                "label": "CanSino Biologic Inc",
+                "value": "C"
+              },
+              {
+                "label": "Chongqing Akso Information Technology Co Ltd",
+                "value": "D"
+              }
+            ],
+            "answer": [
+              "B"
+            ],
+            "analysis": "文档中「系统供应商」字段明确标注该系统供应商为重庆阿克索信息科技有限公司，Chongqing Akso Information Technology Co Ltd为其对应英文名称。",
+            "points": 10
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "act-qz-2-1",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "学习完《第 3 部分》，苏老师为大家准备了随堂挑战，请在屏幕上直接作答！",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-qz-2-2",
+          "type": "speech",
+          "agentId": "curious",
+          "text": "这道题很有针对性，我也来做一下，看看理解到位了没有！",
+          "voice": "zh-CN-XiaoxiaoNeural"
+        }
+      ],
+      "createdAt": 1788757753022,
+      "updatedAt": 1788757753022
+    },
+    {
+      "id": "scene-outro-192bf98e",
+      "stageId": "81421979-d4ae-4c8f-bb0a-18b6a86f7217",
+      "title": "课程总结与结语",
+      "order": 7,
+      "type": "slide",
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "slide-outro-49ec9d",
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625,
+          "theme": {
+            "backgroundColor": "#F8FAFC",
+            "themeColors": [
+              "#3B82F6",
+              "#10B981",
+              "#F59E0B",
+              "#6366F1"
+            ],
+            "fontColor": "#1E293B",
+            "fontName": "PingFang SC, Microsoft YaHei, sans-serif"
+          },
+          "elements": [
+            {
+              "id": "el-badge-end-1fff4c",
+              "type": "shape",
+              "left": 60,
+              "top": 50,
+              "width": 140,
+              "height": 30,
+              "fill": "#ECFDF5",
+              "outline": {
+                "color": "#10B981",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "🎉 结课复盘"
+            },
+            {
+              "id": "el-title-end-b3144e",
+              "type": "text",
+              "left": 60,
+              "top": 95,
+              "width": 880,
+              "height": 55,
+              "content": "恭喜完成《未命名课程》学习！",
+              "fontSize": 28,
+              "defaultColor": "#1E293B",
+              "lineHeight": 1.2
+            },
+            {
+              "id": "el-card-end-0af61b",
+              "type": "shape",
+              "left": 60,
+              "top": 170,
+              "width": 880,
+              "height": 320,
+              "fill": "#FFFFFF",
+              "outline": {
+                "color": "#E2E8F0",
+                "width": 1,
+                "style": "solid"
+              },
+              "text": "🏆 【学习成果沉淀】\n\n1. 已完整通晓本课程核心章节与关键知识点体系；\n2. 顺利完成随堂交互式测验，建立了体系化认知；\n3. 建议点击「返回课程」进入错题本或问答研讨模式进一步加深掌握！"
+            }
+          ]
+        }
+      },
+      "actions": [
+        {
+          "id": "act-end-1-dc43b7",
+          "type": "speech",
+          "agentId": "teacher",
+          "text": "祝贺各位同学顺利学完《未命名课程》的所有内容！大家展现了非常好的求知状态。",
+          "voice": "zh-CN-YunxiNeural"
+        },
+        {
+          "id": "act-end-2-2579a4",
+          "type": "speech",
+          "agentId": "thinker",
+          "text": "学完后建议结合课件大纲和错题解析再复盘一遍，加深记忆痕迹。",
+          "voice": "zh-CN-YunjianNeural"
+        },
+        {
+          "id": "act-end-3-04b30e",
+          "type": "speech",
+          "agentId": "curious",
+          "text": "收获满满！谢谢苏老师和学霸学长的细心指导！",
+          "voice": "zh-CN-XiaoxiaoNeural"
+        }
+      ],
+      "createdAt": 1788757753022,
+      "updatedAt": 1788757753022
+    }
+  ],
+  "scenesCount": 8,
+  "createdAt": "2026-09-07T05:09:13Z"
+}

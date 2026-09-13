@@ -11,26 +11,11 @@ jobs:
     name: Backend Tests
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        # Need pgvector for messages/document_chunks/notes embedding columns
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: study_user
-          POSTGRES_PASSWORD: study123
-          POSTGRES_DB: study_copilot_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U study_user"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+    # Unit tests use SQLite (tests/conftest.py + DATABASE_URL below).
+    # A PostgreSQL service is not required for the current suite.
 
     env:
       # Unit tests use SQLite fixtures in tests/conftest.py.
-      # Point the app engine at the same SQLite DB so import-time engine
-      # creation does not require a migrated PostgreSQL instance.
       DATABASE_URL: sqlite+aiosqlite:///./ci-test.db
       JWT_SECRET_KEY: ci-test-secret-key
       OPENAI_API_KEY: sk-dummy
@@ -38,7 +23,9 @@ jobs:
       OPENAI_MODEL: gpt-3.5-turbo
       # Valid Fernet key (tests must not depend on a developer machine secret)
       ENCRYPTION_KEY: m6577GFSHBCYck63gksojMSWoolIXIRMIi8jEWiULTo=
+      # Offline: tests must not download HuggingFace models on the Runner
       HF_HUB_OFFLINE: "1"
+      CI: "true"
 
     steps:
       - name: Checkout code

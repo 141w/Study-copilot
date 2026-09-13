@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -7,6 +9,80 @@ from app.main import app
 
 # 使用 SQLite 作为测试数据库（无需 PostgreSQL）
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+# 与 settings.embedding_dimension / 文档向量列一致
+FAKE_EMBED_DIM = 768
+
+
+class _FakeEmbedder:
+    """CI / 离线环境用的轻量 embedder 占位（接口与 app.core.embedder.embedder 对齐）。
+
+    真实模型仅在本机已缓存、且未设置 HF_HUB_OFFLINE/CI 时才需要；
+    单元测试关注业务编排，不应依赖 HuggingFace 下载。
+    """
+
+    model_name = "fake/test-embedder"
+    dimension = FAKE_EMBED_DIM
+
+    @property
+    def model(self):
+        # system_status 等探活代码会读 embedder.model
+        return object()
+
+    def _vec(self, seed: str) -> list[float]:
+        # 确定性伪向量：同文本 → 同向量，便于断言
+        h = abs(hash(seed)) % (2**32)
+        return [((h >> (i % 32)) & 1) * 0.1 + (i % 7) * 0.01 for i in range(FAKE_EMBED_DIM)]
+
+    async def embed_query(self, text: str):
+        import numpy as np
+
+        return np.array(self._vec(text or ""), dtype="float32")
+
+    async def embed_texts(self, texts: list[str]):
+        import numpy as np
+
+        return np.array([self._vec(t or "") for t in texts], dtype="float32")
+
+    def encode(self, texts, **kwargs):
+        import numpy as np
+
+        if isinstance(texts, str):
+            return np.array(self._vec(texts), dtype="float32")
+        return np.array([self._vec(t or "") for t in texts], dtype="float32")
+
+    def ensure_loaded(self):
+        return None
+
+
+def _should_mock_embedder() -> bool:
+    return os.environ.get("HF_HUB_OFFLINE") == "1" or os.environ.get("CI") == "true"
+
+
+@pytest.fixture(autouse=True)
+async def _fake_embedder_in_ci(monkeypatch):
+    """HF_HUB_OFFLINE=1 或 CI 时替换全局 embedder，避免 Runner 拉模型。"""
+    if not _should_mock_embedder():
+        yield
+        return
+    import app.core.embedder as emb_mod
+
+    fake = _FakeEmbedder()
+    monkeypatch.setattr(emb_mod, "embedder", fake)
+    # 常见 from-import 站点
+    for mod_name in (
+        "app.services.chat_service",
+        "app.services.document_service",
+        "app.services.note_service",
+        "app.core.pgvector_store",
+        "app.core.vector_store",
+    ):
+        try:
+            mod = __import__(mod_name, fromlist=["embedder"])
+            if hasattr(mod, "embedder"):
+                monkeypatch.setattr(mod, "embedder", fake)
+        except Exception:
+            pass
+    yield
 
 
 @pytest.fixture(scope="session")

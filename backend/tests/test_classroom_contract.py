@@ -125,10 +125,20 @@ SCENE_KEYS = {
 
 
 def _load_engine_dsl_sample() -> dict:
-    """读取引擎真实产物样本（上游生成的课堂 JSON）。"""
+    """读取引擎真实产物样本（上游生成的课堂 JSON）。
+
+    优先使用仓库内锁定的 fixture（CI 干净 checkout 可用）；
+    本机存在 classroom/data/classrooms 时也可作为补充来源。
+    """
+    fixture = Path(__file__).resolve().parent / "fixtures" / "classroom_dsl" / "engine-sample.json"
+    if fixture.is_file():
+        return json.loads(fixture.read_text(encoding="utf-8"))
     sample_dir = ENGINE_ROOT / "data" / "classrooms"
     files = sorted(sample_dir.glob("*.json"))
-    assert files, "classroom/data/classrooms 无样本可锁定 DSL schema（引擎生成一次后回填样本）"
+    assert files, (
+        "缺少 DSL 样本：backend/tests/fixtures/classroom_dsl/engine-sample.json "
+        "且 classroom/data/classrooms 为空"
+    )
     return json.loads(files[0].read_text(encoding="utf-8"))
 
 
