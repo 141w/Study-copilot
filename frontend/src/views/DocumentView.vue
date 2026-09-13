@@ -64,8 +64,7 @@
         <div class="flex items-center gap-2">
           <el-button
             size="small"
-            type="success"
-            plain
+            type="primary"
             @click="openOriginalFile"
           >
             <el-icon class="w-4 h-4 mr-1"><View /></el-icon>
@@ -81,7 +80,7 @@
           </el-button>
           <el-button
             size="small"
-            type="default"
+            type="primary"
             @click="openTransform"
           >
             <el-icon class="w-4 h-4 mr-1"><Switch /></el-icon>
@@ -89,7 +88,7 @@
           </el-button>
           <el-button
             size="small"
-            type="default"
+            type="primary"
             @click="copyAllText"
           >
             <el-icon class="w-4 h-4 mr-1"><CopyDocument /></el-icon>
