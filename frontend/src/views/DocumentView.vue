@@ -446,7 +446,7 @@ function scrollToFirstMatch(): void {
 
 /** 笔记/聊天深链：/documents?doc=&page=&q= */
 async function applyDeepLinkFromRoute(): Promise<void> {
-  const docId = route.query.doc
+  const docId = route?.query?.doc
   if (typeof docId !== 'string' || !docId) return
   await documentStore.fetchDocuments()
   const doc = documentStore.documents.find(d => d.id === docId)
@@ -454,8 +454,8 @@ async function applyDeepLinkFromRoute(): Promise<void> {
     toast.error('未找到对应文档')
     return
   }
-  const page = typeof route.query.page === 'string' ? route.query.page : undefined
-  const q = typeof route.query.q === 'string' ? route.query.q : undefined
+  const page = typeof route?.query?.page === 'string' ? route.query.page : undefined
+  const q = typeof route?.query?.q === 'string' ? route.query.q : undefined
   await selectDocument(doc, { highlight: q, page })
 }
 

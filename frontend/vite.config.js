@@ -271,10 +271,6 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
-      '/api/usage': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
       '/api/web-search': {
         target: 'http://localhost:3001',
         changeOrigin: true,
