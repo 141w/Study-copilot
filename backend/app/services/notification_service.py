@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import AsyncTask
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +95,8 @@ def build_notification(task: AsyncTask) -> dict[str, Any]:
         "body": body,
         "link": link,
         "read": task.read_at is not None,
-        "created_at": str(task.created_at) if task.created_at else None,
-        "completed_at": str(task.completed_at) if task.completed_at else None,
+        "created_at": isoformat_utc(task.created_at),
+        "completed_at": isoformat_utc(task.completed_at),
     }
 
 

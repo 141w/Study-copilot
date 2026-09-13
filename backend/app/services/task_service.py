@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import AsyncTask, User
 from app.exceptions import NotFoundError, ValidationError
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -232,8 +233,8 @@ def format_task(task: AsyncTask) -> dict:
         "progress": task.progress,
         "result": result_data,
         "error": task.error,
-        "created_at": str(task.created_at) if task.created_at else None,
-        "completed_at": str(task.completed_at) if task.completed_at else None,
+        "created_at": isoformat_utc(task.created_at),
+        "completed_at": isoformat_utc(task.completed_at),
     }
 
 

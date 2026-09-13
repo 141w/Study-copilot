@@ -19,6 +19,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import TokenUsage, User, _utcnow_naive
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +363,7 @@ async def get_usage_dashboard(
     recent_records = [
         {
             "id": r.id,
-            "created_at": r.created_at.isoformat(),
+            "created_at": isoformat_utc(r.created_at),
             "source": r.source,
             "source_label": SOURCE_LABELS.get(r.source, r.source),
             "kind": r.kind,

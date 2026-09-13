@@ -147,3 +147,36 @@ async def test_failed_task_notification_link(client, db_session, local_user):
     assert "LLM" in n["body"]
     assert n["link"] == "/tasks"
     assert n["level"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_notification_timestamps_are_utc_iso_z(local_user, client, db_session):
+    """Naive UTC DB times must serialize with Z so JS Date treats them as UTC."""
+    from datetime import UTC, datetime
+
+    from app.db import AsyncTask
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    db_session.add(
+        AsyncTask(
+            id="t-tz",
+            user_id=local_user.id,
+            task_type="document_process",
+            status="completed",
+            progress=1.0,
+            result='{"filename":"a.pdf","doc_id":"d1"}',
+            created_at=now,
+            completed_at=now,
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get("/api/notifications")
+    n = next(x for x in resp.json()["notifications"] if x["id"] == "t-tz")
+    assert n["completed_at"] and n["completed_at"].endswith("Z")
+    assert n["created_at"] and n["created_at"].endswith("Z")
+    # JS parse as UTC should be within ~2 minutes of now
+    from datetime import datetime as dt
+
+    parsed = dt.fromisoformat(n["completed_at"].replace("Z", "+00:00"))
+    assert abs((parsed - datetime.now(UTC)).total_seconds()) < 120
