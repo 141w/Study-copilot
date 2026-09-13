@@ -143,35 +143,32 @@
                   {{ chunk.page ? `第 ${chunk.page} 页` : `段落 ${filteredChunks.findIndex(c => c.idx === chunk.idx) + 1}` }}
                 </span>
               </div>
-              <!-- Hover Actions（P3-3：md 常显 / 触屏点按可见）-->
-              <div class="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 opacity-100 transition-opacity">
-                <el-tooltip content="解释此段" placement="top">
-                  <button
-                    @click="explainChunk(chunk)"
-                    class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-default)] rounded-md transition-all active:scale-95 cursor-pointer"
-                    aria-label="解释此段"
-                  >
-                    <el-icon class="w-4 h-4"><ChatLineRound /></el-icon>
-                  </button>
-                </el-tooltip>
-                <el-tooltip content="基于此段出题" placement="top">
-                  <button
-                    @click="generateQuiz(chunk)"
-                    class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-default)] rounded-md transition-all active:scale-95 cursor-pointer"
-                    aria-label="基于此段出题"
-                  >
-                    <el-icon class="w-4 h-4"><EditPen /></el-icon>
-                  </button>
-                </el-tooltip>
-                <el-tooltip content="复制段落" placement="top">
-                  <button
-                    @click="copyText(chunk.text)"
-                    class="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-default)] rounded-md transition-all active:scale-95 cursor-pointer"
-                    aria-label="复制段落"
-                  >
-                    <el-icon class="w-4 h-4"><CopyDocument /></el-icon>
-                  </button>
-                </el-tooltip>
+              <!-- Hover Actions：与顶栏操作同规格 -->
+              <div class="flex items-center gap-1.5 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 opacity-100 transition-opacity">
+                <el-button
+                  size="small"
+                  type="primary"
+                  @click="explainChunk(chunk)"
+                >
+                  <el-icon class="w-4 h-4 mr-1"><ChatLineRound /></el-icon>
+                  解释此段
+                </el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  @click="generateQuiz(chunk)"
+                >
+                  <el-icon class="w-4 h-4 mr-1"><EditPen /></el-icon>
+                  基于此段出题
+                </el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  @click="copyText(chunk.text)"
+                >
+                  <el-icon class="w-4 h-4 mr-1"><CopyDocument /></el-icon>
+                  复制段落
+                </el-button>
               </div>
             </div>
 
