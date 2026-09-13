@@ -28,7 +28,10 @@ jobs:
           --health-retries=5
 
     env:
-      DATABASE_URL: postgresql+asyncpg://study_user:study123@localhost:5432/study_copilot_test
+      # Unit tests use SQLite fixtures in tests/conftest.py.
+      # Point the app engine at the same SQLite DB so import-time engine
+      # creation does not require a migrated PostgreSQL instance.
+      DATABASE_URL: sqlite+aiosqlite:///./ci-test.db
       JWT_SECRET_KEY: ci-test-secret-key
       OPENAI_API_KEY: sk-dummy
       OPENAI_BASE_URL: https://api.openai.com/v1
