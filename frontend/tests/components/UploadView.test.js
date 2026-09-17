@@ -70,7 +70,13 @@ describe('UploadView Component', () => {
     const wrapper = createWrapper(UploadView)
     const fileInput = wrapper.find('input[type="file"]')
     expect(fileInput.exists()).toBe(true)
-    expect(fileInput.attributes('accept')).toBe('.pdf,.docx,.pptx')
+    const accept = fileInput.attributes('accept') || ''
+    expect(accept).toContain('.pdf')
+    expect(accept).toContain('.docx')
+    expect(accept).toContain('.pptx')
+    expect(accept).toContain('.txt')
+    expect(accept).toContain('.md')
+    expect(accept).toContain('.png')
   })
 
   it('has a select file button', () => {
