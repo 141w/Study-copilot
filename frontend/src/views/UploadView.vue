@@ -17,7 +17,7 @@
       <p class="text-[var(--text-secondary)] mb-2">拖拽文档到此处，或点击上传</p>
       <input
         type="file"
-        accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md,.markdown"
+        accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md,.markdown,.jpg,.jpeg,.png,.webp,.bmp"
         class="hidden"
         ref="fileInput"
         @change="handleFileSelect"
@@ -29,11 +29,11 @@
         {{ uploading ? '上传中...' : '选择文件' }}
       </el-button>
       <p class="text-sm text-[var(--text-muted)] mt-4">
-        支持 PDF、Word、PPT、TXT、Markdown，最大 50MB
+        支持 PDF、Word、PPT、TXT、Markdown、图片（OCR），最大 50MB
       </p>
       <div class="flex justify-center gap-2 mt-3 flex-wrap">
         <span
-          v-for="t in ['PDF', 'Word', 'PowerPoint', 'TXT', 'Markdown']"
+          v-for="t in ['PDF', 'Word', 'PowerPoint', 'TXT', 'Markdown', '图片OCR']"
           :key="t"
           class="text-xs px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]"
         >{{ t }}</span>
