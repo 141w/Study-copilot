@@ -17,7 +17,7 @@
       <p class="text-[var(--text-secondary)] mb-2">拖拽文档到此处，或点击上传</p>
       <input
         type="file"
-        accept=".pdf,.docx,.pptx"
+        accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md,.markdown"
         class="hidden"
         ref="fileInput"
         @change="handleFileSelect"
@@ -28,11 +28,15 @@
       >
         {{ uploading ? '上传中...' : '选择文件' }}
       </el-button>
-      <p class="text-sm text-[var(--text-muted)] mt-4">支持 PDF、DOCX、PPTX 格式，最大 50MB</p>
-      <div class="flex justify-center gap-4 mt-3">
-        <span class="text-xs px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]">PDF</span>
-        <span class="text-xs px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]">Word</span>
-        <span class="text-xs px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]">PowerPoint</span>
+      <p class="text-sm text-[var(--text-muted)] mt-4">
+        支持 PDF、Word、PPT、TXT、Markdown，最大 50MB
+      </p>
+      <div class="flex justify-center gap-2 mt-3 flex-wrap">
+        <span
+          v-for="t in ['PDF', 'Word', 'PowerPoint', 'TXT', 'Markdown']"
+          :key="t"
+          class="text-xs px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]"
+        >{{ t }}</span>
       </div>
     </div>
 
@@ -176,14 +180,17 @@ async function uploadFile(file: File): Promise<void> {
     const axiosError = error as { response?: { data?: { detail?: string } } }
     const detail = axiosError.response?.data?.detail || ''
     let message: string
-    if (detail.includes('文档解析失败')) {
-      message = '无法解析此文档，请确认文件未损坏'
+    if (detail.includes('文档解析失败') || detail.includes('可搜索 PDF') || detail.includes('Docling')) {
+      // 透传后端可操作提示
+      message = detail
     } else if (detail.includes('文档内容不足')) {
       message = '文档内容太少，无法生成知识块'
     } else if (detail.includes('文件过大')) {
       message = '文件超过 50MB 限制'
+    } else if (detail.includes('不支持的文件类型')) {
+      message = detail
     } else {
-      message = '上传失败，请重试'
+      message = detail || '上传失败，请重试'
     }
     toastStore.error(message)
   } finally {
