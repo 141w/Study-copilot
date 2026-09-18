@@ -659,11 +659,14 @@ function scrollToSource(index: number): void {
 
 async function handleSend(content: string): Promise<void> {
   if (chatMode.value === 'discuss') {
+    collapseAllSourceCards()
     await handleDiscuss(content)
     await nextTick()
     forceScrollToBottom()
     return
   }
+  // 新一轮：收起此前展开的参考来源，保证新消息可见
+  collapseAllSourceCards()
   // 启动流式但不等结束：立刻让「刚发出的 user + 占位回答」进入可视区
   const streamPromise = chatStore.askQuestionStream(
     content, selectedDocs.value, null, researchMode.value
@@ -977,15 +980,24 @@ function newChat(): void {
   if (chatStore.messages.length > 0) {
     playScene('burst')
   }
+  collapseAllSourceCards()
   chatStore.clearMessages()
   chatStore.currentSession = null
   chatStore.currentSessionTitle = ''
   showHistory.value = false
 }
 
+/** 参考来源自动折叠：新一轮对话 / 新会话 / 重进历史时强制收起 */
+function collapseAllSourceCards(): void {
+  for (const m of chatStore.messages) {
+    m.expandedSources = false
+  }
+}
+
 function onSessionLoaded(_sessionId: string): void {
   showHistory.value = false
   // 历史 DOM + Markdown/图片高度会晚于 nextTick 稳定 → 多帧贴底
+  collapseAllSourceCards()
   scrollChatToBottomSticky(8)
   // P8：载入历史会话 → orbit 入场
   playScene('arrive')
@@ -1251,6 +1263,8 @@ onMounted(async () => {
   window.addEventListener('pointerdown', _onPointer, { passive: true })
   window.addEventListener('keydown', _onKey, { passive: true })
   onActivity()
+  // 离开页面后再进入：来源卡一律折叠
+  collapseAllSourceCards()
 
   await nextTick()
   // 消息 DOM id 与 proximity sections 对齐：msg-${id}

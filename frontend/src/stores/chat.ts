@@ -146,6 +146,8 @@ export const useChatStore = defineStore('chat', () => {
           savedNote,
           saved_note: savedNote,
           discussionTurns: m.discussionTurns || (m as any).discussion_turns || undefined,
+          // 重进页面 / 切会话：参考来源默认折叠，避免遮挡最新消息
+          expandedSources: false,
         }
       })
       currentSession.value = sessionId
