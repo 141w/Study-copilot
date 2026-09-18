@@ -15,7 +15,7 @@ from app.core import metrics_counters
 from app.core.adaptive_retriever import adaptive_retriever
 from app.core.answer_reflector import answer_reflector
 from app.core.embedder import embedder
-from app.core.llm import LLM
+from app.core.llm import LLM, build_chat_messages, resolve_completion_max_tokens
 from app.core.pgvector_store import PgVectorStore
 from app.core.query_router import QueryType, query_router
 from app.core.retrieval_grader import retrieval_grader
@@ -481,15 +481,15 @@ class RAGEngine:
         if memory_envelope:
             system_prompt = f"{system_prompt}\n\n{memory_envelope}"
         user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+        # Multi-turn: inject history between system and current question
+        messages = build_chat_messages(system_prompt, history, user_prompt)
         llm = LLM.from_config(llm_config)
         try:
             if llm_config:
                 temperature = llm_config.get("temperature", 0.7)
-                max_tokens = llm_config.get("max_tokens")
+                max_tokens = resolve_completion_max_tokens(
+                    llm.model, llm_config.get("max_tokens")
+                )
                 answer = await llm.chat(messages, temperature=temperature, max_tokens=max_tokens)
             else:
                 answer = await llm.chat(messages)
@@ -507,10 +507,7 @@ class RAGEngine:
         if memory_envelope:
             system_prompt = f"{system_prompt}\n\n{memory_envelope}"
         user_prompt = f"参考文档：\n{context}\n\n来源列表：\n{sources_text}\n\n问题：{query}"
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+        messages = build_chat_messages(system_prompt, history, user_prompt)
         llm = LLM.from_config(llm_config)
         temperature = llm_config.get("temperature", 0.7) if llm_config else 0.7
         max_tokens = llm_config.get("max_tokens") if llm_config else None

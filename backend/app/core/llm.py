@@ -15,6 +15,62 @@ from app.core.tracing import record_generation
 
 SUPPORTED_MESSAGE_FORMATS = {"openai", "anthropic", "gemini", "ollama"}
 
+_THINKING_MODEL_HINTS = (
+    "r1",
+    "think",
+    "o1",
+    "o3",
+    "qwq",
+    "reasoner",
+    "step-3",
+    "deepseek-r1",
+)
+
+
+def is_thinking_model(model: Any) -> bool:
+    try:
+        name = str(model or "").lower()
+    except Exception:
+        return False
+    return any(h in name for h in _THINKING_MODEL_HINTS)
+
+
+def resolve_completion_max_tokens(model: Any, configured: Any) -> int | None:
+    """Return a safe completion token budget.
+
+    Thinking models spend ``max_tokens`` on reasoning *before* content. Multi-turn
+    prompts lengthen reasoning, so a tight budget (e.g. 2048) truncates answers
+    more often as conversation grows. Floor budgets accordingly.
+    """
+    try:
+        cfg = int(configured) if configured not in (None, "") else None
+    except (TypeError, ValueError):
+        cfg = None
+    if is_thinking_model(model):
+        return max(cfg or 0, 8000) if cfg is not None else 8000
+    if cfg is not None and cfg < 4096:
+        return max(cfg, 4096)
+    return cfg
+
+
+def build_chat_messages(
+    system_prompt: str,
+    history: list[dict[str, Any]] | None,
+    user_prompt: str,
+) -> list[dict[str, str]]:
+    """Assemble OpenAI messages: system + trimmed history turns + current user."""
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    for h in history or []:
+        if not isinstance(h, dict):
+            continue
+        role = h.get("role")
+        content = str(h.get("content") or "").strip()
+        if not content or role not in ("system", "user", "assistant"):
+            continue
+        messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_prompt})
+    return messages
+
 
 def normalize_message_format(
     messages: list[dict[str, Any]],
@@ -177,20 +233,27 @@ class LLM:
           {"type": "reasoning" | "token", "content": str}
         若 include_reasoning=False，返回纯字符串流（默认向后兼容）。
         """
+        budget = resolve_completion_max_tokens(self.model, max_tokens)
         last_err: Exception | None = None
         for attempt in range(max_retries + 1):
             has_yielded = False
             in_think_tag = False
+            finish_reason: str | None = None
             try:
                 stream = await self.client.chat.completions.create(
                     model=self.model,
                     messages=cast(Any, messages),
                     temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=budget,
                     stream=True,
                 )
                 async for chunk in stream:
-                    delta = chunk.choices[0].delta if chunk.choices else None
+                    choice = chunk.choices[0] if chunk.choices else None
+                    if not choice:
+                        continue
+                    if getattr(choice, "finish_reason", None):
+                        finish_reason = choice.finish_reason
+                    delta = choice.delta
                     if not delta:
                         continue
 
@@ -240,6 +303,21 @@ class LLM:
                                         break
                         else:
                             yield content
+                if finish_reason == "length":
+                    logger.warning(
+                        "chat_stream truncated: finish_reason=length model=%s max_tokens=%s",
+                        self.model,
+                        budget,
+                    )
+                    notice = (
+                        "\n\n> ⚠️ 回复因达到 max_tokens 上限被截断"
+                        f"（当前约 {budget}）。可在「模型设置」中调高 max_tokens，"
+                        "或让我「继续」接着写。"
+                    )
+                    if include_reasoning:
+                        yield {"type": "token", "content": notice}
+                    else:
+                        yield notice
                 return  # 成功完成，退出重试循环
             except Exception as e:
                 if has_yielded:

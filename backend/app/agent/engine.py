@@ -22,7 +22,7 @@ from app.agent.tools.definitions import (
     SearchMemoryTool,
 )
 from app.agent.tools.policy import can_run_concurrently
-from app.core.llm import LLM
+from app.core.llm import LLM, resolve_completion_max_tokens
 from app.core.rag_engine import extract_source_indices
 from app.core.tracing import async_trace_span_ctx, trace_span_ctx
 from app.services.memory_service import memory_service
@@ -366,6 +366,9 @@ class AgentEngine:
 
             # ── Think: Call LLM with tool schemas ──
             try:
+                completion_budget = resolve_completion_max_tokens(
+                    llm.model, (cfg or {}).get("max_tokens")
+                )
                 async with async_trace_span_ctx(
                     "agent.llm.chat_with_tools",
                     metadata={"iteration": iteration},
@@ -375,6 +378,7 @@ class AgentEngine:
                         messages=messages,
                         tools=schemas,
                         temperature=0.4,
+                        max_tokens=completion_budget,
                     )
             except Exception as e:
                 logger.error("[AgentEngine] LLM invocation error: %s", e)
