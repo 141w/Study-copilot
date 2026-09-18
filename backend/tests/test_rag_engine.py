@@ -337,6 +337,7 @@ class TestRAGEngineAsync:
     async def test_generate_answer_with_max_tokens(self, MockLLM, engine):
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = "答案"
+        mock_llm.model = "gpt-4o-mini"
         MockLLM.return_value = mock_llm
         MockLLM.from_config.return_value = mock_llm
 
@@ -344,7 +345,8 @@ class TestRAGEngineAsync:
         await engine.generate_answer("q", "ctx", llm_config=config)
         mock_llm.chat.assert_called_once()
         call_kwargs = mock_llm.chat.call_args
-        assert call_kwargs[1].get("max_tokens") == 512
+        # Completion budget is floored so tiny max_tokens cannot truncate answers
+        assert call_kwargs[1].get("max_tokens") >= 4096
 
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
