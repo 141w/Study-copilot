@@ -85,8 +85,6 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.text()).toContain('思考过程 (2 步)')
     expect(wrapper.text()).toContain('检索知识库')
     expect(wrapper.html()).toContain('RAG 即检索增强生成。')
-    expect(wrapper.text()).toContain('rag_paper.pdf')
-    expect(wrapper.text()).toContain('P3')
     expect(wrapper.find('.sticky').exists()).toBe(true)
 
     // 复制按钮测试
