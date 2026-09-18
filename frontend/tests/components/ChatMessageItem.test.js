@@ -95,8 +95,9 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.emitted('copy')).toBeTruthy()
     expect(wrapper.emitted('copy')?.[0][0].id).toBe('2')
 
-    // 来源卡可见：默认只显示标题，正文摘要需点击展开
-    expect(wrapper.find('.source-card').exists()).toBe(true)
+    // 来源区默认折叠；展开后卡内只显示标题
+    expect(wrapper.find('.source-card').exists()).toBe(false)
+    await wrapper.find('[data-test="sources-toggle"]').trigger('click')
     expect(wrapper.text()).toContain('rag_paper.pdf')
     expect(wrapper.text()).not.toContain('RAG 架构解析')
     const cardToggle = wrapper.find('[data-test="source-card-toggle-1"]')
@@ -158,7 +159,7 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.find('.thinking-section').attributes('open')).toBeUndefined()
   })
 
-  it('来源卡：首 token 后展示完整卡且默认展开，可折叠切换', async () => {
+  it('来源卡：首 token 后展示完整区，默认折叠，可手动展开', async () => {
     const wrapper = mount(ChatMessageItem, {
       props: {
         message: {
@@ -209,6 +210,12 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
 
     expect(wrapper.find('[data-test="sources-research-hint"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="sources-toggle"]').exists()).toBe(true)
+    // 自动折叠规则：默认折叠，优先露出正文
+    expect(wrapper.find('.source-card').exists()).toBe(false)
+    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('false')
+
+    // 手动展开来源区
+    await wrapper.find('[data-test="sources-toggle"]').trigger('click')
     expect(wrapper.find('.source-card').exists()).toBe(true)
     expect(wrapper.text()).toContain('ml_notes.md')
     // 卡内正文默认折叠，仅标题
@@ -226,27 +233,21 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('.source-card').exists()).toBe(false)
     expect(wrapper.text()).toContain('参考来源')
-
-    // 再展开
-    await wrapper.find('[data-test="sources-toggle"]').trigger('click')
-    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('true')
-    expect(wrapper.find('.source-card').exists()).toBe(true)
   })
 
-  it('历史消息（非流式）来源区默认展开，单卡默认只显示标题', async () => {
+  it('历史消息（非流式）来源区默认折叠，展开后单卡只显示标题', async () => {
+    const message = {
+      id: 'hist-1',
+      role: 'assistant',
+      content: '回答内容 [来源1]',
+      sources: [
+        { index: 1, source: 'notes.md', page: '2', text: '原文摘要', document_id: 'd1' },
+      ],
+      isStreaming: false,
+      created_at: new Date().toISOString(),
+    }
     const wrapper = mount(ChatMessageItem, {
-      props: {
-        message: {
-          id: 'hist-1',
-          role: 'assistant',
-          content: '回答内容 [来源1]',
-          sources: [
-            { index: 1, source: 'notes.md', page: '2', text: '原文摘要', document_id: 'd1' },
-          ],
-          isStreaming: false,
-          created_at: new Date().toISOString(),
-        },
-      },
+      props: { message },
       global: {
         stubs: {
           CopilotBotAvatar: true,
@@ -257,13 +258,24 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
       },
     })
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('.source-card').exists()).toBe(true)
+    // 默认折叠：不展示来源正文区
+    expect(wrapper.find('.source-card').exists()).toBe(false)
+    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('false')
+
+    await wrapper.find('[data-test="sources-toggle"]').trigger('click')
     expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('true')
-    // 单卡正文默认折叠
     expect(wrapper.text()).toContain('notes.md')
     expect(wrapper.text()).not.toContain('原文摘要')
-    await wrapper.find('[data-test="source-card-toggle-1"]').trigger('click')
-    expect(wrapper.text()).toContain('原文摘要')
+    // 展开态写回 message，供全局强制折叠
+    expect(wrapper.props('message').expandedSources).toBe(true)
+
+    // 模拟新一轮对话 / 重进页面：store 写入 false → 组件应收起
+    await wrapper.setProps({
+      message: { ...message, expandedSources: false },
+    })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-test="sources-toggle"]').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.source-card').exists()).toBe(false)
   })
 
   it('正确渲染原生 CoT 深度思考面板（Reasoning Box）与折叠交互', async () => {
@@ -725,6 +737,10 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
       }
     })
 
+    await wrapper.vm.$nextTick()
+    // 默认折叠：先展开来源区再校验卡内结构
+    expect(wrapper.find('.source-card').exists()).toBe(false)
+    await wrapper.find('[data-test="sources-toggle"]').trigger('click')
     const card = wrapper.find('.source-card')
     expect(card.exists()).toBe(true)
     // 重构后来源卡样式走 scoped 语义类；触发按钮必须带「剥 UA 原生皮肤」的专用类

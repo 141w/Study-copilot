@@ -246,7 +246,7 @@
               class="sources-toggle"
               data-test="sources-toggle"
               :aria-expanded="isSourcesOpen"
-              @click="isSourcesOpen = !isSourcesOpen"
+              @click="toggleSourcesOpen"
             >
               <div class="sources-toggle__left">
                 <div class="sources-toggle__icon">
@@ -363,52 +363,50 @@ const isResearchPhase = computed(() => {
 /** 完整来源卡展开态：历史消息默认展开；流式结束后自动展开一次 */
 const isSourcesOpen = ref(false)
 
-function syncSourcesOpenAfterStream(): void {
-  if (displaySources.value.length > 0) {
-    isSourcesOpen.value = true
-  }
+/** 展开态双写 message.expandedSources，供 ChatView.collapseAllSourceCards 强制收起 */
+function toggleSourcesOpen(): void {
+  setSourcesOpen(!isSourcesOpen.value)
 }
 
-// 正文开始吐字：离开研究阶段，铺开完整卡
+function setSourcesOpen(open: boolean): void {
+  isSourcesOpen.value = open
+  props.message.expandedSources = open
+}
+
+// 正文首次吐字：默认折叠（除非消息已标记展开，例如引用跳转）
 watch(
   () => Boolean(props.message.content),
   (hasContent, hadContent) => {
     if (hasContent && !hadContent) {
-      isSourcesOpen.value = false
-      // 首 token 后给用户完整来源入口；默认展开一次便于核对引用
-      if (displaySources.value.length > 0) {
-        isSourcesOpen.value = true
-      }
+      isSourcesOpen.value = Boolean(props.message.expandedSources)
     }
   }
 )
 
-// 流结束：确保完整区可见且默认展开
 watch(
   () => props.message.isStreaming,
   (isStreaming, wasStreaming) => {
-    if (!isStreaming && wasStreaming) {
-      syncSourcesOpenAfterStream()
+    if (!isStreaming && wasStreaming && !props.message.expandedSources) {
+      isSourcesOpen.value = false
     }
   }
 )
 
-// 历史会话挂载 / 消息切换：非流式且有来源时默认展开
+// 历史会话挂载 / 消息切换：默认折叠
 watch(
   () => props.message.id,
   () => {
-    isSourcesOpen.value = Boolean(
-      !props.message.isStreaming && displaySources.value.length > 0
-    )
+    isSourcesOpen.value = Boolean(props.message.expandedSources)
   },
   { immediate: true }
 )
 
-// 点击正文内的 [来源N] 跳转时，确保来源区是打开的
+// true → 展开（引用跳转）；false → 收起（新轮次 / 重进页面）
 watch(
   () => props.message.expandedSources,
   (open) => {
-    if (open) isSourcesOpen.value = true
+    if (open === true) isSourcesOpen.value = true
+    else if (open === false) isSourcesOpen.value = false
   }
 )
 
@@ -435,7 +433,7 @@ function handleContentClick(e: MouseEvent): void {
     if (idx) {
       const num = parseInt(idx, 10)
       if (!isNaN(num)) {
-        isSourcesOpen.value = true
+        setSourcesOpen(true)
         emit('scrollToSource', num)
         nextTick(() => {
           sourceCardsRef.value?.expand(num)
