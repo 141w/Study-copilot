@@ -31,18 +31,18 @@ def test_build_chat_messages_skips_empty_history():
 
 def test_thinking_model_budget_floor():
     assert is_thinking_model("step-3.7-flash")
-    assert resolve_completion_max_tokens("step-3.7-flash", 2048) >= 8000
-    assert resolve_completion_max_tokens("step-3.7-flash", None) == 8000
+    assert resolve_completion_max_tokens("step-3.7-flash", 2048) >= 16000
+    assert resolve_completion_max_tokens("step-3.7-flash", None) == 16000
 
 
 def test_thinking_budget_scales_with_long_multiturn_prompt():
     short = resolve_completion_max_tokens("step-3.7-flash", 2048, prompt_chars=0)
-    long = resolve_completion_max_tokens("step-3.7-flash", 2048, prompt_chars=20000)
-    assert long > short + 2000
-    assert long <= 16000
+    long = resolve_completion_max_tokens("step-3.7-flash", 2048, prompt_chars=40000)
+    assert long > short + 4000
+    assert long <= 32768
 
 
 def test_normal_model_budget_floor():
     assert not is_thinking_model("gpt-4o-mini")
-    assert resolve_completion_max_tokens("gpt-4o-mini", 2048) == 4096
-    assert resolve_completion_max_tokens("gpt-4o-mini", 8192) == 8192
+    assert resolve_completion_max_tokens("gpt-4o-mini", 2048) == 8192
+    assert resolve_completion_max_tokens("gpt-4o-mini", 16384) == 16384

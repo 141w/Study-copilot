@@ -381,7 +381,7 @@ def _default_config() -> dict:
         "provider": "openrouter",
         "model_name": "gpt-4o-mini",
         "temperature": 0.7,
-        "max_tokens": 2048,
+        "max_tokens": 8192,
         "context_window": 262144,
         "embedding_model": "shibing624/text2vec-base-chinese",
         "embedding_dimension": 768,

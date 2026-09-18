@@ -43,21 +43,24 @@ def resolve_completion_max_tokens(
     Thinking models spend ``max_tokens`` on reasoning *before* content. Multi-turn
     prompts lengthen reasoning, so a tight budget (e.g. 2048) truncates answers
     more often as conversation grows. Floor budgets and scale with prompt size.
+
+    StepFun ``step-3.7-flash`` accepts 8k–32k max_tokens in practice; typical
+    short answers use ~1–3k completion tokens, but CoT + long RAG context can
+    spike well past 4k.
     """
     try:
         cfg = int(configured) if configured not in (None, "") else None
     except (TypeError, ValueError):
         cfg = None
     if is_thinking_model(model):
-        base = max(cfg or 0, 8000)
-        # Longer multi-turn prompts → longer CoT; ~1 extra completion token / 5 prompt chars
-        extra = min(6000, max(0, int(prompt_chars) // 5))
-        return min(16000, base + extra)
+        # Floor 16k: room for CoT + long-form answer in multi-turn RAG
+        base = max(cfg or 0, 16000)
+        extra = min(16000, max(0, int(prompt_chars) // 4))
+        return min(32768, base + extra)
+    # Non-thinking: floor 8k so long answers are not cut mid-sentence
     if cfg is None:
-        return max(4096, min(8000, 4096 + int(prompt_chars) // 400))
-    if cfg < 4096:
-        return max(cfg, 4096)
-    return cfg
+        return max(8192, min(16384, 8192 + int(prompt_chars) // 400))
+    return max(cfg, 8192)
 
 
 def _prompt_chars(messages: list[dict[str, Any]] | None) -> int:
@@ -260,6 +263,7 @@ class LLM:
         last_err: Exception | None = None
         for attempt in range(max_retries + 1):
             has_yielded = False
+            produced_content = False  # 实际产出了 token/reasoning（空流检测用）
             in_think_tag = False
             finish_reason: str | None = None
             try:
@@ -295,12 +299,14 @@ class LLM:
                     if reasoning:
                         has_yielded = True
                         if include_reasoning:
+                            produced_content = True
                             yield {"type": "reasoning", "content": reasoning}
 
                     # 2. 提取 content 并做 <think> 标签容错流式解析
                     content = delta.content
                     if content:
                         has_yielded = True
+                        produced_content = True
                         if include_reasoning:
                             text_to_process = content
                             while text_to_process:
@@ -341,6 +347,13 @@ class LLM:
                         yield {"type": "token", "content": notice}
                     else:
                         yield notice
+                # 空流检测：LLM 有时返回零 chunk 的「成功」流（无异常、无内容），
+                # 若静默通过会导致上层拿到空回复且不落库。视为失败走重试/抛出。
+                if not produced_content and finish_reason != "length":
+                    raise RuntimeError(
+                        "LLM stream returned no content "
+                        f"(model={self.model}, finish_reason={finish_reason})"
+                    )
                 return  # 成功完成，退出重试循环
             except Exception as e:
                 if has_yielded:
