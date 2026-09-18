@@ -35,22 +35,37 @@ def is_thinking_model(model: Any) -> bool:
     return any(h in name for h in _THINKING_MODEL_HINTS)
 
 
-def resolve_completion_max_tokens(model: Any, configured: Any) -> int | None:
+def resolve_completion_max_tokens(
+    model: Any, configured: Any, *, prompt_chars: int = 0
+) -> int | None:
     """Return a safe completion token budget.
 
     Thinking models spend ``max_tokens`` on reasoning *before* content. Multi-turn
     prompts lengthen reasoning, so a tight budget (e.g. 2048) truncates answers
-    more often as conversation grows. Floor budgets accordingly.
+    more often as conversation grows. Floor budgets and scale with prompt size.
     """
     try:
         cfg = int(configured) if configured not in (None, "") else None
     except (TypeError, ValueError):
         cfg = None
     if is_thinking_model(model):
-        return max(cfg or 0, 8000) if cfg is not None else 8000
-    if cfg is not None and cfg < 4096:
+        base = max(cfg or 0, 8000)
+        # ~1 extra completion token per 200 prompt chars (multi-turn reasoning growth)
+        extra = min(6000, max(0, int(prompt_chars) // 200))
+        return min(16000, base + extra)
+    if cfg is None:
+        return max(4096, min(8000, 4096 + int(prompt_chars) // 400))
+    if cfg < 4096:
         return max(cfg, 4096)
     return cfg
+
+
+def _prompt_chars(messages: list[dict[str, Any]] | None) -> int:
+    total = 0
+    for m in messages or []:
+        if isinstance(m, dict):
+            total += len(str(m.get("content") or ""))
+    return total
 
 
 def build_chat_messages(
@@ -156,6 +171,9 @@ class LLM:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        budget = resolve_completion_max_tokens(
+            self.model, max_tokens, prompt_chars=_prompt_chars(messages)
+        )
         last_err: Exception | None = None
         for attempt in range(max_retries):
             try:
@@ -163,7 +181,7 @@ class LLM:
                     model=self.model,
                     messages=cast(Any, messages),
                     temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=budget,
                 )
                 if resp.choices:
                     return resp.choices[0].message.content
@@ -185,13 +203,16 @@ class LLM:
         max_retries: int = 3,
     ) -> str:
         """带重试的聊天接口"""
+        budget = resolve_completion_max_tokens(
+            self.model, max_tokens, prompt_chars=_prompt_chars(messages)
+        )
         for attempt in range(max_retries):
             try:
                 resp = await self.client.chat.completions.create(
                     model=self.model,
                     messages=cast(Any, messages),
                     temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=budget,
                 )
                 # SDK 的 content 可为 None（模型空回复）；chat 契约是非空 str
                 if resp.choices:
@@ -233,7 +254,9 @@ class LLM:
           {"type": "reasoning" | "token", "content": str}
         若 include_reasoning=False，返回纯字符串流（默认向后兼容）。
         """
-        budget = resolve_completion_max_tokens(self.model, max_tokens)
+        budget = resolve_completion_max_tokens(
+            self.model, max_tokens, prompt_chars=_prompt_chars(messages)
+        )
         last_err: Exception | None = None
         for attempt in range(max_retries + 1):
             has_yielded = False
@@ -351,11 +374,14 @@ class LLM:
         """
         for attempt in range(max_retries):
             try:
+                budget = resolve_completion_max_tokens(
+                    self.model, max_tokens, prompt_chars=_prompt_chars(messages)
+                )
                 kwargs: dict[str, Any] = {
                     "model": self.model,
                     "messages": cast(Any, messages),
                     "temperature": temperature,
-                    "max_tokens": max_tokens,
+                    "max_tokens": budget,
                 }
                 if tools:
                     kwargs["tools"] = cast(Any, tools)

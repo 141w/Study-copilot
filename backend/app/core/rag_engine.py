@@ -510,7 +510,12 @@ class RAGEngine:
         messages = build_chat_messages(system_prompt, history, user_prompt)
         llm = LLM.from_config(llm_config)
         temperature = llm_config.get("temperature", 0.7) if llm_config else 0.7
-        max_tokens = llm_config.get("max_tokens") if llm_config else None
+        # chat_stream resolves again; pass explicit safe budget for logging/clarity
+        max_tokens = resolve_completion_max_tokens(
+            llm.model,
+            llm_config.get("max_tokens") if llm_config else None,
+            prompt_chars=sum(len(str(m.get("content") or "")) for m in messages),
+        )
         try:
             async for chunk in llm.chat_stream(
                 messages,

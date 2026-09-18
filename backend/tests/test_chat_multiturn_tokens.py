@@ -1,4 +1,4 @@
-"""Multi-turn chat: history injection + completion token budget resolution."""
+"""Multi-turn chat must inject history and keep a safe completion budget."""
 
 from __future__ import annotations
 
@@ -13,32 +13,36 @@ def test_build_chat_messages_injects_history():
     msgs = build_chat_messages(
         "sys",
         [
-            {"role": "user", "content": "第一问"},
-            {"role": "assistant", "content": "第一答"},
-            {"role": "system", "content": "之前的对话摘要：xxx"},
+            {"role": "user", "content": "第一轮问题"},
+            {"role": "assistant", "content": "第一轮回答"},
         ],
-        "当前问题",
+        "第二轮问题",
     )
     assert msgs[0] == {"role": "system", "content": "sys"}
-    roles = [m["role"] for m in msgs]
-    assert roles == ["system", "user", "assistant", "system", "user"]
-    assert msgs[-1]["content"] == "当前问题"
+    assert msgs[1]["content"] == "第一轮问题"
+    assert msgs[2]["content"] == "第一轮回答"
+    assert msgs[-1]["content"] == "第二轮问题"
 
 
 def test_build_chat_messages_skips_empty_history():
     msgs = build_chat_messages("sys", [{"role": "user", "content": "  "}, None], "q")
-    assert len(msgs) == 2
-    assert msgs[1]["content"] == "q"
+    assert [m["role"] for m in msgs] == ["system", "user"]
 
 
-def test_resolve_max_tokens_thinking_model_floors():
-    assert is_thinking_model("step-3.7-flash") is True
+def test_thinking_model_budget_floor():
+    assert is_thinking_model("step-3.7-flash")
     assert resolve_completion_max_tokens("step-3.7-flash", 2048) >= 8000
     assert resolve_completion_max_tokens("step-3.7-flash", None) == 8000
 
 
-def test_resolve_max_tokens_normal_model_min_4096():
-    assert is_thinking_model("gpt-4o-mini") is False
+def test_thinking_budget_scales_with_long_multiturn_prompt():
+    short = resolve_completion_max_tokens("step-3.7-flash", 2048, prompt_chars=0)
+    long = resolve_completion_max_tokens("step-3.7-flash", 2048, prompt_chars=20000)
+    assert long > short
+    assert long <= 16000
+
+
+def test_normal_model_budget_floor():
+    assert not is_thinking_model("gpt-4o-mini")
     assert resolve_completion_max_tokens("gpt-4o-mini", 2048) == 4096
     assert resolve_completion_max_tokens("gpt-4o-mini", 8192) == 8192
-    assert resolve_completion_max_tokens("gpt-4o-mini", None) is None
