@@ -660,18 +660,27 @@ function scrollToSource(index: number): void {
 async function handleSend(content: string): Promise<void> {
   if (chatMode.value === 'discuss') {
     await handleDiscuss(content)
+    await nextTick()
+    forceScrollToBottom()
     return
   }
+  // 启动流式但不等结束：立刻让「刚发出的 user + 占位回答」进入可视区
+  const streamPromise = chatStore.askQuestionStream(
+    content, selectedDocs.value, null, researchMode.value
+  )
+  void nextTick().then(() => {
+    forceScrollToBottom()
+    scrollLatestUserMessageIntoView()
+  })
   try {
-    await chatStore.askQuestionStream(content, selectedDocs.value, null, researchMode.value)
+    await streamPromise
   }
   catch (_e) {
     playScene('exclaim')
     return
   }
   await nextTick()
-  // 刚发出的消息对齐可视区顶部（长历史回看时也能立刻看到自己的问题）
-  scrollLatestUserMessageIntoView()
+  forceScrollToBottom()
 }
 
 /** 讨论模式 SSE AbortController — 与问答流 cancelStream 对齐，供「停止」按钮使用 */
@@ -710,6 +719,7 @@ async function handleDiscuss(content: string): Promise<void> {
     created_at: new Date().toISOString(),
     isStreaming: true,
   })
+  void nextTick().then(() => forceScrollToBottom())
 
   try {
     const res = await fetch('/api/chat/discuss', {
@@ -921,7 +931,7 @@ async function handleDiscuss(content: string): Promise<void> {
         catch { /* skip malformed */ }
       }
       await nextTick()
-      scrollToBottom()
+      forceScrollToBottom()
     }
   }
   catch (e: any) {
@@ -975,10 +985,8 @@ function newChat(): void {
 
 function onSessionLoaded(_sessionId: string): void {
   showHistory.value = false
-  // 历史载入后强制滚到底部（scrollToBottom 的 nearBottom 守卫会拦住「从顶部载入」）
-  nextTick(() => forceScrollToBottom())
-  // 图片/Markdown 高度稳定后再补一次，避免落在中间
-  setTimeout(() => forceScrollToBottom(), 80)
+  // 历史 DOM + Markdown/图片高度会晚于 nextTick 稳定 → 多帧贴底
+  scrollChatToBottomSticky(8)
   // P8：载入历史会话 → orbit 入场
   playScene('arrive')
 }
@@ -1007,9 +1015,23 @@ function forceScrollToBottom(): void {
 }
 
 /**
- * 发送后把刚发出的 user 消息滚到可视区顶部附近。
- * 历史很长时用户在上方回看，「贴底」会看不到自己刚发的那条；
- * 以最后一条 user 消息为锚，block:'start' 对齐容器顶。
+ * 连续多帧贴底：等 Markdown/图片/思考面板撑开后再滚，避免历史会话停在随机位置。
+ */
+function scrollChatToBottomSticky(attempts = 6): void {
+  let i = 0
+  const tick = (): void => {
+    forceScrollToBottom()
+    if (++i < attempts) {
+      requestAnimationFrame(() => {
+        window.setTimeout(tick, 40)
+      })
+    }
+  }
+  nextTick(() => tick())
+}
+
+/**
+ * 发送后把刚发出的 user 消息滚进可视区（优先贴底，保证占位回答也可见）。
  */
 function scrollLatestUserMessageIntoView(): void {
   const container = messagesRef.value
@@ -1017,16 +1039,17 @@ function scrollLatestUserMessageIntoView(): void {
     forceScrollToBottom()
     return
   }
+  // 刚发送时目标是「看到最新对话」，贴底最稳；仅在容器尚未增长时兜底用 user 锚点
+  forceScrollToBottom()
   const items = container.querySelectorAll('[data-msg-role="user"]')
   const target = items[items.length - 1] as HTMLElement | undefined
   if (target) {
-    // 容器内滚动：相对 container 定位，避免整页跳动
     const cRect = container.getBoundingClientRect()
     const tRect = target.getBoundingClientRect()
-    const delta = tRect.top - cRect.top - 12
-    container.scrollTop += delta
-  } else {
-    forceScrollToBottom()
+    // 若 user 消息被输入区/容器底裁切，再把它上移到容器下部 1/3
+    if (tRect.bottom > cRect.bottom - 8) {
+      container.scrollTop += tRect.bottom - (cRect.top + cRect.height * 0.66)
+    }
   }
 }
 
@@ -1180,12 +1203,20 @@ watch(() => chatStore.messages.length, (newLen, oldLen) => {
       flipFromRect = oldEl.getBoundingClientRect()
     }
   }
+  const grew = newLen > oldLen
+  const replacedHistory = newLen > 0 && oldLen > 0 && newLen !== oldLen
   nextTick(() => {
     if (flipPending) {
       flipPending = false
       playFlip()
     }
-    scrollToBottom()
+    // 新消息/历史切换：强制贴底；仅流式同长度增长走 nearBottom 跟随
+    if (grew || replacedHistory) {
+      if (replacedHistory) scrollChatToBottomSticky(4)
+      else forceScrollToBottom()
+    } else {
+      scrollToBottom()
+    }
     const last = chatStore.messages[newLen - 1]
     if (last) updateBotMood(last, true)
   })

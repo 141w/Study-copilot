@@ -59,7 +59,8 @@ async function loadSession(sessionId: string) {
 }
 
 function goToSession(sessionId: string) {
-  emit('loaded', sessionId)
+  // 语义搜索跳转：必须真正拉取该会话消息，否则列表仍是上一场对话
+  void loadSession(sessionId)
 }
 
 function startEditTitle(session: ChatSessionSummary) {
