@@ -50,8 +50,8 @@ def resolve_completion_max_tokens(
         cfg = None
     if is_thinking_model(model):
         base = max(cfg or 0, 8000)
-        # ~1 extra completion token per 200 prompt chars (multi-turn reasoning growth)
-        extra = min(6000, max(0, int(prompt_chars) // 200))
+        # Longer multi-turn prompts → longer CoT; ~1 extra completion token / 5 prompt chars
+        extra = min(6000, max(0, int(prompt_chars) // 5))
         return min(16000, base + extra)
     if cfg is None:
         return max(4096, min(8000, 4096 + int(prompt_chars) // 400))

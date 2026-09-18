@@ -38,7 +38,7 @@ def test_thinking_model_budget_floor():
 def test_thinking_budget_scales_with_long_multiturn_prompt():
     short = resolve_completion_max_tokens("step-3.7-flash", 2048, prompt_chars=0)
     long = resolve_completion_max_tokens("step-3.7-flash", 2048, prompt_chars=20000)
-    assert long > short
+    assert long > short + 2000
     assert long <= 16000
 
 
