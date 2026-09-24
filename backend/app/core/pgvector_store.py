@@ -50,9 +50,19 @@ async def _get_fts_config(db: AsyncSession) -> str:
             return "zh"
     except Exception as exc:
         logger.debug("pg_ts_config probe failed or not postgres: %s", exc)
-    logger.info("PostgreSQL 'zh' full-text configuration not detected; falling back to 'simple'")
+    logger.warning(
+        "PostgreSQL 'zh' full-text configuration not detected; falling back to 'simple'. "
+        "Chinese FTS becomes ineffective (whole-sentence tokens) and hybrid RRF "
+        "ranking degrades — install zhparser and create the 'zh' config "
+        "(see docs/1-INSTALLATION)."
+    )
     _cached_fts_config = "simple"
     return "simple"
+
+
+def get_fts_config_status() -> str | None:
+    """当前 FTS 配置（未探测过返回 None）；供运维探针/测试读取。"""
+    return _cached_fts_config
 
 
 class PgVectorStore:
@@ -94,9 +104,14 @@ class PgVectorStore:
         if not chunks:
             return False
 
-        texts = [c["text"] for c in chunks]
+        # 向量输入：context_header + 正文（匹配带上下文、展示用干净原文）
+        embed_texts = []
+        for c in chunks:
+            header = c.get("context_header") or (c.get("metadata") or {}).get("context_header") or ""
+            body = c.get("text") or ""
+            embed_texts.append(f"{header}\n\n{body}" if header else body)
         try:
-            embeddings = await embedder.embed_texts(texts)
+            embeddings = await embedder.embed_texts(embed_texts)
         except Exception as exc:
             logger.error("Embedding failed for doc %s: %s", doc_id, exc)
             raise
@@ -121,8 +136,13 @@ class PgVectorStore:
 
         rows: list[dict] = []
         for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
-            meta = {k: v for k, v in chunk.items() if k not in ("text", "id")}
+            meta = {k: v for k, v in chunk.items() if k not in ("text", "id", "source_content")}
             emb_list = emb.tolist() if hasattr(emb, "tolist") else list(emb)
+            header = (
+                chunk.get("context_header")
+                or (chunk.get("metadata") or {}).get("context_header")
+                or None
+            )
             rows.append(
                 {
                     "id": str(uuid.uuid4()),
@@ -132,6 +152,11 @@ class PgVectorStore:
                     "chunk_index": i,
                     "chunk_metadata": _json.dumps(meta),
                     "created_at": datetime.now(UTC).replace(tzinfo=None),
+                    "source_content": chunk.get("source_content"),
+                    "char_start": chunk.get("char_start"),
+                    "char_end": chunk.get("char_end"),
+                    "context_header": header,
+                    "is_parent": bool(chunk.get("is_parent") or (chunk.get("metadata") or {}).get("is_parent")),
                 }
             )
 
@@ -140,8 +165,11 @@ class PgVectorStore:
 
         sql = text(
             "INSERT INTO document_chunks "
-            "(id, document_id, content, embedding, chunk_index, chunk_metadata, created_at) "
-            f"VALUES (:id, :document_id, :content, CAST(:embedding AS vector({self.dimension})), :chunk_index, :chunk_metadata, :created_at)"
+            "(id, document_id, content, embedding, chunk_index, chunk_metadata, created_at, "
+            "source_content, char_start, char_end, context_header, is_parent) "
+            f"VALUES (:id, :document_id, :content, CAST(:embedding AS vector({self.dimension})), "
+            ":chunk_index, :chunk_metadata, :created_at, "
+            ":source_content, :char_start, :char_end, :context_header, :is_parent)"
         )
 
         if db is not None:
@@ -193,7 +221,7 @@ class PgVectorStore:
             FROM document_chunks
             WHERE document_id = ANY(:doc_ids)
               AND embedding IS NOT NULL
-              AND (chunk_metadata->>'is_parent' IS NULL OR chunk_metadata->>'is_parent' != 'true')
+              AND (is_parent IS NULL OR is_parent = false OR is_parent = 0)
             ORDER BY embedding <=> CAST(:q_emb AS vector)
             LIMIT :overfetch
         ),
@@ -205,7 +233,7 @@ class PgVectorStore:
             FROM document_chunks,
                  plainto_tsquery('{fts_cfg}', :query) AS query
             WHERE document_id = ANY(:doc_ids)
-              AND (chunk_metadata->>'is_parent' IS NULL OR chunk_metadata->>'is_parent' != 'true')
+              AND (is_parent IS NULL OR is_parent = false OR is_parent = 0)
             ORDER BY ts_rank(to_tsvector('{fts_cfg}', content), query) DESC
             LIMIT :overfetch
         ),

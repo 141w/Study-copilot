@@ -311,6 +311,12 @@ class DocumentChunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, default=0)
     chunk_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    # Phase-2 coords / clean original / breadcrumb / parent flag (NULL-safe for legacy rows)
+    source_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    char_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    char_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    context_header: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_parent: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class CustomPersona(Base):

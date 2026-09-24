@@ -234,6 +234,9 @@
             @send="handleSend"
             @stop="handleStop"
             :loading="chatStore.isStreaming"
+            :scope-chips="scopeChips"
+            @remove-scope="removeScope"
+            @add-scope="addScope"
             placeholder="输入您的问题..."
           />
         </div>
@@ -305,6 +308,39 @@ const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 const readyDocs = computed(() => documentStore.readyDocuments)
 const selectedDocs = ref<string[]>([])
+
+const scopeChips = computed(() =>
+  selectedDocs.value.map(id => {
+    const doc = documentStore.documents?.find(d => d.id === id)
+    return {
+      key: `doc:${id}`,
+      kind: 'doc' as const,
+      id,
+      label: doc?.filename || id,
+    }
+  })
+)
+
+function removeScope(chip: { kind: string; id: string }): void {
+  if (chip.kind === 'doc') {
+    selectedDocs.value = selectedDocs.value.filter(x => x !== chip.id)
+  }
+}
+
+function addScope(chip: { kind: string; id: string }): void {
+  if (chip.kind === 'doc' && !selectedDocs.value.includes(chip.id)) {
+    selectedDocs.value = [...selectedDocs.value, chip.id]
+  }
+  // 课程维度：选中课程下 ready 文档一并纳入范围
+  if (chip.kind === 'course') {
+    // 课程文档关联由 courseStore 提供；此处按已加载文档的 course_space_id 过滤
+    const courseDocs = (documentStore.documents || [])
+      .filter(d => (d as any).course_space_id === chip.id && d.status === 'ready')
+      .map(d => d.id)
+    const merged = new Set([...selectedDocs.value, ...courseDocs])
+    selectedDocs.value = [...merged]
+  }
+}
 const showHistory = ref(false)
 const showPersonaDialog = ref(false)
 const botMood = ref<BotMood>('idle')

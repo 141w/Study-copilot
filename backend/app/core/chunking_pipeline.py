@@ -135,6 +135,7 @@ async def run_chunking_chain(
 
     if chunks:
         chunks = enrich_chunk_breadcrumbs(chunks, profile)
+        chunks = attach_source_coords(chunks, all_text)
 
     return ChunkingRunResult(
         selected_strategy=selected_method,
@@ -201,6 +202,42 @@ def chunk_stats(chunks: list[dict[str, Any]], max_chunks: int) -> dict[str, Any]
     return stats
 
 
+def attach_source_coords(
+    chunks: list[dict[str, Any]],
+    full_text: str,
+) -> list[dict[str, Any]]:
+    """Attach char_start/char_end + source_content so content == source[offsets].
+
+    Invariant relied on by parent rebuild and citation preview (WeKnora Chunk).
+    Forward-scan keeps overlap blocks monotonic; fallback index() may match elsewhere.
+    """
+    cursor = 0
+    for c in chunks:
+        text = c.get("text") or ""
+        c["source_content"] = full_text
+        if not text:
+            c["char_start"] = cursor
+            c["char_end"] = cursor
+            continue
+        idx = full_text.find(text, cursor)
+        if idx < 0:
+            idx = full_text.find(text)
+        if idx < 0:
+            # soft-split / normalized whitespace: no exact slice — leave NULL
+            c["char_start"] = None
+            c["char_end"] = None
+        else:
+            c["char_start"] = idx
+            c["char_end"] = idx + len(text)
+            cursor = idx + max(1, len(text) - 20)  # allow overlap replay
+        meta = c.setdefault("metadata", {})
+        if meta.get("is_parent") or c.get("is_parent"):
+            c["is_parent"] = True
+        else:
+            c["is_parent"] = bool(c.get("is_parent"))
+    return chunks
+
+
 def serialize_chunks(chunks: list[dict[str, Any]], max_chunks: int) -> list[dict[str, Any]]:
     out = []
     for i, c in enumerate(chunks[:max_chunks], 1):
@@ -211,6 +248,8 @@ def serialize_chunks(chunks: list[dict[str, Any]], max_chunks: int) -> list[dict
                 "content": c.get("text", "") or "",
                 "page": c.get("page", meta.get("page", "")),
                 "context_header": meta.get("context_header") or c.get("context_header") or "",
+                "char_start": c.get("char_start"),
+                "char_end": c.get("char_end"),
             }
         )
     return out
