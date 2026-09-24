@@ -89,6 +89,14 @@
           </el-button>
           <el-button
             size="small"
+            data-test="open-chunk-preview"
+            @click="openChunkPreview"
+          >
+            <el-icon class="w-4 h-4 mr-1"><View /></el-icon>
+            分块预览
+          </el-button>
+          <el-button
+            size="small"
             type="primary"
             @click="copyAllText"
           >
@@ -220,6 +228,12 @@
       :document-id="selectedDoc?.id"
     />
 
+    <!-- 分块预览（只读） -->
+    <ChunkPreviewDialog
+      v-model:visible="showChunkPreview"
+      :initial-text="chunkPreviewText"
+    />
+
     <!-- AI 互动课堂生成 -->
     <GenerateClassroomDialog
       v-model="showClassroomDialog"
@@ -297,6 +311,7 @@ import { formatSize, cleanPdfText } from '../composables/useFormat'
 import { useMarkdown } from '../composables/useMarkdown'
 import type { Document as DocumentModel } from '../types/models'
 import TransformDialog from '../components/TransformDialog.vue'
+import ChunkPreviewDialog from '../components/ChunkPreviewDialog.vue'
 import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import SkeletonList from '../components/common/SkeletonList.vue'
 import api from '../services/api'
@@ -342,6 +357,8 @@ const showBackToTop = ref(false)
 
 // Transform dialog state
 const showTransformDialog = ref(false)
+const showChunkPreview = ref(false)
+const chunkPreviewText = ref('')
 const transformDocText = ref('')
 const transformDocTitle = ref('')
 
@@ -605,6 +622,11 @@ function openTransform(): void {
   transformDocText.value = allText
   transformDocTitle.value = selectedDoc.value.filename
   showTransformDialog.value = true
+}
+
+function openChunkPreview(): void {
+  chunkPreviewText.value = chunks.value.map(c => c.text).join('\n\n')
+  showChunkPreview.value = true
 }
 
 // AI 互动课堂：课堂生成完成回调

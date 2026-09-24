@@ -38,7 +38,76 @@ class UrlImportRequest(BaseModel):
     url: str
 
 
+class ChunkPreviewRequest(BaseModel):
+    text: str
+    chunk_size: int | None = None
+    chunk_overlap: int | None = None
+    strategy: str | None = "auto"
+
+
 # ── Endpoints ──────────────────────────────────────────────────────────────
+
+
+@router.post("/preview-chunking")
+async def preview_chunking(
+    data: ChunkPreviewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """只读分块预览：不写库、不算向量。返回策略链、拒绝原因、画像与候选块。"""
+    import asyncio
+
+    from app.core.chunking_pipeline import (
+        PREVIEW_MAX_CHARS,
+        PREVIEW_MAX_CHUNKS,
+        PREVIEW_TIMEOUT_S,
+        chunk_stats,
+        profile_to_dict,
+        run_chunking_chain,
+        serialize_chunks,
+    )
+    from app.exceptions import ValidationError
+
+    text = data.text or ""
+    if len(text) > PREVIEW_MAX_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文本超过预览上限 {PREVIEW_MAX_CHARS} 字符",
+        )
+    if not text.strip():
+        raise ValidationError("文本不能为空")
+
+    strategy = (data.strategy or "auto").lower()
+    if strategy not in {"auto", "fixed", "semantic", "hierarchical"}:
+        raise ValidationError("strategy 仅支持 auto|fixed|semantic|hierarchical")
+
+    pages = [{"text": text, "page": 1}]
+    try:
+        run = await asyncio.wait_for(
+            run_chunking_chain(
+                pages,
+                "preview",
+                filename="",
+                strategy=strategy,
+                chunk_size=data.chunk_size,
+                chunk_overlap=data.chunk_overlap,
+                allow_embed=False,
+            ),
+            timeout=PREVIEW_TIMEOUT_S,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail="分块预览超时（5s）")
+
+    stats = chunk_stats(run.chunks, PREVIEW_MAX_CHUNKS)
+    return {
+        "selected_strategy": run.selected_strategy,
+        "chain": run.chain,
+        "rejected": run.rejected,
+        "fallback_used": run.fallback_used,
+        "profile": profile_to_dict(run.profile),
+        "chunks": serialize_chunks(run.chunks, PREVIEW_MAX_CHUNKS),
+        "stats": stats,
+    }
 
 
 @router.post("/upload", response_model=DocProcessResponse)

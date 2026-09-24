@@ -19,15 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.chunk_strategy import (
-    enrich_chunk_breadcrumbs,
     profile_document,
     select_chunking_chain,
-    validate_chunks,
 )
-from app.core.chunker import (
-    create_chunker,
-    deduplicate_chunks,
-)
+from app.core.chunking_pipeline import run_chunking_chain
 from app.core.document_parser import document_parser
 from app.core.pgvector_store import PgVectorStore
 from app.core.task_worker import enqueue
@@ -215,70 +210,35 @@ async def _do_process_document(
         if progress_callback:
             await progress_callback(0.3, f"文档解析完成，共提取 {len(pages)} 页内容")
 
-        # Document profiling and adaptive strategy chain selection
+        # Document profiling and adaptive strategy chain selection (logged;
+        # full chain loop lives in run_chunking_chain)
         all_text = "\n".join(p.get("text", "") for p in pages)
-        total_text_len = len(all_text)
         profile = profile_document(all_text)
         chain = select_chunking_chain(profile, filename=doc.filename or "")
         logger.info(
             "Adaptive chunker selected chain %s for doc '%s' (chars=%d, headings=%d, dominant_level=%d)",
             chain,
             doc.filename,
-            total_text_len,
+            profile.total_chars,
             profile.md_heading_total,
             profile.dominant_heading_level(),
         )
 
-        chunks = []
-        selected_method = chain[-1]
-        for idx, method in enumerate(chain):
-            if progress_callback:
-                await progress_callback(
-                    0.5, f"尝试以 {method} 策略分块（第 {idx + 1}/{len(chain)} 层）..."
-                )
-            try:
-                logger.info("Attempting chunking with %s strategy (tier %d)...", method, idx + 1)
-                chunker = create_chunker(method=method)
-                candidate_chunks = await chunker.chunk_document(pages, doc_id)
-                candidate_chunks = deduplicate_chunks(candidate_chunks, similarity_threshold=0.85)
-
-                target_size = getattr(chunker, "chunk_size", 500)
-                is_valid, reason = validate_chunks(
-                    candidate_chunks, total_chars=total_text_len, chunk_size=target_size
-                )
-                if is_valid:
-                    chunks = candidate_chunks
-                    selected_method = method
-                    logger.info(
-                        "Chunking succeeded with %s strategy: %d chunks", method, len(chunks)
-                    )
-                    break
-                else:
-                    logger.warning(
-                        "Tier %s output rejected by validator: %s. Falling to next tier.",
-                        method,
-                        reason,
-                    )
-            except Exception as e:
-                logger.warning("Tier %s execution error: %s. Falling to next tier.", method, e)
-
-        # Final safety net: if chain exhausted without valid chunks, fallback to fixed
-        if not chunks:
-            logger.warning("All chain tiers rejected; running final fixed chunker safety fallback.")
-            try:
-                chunker = create_chunker(method="fixed")
-                chunks = await chunker.chunk_document(pages, doc_id)
-                chunks = deduplicate_chunks(chunks, similarity_threshold=0.85)
-                selected_method = "fixed"
-            except Exception as e:
-                logger.error("Failed to chunk document with fallback: %s", e)
-                raise ExternalServiceError(f"文档分块失败: {str(e)}")
+        run = await run_chunking_chain(
+            pages,
+            doc_id,
+            filename=doc.filename or "",
+            allow_embed=True,
+        )
+        chunks = run.chunks
+        selected_method = run.selected_strategy
+        method = selected_method
+        profile = run.profile or profile
 
         if not chunks:
             raise ValidationError("文档内容不足，无法生成知识块")
 
-        # Enrich context headers / breadcrumbs
-        chunks = enrich_chunk_breadcrumbs(chunks, profile)
+        # Enrich context headers / breadcrumbs (already applied inside runner)
         logger.info(
             "Adaptive chunking complete using %s, %d chunks created", selected_method, len(chunks)
         )
