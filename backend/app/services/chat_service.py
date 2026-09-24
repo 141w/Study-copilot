@@ -436,6 +436,47 @@ async def ask_question_stream(
                 logger.debug("[ChatService] Failed to record usage in GeneratorExit: %s", e)
         done_yielded = True
         return
+    except Exception as e:
+        # 流式过程中发生未预期异常（LLM 报错、检索失败等）：
+        # 落库失败占位消息保证会话历史完整（不再出现「有问无答」的静默失败），
+        # 并下发结构化 error 事件让前端明确感知失败。
+        logger.error("[ChatService] ask_stream failed: %s", e, exc_info=True)
+        err: Exception = e
+        try:
+            from app.exceptions import classify_llm_error
+
+            err = classify_llm_error(e)
+        except Exception:
+            pass
+        # 已产出的部分回答一并落库（标注中断），否则只落库失败占位
+        partial = "".join(answer_parts)
+        if partial:
+            placeholder = partial + f"\n\n（生成中断：{err}）"
+        else:
+            placeholder = f"（回答生成失败：{err}）"
+        try:
+            a_emb = await _embed_text(placeholder)
+            await _insert_message(
+                db,
+                str(uuid.uuid4()),
+                session_id,
+                "assistant",
+                placeholder,
+                json.dumps({"error": str(err)}, ensure_ascii=False),
+                a_emb,
+            )
+        except Exception as save_err:
+            logger.warning(
+                "[ChatService] Failed to persist error placeholder: %s", save_err
+            )
+        yield {
+            "type": "error",
+            "code": "stream_error",
+            "message": str(err),
+            "recoverable": True,
+        }
+        yield {"type": "done"}
+        done_yielded = True
     finally:
         if not done_yielded:
             full_answer = "".join(answer_parts)

@@ -154,12 +154,13 @@ async def get_learning_activity(
     统计：聊天消息（经会话归属用户）、测验提交、笔记创建。
     返回按日 count + level（0-4），供前端 GitHub 风格热力图渲染。
     """
-    from datetime import date, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from app.db import ChatSession, Message, Note
 
     days = max(30, min(int(days or 365), 730))
-    today = date.today()
+    # 与 QuizResult.submitted_at / Message.created_at 同为 UTC 朴素时间
+    today = datetime.now(UTC).replace(tzinfo=None).date()
     start = today - timedelta(days=days - 1)
 
     # 聊天：Message 经 ChatSession 归属

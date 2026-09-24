@@ -37,6 +37,7 @@
           :aria-label="`阅读文档 ${doc.filename}`"
           class="p-4 border rounded-lg cursor-pointer transition-all bg-[var(--surface-card)] shadow-sm hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)]/30"
           :class="selectedDoc?.id === doc.id ? 'border-l-4 border-l-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)]'"
+          :data-doc-card="doc.id"
         >
           <div class="flex items-center gap-2 mb-2">
             <el-icon class="w-5 h-5 text-[var(--text-secondary)]"><Document /></el-icon>
@@ -159,7 +160,7 @@
                   @click="generateQuiz(chunk)"
                 >
                   <el-icon class="w-4 h-4 mr-1"><EditPen /></el-icon>
-                  基于此段出题
+                  基于本文出题
                 </el-button>
                 <el-button
                   size="small"
@@ -444,20 +445,34 @@ function scrollToFirstMatch(): void {
   })
 }
 
-/** 笔记/聊天深链：/documents?doc=&page=&q= */
+/** 笔记/聊天深链：/documents?doc=&page=&q=（兼容旧 document_id） */
 async function applyDeepLinkFromRoute(): Promise<void> {
-  const docId = route?.query?.doc
-  if (typeof docId !== 'string' || !docId) return
+  const q = route?.query
+  const raw = q?.doc ?? q?.document_id
+  const docId = typeof raw === 'string' ? raw : Array.isArray(raw) ? String(raw[0] || '') : ''
+  if (!docId) return
   await documentStore.fetchDocuments()
   const doc = documentStore.documents.find(d => d.id === docId)
   if (!doc) {
     toast.error('未找到对应文档')
     return
   }
-  const page = typeof route?.query?.page === 'string' ? route.query.page : undefined
-  const q = typeof route?.query?.q === 'string' ? route.query.q : undefined
-  await selectDocument(doc, { highlight: q, page })
+  const page = typeof q?.page === 'string' ? q.page : undefined
+  const highlight = typeof q?.q === 'string' ? q.q : undefined
+  await selectDocument(doc, { highlight, page })
+  // 列表内定位到该卡片
+  await nextTick()
+  const el = document.querySelector(`[data-doc-card="${doc.id}"]`)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
+
+// 已在文档页时 query 变化也要重新定位
+watch(
+  () => route?.query,
+  () => {
+    applyDeepLinkFromRoute()
+  }
+)
 
 // 当选中的文档在后台完成解析切片后，自动加载内容
 watch(

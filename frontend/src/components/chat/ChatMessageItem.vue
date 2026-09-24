@@ -412,16 +412,16 @@ watch(
 
 const sourceCardsRef = ref<InstanceType<typeof ChatSourceCards> | null>(null)
 
-/** 打开文档阅读器并定位到来源页/关键词（T17） */
+/** 打开文档阅读器并定位到来源页/关键词（统一深链参数 `doc`） */
 function openSourceDocument(source: Source): void {
   const docId = source.document_id || ''
   const page = source.page ? String(source.page) : undefined
   const q = (source.text || '').slice(0, 40).trim() || undefined
   const query: Record<string, string> = {}
-  if (docId) query.document_id = docId
+  // 与 DocumentView.applyDeepLinkFromRoute / NoteViewer 统一为 doc
+  if (docId) query.doc = docId
   if (page) query.page = page
   if (q) query.q = q
-  // 来源文件名也可作为兜底定位键
   if (!docId && source.source) query.filename = source.source
   router.push({ name: 'documents', query })
 }
@@ -753,4 +753,35 @@ summary {
 .sources-toggle__arrow--open {
   transform: rotate(90deg);
 }
+
+/* 聊天气泡内标题尺寸与间距严格收敛，消除大字报视觉破坏 */
+:deep(.prose h1),
+:deep(.markdown-body h1) {
+  font-size: 1.125rem !important; /* 18px */
+  font-weight: 600 !important;
+  line-height: 1.5 !important;
+  margin-top: 0.75rem !important;
+  margin-bottom: 0.375rem !important;
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+}
+
+:deep(.prose h2),
+:deep(.markdown-body h2) {
+  font-size: 1rem !important; /* 16px */
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  margin-top: 0.625rem !important;
+  margin-bottom: 0.25rem !important;
+  border-bottom: none !important;
+}
+
+:deep(.prose h3),
+:deep(.markdown-body h3) {
+  font-size: 0.9375rem !important; /* 15px */
+  font-weight: 600 !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
 </style>

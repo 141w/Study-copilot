@@ -5,6 +5,7 @@ import { refreshAccessToken } from '../services/authRefresh'
 import { useUserPrefs } from '../composables/useUserPrefs'
 import type { Source } from '../types/models'
 
+
 /** 反思/思考步骤（后端 thinking 事件负载） */
 export interface ThinkingStep {
   step: number | string
