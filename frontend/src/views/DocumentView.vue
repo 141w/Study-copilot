@@ -178,6 +178,24 @@
                   <el-icon class="w-4 h-4 mr-1"><CopyDocument /></el-icon>
                   复制段落
                 </el-button>
+                <el-button
+                  size="small"
+                  data-test="edit-chunk"
+                  :disabled="!chunk.id"
+                  @click="openChunkEdit(chunk)"
+                >
+                  <el-icon class="w-4 h-4 mr-1"><EditPen /></el-icon>
+                  编辑
+                </el-button>
+                <el-button
+                  size="small"
+                  data-test="chunk-history"
+                  :disabled="!chunk.id"
+                  @click="openChunkHistory(chunk)"
+                >
+                  <el-icon class="w-4 h-4 mr-1"><Clock /></el-icon>
+                  历史
+                </el-button>
               </div>
             </div>
 
@@ -232,6 +250,20 @@
     <ChunkPreviewDialog
       v-model:visible="showChunkPreview"
       :initial-text="chunkPreviewText"
+    />
+
+    <!-- 切片在线编辑 / 版本历史 -->
+    <ChunkEditDialog
+      v-model:visible="showChunkEdit"
+      :doc-id="selectedDoc?.id || ''"
+      :chunk="editTarget"
+      @saved="onChunkSaved"
+    />
+    <ChunkRevisionList
+      v-model:visible="showChunkHistory"
+      :doc-id="selectedDoc?.id || ''"
+      :chunk-id="historyChunkId"
+      @reverted="onChunkReverted"
     />
 
     <!-- AI 互动课堂生成 -->
@@ -301,7 +333,7 @@
 </template>
 
 <script setup lang="ts">
-import { Document, Switch, CopyDocument, ChatLineRound, EditPen, Top, VideoPlay, Search, ChatDotSquare, Loading, View } from '@/components/icons'
+import { Document, Switch, CopyDocument, ChatLineRound, EditPen, Top, VideoPlay, Search, ChatDotSquare, Loading, View, Clock } from '@/components/icons'
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuizStore } from '../stores/quiz'
@@ -312,6 +344,8 @@ import { useMarkdown } from '../composables/useMarkdown'
 import type { Document as DocumentModel } from '../types/models'
 import TransformDialog from '../components/TransformDialog.vue'
 import ChunkPreviewDialog from '../components/ChunkPreviewDialog.vue'
+import ChunkEditDialog from '../components/ChunkEditDialog.vue'
+import ChunkRevisionList from '../components/ChunkRevisionList.vue'
 import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import SkeletonList from '../components/common/SkeletonList.vue'
 import api from '../services/api'
@@ -321,6 +355,9 @@ interface DocChunk {
   idx: number
   text: string
   page?: string
+  id?: string
+  content_revision?: number
+  index_status?: string
 }
 
 const router = useRouter()
@@ -364,6 +401,46 @@ const transformDocTitle = ref('')
 
 // AI 互动课堂弹窗
 const showClassroomDialog = ref(false)
+
+// 切片在线编辑 / 版本历史
+const showChunkEdit = ref(false)
+const showChunkHistory = ref(false)
+const historyChunkId = ref('')
+const editTarget = ref<{ id: string; content: string; contentRevision: number } | null>(null)
+
+function openChunkEdit(chunk: DocChunk): void {
+  if (!chunk.id) return
+  editTarget.value = {
+    id: chunk.id,
+    content: chunk.text,
+    contentRevision: chunk.content_revision ?? 0,
+  }
+  showChunkEdit.value = true
+}
+
+function openChunkHistory(chunk: DocChunk): void {
+  if (!chunk.id) return
+  historyChunkId.value = chunk.id
+  showChunkHistory.value = true
+}
+
+function onChunkSaved(payload: { id: string; content: string; contentRevision: number; indexStatus: string }): void {
+  const target = chunks.value.find(c => c.id === payload.id)
+  if (target) {
+    target.text = payload.content
+    target.content_revision = payload.contentRevision
+    target.index_status = payload.indexStatus
+  }
+}
+
+function onChunkReverted(payload: { content: string; contentRevision: number; indexStatus: string }): void {
+  const target = chunks.value.find(c => c.id === historyChunkId.value)
+  if (target) {
+    target.text = payload.content
+    target.content_revision = payload.contentRevision
+    target.index_status = payload.indexStatus
+  }
+}
 
 const filteredChunks = computed<DocChunk[]>(() => {
   if (!searchQuery.value.trim()) {

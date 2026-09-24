@@ -3,6 +3,7 @@ from app.db.database import (
     AsyncTask,
     Base,
     ChatSession,
+    ChunkRevision,
     CourseSpace,
     CustomPersona,
     Document,

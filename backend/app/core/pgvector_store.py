@@ -189,6 +189,74 @@ class PgVectorStore:
         return True
 
     # ------------------------------------------------------------------
+    # 单 chunk 重索引（切片在线编辑用；不做全量 reindex）
+    # ------------------------------------------------------------------
+
+    async def delete_by_chunk_id(self, chunk_id: str, db: AsyncSession | None = None) -> bool:
+        """按 chunk_id 清除向量（保留行与正文，供 reindex_chunk 重嵌）。
+
+        Dual-dialect note: SQL 仅 UPDATE embedding，SQLite 测试可直接跑
+        （_Vector 列在 SQLite 上是 TEXT，置 NULL 合法）。
+        """
+        sql = text("UPDATE document_chunks SET embedding = NULL WHERE id = :id")
+        params = {"id": chunk_id}
+
+        if db is not None:
+            await db.execute(sql, params)
+            await db.commit()
+        else:
+            async with AsyncSessionLocal() as session:
+                await session.execute(sql, params)
+                await session.commit()
+        logger.debug("Cleared embedding for chunk %s", chunk_id)
+        return True
+
+    async def reindex_chunk(
+        self, chunk_id: str, content: str, db: AsyncSession | None = None
+    ) -> bool:
+        """重嵌单个 chunk 的向量（不跑全量 reindex）。
+
+        仅更新 embedding 列；正文已由 chunk_service 写入。
+        PostgreSQL 路径使用 CAST(... AS vector(N))；单元测试通过 mock 绕过。
+        """
+        header: str | None = None
+        session_owner = db is None
+        session = db
+        if session is None:
+            session = AsyncSessionLocal()
+        try:
+            row = await session.execute(
+                text("SELECT context_header FROM document_chunks WHERE id = :id"),
+                {"id": chunk_id},
+            )
+            header_row = row.first()
+            header = header_row[0] if header_row else None
+            embed_text = f"{header}\n\n{content}" if header else content
+            try:
+                embeddings = await embedder.embed_texts([embed_text])
+            except Exception as exc:
+                logger.error("Embedding failed for chunk %s: %s", chunk_id, exc)
+                raise
+            emb = embeddings[0]
+            emb_list = emb.tolist() if hasattr(emb, "tolist") else list(emb)
+            if len(emb_list) != self.dimension:
+                raise ValidationError(
+                    f"Embedding 维度不匹配：模型输出 {len(emb_list)} 维，"
+                    f"但配置/数据库列为 {self.dimension} 维。"
+                )
+            sql = text(
+                "UPDATE document_chunks SET embedding = CAST(:embedding AS vector("
+                f"{self.dimension})) WHERE id = :id"
+            )
+            await session.execute(sql, {"id": chunk_id, "embedding": json.dumps(emb_list)})
+            await session.commit()
+            logger.debug("Reindexed chunk %s", chunk_id)
+            return True
+        finally:
+            if session_owner and session is not None:
+                await session.close()
+
+    # ------------------------------------------------------------------
     # 检索（混合：向量 + 全文 RRF）
     # ------------------------------------------------------------------
 

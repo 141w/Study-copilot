@@ -26,6 +26,7 @@ from sqlalchemy import (
     Table,
     Text,
     TypeDecorator,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -317,6 +318,33 @@ class DocumentChunk(Base):
     char_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     context_header: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_parent: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Phase-3 online edit: optimistic concurrency + reindex status
+    content_revision: Mapped[int] = mapped_column(Integer, default=0)
+    index_status: Mapped[str] = mapped_column(String(20), default="ready")
+    last_editor_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class ChunkRevision(Base):
+    """Immutable snapshot of a replaced chunk version (history for revert).
+
+    Current version stays on ``document_chunks``; this table only holds
+    superseded bodies. UNIQUE(chunk_id, revision) prevents double-snapshot.
+    """
+
+    __tablename__ = "chunk_revisions"
+    __table_args__ = (
+        UniqueConstraint("chunk_id", "revision", name="uq_chunk_revisions_chunk_revision"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    chunk_id: Mapped[str] = mapped_column(
+        ForeignKey("document_chunks.id", ondelete="CASCADE"), index=True
+    )
+    revision: Mapped[int] = mapped_column(Integer)
+    content: Mapped[str] = mapped_column(Text)
+    editor_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    edited_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class CustomPersona(Base):

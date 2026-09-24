@@ -45,6 +45,16 @@ class ChunkPreviewRequest(BaseModel):
     strategy: str | None = "auto"
 
 
+class ChunkUpdateRequest(BaseModel):
+    content: str
+    expected_revision: int | None = None
+
+
+class ChunkRevertRequest(BaseModel):
+    revision: int
+    expected_revision: int | None = None
+
+
 # ── Endpoints ──────────────────────────────────────────────────────────────
 
 
@@ -154,7 +164,87 @@ async def get_doc(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await document_service.get_document(db, current_user, doc_id)
+    result = await document_service.get_document(db, current_user, doc_id)
+    # Enrich chunks with stable ids / edit state for the online editor.
+    from app.services import chunk_service
+
+    briefs = await chunk_service.list_chunk_briefs(db, current_user, doc_id)
+    chunks = result.get("chunks") or []
+    if len(chunks) == len(briefs):
+        for c, b in zip(chunks, briefs):
+            c["id"] = b["id"]
+            c["content_revision"] = b["content_revision"]
+            c["index_status"] = b["index_status"]
+            c["char_start"] = b["char_start"]
+            c["char_end"] = b["char_end"]
+            c["is_parent"] = b["is_parent"]
+    return result
+
+
+@router.get("/{doc_id}/chunks/{chunk_id}")
+async def get_chunk(
+    doc_id: str,
+    chunk_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services import chunk_service
+
+    return await chunk_service.get_chunk(db, current_user, doc_id, chunk_id)
+
+
+@router.put("/{doc_id}/chunks/{chunk_id}")
+async def update_chunk(
+    doc_id: str,
+    chunk_id: str,
+    data: ChunkUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """乐观并发编辑：expected_revision 不匹配 → 409；响应含 index_status。"""
+    from app.services import chunk_service
+
+    return await chunk_service.update_chunk(
+        db,
+        current_user,
+        doc_id,
+        chunk_id,
+        data.content,
+        expected_revision=data.expected_revision,
+    )
+
+
+@router.post("/{doc_id}/chunks/{chunk_id}/revert")
+async def revert_chunk(
+    doc_id: str,
+    chunk_id: str,
+    data: ChunkRevertRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """回滚到历史版本（实现为一次可再回滚的编辑）。"""
+    from app.services import chunk_service
+
+    return await chunk_service.revert_chunk(
+        db,
+        current_user,
+        doc_id,
+        chunk_id,
+        data.revision,
+        expected_revision=data.expected_revision,
+    )
+
+
+@router.get("/{doc_id}/chunks/{chunk_id}/revisions")
+async def list_chunk_revisions(
+    doc_id: str,
+    chunk_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services import chunk_service
+
+    return await chunk_service.list_revisions(db, current_user, doc_id, chunk_id)
 
 
 @router.delete("/{doc_id}")
@@ -224,3 +314,74 @@ async def import_from_url(
 
     result = await document_service.upload_document(db, current_user, filename, content)
     return DocProcessResponse(**result)
+
+
+# ── 5.6 聊天会话临时附件（仅追加；勿与 /{doc_id} 单段路由冲突） ─────────────
+
+
+class ChatAttachmentResp(BaseModel):
+    id: str
+    filename: str
+    file_type: str
+    status: str
+    size: int | None = None
+    session_id: str | None = None
+    created_at: str | None = None
+    has_text: bool = False
+
+
+@router.post("/chat-attachments/upload", response_model=ChatAttachmentResp)
+async def upload_chat_attachment(
+    request: Request,
+    file: UploadFile = File(...),
+    session_id: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    """5.6：会话级临时附件上传。两阶段状态：uploaded/parsing → ready。"""
+    if not _upload_limiter.check(request):
+        raise RateLimitError("请求过于频繁，请稍后再试")
+    from app.services import chat_service
+
+    content = await file.read()
+    if not file.filename:
+        raise HTTPException(status_code=422, detail="上传文件缺少文件名")
+    meta = await chat_service.save_chat_attachment(
+        current_user, file.filename, content, session_id=session_id
+    )
+    return ChatAttachmentResp(**meta)
+
+
+@router.get("/chat-attachments/list", response_model=list[ChatAttachmentResp])
+async def list_chat_attachments(
+    session_id: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    """5.6：列出当前用户的会话临时附件。"""
+    from app.services import chat_service
+
+    items = await chat_service.list_chat_attachments(current_user, session_id=session_id)
+    return [ChatAttachmentResp(**m) for m in items]
+
+
+@router.get("/chat-attachments/{attachment_id}", response_model=ChatAttachmentResp)
+async def get_chat_attachment(
+    attachment_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """5.6：查询附件状态（解析可稍后完成，不阻塞发送）。"""
+    from app.services import chat_service
+
+    meta = await chat_service.get_chat_attachment(current_user, attachment_id)
+    return ChatAttachmentResp(**meta)
+
+
+@router.delete("/chat-attachments/{attachment_id}")
+async def delete_chat_attachment(
+    attachment_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """5.6：删除会话临时附件。"""
+    from app.services import chat_service
+
+    await chat_service.delete_chat_attachment(current_user, attachment_id)
+    return {"message": "附件已删除"}
