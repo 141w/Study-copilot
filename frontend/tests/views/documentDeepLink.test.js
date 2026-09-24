@@ -5,11 +5,13 @@ import ChatMessageItem from '@/components/chat/ChatMessageItem.vue'
 import DocumentView from '@/views/DocumentView.vue'
 
 const mockPush = vi.fn()
+/** 可变 route.query，便于兼容参数场景 */
+const routeQuery = { doc: 'doc-42', page: '3', q: '梯度下降' }
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush }),
   useRoute: () => ({
     path: '/documents',
-    query: { doc: 'doc-42', page: '3', q: '梯度下降' },
+    query: routeQuery,
   }),
 }))
 
@@ -131,6 +133,39 @@ describe('来源卡 → 文档深链（统一 ?doc=）', () => {
     })
     await flushPromises()
     expect(errSpy).toHaveBeenCalledWith('未找到对应文档')
+  })
+
+  it('DocumentView 兼容旧参数 document_id 深链', async () => {
+    const documentStore = useDocumentStore()
+    vi.spyOn(documentStore, 'fetchDocuments').mockImplementation(async () => {
+      documentStore.documents = [
+        { id: 'legacy-1', filename: 'legacy.pdf', status: 'ready', file_size: 2, chunk_count: 1 },
+      ]
+      return documentStore.documents
+    })
+    // 只给 document_id，不给 doc
+    routeQuery.doc = undefined
+    routeQuery.document_id = 'legacy-1'
+    try {
+      const wrapper = mount(DocumentView, {
+        global: {
+          stubs: {
+            TransformDialog: true,
+            GenerateClassroomDialog: true,
+            SkeletonList: true,
+            'el-button': true,
+            'el-icon': true,
+            'el-pagination': true,
+          },
+        },
+      })
+      await flushPromises()
+      expect(wrapper.text()).toContain('legacy.pdf')
+      expect(api.get).toHaveBeenCalledWith('/documents/legacy-1')
+    } finally {
+      routeQuery.doc = 'doc-42'
+      delete routeQuery.document_id
+    }
   })
 
   it('切片操作按钮文案为「基于本文出题」（与整文档出题一致）', async () => {
