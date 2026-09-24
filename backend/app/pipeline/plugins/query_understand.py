@@ -6,7 +6,14 @@ import logging
 
 from app.core.llm import LLM
 from app.core.query_router import QueryType, query_router
-from app.core.rag_engine import rag_engine
+from app.core.rag_engine import (
+    WINDOW_RETRIEVE,
+    WINDOW_UNDERSTAND,
+    rag_engine,
+    result_doc_count,
+    thinking_event,
+    window_close_event,
+)
 from app.pipeline.base import EventType, NextFn, PipelineState, Plugin, emit_event
 
 logger = logging.getLogger(__name__)
@@ -34,11 +41,18 @@ class QueryUnderstandPlugin(Plugin):
         if analysis.intent == QueryType.OUT_OF_SCOPE:
             await emit_event(
                 state,
-                {
-                    "type": "thinking",
-                    "step": "intent_analysis",
-                    "detail": f"意图识别：【超出范围】。问题「{state.standalone_query[:40]}」与学习场景无关，终止检索。",
-                },
+                thinking_event(
+                    "intent_analysis",
+                    f"意图识别：【超出范围】。问题「{state.standalone_query[:40]}」与学习场景无关，终止检索。",
+                    window=WINDOW_UNDERSTAND,
+                    status="done",
+                ),
+            )
+            await emit_event(
+                state,
+                window_close_event(
+                    WINDOW_UNDERSTAND, "问题理解完成，短路终止", status="done"
+                ),
             )
             state.short_circuited = True
             state.answer = "这个问题超出了我的知识范围，请问一些与学习相关的问题。"
@@ -97,7 +111,18 @@ class QueryUnderstandPlugin(Plugin):
             )
             await emit_event(
                 state,
-                {"type": "thinking", "step": "intent_analysis", "detail": detail},
+                thinking_event(
+                    "intent_analysis",
+                    detail,
+                    window=WINDOW_UNDERSTAND,
+                    status="done",
+                ),
+            )
+            await emit_event(
+                state,
+                window_close_event(
+                    WINDOW_UNDERSTAND, "问题理解完成", status="done"
+                ),
             )
 
         await next_fn()
@@ -106,11 +131,18 @@ class QueryUnderstandPlugin(Plugin):
         state.short_circuited = True
         await emit_event(
             state,
-            {
-                "type": "thinking",
-                "step": "intent_analysis",
-                "detail": f"意图识别：【通用常识问答】。无需检索文档，由模型直接给出解答：「{state.standalone_query}」",
-            },
+            thinking_event(
+                "intent_analysis",
+                f"意图识别：【通用常识问答】。无需检索文档，由模型直接给出解答：「{state.standalone_query}」",
+                window=WINDOW_UNDERSTAND,
+                status="done",
+            ),
+        )
+        await emit_event(
+            state,
+            window_close_event(
+                WINDOW_UNDERSTAND, "问题理解完成，转直接回答", status="done"
+            ),
         )
         from app.core.template_manager import render_template
 
@@ -136,14 +168,38 @@ class QueryUnderstandPlugin(Plugin):
         state.short_circuited = True
         await emit_event(
             state,
-            {
-                "type": "thinking",
-                "step": "intent_analysis",
-                "detail": "意图识别：【全篇知识总结】。正在检索并整合文档全部核心切片...",
-            },
+            thinking_event(
+                "intent_analysis",
+                "意图识别：【全篇知识总结】。正在检索并整合文档全部核心切片...",
+                window=WINDOW_UNDERSTAND,
+                status="done",
+            ),
+        )
+        await emit_event(
+            state,
+            window_close_event(
+                WINDOW_UNDERSTAND, "问题理解完成，转全篇总结", status="done"
+            ),
         )
         all_results = await rag_engine.retrieve(state.doc_ids, "文档内容总结", top_k=100)
         if not all_results:
+            await emit_event(
+                state,
+                thinking_event(
+                    "adaptive_retrieve",
+                    "全篇检索命中 0 条切片",
+                    window=WINDOW_RETRIEVE,
+                    count=0,
+                    doc_count=0,
+                    status="empty",
+                ),
+            )
+            await emit_event(
+                state,
+                window_close_event(
+                    WINDOW_RETRIEVE, "检索无结果", count=0, doc_count=0, status="empty"
+                ),
+            )
             state.answer = "未找到任何文档内容，请先上传文档。"
             state.short_circuit_result = {
                 "answer": state.answer,
@@ -153,6 +209,27 @@ class QueryUnderstandPlugin(Plugin):
             }
             await emit_event(state, {"type": "answer", "content": state.answer})
             return
+        await emit_event(
+            state,
+            thinking_event(
+                "adaptive_retrieve",
+                f"全篇检索完成，命中 {len(all_results)} 条切片",
+                window=WINDOW_RETRIEVE,
+                count=len(all_results),
+                doc_count=result_doc_count(all_results),
+                status="done",
+            ),
+        )
+        await emit_event(
+            state,
+            window_close_event(
+                WINDOW_RETRIEVE,
+                f"检索完成：{len(all_results)} 条切片",
+                count=len(all_results),
+                doc_count=result_doc_count(all_results),
+                status="done",
+            ),
+        )
 
         from app.core.rag_engine import _display_relevance
 
@@ -208,15 +285,43 @@ class QueryUnderstandPlugin(Plugin):
         await emit_event(state, {"type": "intent", "intent": "note_taking"})
         await emit_event(
             state,
-            {
-                "type": "thinking",
-                "step": "intent_analysis",
-                "detail": f"意图识别：【学习笔记沉淀】。正在提取核心概念与考点，编排结构化笔记：「{state.standalone_query}」",
-            },
+            thinking_event(
+                "intent_analysis",
+                f"意图识别：【学习笔记沉淀】。正在提取核心概念与考点，编排结构化笔记：「{state.standalone_query}」",
+                window=WINDOW_UNDERSTAND,
+                status="done",
+            ),
+        )
+        await emit_event(
+            state,
+            window_close_event(
+                WINDOW_UNDERSTAND, "问题理解完成，转笔记沉淀", status="done"
+            ),
         )
         ctx = ""
         if state.doc_ids:
             results = await rag_engine.retrieve(state.doc_ids, state.standalone_query, top_k=5)
+            await emit_event(
+                state,
+                thinking_event(
+                    "adaptive_retrieve",
+                    f"笔记素材检索完成，命中 {len(results)} 条切片",
+                    window=WINDOW_RETRIEVE,
+                    count=len(results),
+                    doc_count=result_doc_count(results),
+                    status="done" if results else "empty",
+                ),
+            )
+            await emit_event(
+                state,
+                window_close_event(
+                    WINDOW_RETRIEVE,
+                    f"检索完成：{len(results)} 条切片",
+                    count=len(results),
+                    doc_count=result_doc_count(results),
+                    status="done" if results else "empty",
+                ),
+            )
             if results:
                 ctx = rag_engine.build_context(results, max_context_tokens=16000)
                 sources_list = []
@@ -241,13 +346,20 @@ class QueryUnderstandPlugin(Plugin):
                     state,
                     {"type": "sources", "sources": sources_list, "filtered_sources": sources_list},
                 )
+        else:
+            await emit_event(
+                state,
+                window_close_event(
+                    WINDOW_RETRIEVE, "未选择文档，跳过检索", count=0, doc_count=0, status="empty"
+                ),
+            )
         await emit_event(
             state,
-            {
-                "type": "thinking",
-                "step": "strategy_select",
-                "detail": "策略规划：应用标准化知识卡片模板，生成包含核心定义、原理解析、易错陷阱与思考题的结构化笔记。",
-            },
+            thinking_event(
+                "strategy_select",
+                "策略规划：应用标准化知识卡片模板，生成包含核心定义、原理解析、易错陷阱与思考题的结构化笔记。",
+                window=WINDOW_UNDERSTAND,
+            ),
         )
         system_prompt = render_template(
             "notes/synthesize_note.jinja2", query=state.standalone_query, context=ctx

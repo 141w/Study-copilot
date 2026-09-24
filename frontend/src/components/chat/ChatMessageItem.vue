@@ -87,17 +87,82 @@
             </div>
           </summary>
           <div class="px-3 pb-2.5 pt-1 border-t border-[var(--border-subtle)] space-y-2 text-xs">
+            <!-- 4A: 阶段窗口收束 —「问题理解」/「检索」两个可视窗口，明细在窗内 -->
             <div
-              v-for="(t, ti) in message.thinking"
-              :key="ti"
+              v-for="win in stageWindows"
+              :key="win.id"
+              class="stage-window rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)]/50 overflow-hidden"
+              :data-test="`stage-window-${win.id}`"
+              :data-status="win.status"
+            >
+              <button
+                type="button"
+                class="stage-window__header w-full flex items-center gap-2 px-2.5 py-1.5 text-left cursor-pointer select-none hover:bg-[var(--bg-hover)] transition-colors"
+                :data-test="`stage-window-toggle-${win.id}`"
+                :aria-expanded="win.expanded ? 'true' : 'false'"
+                @click="toggleStageWindow(win.id)"
+              >
+                <span
+                  v-if="win.status === 'running'"
+                  class="thinking-dot !w-1.5 !h-1.5 shrink-0"
+                  data-test="stage-window-spinner"
+                ></span>
+                <span
+                  v-else
+                  class="w-2 h-2 rounded-full shrink-0"
+                  :class="win.status === 'error' ? 'bg-rose-500' : win.status === 'empty' ? 'bg-amber-500/70' : 'bg-emerald-500/70'"
+                ></span>
+                <span class="font-medium text-[var(--text-primary)] shrink-0">{{ win.title }}</span>
+                <span class="text-[10px] text-[var(--text-muted)] truncate flex-1" :data-test="`stage-window-meta-${win.id}`">
+                  {{ win.meta }}
+                </span>
+                <el-icon
+                  class="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)] transition-transform duration-200"
+                  :class="{ 'rotate-90': win.expanded }"
+                >
+                  <ArrowRight />
+                </el-icon>
+              </button>
+              <div
+                v-show="win.expanded"
+                class="stage-window__body px-2.5 pb-2 pt-0.5 border-t border-[var(--border-subtle)] space-y-1.5"
+                :data-test="`stage-window-body-${win.id}`"
+              >
+                <div
+                  v-for="(t, ti) in win.steps"
+                  :key="ti"
+                  class="flex items-start gap-2 pt-0.5 text-[var(--text-secondary)] leading-relaxed"
+                >
+                  <span
+                    :class="['px-1.5 py-0.5 text-[10px] font-medium rounded border flex-shrink-0 tracking-wide', t.badge.color]"
+                  >
+                    {{ t.badge.label }}
+                  </span>
+                  <span class="flex-1 min-w-0 text-[var(--text-secondary)] break-words">{{ t.detail }}</span>
+                  <span
+                    v-if="t.durationMs != null"
+                    class="text-[9px] text-[var(--text-muted)] shrink-0 font-mono"
+                    data-test="stage-step-duration"
+                  >
+                    {{ t.durationMs }}ms
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 未能归入两窗的细粒度事件（反思/Agent 等）保留为明细 -->
+            <div
+              v-for="(t, ti) in residualThinkingSteps"
+              :key="`residual-${ti}`"
               class="flex items-start gap-2 pt-1 text-[var(--text-secondary)] leading-relaxed"
+              data-test="residual-thinking-step"
             >
               <span
-                :class="['px-1.5 py-0.5 text-[10px] font-medium rounded border flex-shrink-0 tracking-wide', getStepBadge(typeof t === 'object' && t ? t.step : t).color]"
+                :class="['px-1.5 py-0.5 text-[10px] font-medium rounded border flex-shrink-0 tracking-wide', t.badge.color]"
               >
-                {{ getStepBadge(typeof t === 'object' && t ? t.step : t).label }}
+                {{ t.badge.label }}
               </span>
-              <span class="flex-1 min-w-0 text-[var(--text-secondary)] break-words">{{ typeof t === 'object' && t ? t.detail : t }}</span>
+              <span class="flex-1 min-w-0 text-[var(--text-secondary)] break-words">{{ t.detail }}</span>
             </div>
           </div>
         </details>
@@ -285,7 +350,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, DocumentCopy, EditPen, Reading } from '@/components/icons'
@@ -499,6 +564,8 @@ watch(
   () => {
     isThinkingOpen.value = false
     isReasoningOpen.value = false
+    stageExpand.understand = false
+    stageExpand.retrieve = false
   }
 )
 
@@ -519,7 +586,7 @@ const isCoTThinking = computed(() => {
   return Boolean(props.message.isStreaming && !props.message.content && props.message.reasoning)
 })
 
-// 思考中第二行：展示当前正在执行的 Agentic 决策步骤
+// 思考中第二行：展示当前正在执行的 Agentic 决策步骤（跳过 window_close 收尾事件）
 const latestThinkingStep = computed(() => {
   if (!props.message.thinking) return null
   if (typeof props.message.thinking === 'string') {
@@ -529,8 +596,8 @@ const latestThinkingStep = computed(() => {
     }
   }
   if (!Array.isArray(props.message.thinking) || props.message.thinking.length === 0) return null
-  const steps = props.message.thinking
-  const last = steps[steps.length - 1]
+  const steps = [...props.message.thinking].reverse()
+  const last = steps.find((s) => String((s as { step?: string | number })?.step ?? s) !== 'window_close')
   if (!last) return null
   if (typeof last === 'string') {
     return {
@@ -602,9 +669,243 @@ function formatUserContent(content: string): string {
   if (!content) return ''
   return content.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n')
 }
+
+// ── 4A 过程进度收束：两窗分组（问题理解 / 检索） ──────────────────────────
+type StageWindowId = 'understand' | 'retrieve'
+type StageWindowStatus = 'pending' | 'running' | 'done' | 'empty' | 'error'
+
+interface StageWindowStep {
+  badge: { label: string; color: string }
+  detail: string
+  durationMs?: number
+  count?: number
+  docCount?: number
+}
+
+interface StageWindowView {
+  id: StageWindowId
+  title: string
+  status: StageWindowStatus
+  steps: StageWindowStep[]
+  meta: string
+  expanded: boolean
+}
+
+const UNDERSTAND_STEPS = new Set([
+  'intent_analysis',
+  'query_decompose',
+  'agent_start',
+  'agent_think',
+  'agent_stall',
+])
+const RETRIEVE_STEPS = new Set([
+  'strategy_select',
+  'adaptive_retrieve',
+  'retrieval_check',
+  'retrieval_retry',
+  'compare_fallback',
+  'compare_entities',
+  'tool_call',
+  'tool_result',
+  'agent_act',
+  'agent_synthesize',
+  'agent_error',
+  'agent_truncated',
+])
+
+function resolveWindowId(step: string | number, explicit?: string): StageWindowId | null {
+  if (explicit === 'understand' || explicit === 'retrieve') return explicit
+  const s = String(step)
+  if (s === 'window_close') return explicit === 'understand' || explicit === 'retrieve' ? explicit : null
+  if (UNDERSTAND_STEPS.has(s)) return 'understand'
+  if (RETRIEVE_STEPS.has(s)) return 'retrieve'
+  if (/retrieve|检索|rerank|重排|merge|合并|截断/i.test(s)) return 'retrieve'
+  if (/intent|意图|rewrite|改写/i.test(s)) return 'understand'
+  return null
+}
+
+const stageExpand = reactive<Record<StageWindowId, boolean>>({
+  understand: false,
+  retrieve: false,
+})
+
+function toggleStageWindow(id: StageWindowId): void {
+  stageExpand[id] = !stageExpand[id]
+}
+
+function normalizeStepDetail(raw: unknown): string {
+  return String(raw ?? '')
+    .replace(/[#*`_~>\n\r]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function toWindowStep(t: unknown): StageWindowStep {
+  const obj = (typeof t === 'object' && t ? t : { step: t, detail: String(t ?? '') }) as {
+    step: string | number
+    detail?: string
+    duration_ms?: number
+    count?: number
+    doc_count?: number
+  }
+  return {
+    badge: getStepBadge(obj.step),
+    detail: normalizeStepDetail(obj.detail),
+    durationMs: typeof obj.duration_ms === 'number' ? obj.duration_ms : undefined,
+    count: typeof obj.count === 'number' ? obj.count : undefined,
+    docCount: typeof obj.doc_count === 'number' ? obj.doc_count : undefined,
+  }
+}
+
+function thinkingList(): unknown[] {
+  const th = props.message.thinking
+  if (!th) return []
+  if (typeof th === 'string') return [{ step: 'decision', detail: th }]
+  return Array.isArray(th) ? th : []
+}
+
+/** 硬性语义：错误 / 流结束 / 正文到达后窗口绝不转圈 */
+const streamSettled = computed(() => {
+  return (
+    !props.message.isStreaming ||
+    Boolean(props.message.content) ||
+    Boolean((props.message as { error?: string }).error)
+  )
+})
+
+const stageWindows = computed<StageWindowView[]>(() => {
+  const steps = thinkingList()
+  const understand: StageWindowStep[] = []
+  const retrieve: StageWindowStep[] = []
+  const closes: Record<StageWindowId, { status: string; durationMs?: number; count?: number; docCount?: number; detail?: string } | null> = {
+    understand: null,
+    retrieve: null,
+  }
+
+  for (const raw of steps) {
+    const obj = (typeof raw === 'object' && raw ? raw : { step: raw, detail: String(raw ?? '') }) as {
+      step: string | number
+      detail?: string
+      window?: string
+      duration_ms?: number
+      count?: number
+      doc_count?: number
+      status?: string
+    }
+    const stepName = String(obj.step)
+    const winId = resolveWindowId(obj.step, obj.window)
+    if (stepName === 'window_close') {
+      const target = winId ?? (obj.window === 'understand' ? 'understand' : obj.window === 'retrieve' ? 'retrieve' : null)
+      if (target === 'understand' || target === 'retrieve') {
+        closes[target] = {
+          status: obj.status || 'done',
+          durationMs: typeof obj.duration_ms === 'number' ? obj.duration_ms : undefined,
+          count: typeof obj.count === 'number' ? obj.count : undefined,
+          docCount: typeof obj.doc_count === 'number' ? obj.doc_count : undefined,
+          detail: obj.detail,
+        }
+      }
+      continue
+    }
+    const item = toWindowStep(raw)
+    if (winId === 'understand') understand.push(item)
+    else if (winId === 'retrieve') retrieve.push(item)
+  }
+
+  const makeStatus = (
+    id: StageWindowId,
+    stepsIn: StageWindowStep[]
+  ): StageWindowStatus => {
+    const close = closes[id]
+    if (close) {
+      if (close.status === 'error') return 'error'
+      if (close.status === 'empty') return 'empty'
+      return 'done'
+    }
+    // 无关闭事件也强制收束（错误/短路/流结束）
+    if (streamSettled.value) {
+      if ((props.message as { error?: string }).error) return 'error'
+      return stepsIn.length > 0 ? 'done' : 'pending'
+    }
+    return stepsIn.length > 0 ? 'running' : 'pending'
+  }
+
+  const makeMeta = (
+    id: StageWindowId,
+    stepsIn: StageWindowStep[],
+    status: StageWindowStatus
+  ): string => {
+    const close = closes[id]
+    const duration = close?.durationMs ?? stepsIn[stepsIn.length - 1]?.durationMs
+    const count = close?.count ?? stepsIn[stepsIn.length - 1]?.count
+    const docCount = close?.docCount ?? stepsIn[stepsIn.length - 1]?.docCount
+    const parts: string[] = []
+    if (status === 'running') parts.push('进行中…')
+    else if (status === 'error') parts.push('已中断')
+    else if (status === 'empty') parts.push('无结果')
+    else if (status === 'pending') parts.push('待开始')
+    if (duration != null) parts.push(`${duration}ms`)
+    if (count != null) parts.push(`${count} 条`)
+    if (docCount != null) parts.push(`${docCount} 篇文档`)
+    if (parts.length <= 1 && stepsIn.length > 0) parts.push(`${stepsIn.length} 步`)
+    return parts.join(' · ')
+  }
+
+  const understandStatus = makeStatus('understand', understand)
+  const retrieveStatus = makeStatus('retrieve', retrieve)
+
+  return [
+    {
+      id: 'understand',
+      title: '问题理解',
+      status: understandStatus,
+      steps: understand,
+      meta: makeMeta('understand', understand, understandStatus),
+      expanded: stageExpand.understand,
+    },
+    {
+      id: 'retrieve',
+      title: '检索',
+      status: retrieveStatus,
+      steps: retrieve,
+      meta: makeMeta('retrieve', retrieve, retrieveStatus),
+      expanded: stageExpand.retrieve,
+    },
+  ]
+})
+
+const residualThinkingSteps = computed(() => {
+  const out: StageWindowStep[] = []
+  for (const raw of thinkingList()) {
+    const obj = (typeof raw === 'object' && raw ? raw : { step: raw, detail: String(raw ?? '') }) as {
+      step: string | number
+    }
+    if (String(obj.step) === 'window_close') continue
+    const winId = resolveWindowId(
+      obj.step,
+      (obj as { window?: string }).window
+    )
+    if (winId == null) out.push(toWindowStep(raw))
+  }
+  return out
+})
 </script>
 
 <style scoped>
+/* 4A 阶段窗口：剥 UA 原生 button 皮肤（项目未启用 Tailwind preflight） */
+.stage-window__header {
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.stage-window__header:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
 summary::-webkit-details-marker {
   display: none;
 }

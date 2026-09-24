@@ -333,6 +333,10 @@ async def ask_question_stream(
                     "step": chunk.get("step", ""),
                     "detail": chunk.get("detail", ""),
                 }
+                # 4A: duration / counts / window / status must survive into history replay
+                for key in ("window", "duration_ms", "count", "doc_count", "status"):
+                    if key in chunk and chunk[key] is not None:
+                        step_data[key] = chunk[key]
                 collected_thinking.append(step_data)
                 yield {
                     "type": "thinking",
@@ -469,6 +473,15 @@ async def ask_question_stream(
             logger.warning(
                 "[ChatService] Failed to persist error placeholder: %s", save_err
             )
+        # 4A 硬性语义：异常终止路径必须补发窗口关闭事件，避免前端阶段窗永久转圈
+        from app.core.rag_engine import WINDOW_RETRIEVE, WINDOW_UNDERSTAND, window_close_event
+
+        yield window_close_event(
+            WINDOW_UNDERSTAND, f"阶段中断：{err}", status="error"
+        )
+        yield window_close_event(
+            WINDOW_RETRIEVE, f"阶段中断：{err}", status="error"
+        )
         yield {
             "type": "error",
             "code": "stream_error",

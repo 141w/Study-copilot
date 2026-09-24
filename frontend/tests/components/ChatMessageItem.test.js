@@ -757,5 +757,189 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
     expect(body.find('button').classes()).toContain('source-card__copy')
     expect(wrapper.text()).toContain('系统设计正文摘录')
   })
+
+  // ── 4A 过程进度收束 ──────────────────────────────────────────────────────
+
+  it('4A: 思考事件收拢为「问题理解」「检索」两个窗口，明细在窗内可展开', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'win-group-1',
+          role: 'assistant',
+          content: '',
+          thinking: [
+            { step: 'intent_analysis', detail: '意图识别：文档知识检索', window: 'understand', duration_ms: 42 },
+            { step: 'window_close', detail: '问题理解完成', window: 'understand', duration_ms: 42, status: 'done' },
+            { step: 'strategy_select', detail: '检索策略：standard', window: 'retrieve', duration_ms: 10 },
+            { step: 'adaptive_retrieve', detail: '标准检索，获取 3 条结果', window: 'retrieve', duration_ms: 85, count: 3, doc_count: 2 },
+            { step: 'window_close', detail: '检索完成', window: 'retrieve', duration_ms: 95, count: 3, doc_count: 2, status: 'done' },
+          ],
+          isStreaming: true,
+          created_at: new Date().toISOString()
+        }
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true
+        }
+      }
+    })
+    await wrapper.vm.$nextTick()
+
+    // 两个可视窗口
+    const understand = wrapper.find('[data-test="stage-window-understand"]')
+    const retrieve = wrapper.find('[data-test="stage-window-retrieve"]')
+    expect(understand.exists()).toBe(true)
+    expect(retrieve.exists()).toBe(true)
+    expect(understand.text()).toContain('问题理解')
+    expect(retrieve.text()).toContain('检索')
+
+    // 窗口默认折叠，但明细仍在 DOM（可展开）
+    expect(wrapper.find('[data-test="stage-window-toggle-understand"]').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('[data-test="stage-window-toggle-retrieve"]').attributes('aria-expanded')).toBe('false')
+
+    // 展开问题理解窗口：可见 intent 明细 + 耗时
+    await wrapper.find('[data-test="stage-window-toggle-understand"]').trigger('click')
+    expect(wrapper.find('[data-test="stage-window-toggle-understand"]').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('[data-test="stage-window-body-understand"]').text()).toContain('意图识别')
+    expect(wrapper.find('[data-test="stage-window-body-understand"]').text()).toContain('42ms')
+
+    // 展开检索窗口：可见 strategy/retrieve 明细 + 计数
+    await wrapper.find('[data-test="stage-window-toggle-retrieve"]').trigger('click')
+    const retrieveBody = wrapper.find('[data-test="stage-window-body-retrieve"]')
+    expect(retrieveBody.text()).toContain('检索策略')
+    expect(retrieveBody.text()).toContain('标准检索')
+    expect(retrieve.text()).toContain('3 条')
+    expect(retrieve.text()).toContain('2 篇文档')
+
+    // window_close 收尾事件不应作为明细行出现
+    expect(wrapper.text()).not.toContain('问题理解完成')
+  })
+
+  it('4A: 历史回放保留 duration_ms / count / doc_count', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'win-history-1',
+          role: 'assistant',
+          content: '回答正文',
+          thinking: [
+            { step: 'intent_analysis', detail: '意图识别：文档知识检索', window: 'understand', duration_ms: 120 },
+            { step: 'adaptive_retrieve', detail: '标准检索，获取 5 条结果', window: 'retrieve', duration_ms: 300, count: 5, doc_count: 3 },
+          ],
+          isStreaming: false,
+          created_at: new Date().toISOString()
+        }
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true
+        }
+      }
+    })
+    await wrapper.vm.$nextTick()
+
+    // 流已结束 → 窗口强制收束为 done，不再转圈
+    expect(wrapper.find('[data-test="stage-window-understand"]').attributes('data-status')).toBe('done')
+    expect(wrapper.find('[data-test="stage-window-retrieve"]').attributes('data-status')).toBe('done')
+    expect(wrapper.find('[data-test="stage-window-spinner"]').exists()).toBe(false)
+
+    // meta 展示历史耗时与计数
+    expect(wrapper.find('[data-test="stage-window-meta-understand"]').text()).toContain('120ms')
+    expect(wrapper.find('[data-test="stage-window-meta-retrieve"]').text()).toContain('300ms')
+    expect(wrapper.find('[data-test="stage-window-meta-retrieve"]').text()).toContain('5 条')
+  })
+
+  it('4A: 错误路径下阶段窗口必须关闭，绝不永久转圈', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'win-error-1',
+          role: 'assistant',
+          content: '',
+          thinking: [
+            { step: 'intent_analysis', detail: '意图识别：文档知识检索', window: 'understand', duration_ms: 30 },
+            { step: 'strategy_select', detail: '检索策略：standard', window: 'retrieve' },
+          ],
+          isStreaming: true,
+          created_at: new Date().toISOString()
+        }
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true
+        }
+      }
+    })
+    await wrapper.vm.$nextTick()
+
+    // 流式进行中：窗口处于 running 并显示转圈
+    expect(wrapper.find('[data-test="stage-window-understand"]').attributes('data-status')).toBe('running')
+    expect(wrapper.find('[data-test="stage-window-retrieve"]').attributes('data-status')).toBe('running')
+    expect(wrapper.findAll('[data-test="stage-window-spinner"]').length).toBeGreaterThan(0)
+
+    // 错误终止（无 window_close 事件也必须强制关闭）— 硬性语义
+    await wrapper.setProps({
+      message: {
+        id: 'win-error-1',
+        role: 'assistant',
+        content: '回答生成失败，请稍后重试（可重试）',
+        thinking: [
+          { step: 'intent_analysis', detail: '意图识别：文档知识检索', window: 'understand', duration_ms: 30 },
+          { step: 'strategy_select', detail: '检索策略：standard', window: 'retrieve' },
+        ],
+        isStreaming: false,
+        error: 'stream_error',
+        created_at: new Date().toISOString()
+      }
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-test="stage-window-understand"]').attributes('data-status')).not.toBe('running')
+    expect(wrapper.find('[data-test="stage-window-retrieve"]').attributes('data-status')).not.toBe('running')
+    expect(wrapper.find('[data-test="stage-window-spinner"]').exists()).toBe(false)
+  })
+
+  it('4A: 后端 window_close 错误事件将窗口标为 error 而非 running', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 'win-error-2',
+          role: 'assistant',
+          content: '',
+          thinking: [
+            { step: 'intent_analysis', detail: '意图识别', window: 'understand' },
+            { step: 'window_close', detail: '阶段中断：model unreachable', window: 'understand', status: 'error' },
+            { step: 'window_close', detail: '阶段中断：model unreachable', window: 'retrieve', status: 'error' },
+          ],
+          isStreaming: true,
+          created_at: new Date().toISOString()
+        }
+      },
+      global: {
+        stubs: {
+          CopilotBotAvatar: true,
+          TTSPlayer: true,
+          'el-icon': true,
+          'el-button': true
+        }
+      }
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-test="stage-window-understand"]').attributes('data-status')).toBe('error')
+    expect(wrapper.find('[data-test="stage-window-retrieve"]').attributes('data-status')).toBe('error')
+    expect(wrapper.find('[data-test="stage-window-spinner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="stage-window-meta-understand"]').text()).toContain('已中断')
+  })
 })
 

@@ -6,10 +6,20 @@ import { useUserPrefs } from '../composables/useUserPrefs'
 import type { Source } from '../types/models'
 
 
-/** 反思/思考步骤（后端 thinking 事件负载） */
+/** 反思/思考步骤（后端 thinking 事件负载；4A 附带阶段窗口元数据） */
 export interface ThinkingStep {
   step: number | string
   detail: string
+  /** 4A: stage window id — 'understand' | 'retrieve' */
+  window?: string
+  /** 4A: stage duration in milliseconds */
+  duration_ms?: number
+  /** 4A: result / candidate count */
+  count?: number
+  /** 4A: distinct document count */
+  doc_count?: number
+  /** 4A: window_close status — done | empty | error */
+  status?: string
 }
 
 /** Persona block for discussion mode */
@@ -147,6 +157,7 @@ export const useChatStore = defineStore('chat', () => {
           savedNote,
           saved_note: savedNote,
           discussionTurns: m.discussionTurns || (m as any).discussion_turns || undefined,
+          // thinking 原样透传（含 4A duration_ms/count/doc_count/window/status）
           // 重进页面 / 切会话：参考来源默认折叠，避免遮挡最新消息
           expandedSources: false,
         }
@@ -307,7 +318,14 @@ export const useChatStore = defineStore('chat', () => {
         if (msgIdx !== -1) {
           const m = messages.value[msgIdx]
           if (!Array.isArray(m.thinking)) m.thinking = []
-          m.thinking.push({ step: data.step!, detail: data.detail! })
+          const step: ThinkingStep = { step: data.step!, detail: data.detail! }
+          // 4A: preserve duration/counts/window/status for stage windows + history replay
+          if (typeof data.window === 'string') step.window = data.window
+          if (typeof data.duration_ms === 'number') step.duration_ms = data.duration_ms
+          if (typeof data.count === 'number') step.count = data.count
+          if (typeof data.doc_count === 'number') step.doc_count = data.doc_count
+          if (typeof data.status === 'string') step.status = data.status
+          m.thinking.push(step)
         }
         return false
       }

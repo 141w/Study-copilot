@@ -5,6 +5,7 @@ RAG Engine for Study Copilot
 import asyncio
 import logging
 import re
+import time
 from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,106 @@ def extract_source_indices(text: str) -> list[int]:
     return sorted(list(indices))
 
 
+# ── 4A 过程进度收束：阶段窗口元数据 ──────────────────────────────────────
+WINDOW_UNDERSTAND = "understand"
+WINDOW_RETRIEVE = "retrieve"
+
+
+def thinking_event(
+    step: str,
+    detail: str,
+    *,
+    window: str | None = None,
+    duration_ms: int | None = None,
+    count: int | None = None,
+    doc_count: int | None = None,
+    status: str | None = None,
+) -> dict:
+    """Build a thinking SSE payload, optionally tagged with stage-window metadata."""
+    ev: dict = {"type": "thinking", "step": step, "detail": detail}
+    if window is not None:
+        ev["window"] = window
+    if duration_ms is not None:
+        ev["duration_ms"] = int(duration_ms)
+    if count is not None:
+        ev["count"] = int(count)
+    if doc_count is not None:
+        ev["doc_count"] = int(doc_count)
+    if status is not None:
+        ev["status"] = status
+    return ev
+
+
+def window_close_event(
+    window: str,
+    detail: str = "",
+    *,
+    duration_ms: int | None = None,
+    count: int | None = None,
+    doc_count: int | None = None,
+    status: str = "done",
+) -> dict:
+    """Closing event for a stage window.
+
+    Hard semantics (4A): every terminate path (error / short-circuit / empty)
+    MUST emit one of these so the UI never spins forever.
+    """
+    label = "问题理解" if window == WINDOW_UNDERSTAND else "检索"
+    return thinking_event(
+        "window_close",
+        detail or f"{label}阶段结束",
+        window=window,
+        duration_ms=duration_ms,
+        count=count,
+        doc_count=doc_count,
+        status=status,
+    )
+
+
+def result_doc_count(results: list | None) -> int:
+    docs: set[str] = set()
+    for r in results or []:
+        chunk = r.get("chunk") or {}
+        did = chunk.get("document_id") or chunk.get("source") or ""
+        if did:
+            docs.add(str(did))
+    return len(docs)
+
+
+def annotate_retrieve_events(
+    events: list[dict],
+    *,
+    duration_ms: int,
+    count: int,
+    doc_count: int,
+) -> list[dict]:
+    """Attach window / duration / result counts to adaptive-retrieve thinking events."""
+    for ev in events:
+        if ev.get("type") != "thinking":
+            continue
+        step = str(ev.get("step") or "")
+        if step in (
+            "strategy_select",
+            "adaptive_retrieve",
+            "query_decompose",
+            "compare_fallback",
+            "compare_entities",
+            "retrieval_check",
+            "retrieval_retry",
+        ):
+            ev.setdefault("window", WINDOW_RETRIEVE)
+        if step == "adaptive_retrieve":
+            ev["duration_ms"] = int(duration_ms)
+            ev["count"] = int(count)
+            ev["doc_count"] = int(doc_count)
+        elif "duration_ms" not in ev:
+            ev["duration_ms"] = int(duration_ms)
+        if step in ("adaptive_retrieve", "retrieval_check") and "count" not in ev:
+            ev["count"] = int(count)
+            ev["doc_count"] = int(doc_count)
+    return events
+
+
 class RAGEngine:
     def __init__(self):
         self.top_k = settings.top_k if hasattr(settings, "top_k") else 5
@@ -59,6 +160,11 @@ class RAGEngine:
         self, query: str, history: list[dict], user_config: dict | None = None
     ) -> str:
         """Rewrite a follow-up query into a standalone question using conversation history."""
+        # 单轮守卫：没有会话历史时 query 本身就是独立问题，无需改写。
+        # 2026-09-19 评测实测：无历史改写对单轮 query 净负收益
+        # （R@10 -3.5pt），且每次改写浪费一次 LLM 调用。
+        if not history:
+            return query
         try:
             history_parts = []
             for msg in trim_history(history, max_messages=10, max_tokens=2000):
@@ -133,14 +239,24 @@ class RAGEngine:
 
         # 第一次检索
         retrieved = await self.retrieve(doc_ids, query, top_k)
+
+        # 配置门控：corrective_retrieval_enabled=False（默认）时跳过评分与
+        # 重试，直接返回首次检索结果。2026-09-19 评测实测：grader 触发率 0%
+        # （无收益），且每次查询固定多花 2 次 LLM 调用（评分+改写）。
+        if not settings.corrective_retrieval_enabled:
+            logger.debug("Corrective retrieval disabled by config; skipping grade/retry")
+            return retrieved, thinking_events
+
         quality = await retrieval_grader.grade(query, retrieved, user_config)
 
         thinking_events.append(
-            {
-                "type": "thinking",
-                "step": "retrieval_check",
-                "detail": f"检索到 {len(retrieved)} 条结果，质量：{quality.quality}（{quality.reason}，得分 {quality.score:.2f}）",
-            }
+            thinking_event(
+                "retrieval_check",
+                f"检索到 {len(retrieved)} 条结果，质量：{quality.quality}（{quality.reason}，得分 {quality.score:.2f}）",
+                window=WINDOW_RETRIEVE,
+                count=len(retrieved),
+                doc_count=result_doc_count(retrieved),
+            )
         )
         metrics_counters.incr("rag.retrieval_check")
         if quality.is_good:
@@ -151,11 +267,13 @@ class RAGEngine:
         logger.info("Retrieval quality poor (%s), rewriting query...", quality.reason)
         metrics_counters.incr("rag.retrieval_retry")
         thinking_events.append(
-            {
-                "type": "thinking",
-                "step": "retrieval_retry",
-                "detail": f"检索质量不佳（{quality.reason}），正在改写查询重试...",
-            }
+            thinking_event(
+                "retrieval_retry",
+                f"检索质量不佳（{quality.reason}），正在改写查询重试...",
+                window=WINDOW_RETRIEVE,
+                count=len(retrieved),
+                doc_count=result_doc_count(retrieved),
+            )
         )
 
         rewritten = await self._rewrite_query(query, [], user_config)
@@ -163,18 +281,25 @@ class RAGEngine:
         quality_retry = await retrieval_grader.grade(query, retrieved_retry, user_config)
 
         thinking_events.append(
-            {
-                "type": "thinking",
-                "step": "retrieval_check",
-                "detail": f"重试检索到 {len(retrieved_retry)} 条结果，质量：{quality_retry.quality}（{quality_retry.reason}，得分 {quality_retry.score:.2f}）",
-            }
+            thinking_event(
+                "retrieval_check",
+                f"重试检索到 {len(retrieved_retry)} 条结果，质量：{quality_retry.quality}（{quality_retry.reason}，得分 {quality_retry.score:.2f}）",
+                window=WINDOW_RETRIEVE,
+                count=len(retrieved_retry),
+                doc_count=result_doc_count(retrieved_retry),
+            )
         )
 
         if quality_retry.is_good:
             return retrieved_retry, thinking_events
 
-        # 两次都不行 → 返回空
-        return [], thinking_events
+        # 两次都不行 → 返回首次检索结果而非空。空结果意味着用户得到
+        # 「未找到相关内容」，而首次检索结果再不济也优于什么都没有。
+        logger.info(
+            "Retrieval quality still poor after retry (%s); returning first results",
+            quality_retry.reason,
+        )
+        return retrieved, thinking_events
 
     async def _direct_answer(self, query, user_config=None) -> str:
         """不依赖文档，直接用 LLM 回答通用问题。"""
@@ -382,7 +507,15 @@ class RAGEngine:
         pass
 
     def _ensure_reranker(self):
-        if not self._reranker_loaded:
+        if self._reranker_loaded:
+            return self._reranker
+        # 配置门控：reranker_enabled=False 时整体跳过加载（评测实测负增益，见 config 注释）
+        if not settings.reranker_enabled:
+            logger.debug("Reranker disabled by config (reranker_enabled=False); skipping load")
+            self._reranker = None
+            self._reranker_loaded = True
+            return None
+        if True:
             try:
                 from sentence_transformers import CrossEncoder
 
@@ -679,12 +812,27 @@ class RAGEngine:
 
         # ── Step 1: 意图理解 + 上下文改写（一次 LLM 调用）──
         llm = self._get_llm(user_config)
+        t_intent = time.monotonic()
         analysis = await query_router.analyze(query, doc_ids, history, llm)
+        intent_ms = int((time.monotonic() - t_intent) * 1000)
         route = analysis.intent
         final_query = analysis.standalone_query
         logger.info("[RAG] Intent: %s, Query: '%s'", route.value, final_query[:50])
 
         if route == QueryType.OUT_OF_SCOPE:
+            yield thinking_event(
+                "intent_analysis",
+                f"意图识别：【超出范围】。问题「{final_query[:40]}」与学习场景无关，终止检索。",
+                window=WINDOW_UNDERSTAND,
+                duration_ms=intent_ms,
+                status="done",
+            )
+            yield window_close_event(
+                WINDOW_UNDERSTAND,
+                f"问题理解完成（{intent_ms}ms），短路终止",
+                duration_ms=intent_ms,
+                status="done",
+            )
             yield {
                 "type": "answer",
                 "content": "这个问题超出了我的知识范围，请问一些与学习相关的问题。",
@@ -693,11 +841,19 @@ class RAGEngine:
 
         if route == QueryType.DIRECT_ANSWER:
             # 流式直接回答（不走检索）
-            yield {
-                "type": "thinking",
-                "step": "intent_analysis",
-                "detail": f"意图识别：【通用常识问答】。无需检索文档，由模型直接给出解答：「{final_query}」",
-            }
+            yield thinking_event(
+                "intent_analysis",
+                f"意图识别：【通用常识问答】。无需检索文档，由模型直接给出解答：「{final_query}」",
+                window=WINDOW_UNDERSTAND,
+                duration_ms=intent_ms,
+                status="done",
+            )
+            yield window_close_event(
+                WINDOW_UNDERSTAND,
+                f"问题理解完成（{intent_ms}ms），转直接回答",
+                duration_ms=intent_ms,
+                status="done",
+            )
             system_prompt = render_template("rag/general_chat_system.jinja2")
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -709,15 +865,59 @@ class RAGEngine:
 
         if route == QueryType.SUMMARY:
             # 流式总结：检索全部文档，流式生成摘要
-            yield {
-                "type": "thinking",
-                "step": "intent_analysis",
-                "detail": "意图识别：【全篇知识总结】。正在检索并整合文档全部核心切片...",
-            }
+            yield thinking_event(
+                "intent_analysis",
+                "意图识别：【全篇知识总结】。正在检索并整合文档全部核心切片...",
+                window=WINDOW_UNDERSTAND,
+                duration_ms=intent_ms,
+                status="done",
+            )
+            yield window_close_event(
+                WINDOW_UNDERSTAND,
+                f"问题理解完成（{intent_ms}ms），转全篇总结",
+                duration_ms=intent_ms,
+                status="done",
+            )
+            t_ret = time.monotonic()
             all_results = await self.retrieve(doc_ids, "文档内容总结", top_k=100)
+            ret_ms = int((time.monotonic() - t_ret) * 1000)
             if not all_results:
+                yield thinking_event(
+                    "adaptive_retrieve",
+                    "全篇检索命中 0 条切片",
+                    window=WINDOW_RETRIEVE,
+                    duration_ms=ret_ms,
+                    count=0,
+                    doc_count=0,
+                    status="empty",
+                )
+                yield window_close_event(
+                    WINDOW_RETRIEVE,
+                    f"检索无结果（{ret_ms}ms）",
+                    duration_ms=ret_ms,
+                    count=0,
+                    doc_count=0,
+                    status="empty",
+                )
                 yield {"type": "answer", "content": "未找到任何文档内容，请先上传文档。"}
                 return
+            yield thinking_event(
+                "adaptive_retrieve",
+                f"全篇检索完成，命中 {len(all_results)} 条切片",
+                window=WINDOW_RETRIEVE,
+                duration_ms=ret_ms,
+                count=len(all_results),
+                doc_count=result_doc_count(all_results),
+                status="done",
+            )
+            yield window_close_event(
+                WINDOW_RETRIEVE,
+                f"检索完成（{ret_ms}ms）：{len(all_results)} 条切片",
+                duration_ms=ret_ms,
+                count=len(all_results),
+                doc_count=result_doc_count(all_results),
+                status="done",
+            )
             ctx = self.build_context(all_results, max_context_tokens=60000)
             sources_text = self.build_sources_text(all_results)
             sources_list = []
@@ -750,15 +950,45 @@ class RAGEngine:
 
         if route == QueryType.NOTE_TAKING:
             yield {"type": "intent", "intent": "note_taking"}
-            yield {
-                "type": "thinking",
-                "step": "intent_analysis",
-                "detail": f"意图识别：【学习笔记沉淀】。正在提取核心概念与考点，编排结构化笔记：「{final_query}」",
-            }
+            yield thinking_event(
+                "intent_analysis",
+                f"意图识别：【学习笔记沉淀】。正在提取核心概念与考点，编排结构化笔记：「{final_query}」",
+                window=WINDOW_UNDERSTAND,
+                duration_ms=intent_ms,
+                status="done",
+            )
+            yield window_close_event(
+                WINDOW_UNDERSTAND,
+                f"问题理解完成（{intent_ms}ms），转笔记沉淀",
+                duration_ms=intent_ms,
+                status="done",
+            )
             ctx = ""
             sources_list = []
+            note_ret_ms = 0
+            note_count = 0
             if doc_ids:
+                t_ret = time.monotonic()
                 results = await self.retrieve(doc_ids, final_query, top_k=5)
+                note_ret_ms = int((time.monotonic() - t_ret) * 1000)
+                note_count = len(results)
+                yield thinking_event(
+                    "adaptive_retrieve",
+                    f"笔记素材检索完成，命中 {note_count} 条切片",
+                    window=WINDOW_RETRIEVE,
+                    duration_ms=note_ret_ms,
+                    count=note_count,
+                    doc_count=result_doc_count(results),
+                    status="done" if results else "empty",
+                )
+                yield window_close_event(
+                    WINDOW_RETRIEVE,
+                    f"检索完成（{note_ret_ms}ms）：{note_count} 条切片",
+                    duration_ms=note_ret_ms,
+                    count=note_count,
+                    doc_count=result_doc_count(results),
+                    status="done" if results else "empty",
+                )
                 if results:
                     ctx = self.build_context(results, max_context_tokens=16000)
                     for i, r in enumerate(results[:10]):
@@ -784,11 +1014,21 @@ class RAGEngine:
                         "sources": sources_list,
                         "filtered_sources": sources_list,
                     }
-            yield {
-                "type": "thinking",
-                "step": "strategy_select",
-                "detail": "策略规划：应用标准化知识卡片模板，生成包含核心定义、原理解析、易错陷阱与思考题的结构化笔记。",
-            }
+            else:
+                yield window_close_event(
+                    WINDOW_RETRIEVE,
+                    "未选择文档，跳过检索",
+                    count=0,
+                    doc_count=0,
+                    status="empty",
+                )
+            yield thinking_event(
+                "strategy_select",
+                "策略规划：应用标准化知识卡片模板，生成包含核心定义、原理解析、易错陷阱与思考题的结构化笔记。",
+                window=WINDOW_UNDERSTAND,
+                duration_ms=note_ret_ms,
+                count=note_count,
+            )
             system_prompt = render_template(
                 "notes/synthesize_note.jinja2", query=final_query, context=ctx
             )
@@ -811,24 +1051,50 @@ class RAGEngine:
         # ── Step 2: RAG 路径（自适应检索 + 答案反思） ──
         # final_query 已在 Step 1 中由 analyze() 处理好
         if final_query != query:
-            yield {
-                "type": "thinking",
-                "step": "intent_analysis",
-                "detail": f"意图识别：【文档知识检索】。结合对话历史消除指代，改写为独立提问：「{final_query}」",
-            }
+            yield thinking_event(
+                "intent_analysis",
+                f"意图识别：【文档知识检索】。结合对话历史消除指代，改写为独立提问：「{final_query}」",
+                window=WINDOW_UNDERSTAND,
+                duration_ms=intent_ms,
+                status="done",
+            )
         else:
-            yield {
-                "type": "thinking",
-                "step": "intent_analysis",
-                "detail": f"意图识别：【文档知识检索】。问题独立明确：「{final_query}」",
-            }
+            yield thinking_event(
+                "intent_analysis",
+                f"意图识别：【文档知识检索】。问题独立明确：「{final_query}」",
+                window=WINDOW_UNDERSTAND,
+                duration_ms=intent_ms,
+                status="done",
+            )
+        yield window_close_event(
+            WINDOW_UNDERSTAND,
+            f"问题理解完成（{intent_ms}ms）",
+            duration_ms=intent_ms,
+            status="done",
+        )
 
+        t_strat = time.monotonic()
         strategy = await adaptive_retriever.select_strategy(final_query, llm)
+        strat_ms = int((time.monotonic() - t_strat) * 1000)
         logger.info("[RAG] Adaptive strategy selected: %s", strategy.value)
 
+        t_ret = time.monotonic()
         retrieved, thinking_events = await adaptive_retriever.retrieve_adaptive(
             doc_ids, final_query, strategy, self, user_config
         )
+        ret_ms = int((time.monotonic() - t_ret) * 1000)
+        retrieve_doc_count = result_doc_count(retrieved)
+        annotate_retrieve_events(
+            thinking_events,
+            duration_ms=strat_ms + ret_ms,
+            count=len(retrieved),
+            doc_count=retrieve_doc_count,
+        )
+        for ev in thinking_events:
+            if ev.get("step") == "strategy_select":
+                ev["duration_ms"] = strat_ms
+                ev.setdefault("count", len(retrieved))
+                ev.setdefault("doc_count", retrieve_doc_count)
 
         # 先输出思考过程
         for event in thinking_events:
@@ -837,37 +1103,54 @@ class RAGEngine:
         # Step 3: Corrective retrieval — grade quality, retry if poor
         if retrieved:
             quality = await retrieval_grader.grade(final_query, retrieved, user_config)
-            yield {
-                "type": "thinking",
-                "step": "retrieval_check",
-                "detail": quality.detail
+            yield thinking_event(
+                "retrieval_check",
+                quality.detail
                 or f"检索到 {len(retrieved)} 条结果，质量评分：{quality.score:.2f}（{quality.reason}）",
-            }
+                window=WINDOW_RETRIEVE,
+                count=len(retrieved),
+                doc_count=retrieve_doc_count,
+            )
             if not quality.is_good:
                 logger.info(
                     "[RAG] Stream retrieval %s (%s), attempting corrective...",
                     quality.quality,
                     quality.reason,
                 )
-                yield {
-                    "type": "thinking",
-                    "step": "retrieval_retry",
-                    "detail": f"检索质量评分偏低（{quality.score:.2f}），正在针对问题核心要点重写查询执行纠错检索...",
-                }
+                yield thinking_event(
+                    "retrieval_retry",
+                    f"检索质量评分偏低（{quality.score:.2f}），正在针对问题核心要点重写查询执行纠错检索...",
+                    window=WINDOW_RETRIEVE,
+                    count=len(retrieved),
+                    doc_count=retrieve_doc_count,
+                )
                 corrected, _ = await self._corrective_retrieve(
                     doc_ids, final_query, user_config, top_k=5
                 )
                 if corrected:
                     retrieved = corrected
+                    retrieve_doc_count = result_doc_count(retrieved)
                     quality_corrected = await retrieval_grader.grade(
                         final_query, retrieved, user_config
                     )
-                    yield {
-                        "type": "thinking",
-                        "step": "retrieval_check",
-                        "detail": f"纠错检索完成：{quality_corrected.detail or f'重新召回 {len(corrected)} 条切片，质量评分提升至 {quality_corrected.score:.2f}'}",
-                    }
+                    yield thinking_event(
+                        "retrieval_check",
+                        f"纠错检索完成：{quality_corrected.detail or f'重新召回 {len(corrected)} 条切片，质量评分提升至 {quality_corrected.score:.2f}'}",
+                        window=WINDOW_RETRIEVE,
+                        count=len(corrected),
+                        doc_count=retrieve_doc_count,
+                    )
                     logger.info("[RAG] Stream corrective improved: %d chunks", len(corrected))
+
+        # 4A 硬性语义：检索窗口必须关闭（含空结果短路）
+        yield window_close_event(
+            WINDOW_RETRIEVE,
+            f"检索完成（{strat_ms + ret_ms}ms）：{len(retrieved)} 条候选 / {retrieve_doc_count} 篇文档",
+            duration_ms=strat_ms + ret_ms,
+            count=len(retrieved),
+            doc_count=retrieve_doc_count,
+            status="done" if retrieved else "empty",
+        )
 
         if not retrieved:
             yield {
