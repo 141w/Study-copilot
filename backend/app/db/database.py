@@ -317,10 +317,10 @@ class DocumentChunk(Base):
     char_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
     char_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     context_header: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_parent: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_parent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # Phase-3 online edit: optimistic concurrency + reindex status
-    content_revision: Mapped[int] = mapped_column(Integer, default=0)
-    index_status: Mapped[str] = mapped_column(String(20), default="ready")
+    content_revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    index_status: Mapped[str] = mapped_column(String(20), default="ready", server_default="ready")
     last_editor_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
