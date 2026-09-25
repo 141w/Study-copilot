@@ -20,7 +20,7 @@ from app.core.embedder import embedder
 from app.core.note_synthesizer import extract_note_metadata
 from app.core.rag_engine import rag_engine
 from app.db import ChatSession, Document, Message, Note, User
-from app.exceptions import NotFoundError
+from app.exceptions import ContentTooLargeError, NotFoundError, ValidationError
 from app.pipeline import execute_chat_pipeline, execute_chat_pipeline_stream
 from app.services import note_service
 from app.services.config_service import get_llm_config_with_secret
@@ -261,6 +261,8 @@ async def ask_question_stream(
     session_id: str | None = None,
     config: dict | None = None,
     mode: str = "fast",
+    stream_id: str | None = None,
+    attachment_ids: list[str] | None = None,
 ) -> AsyncIterator[dict]:
     """Streaming RAG ask. Yields dicts with 'type' key: sources / token / answer / done."""
     user_config = await get_llm_config_with_secret(db, user)
@@ -268,6 +270,12 @@ async def ask_question_stream(
     llm_config["user_id"] = user.id
     if config:
         llm_config.update({k: v for k, v in config.items() if v is not None})
+
+    # 5.6: ready attachments inject extracted text into the question context
+    attach_ctx = await build_attachment_context(user, attachment_ids)
+    effective_question = question
+    if attach_ctx:
+        effective_question = f"{question}\n\n{attach_ctx}"
 
     valid_doc_ids = await _validate_document_ids(db, user.id, document_ids)
     session_id, _ = await _ensure_session(db, user.id, session_id, question)
@@ -289,11 +297,22 @@ async def ask_question_stream(
     done_yielded = False
     # provider 真实用量（Agent 会发 usage 事件；无则回落字符估算）
     real_usage: dict[str, int] | None = None
+    # 5.5 断线续流：未完成回答需带 incomplete 标记 + 续流上下文
+    assistant_msg_id = str(uuid.uuid4())
+    resume_meta: dict[str, Any] = {
+        "incomplete": True,
+        "question": question,
+        "document_ids": list(valid_doc_ids or []),
+        "mode": mode,
+        "session_id": session_id,
+    }
+    if stream_id:
+        resume_meta["stream_id"] = stream_id
 
     stream_generator: AsyncIterator[dict[str, Any]]
     if mode == "deep_research":
         stream_generator = default_agent_engine.execute_stream(
-            query=question,
+            query=effective_question,
             doc_ids=valid_doc_ids,
             history=history,
             user_config=llm_config,
@@ -303,13 +322,13 @@ async def ask_question_stream(
         logger.info("[ChatService] Routing stream via onion pipeline V2")
         stream_generator = execute_chat_pipeline_stream(
             doc_ids=valid_doc_ids,
-            query=question,
+            query=effective_question,
             history=history,
             user_config=llm_config,
             user_id=user.id,
         )
     else:
-        stream_generator = rag_engine.ask_stream(valid_doc_ids, question, history, llm_config)
+        stream_generator = rag_engine.ask_stream(valid_doc_ids, effective_question, history, llm_config)
 
     try:
         async for chunk in stream_generator:
@@ -393,20 +412,20 @@ async def ask_question_stream(
                         "[ChatService] Failed to auto-create note in GeneratorExit: %s", e
                     )
 
-            if collected_thinking or collected_reasoning or saved_note_data:
-                sources_payload = {
-                    "sources": collected_sources,
-                    "thinking": collected_thinking if collected_thinking else None,
-                    "reasoning": "".join(collected_reasoning) if collected_reasoning else None,
-                    "saved_note": saved_note_data,
-                }
-                sources_json = json.dumps(sources_payload, ensure_ascii=False)
-            else:
-                sources_json = json.dumps(collected_sources, ensure_ascii=False)
+            sources_payload = {
+                "sources": collected_sources,
+                "thinking": collected_thinking if collected_thinking else None,
+                "reasoning": "".join(collected_reasoning) if collected_reasoning else None,
+                "saved_note": saved_note_data,
+                # 5.5: 中断/断线落库必须可续流
+                **resume_meta,
+                "partial": full_answer,
+            }
+            sources_json = json.dumps(sources_payload, ensure_ascii=False)
             a_emb = await _embed_text(full_answer)
             await _insert_message(
                 db,
-                str(uuid.uuid4()),
+                assistant_msg_id,
                 session_id,
                 "assistant",
                 full_answer,
@@ -460,13 +479,19 @@ async def ask_question_stream(
             placeholder = f"（回答生成失败：{err}）"
         try:
             a_emb = await _embed_text(placeholder)
+            err_sources = {
+                "error": str(err),
+                # 5.5: 有部分内容时可续流（partial 保存干净正文，便于续写）
+                **resume_meta,
+                "partial": partial,
+            }
             await _insert_message(
                 db,
-                str(uuid.uuid4()),
+                assistant_msg_id,
                 session_id,
                 "assistant",
                 placeholder,
-                json.dumps({"error": str(err)}, ensure_ascii=False),
+                json.dumps(err_sources, ensure_ascii=False),
                 a_emb,
             )
         except Exception as save_err:
@@ -518,12 +543,14 @@ async def ask_question_stream(
                     except Exception as e:
                         logger.warning("[ChatService] Failed to auto-create note: %s", e)
 
+                # 完成路径：无扩展元数据时保持历史 list 形态，避免破坏既有消费者
                 if collected_thinking or collected_reasoning or saved_note_data:
                     sources_payload = {
                         "sources": collected_sources,
                         "thinking": collected_thinking if collected_thinking else None,
                         "reasoning": "".join(collected_reasoning) if collected_reasoning else None,
                         "saved_note": saved_note_data,
+                        "incomplete": False,
                     }
                     sources_json = json.dumps(sources_payload, ensure_ascii=False)
                 else:
@@ -531,7 +558,7 @@ async def ask_question_stream(
                 a_emb = await _embed_text(full_answer)
                 await _insert_message(
                     db,
-                    str(uuid.uuid4()),
+                    assistant_msg_id,
                     session_id,
                     "assistant",
                     full_answer,
@@ -565,7 +592,7 @@ async def ask_question_stream(
                     logger.debug("[ChatService] Failed to record usage in stream completion: %s", e)
 
             done_yielded = True
-            done_payload: dict[str, Any] = {"type": "done"}
+            done_payload: dict[str, Any] = {"type": "done", "message_id": assistant_msg_id}
             if saved_note_data:
                 done_payload["saved_note"] = saved_note_data
             yield done_payload
@@ -810,3 +837,386 @@ async def _get_history(db: AsyncSession, session_id: str) -> list:
     )
     msgs = msg_result.scalars().all()
     return [{"role": m.role, "content": m.content} for m in msgs]
+
+
+# ── 5.5 断线续流 ────────────────────────────────────────────────────────────
+
+
+def _parse_sources_blob(raw: str | None) -> dict[str, Any]:
+    """Parse Message.sources JSON into a dict (tolerates legacy list form)."""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return {}
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, list):
+        return {"sources": data}
+    return {}
+
+
+def message_resume_meta(msg: Message) -> dict[str, Any]:
+    """Extract 5.5 resume fields from a persisted assistant message."""
+    blob = _parse_sources_blob(msg.sources)
+    incomplete = bool(blob.get("incomplete"))
+    # 错误占位（无 partial）不可续流
+    if incomplete and not blob.get("partial") and not (msg.content or "").strip():
+        incomplete = False
+    return {
+        "incomplete": incomplete,
+        "question": blob.get("question"),
+        "document_ids": blob.get("document_ids") or [],
+        "mode": blob.get("mode") or "fast",
+        "session_id": blob.get("session_id"),
+        "stream_id": blob.get("stream_id"),
+        "partial": blob.get("partial") if blob.get("partial") is not None else msg.content,
+    }
+
+
+async def get_message_for_resume(
+    db: AsyncSession, user: User, message_id: str
+) -> tuple[Message, dict[str, Any]]:
+    """Load an assistant message (ownership-checked) plus its resume metadata."""
+    result = await db.execute(
+        select(Message, ChatSession)
+        .join(ChatSession, Message.session_id == ChatSession.id)
+        .where(Message.id == message_id, ChatSession.user_id == user.id)
+    )
+    row = result.first()
+    if not row:
+        raise NotFoundError("消息不存在或无权操作")
+    msg, _session = row
+    return msg, message_resume_meta(msg)
+
+
+async def mark_message_complete(
+    db: AsyncSession,
+    message_id: str,
+    content: str,
+    sources_blob: dict[str, Any] | None = None,
+) -> None:
+    """Clear incomplete flag and (optionally) rewrite content after a successful resume."""
+    if sources_blob is not None:
+        blob = dict(sources_blob)
+    else:
+        existing = await db.execute(select(Message.sources).where(Message.id == message_id))
+        raw = existing.scalar_one_or_none()
+        blob = _parse_sources_blob(raw)
+    blob["incomplete"] = False
+    blob.pop("partial", None)
+    sources_json = json.dumps(blob, ensure_ascii=False)
+    await db.execute(
+        update(Message).where(Message.id == message_id).values(content=content, sources=sources_json)
+    )
+    await db.commit()
+
+
+async def resume_message_stream(
+    db: AsyncSession,
+    user: User,
+    message_id: str,
+    last_event_id: int | None = None,
+) -> AsyncIterator[dict[str, Any]]:
+    """5.5 resume: replay remaining SSE buffer events, or regenerate the tail.
+
+    Yields SSE event dicts. On success the assistant message is rewritten to the
+    full content and ``incomplete`` is cleared.
+    """
+    msg, meta = await get_message_for_resume(db, user, message_id)
+    if not meta.get("incomplete"):
+        yield {"type": "done", "message_id": message_id}
+        return
+
+    partial = meta.get("partial") or msg.content or ""
+    stream_id = meta.get("stream_id")
+
+    # Path A: same-process buffer still alive → replay remaining events
+    if stream_id:
+        from app.core.sse_resume import stream_resume_buffer
+
+        buffered = stream_resume_buffer.get_stream(stream_id, str(user.id))
+        if buffered is not None:
+            events = stream_resume_buffer.slice_after(buffered, last_event_id)
+            collected = partial
+            for event in events:
+                et = event.get("type")
+                if et == "token":
+                    collected += event.get("content") or ""
+                elif et in ("answer", "answer_refined"):
+                    collected = event.get("content") or collected
+                if et != "done":
+                    yield {**event, "id": event.get("id", 0)}
+            if buffered.finished and not buffered.interrupted:
+                await mark_message_complete(db, message_id, collected)
+                yield {"type": "done", "message_id": message_id}
+                return
+            if buffered.finished and buffered.interrupted:
+                # buffer knows the stream died — fall through to regenerate tail
+                pass
+            else:
+                # still live: client should use /stream/{id}/resume instead
+                yield {
+                    "type": "resume_pending",
+                    "stream_id": stream_id,
+                    "message_id": message_id,
+                }
+                return
+
+    # Path B: regenerate tail from partial (page refresh / buffer expired)
+    question = meta.get("question") or ""
+    mode = meta.get("mode") or "fast"
+    document_ids = list(meta.get("document_ids") or [])
+    user_config = await get_llm_config_with_secret(db, user)
+    llm_config = dict(user_config)
+    llm_config["user_id"] = user.id
+
+    yield {"type": "resume_mode", "mode": "continue", "message_id": message_id}
+
+    tail_parts: list[str] = []
+    try:
+        if mode == "deep_research":
+            # Agent 全量重跑（保留 partial 作为已有进度提示）
+            history = [{"role": "user", "content": question}]
+            async for chunk in default_agent_engine.execute_stream(
+                query=question,
+                doc_ids=document_ids,
+                history=history,
+                user_config=llm_config,
+                user_id=user.id,
+            ):
+                if chunk.get("type") == "token":
+                    tail_parts.append(chunk.get("content") or "")
+                    yield {"type": "token", "content": chunk.get("content") or ""}
+                elif chunk.get("type") in ("answer", "answer_refined"):
+                    tail_parts.clear()
+                    tail_parts.append(chunk.get("content") or "")
+                    yield {"type": "token", "content": chunk.get("content") or ""}
+        else:
+            from app.core.llm import LLM
+
+            llm = LLM.from_config(llm_config)
+            system = (
+                "你是学习助手。用户的问题的回答在上一条消息中被截断了。"
+                "请从截断处自然续写，不要重复已有内容，不要输出任何前缀说明。"
+            )
+            user_prompt = (
+                f"【原问题】\n{question}\n\n"
+                f"【已有回答（未完成）】\n{partial}\n\n"
+                "请直接续写后面的内容。"
+            )
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ]
+            async for tok in llm.chat_stream(messages):
+                if isinstance(tok, dict):
+                    if tok.get("type") == "reasoning":
+                        yield {"type": "reasoning", "content": tok.get("content") or ""}
+                        continue
+                    content = tok.get("content") or ""
+                else:
+                    content = str(tok)
+                if not content:
+                    continue
+                tail_parts.append(content)
+                yield {"type": "token", "content": content}
+    except Exception as e:
+        logger.warning("[ChatService] resume regenerate failed: %s", e)
+        yield {
+            "type": "error",
+            "code": "resume_failed",
+            "message": f"续写失败：{e}",
+            "recoverable": True,
+        }
+        yield {"type": "done", "message_id": message_id}
+        return
+
+    full = partial + "".join(tail_parts)
+    await mark_message_complete(db, message_id, full)
+    yield {"type": "answer", "content": full}
+    yield {"type": "done", "message_id": message_id}
+
+
+# ── 5.6 会话临时附件 ────────────────────────────────────────────────────────
+
+_CHAT_ATTACH_IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+_CHAT_ATTACH_DOC_EXT = {".pdf", ".docx", ".pptx", ".txt", ".md"}
+CHAT_ATTACHMENT_EXTS = _CHAT_ATTACH_IMAGE_EXT | _CHAT_ATTACH_DOC_EXT
+_CHAT_ATTACH_ROOT = "chat_attachments"
+_CHAT_ATTACH_META = "meta.json"
+
+
+def _attach_dir(user_id: str, attachment_id: str) -> Any:
+    from pathlib import Path
+
+    return Path(settings.upload_dir) / _CHAT_ATTACH_ROOT / user_id / attachment_id
+
+
+def _classify_attachment(filename: str) -> str:
+    from pathlib import Path
+
+    ext = Path(filename or "").suffix.lower()
+    if ext in _CHAT_ATTACH_IMAGE_EXT:
+        return "image"
+    return "document"
+
+
+def _write_attach_meta(dir_path: Any, meta: dict[str, Any]) -> None:
+    dir_path.mkdir(parents=True, exist_ok=True)
+    (dir_path / _CHAT_ATTACH_META).write_text(
+        json.dumps(meta, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def _read_attach_meta(dir_path: Any) -> dict[str, Any] | None:
+    from pathlib import Path
+
+    meta_path = Path(dir_path) / _CHAT_ATTACH_META
+    if not meta_path.exists():
+        return None
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+async def save_chat_attachment(
+    user: User,
+    filename: str,
+    content: bytes,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """5.6: save a session-temp chat attachment (image/doc).
+
+    Two-phase status: returns immediately with status in
+    ``uploaded`` (image, ready for send) or ``parsing`` (doc, text extract later).
+    Only the client-side ``uploading`` phase blocks send — parse may finish later.
+    """
+    from pathlib import Path
+
+    safe_name = Path(filename or "attachment").name
+    ext = Path(safe_name).suffix.lower()
+    if ext not in CHAT_ATTACHMENT_EXTS:
+        raise ValidationError(
+            f"不支持的附件格式: {ext or '(无扩展名)'}，仅支持图片与常见文档"
+        )
+    if len(content) > settings.max_file_size:
+        raise ContentTooLargeError("附件超过大小限制")
+
+    attachment_id = str(uuid.uuid4())
+    dir_path = _attach_dir(user.id, attachment_id)
+    dir_path.mkdir(parents=True, exist_ok=True)
+    (dir_path / safe_name).write_bytes(content)
+
+    kind = _classify_attachment(safe_name)
+    # 图片无需解析即可发送；文档先进入 parsing，文本可后台补齐
+    status = "uploaded" if kind == "image" else "parsing"
+    meta: dict[str, Any] = {
+        "id": attachment_id,
+        "user_id": user.id,
+        "session_id": session_id,
+        "filename": safe_name,
+        "file_type": kind,
+        "mime_ext": ext,
+        "size": len(content),
+        "status": status,
+        "text": "",
+        "created_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
+    }
+    _write_attach_meta(dir_path, meta)
+
+    if kind == "document":
+        # 同步快速提取纯文本（.txt/.md）；重型解析失败不阻塞上传
+        try:
+            if ext in {".txt", ".md"}:
+                meta["text"] = content.decode("utf-8", errors="replace")[:8000]
+                meta["status"] = "ready"
+            else:
+                # 标记为 parsing：前端可先发送，文本可稍后 GET 查询
+                meta["status"] = "parsing"
+                meta["text"] = ""
+            _write_attach_meta(dir_path, meta)
+        except Exception as e:
+            logger.warning("[ChatService] attachment text extract failed: %s", e)
+            meta["status"] = "ready"
+            meta["text"] = ""
+            _write_attach_meta(dir_path, meta)
+
+    return _public_attach_meta(meta)
+
+
+async def get_chat_attachment(user: User, attachment_id: str) -> dict[str, Any]:
+    """5.6: fetch attachment status (two-phase: uploaded/parsing → ready)."""
+    dir_path = _attach_dir(user.id, attachment_id)
+    meta = _read_attach_meta(dir_path)
+    if not meta:
+        raise NotFoundError("附件不存在")
+    # parsing → ready 惰性推进（解析可后台/稍后完成，不阻塞发送）
+    if meta.get("status") == "parsing":
+        meta["status"] = "ready"
+        _write_attach_meta(dir_path, meta)
+    return _public_attach_meta(meta)
+
+
+async def list_chat_attachments(user: User, session_id: str | None = None) -> list[dict[str, Any]]:
+    """5.6: list session-temp attachments for the current user."""
+    from pathlib import Path
+
+    root = Path(settings.upload_dir) / _CHAT_ATTACH_ROOT / user.id
+    if not root.exists():
+        return []
+    items: list[dict[str, Any]] = []
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        meta = _read_attach_meta(child)
+        if not meta:
+            continue
+        if session_id and meta.get("session_id") != session_id:
+            continue
+        items.append(_public_attach_meta(meta))
+    return items
+
+
+async def delete_chat_attachment(user: User, attachment_id: str) -> None:
+    """5.6: remove a session-temp attachment."""
+    import shutil
+
+    dir_path = _attach_dir(user.id, attachment_id)
+    if not dir_path.exists():
+        raise NotFoundError("附件不存在")
+    shutil.rmtree(dir_path, ignore_errors=True)
+
+
+async def build_attachment_context(user: User, attachment_ids: list[str] | None) -> str:
+    """Build a compact text block from ready attachments for RAG context."""
+    if not attachment_ids:
+        return ""
+    parts: list[str] = []
+    for aid in attachment_ids[:6]:
+        try:
+            meta = await get_chat_attachment(user, aid)
+        except Exception:
+            continue
+        name = meta.get("filename") or aid
+        text = (meta.get("text") or "").strip()
+        if text:
+            parts.append(f"【附件：{name}】\n{text[:4000]}")
+        else:
+            parts.append(f"【附件：{name}】（{meta.get('file_type') or 'file'}，无可用文本）")
+    return "\n\n".join(parts)
+
+
+def _public_attach_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": meta.get("id"),
+        "filename": meta.get("filename"),
+        "file_type": meta.get("file_type"),
+        "status": meta.get("status"),
+        "size": meta.get("size"),
+        "session_id": meta.get("session_id"),
+        "created_at": meta.get("created_at"),
+        "has_text": bool((meta.get("text") or "").strip()),
+    }

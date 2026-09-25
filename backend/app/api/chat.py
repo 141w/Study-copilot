@@ -32,6 +32,8 @@ class AskRequest(BaseModel):
     stream: bool | None = False
     mode: str | None = "fast"  # "fast" | "deep_research"
     agent_enabled: bool | None = False
+    # 5.6: session-temp attachment ids (text injected when ready)
+    attachment_ids: list[str] | None = None
 
 
 class Source(BaseModel):
@@ -102,6 +104,8 @@ class MessageResp(BaseModel):
     reasoning: str | None = None
     saved_note: dict | None = None
     savedNote: dict | None = None  # noqa: N815
+    # 5.5 断线续流
+    incomplete: bool = False
     created_at: str
 
 
@@ -160,6 +164,8 @@ async def ask(
                     req.session_id,
                     req.config,
                     mode=req.mode or ("deep_research" if req.agent_enabled else "fast"),
+                    stream_id=buffered.stream_id,
+                    attachment_ids=req.attachment_ids,
                 ):
                     if event.get("type") == "session" and "stream_id" not in event:
                         event = {**event, "stream_id": buffered.stream_id}
@@ -252,6 +258,43 @@ async def resume_stream(
     )
 
 
+@router.post("/messages/{message_id}/resume")
+async def resume_message(
+    message_id: str,
+    request: Request,
+    last_event_id: int | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """5.5 断线续流：按 message_id 重放缓冲或续写未完成回答。"""
+    if not _chat_limiter.check(request):
+        raise RateLimitError("请求过于频繁，请稍后再试")
+    # 先做鉴权/存在性检查，避免 StreamingResponse 已启动后 404 无法回写状态码
+    await chat_service.get_message_for_resume(db, current_user, message_id)
+
+    async def generate_message_resume():
+        try:
+            async for event in chat_service.resume_message_stream(
+                db, current_user, message_id, last_event_id=last_event_id
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            err = {
+                "type": "error",
+                "code": "resume_failed",
+                "message": str(e),
+                "recoverable": True,
+            }
+            yield f"data: {json.dumps(err, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(
+        generate_message_resume(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
 @router.get("/history", response_model=list[ChatHistoryResp])
 async def get_sessions(
     db: AsyncSession = Depends(get_db),
@@ -285,8 +328,9 @@ async def get_history(
         thinking = None
         reasoning = None
         saved_note = None
+        incomplete = False
         if not m.sources:
-            return sources, discussion_turns, personas, summary, thinking, reasoning, saved_note
+            return sources, discussion_turns, personas, summary, thinking, reasoning, saved_note, incomplete
         try:
             raw = json.loads(m.sources)
             if isinstance(raw, list):
@@ -306,13 +350,16 @@ async def get_history(
                 if isinstance(raw_reasoning, str):
                     reasoning = raw_reasoning
                 saved_note = raw.get("saved_note") or raw.get("savedNote")
+                # 5.5 断线续流
+                if raw.get("incomplete"):
+                    incomplete = True
         except Exception:
             pass
-        return sources, discussion_turns, personas, summary, thinking, reasoning, saved_note
+        return sources, discussion_turns, personas, summary, thinking, reasoning, saved_note, incomplete
 
     messages_resp = []
     for m in msgs:
-        sources, discussion_turns, personas, summary, thinking, reasoning, saved_note = (
+        sources, discussion_turns, personas, summary, thinking, reasoning, saved_note, incomplete = (
             parse_message_payload(m)
         )
         messages_resp.append(
@@ -329,6 +376,7 @@ async def get_history(
                 reasoning=reasoning,
                 saved_note=saved_note,
                 savedNote=saved_note,
+                incomplete=incomplete,
                 created_at=str(m.created_at),
             )
         )

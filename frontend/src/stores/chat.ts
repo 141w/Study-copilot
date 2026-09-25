@@ -77,6 +77,8 @@ export interface ChatStreamMessage {
   summary?: string
   summaryStreaming?: boolean
   error?: string
+  /** 5.5 断线续流：服务端标记未完成回答 */
+  incomplete?: boolean
 }
 
 /** 会话列表条目（后端以 session_id 为键，区别于 models.ChatSession.id） */
@@ -160,6 +162,7 @@ export const useChatStore = defineStore('chat', () => {
           // thinking 原样透传（含 4A duration_ms/count/doc_count/window/status）
           // 重进页面 / 切会话：参考来源默认折叠，避免遮挡最新消息
           expandedSources: false,
+          incomplete: Boolean((m as any).incomplete),
         }
       })
       currentSession.value = sessionId
@@ -249,7 +252,8 @@ export const useChatStore = defineStore('chat', () => {
     question: string,
     documentIds: string[],
     sessionId: string | null = null,
-    mode: 'fast' | 'deep_research' = 'fast'
+    mode: 'fast' | 'deep_research' = 'fast',
+    attachmentIds: string[] = []
   ): Promise<{ success: boolean; cancelled?: boolean }> {
     loading.value = true
     isStreaming.value = true
@@ -416,6 +420,7 @@ export const useChatStore = defineStore('chat', () => {
           stream: true,
           mode,
           agent_enabled: mode === 'deep_research',
+          attachment_ids: attachmentIds.length ? attachmentIds : undefined,
         }),
         signal: controller.signal
       })
@@ -477,6 +482,10 @@ export const useChatStore = defineStore('chat', () => {
         const msgIdx = messages.value.findIndex(m => m.id === tempMsgId)
         if (msgIdx !== -1) {
           messages.value[msgIdx].isStreaming = false
+          // 5.5: 停止后部分回答仍可续流（服务端 incomplete 落库）
+          if (messages.value[msgIdx].content) {
+            messages.value[msgIdx].incomplete = true
+          }
           // 如果没有任何内容，移除占位消息
           if (!messages.value[msgIdx].content) {
             messages.value = messages.value.filter(m => m.id !== tempMsgId)
@@ -540,6 +549,135 @@ export const useChatStore = defineStore('chat', () => {
     if (abortController.value) {
       abortController.value.abort()
     }
+  }
+
+  /** 5.5: 最后一条 assistant 是否未完成（断线续流入口） */
+  function findIncompleteMessage(): ChatStreamMessage | null {
+    for (let i = messages.value.length - 1; i >= 0; i--) {
+      const m = messages.value[i]
+      if (m.role === 'assistant' && (m.incomplete || m.isStreaming)) return m
+    }
+    return null
+  }
+
+  /**
+   * 5.5 断线续流：按 message_id 请求服务端续流/重放。
+   * continue 模式下 token 追加到 partial；replay 模式下 answer 覆盖全文。
+   */
+  async function resumeMessageStream(
+    messageId: string | number,
+    lastEventId = 0
+  ): Promise<{ success: boolean; cancelled?: boolean }> {
+    const msgIdx = messages.value.findIndex(m => m.id === messageId)
+    if (msgIdx === -1) return { success: false }
+
+    loading.value = true
+    isStreaming.value = true
+    const controller = new AbortController()
+    abortController.value = controller
+    messages.value[msgIdx].isStreaming = true
+
+    try {
+      const token = localStorage.getItem('token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const url = `/api/chat/messages/${messageId}/resume?last_event_id=${lastEventId}`
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let mode: 'continue' | 'replay' = 'continue'
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()!
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          let data: SseEvent
+          try {
+            data = JSON.parse(line.slice(6))
+          } catch {
+            continue
+          }
+          if (data.type === 'resume_mode') {
+            mode = (data as { mode?: string }).mode === 'replay' ? 'replay' : 'continue'
+            continue
+          }
+          if (data.type === 'resume_pending') {
+            // 服务端流仍在进行 — 交由 /stream/{id}/resume
+            messages.value[msgIdx].isStreaming = false
+            messages.value[msgIdx].incomplete = true
+            return { success: true }
+          }
+          if (data.type === 'token') {
+            messages.value[msgIdx].content += data.content ?? ''
+            continue
+          }
+          if (data.type === 'answer' || data.type === 'answer_refined') {
+            messages.value[msgIdx].content = data.content || messages.value[msgIdx].content
+            continue
+          }
+          if (data.type === 'reasoning') {
+            const m = messages.value[msgIdx]
+            m.reasoning = (m.reasoning || '') + (data.content || '')
+            continue
+          }
+          if (data.type === 'error') {
+            const errText = typeof data.message === 'string' ? data.message : '续写失败'
+            const m = messages.value[msgIdx]
+            m.content = m.content ? m.content + '\n\n---\n\n' + errText : errText
+            continue
+          }
+          if (data.type === 'done') {
+            messages.value[msgIdx].isStreaming = false
+            messages.value[msgIdx].incomplete = false
+            const serverMsgId = (data as { message_id?: string }).message_id
+            if (serverMsgId) messages.value[msgIdx].id = serverMsgId
+            return { success: true }
+          }
+          void mode
+        }
+      }
+      messages.value[msgIdx].isStreaming = false
+      messages.value[msgIdx].incomplete = false
+      return { success: true }
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        messages.value[msgIdx].isStreaming = false
+        messages.value[msgIdx].incomplete = Boolean(messages.value[msgIdx].content)
+        return { success: false, cancelled: true }
+      }
+      messages.value[msgIdx].isStreaming = false
+      console.error('Error resuming message stream:', error)
+      return { success: false }
+    } finally {
+      loading.value = false
+      isStreaming.value = false
+      abortController.value = null
+    }
+  }
+
+  /**
+   * 5.5 挂载自愈：若最后一条 assistant 未完成则自动续流。
+   * 返回是否触发了续流。
+   */
+  async function tryResumeIncomplete(): Promise<boolean> {
+    const target = findIncompleteMessage()
+    if (!target || target.isStreaming) return false
+    if (!target.id || typeof target.id !== 'string') return false
+    await resumeMessageStream(target.id)
+    return true
   }
 
   async function deleteSession(sessionId: string): Promise<void> {
@@ -638,6 +776,9 @@ export const useChatStore = defineStore('chat', () => {
     clearSearch,
     searchMessages,
     saveMessageAsNote,
+    findIncompleteMessage,
+    resumeMessageStream,
+    tryResumeIncomplete,
     isStreaming
   }
 })
