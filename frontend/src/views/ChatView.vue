@@ -235,8 +235,11 @@
             @stop="handleStop"
             :loading="chatStore.isStreaming"
             :scope-chips="scopeChips"
+            :attachments="chatAttachments"
             @remove-scope="removeScope"
             @add-scope="addScope"
+            @add-attachments="addChatAttachments"
+            @remove-attachment="removeChatAttachment"
             placeholder="输入您的问题..."
           />
         </div>
@@ -277,9 +280,15 @@ import ChatMessageItem from '../components/chat/ChatMessageItem.vue'
 import ChatDiscussionItem from '../components/chat/ChatDiscussionItem.vue'
 import ProximitySidebar from '../components/chat/ProximitySidebar.vue'
 import PersonaManageDialog from '../components/chat/PersonaManageDialog.vue'
+import type { ChatAttachmentItem } from '../components/chat/ChatAttachments.vue'
 import { useVisualViewport } from '../composables/useVisualViewport'
 import { buildChatMarkdown, downloadChatMarkdown } from '../composables/useChatExport'
 import { useMarkdown } from '../composables/useMarkdown'
+import {
+  prepareCitationMarkdown,
+  finalizeCitationHtml,
+  hideIncompleteCitationTail,
+} from '@/utils/citationMarkdown'
 import { useReducedMotion } from '../composables/useReducedMotion'
 import gsap from 'gsap'
 import CopilotBotAvatar from '../components/CopilotBotAvatar.vue'
@@ -628,19 +637,19 @@ function _mdCacheSet(key: string, val: string): void {
   _mdCache.set(key, val)
 }
 
-/** P6-2：来源标记 → 可点击角标（渲染后处理，稳定块缓存命中时同样适用） */
+/** P6-2 / 阶段四B：占位符 → 来源角标（解析后还原；流式残缺标记已在解析前隐藏） */
 function _applySourceBadges(html: string): string {
-  return html.replace(/\[来源(\d+)\]/g, (_match, num: string) => {
-    return `<sup class="source-badge" data-index="${num}">[${num}]</sup>`
-  })
+  return finalizeCitationHtml(html)
 }
 
 /** P6-2：单块 markdown 渲染（带缓存键前缀区分流式尾块） */
-function _renderBlock(block: string, cachePrefix: string): string {
+function _renderBlock(block: string, cachePrefix: string, forStreaming = false): string {
   const key = cachePrefix + block
   const cached = _mdCacheGet(key)
   if (cached) return cached
-  const rendered = _applySourceBadges(renderMarkdownBase(block))
+  // 解析前换出 [来源N] 占位符（并隐藏流式残缺标记），解析后还原为角标
+  const prepared = prepareCitationMarkdown(block, forStreaming)
+  const rendered = _applySourceBadges(renderMarkdownBase(prepared))
   _mdCacheSet(key, rendered)
   return rendered
 }
@@ -659,11 +668,14 @@ function renderMarkdown(text: string, isStreaming = false): string {
     const key = 'full:' + text
     const cached = _mdCacheGet(key)
     if (cached) return cached
-    const rendered = _applySourceBadges(renderMarkdownBase(text))
+    const prepared = prepareCitationMarkdown(text, false)
+    const rendered = _applySourceBadges(renderMarkdownBase(prepared))
     _mdCacheSet(key, rendered)
     return rendered
   }
-  const blocks = text.split(/\n\n+/)
+  // 流式：先隐藏尾部残缺 [来源… 标记，再分块
+  const safeText = hideIncompleteCitationTail(text, true)
+  const blocks = safeText.split(/\n\n+/)
   const parts: string[] = []
   for (let i = 0; i < blocks.length - 1; i++) {
     parts.push(_renderBlock(blocks[i], 'stable:'))
@@ -671,7 +683,7 @@ function renderMarkdown(text: string, isStreaming = false): string {
   // 尾块单独渲染（可能是不完整 md：语法闭合由 markdown-it 容错，未闭合标记按原样呈现，
   // 下个 token 到达即修正——这也是所见即所得的正确语义）
   const tail = blocks[blocks.length - 1]
-  if (tail) parts.push(_renderBlock(tail, 'tail:'))
+  if (tail) parts.push(_renderBlock(tail, 'tail:', true))
   // 块级 HTML 直接拼接（md-it 输出已带块级结构）
   return parts.join('')
 }
@@ -703,9 +715,10 @@ async function handleSend(content: string): Promise<void> {
   }
   // 新一轮：收起此前展开的参考来源，保证新消息可见
   collapseAllSourceCards()
+  const attachmentIds = collectReadyAttachmentIds()
   // 启动流式但不等结束：立刻让「刚发出的 user + 占位回答」进入可视区
   const streamPromise = chatStore.askQuestionStream(
-    content, selectedDocs.value, null, researchMode.value
+    content, selectedDocs.value, null, researchMode.value, attachmentIds
   )
   void nextTick().then(() => {
     forceScrollToBottom()
@@ -717,6 +730,10 @@ async function handleSend(content: string): Promise<void> {
   catch (_e) {
     playScene('exclaim')
     return
+  }
+  // 发送成功后清空本会话输入附件（临时附件已注入上下文）
+  if (attachmentIds.length) {
+    chatAttachments.value = []
   }
   await nextTick()
   forceScrollToBottom()
@@ -1037,6 +1054,76 @@ function onSessionLoaded(_sessionId: string): void {
   scrollChatToBottomSticky(8)
   // P8：载入历史会话 → orbit 入场
   playScene('arrive')
+  // 5.5 断线续流：历史载入后若末条未完成则自动续流
+  void chatStore.tryResumeIncomplete()
+}
+
+// ── 5.6 聊天附件：会话临时上传，两阶段状态 ─────────────────────────────────
+const chatAttachments = ref<ChatAttachmentItem[]>([])
+
+function isImageFile(file: File): boolean {
+  return (file.type || '').startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name)
+}
+
+async function addChatAttachments(files: File[]): Promise<void> {
+  for (const file of files) {
+    const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const item: ChatAttachmentItem = {
+      id: localId,
+      filename: file.name,
+      file_type: isImageFile(file) ? 'image' : 'document',
+      status: 'uploading',
+      size: file.size,
+    }
+    chatAttachments.value = [...chatAttachments.value, item]
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const sessionId = chatStore.currentSession || ''
+      const { data } = await api.post(
+        `/documents/chat-attachments/upload${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''}`,
+        form,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      )
+      const idx = chatAttachments.value.findIndex(a => a.id === localId)
+      if (idx !== -1) {
+        chatAttachments.value[idx] = {
+          id: data.id,
+          filename: data.filename || file.name,
+          file_type: (data.file_type === 'image' ? 'image' : 'document'),
+          // uploaded/parsing/ready：上传完成即可发送，解析可后台继续
+          status: data.status || 'ready',
+          size: data.size ?? file.size,
+        }
+        chatAttachments.value = [...chatAttachments.value]
+      }
+    } catch (e) {
+      console.error('Attachment upload failed:', e)
+      const idx = chatAttachments.value.findIndex(a => a.id === localId)
+      if (idx !== -1) {
+        chatAttachments.value[idx] = { ...chatAttachments.value[idx], status: 'error' }
+        chatAttachments.value = [...chatAttachments.value]
+      }
+    }
+  }
+}
+
+async function removeChatAttachment(id: string): Promise<void> {
+  chatAttachments.value = chatAttachments.value.filter(a => a.id !== id)
+  if (!id.startsWith('local-')) {
+    try {
+      await api.delete(`/documents/chat-attachments/${id}`)
+    } catch {
+      /* 已移除本地态，服务端残留可稍后清理 */
+    }
+  }
+}
+
+function collectReadyAttachmentIds(): string[] {
+  // 仅「上传中」会阻塞发送（ChatInput 已禁用）；parsing/ready 一并带上
+  return chatAttachments.value
+    .filter(a => a.status !== 'uploading' && a.status !== 'error' && !a.id.startsWith('local-'))
+    .map(a => a.id)
 }
 
 function onSessionDeleted(sessionId: string): void {
@@ -1327,6 +1414,9 @@ onMounted(async () => {
   if (contextQuery) {
     await handleSend(contextQuery as string)
   }
+
+  // 5.5 断线续流：挂载后若末条 assistant 未完成则自动续流
+  void chatStore.tryResumeIncomplete()
 
   // P1-1：减少动态偏好下不执行入场动画
   if (prefersReduced.value) return

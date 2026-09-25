@@ -209,12 +209,14 @@
           </div>
         </details>
 
-        <!-- 4. Deck 3: 正式回答 (Final Answer Body) -->
+        <!-- 4. Deck 3: 正文回答 (Final Answer Body) -->
         <div
           v-if="message.isStreaming || message.content"
           class="text-[0.9rem] leading-[1.75] text-[var(--text-primary)] prose prose-sm max-w-none"
-          v-html="renderedMarkdown"
+          v-stable-html="renderedMarkdown"
           @click="handleContentClick"
+          @mouseover="onContentMouseOver"
+          @mouseout="onContentMouseOut"
         ></div>
         <span v-if="message.isStreaming && message.content" class="stream-caret" aria-hidden="true"></span>
 
@@ -346,6 +348,15 @@
         </div>
       </div>
     </div>
+
+    <!-- 引用角标 hover 浮层（Teleport 到 body，80ms 入 / 120ms 出） -->
+    <ChatCitationFloat
+      :visible="citeVisible"
+      :source="citeSource"
+      :anchor="citeAnchor"
+      @enter="onFloatEnter"
+      @leave="onFloatLeave"
+    />
   </div>
 </template>
 
@@ -363,7 +374,10 @@ import type { ExpressionId } from '@/bot/expressions'
 import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
 import TTSPlayer from '@/components/TTSPlayer.vue'
 import ChatSourceCards from './ChatSourceCards.vue'
+import ChatCitationFloat from './ChatCitationFloat.vue'
 import { useMarkdown } from '@/composables/useMarkdown'
+import { stableHtml as vStableHtml } from '@/utils/stableHtml'
+import { useChatCitationPopover } from '@/composables/useChatCitationPopover'
 
 const props = defineProps<{
   message: ChatStreamMessage
@@ -410,6 +424,21 @@ const displaySources = computed<Source[]>(() => {
   const all = props.message.sources
   const list = Array.isArray(filtered) && filtered.length > 0 ? filtered : (Array.isArray(all) ? all : [])
   return list.map((s) => ({ ...s, source: sourceLabel(s) }))
+})
+
+/** 引用角标 hover 浮层（80ms 入 / 120ms 出，Teleport + 视口夹紧） */
+const {
+  visible: citeVisible,
+  activeSource: citeSource,
+  anchor: citeAnchor,
+  onContentMouseOver,
+  onContentMouseOut,
+  onFloatEnter,
+  onFloatLeave,
+} = useChatCitationPopover({
+  sources: () => displaySources.value,
+  delayIn: 80,
+  delayOut: 120,
 })
 
 const usedSourceCount = computed(() => {

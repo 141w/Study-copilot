@@ -42,14 +42,30 @@
         data-test="source-card-body"
       >
         <div class="source-card__body-main">
-          <p v-if="source.text" class="source-card__quote">{{ source.text }}</p>
+          <!-- 就地展开全文：摘录 ↔ 切片全文 无缝切换，不另开抽屉 -->
+          <p
+            v-if="displayBody(source)"
+            class="source-card__quote"
+            :data-test="isFullOpen(source.index) ? 'source-card-full-text' : 'source-card-quote'"
+          >{{ displayBody(source) }}</p>
           <p v-else class="source-card__quote source-card__quote--empty">无正文摘要</p>
 
           <button
-            v-if="source.text"
+            v-if="canLoadFull(source)"
             type="button"
             class="source-card__copy"
-            @click.stop="copySnippet(source.text, source.index)"
+            data-test="source-card-expand-full"
+            :disabled="isLoadingFull(source.index)"
+            @click.stop="toggleFull(source)"
+          >
+            <span>{{ fullToggleLabel(source) }}</span>
+          </button>
+
+          <button
+            v-if="displayBody(source)"
+            type="button"
+            class="source-card__copy"
+            @click.stop="copySnippet(displayBody(source), source.index)"
           >
             <el-icon class="w-3 h-3">
               <component :is="copiedIndex === source.index ? Check : DocumentCopy" />
@@ -76,6 +92,10 @@
 import { ref, watch } from 'vue'
 import type { Source } from '@/types/models'
 import { ArrowRight, DocumentCopy, Check, Document } from '@/components/icons'
+import api from '@/services/api'
+
+/** 来源条目可选携带稳定 chunk_id（阶段四B 后端透传） */
+type SourceWithChunk = Source & { chunk_id?: string | null }
 
 const props = defineProps<{
   sources?: Source[]
@@ -124,7 +144,106 @@ function copySnippet(text: string, index: number): void {
   }).catch(() => {})
 }
 
-watch(() => props.sources, () => { expandedSet.value = new Set() })
+/* ==================== 就地展开全文（阶段四B） ====================
+   摘录 → 点「展开全文」→ 按 chunk_id 取切片全文 → 原地替换正文区。
+   GET /api/documents/{doc_id}/chunks/{chunk_id} 由阶段三/并行任务提供；
+   接口未就绪或无 chunk_id 时软失败，保持摘录展示。 */
+
+const fullTexts = ref<Record<string, string>>({})
+const fullOpenSet = ref<Set<number>>(new Set())
+const fullLoadingSet = ref<Set<number>>(new Set())
+const fullFailedSet = ref<Set<number>>(new Set())
+
+function fullKey(s: SourceWithChunk): string {
+  return `${s.document_id || ''}:${s.chunk_id || ''}:${s.index}`
+}
+
+function canLoadFull(s: SourceWithChunk): boolean {
+  return Boolean(s.chunk_id && s.document_id)
+}
+
+function isFullOpen(index: number | undefined): boolean {
+  return index != null && fullOpenSet.value.has(index)
+}
+
+function isLoadingFull(index: number | undefined): boolean {
+  return index != null && fullLoadingSet.value.has(index)
+}
+
+function displayBody(s: SourceWithChunk): string {
+  if (isFullOpen(s.index)) {
+    const full = fullTexts.value[fullKey(s)]
+    if (full) return full
+  }
+  return s.text || ''
+}
+
+function fullToggleLabel(s: SourceWithChunk): string {
+  if (isLoadingFull(s.index)) return '加载中…'
+  if (isFullOpen(s.index)) return '收起全文'
+  if (fullFailedSet.value.has(s.index)) return '全文不可用'
+  return '展开全文'
+}
+
+async function loadFull(s: SourceWithChunk): Promise<boolean> {
+  const key = fullKey(s)
+  if (fullTexts.value[key]) return true
+  const loading = new Set(fullLoadingSet.value)
+  loading.add(s.index)
+  fullLoadingSet.value = loading
+  try {
+    const res = await api.get(`/documents/${s.document_id}/chunks/${s.chunk_id}`)
+    const data = res?.data
+    const text: string =
+      (typeof data?.content === 'string' && data.content) ||
+      (typeof data?.text === 'string' && data.text) ||
+      (typeof data?.chunk?.content === 'string' && data.chunk.content) ||
+      (typeof data?.chunk?.text === 'string' && data.chunk.text) ||
+      ''
+    fullTexts.value = { ...fullTexts.value, [key]: text }
+    if (!text) {
+      const failed = new Set(fullFailedSet.value)
+      failed.add(s.index)
+      fullFailedSet.value = failed
+      return false
+    }
+    return true
+  } catch {
+    const failed = new Set(fullFailedSet.value)
+    failed.add(s.index)
+    fullFailedSet.value = failed
+    return false
+  } finally {
+    const loading = new Set(fullLoadingSet.value)
+    loading.delete(s.index)
+    fullLoadingSet.value = loading
+  }
+}
+
+async function toggleFull(s: SourceWithChunk): Promise<void> {
+  const idx = s.index
+  if (idx == null) return
+  if (isFullOpen(idx)) {
+    const next = new Set(fullOpenSet.value)
+    next.delete(idx)
+    fullOpenSet.value = next
+    return
+  }
+  if (fullFailedSet.value.has(idx) && !fullTexts.value[fullKey(s)]) return
+  const ok = await loadFull(s)
+  if (!ok) return
+  const next = new Set(fullOpenSet.value)
+  next.add(idx)
+  fullOpenSet.value = next
+}
+
+watch(() => props.sources, () => {
+  expandedSet.value = new Set()
+  fullOpenSet.value = new Set()
+  fullLoadingSet.value = new Set()
+  fullFailedSet.value = new Set()
+  fullTexts.value = {}
+})
 defineExpose({ expand })
 </script>
 
