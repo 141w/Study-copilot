@@ -1,24 +1,28 @@
 """数据库结构引导（幂等）。
 
-背景：本项目的 Alembic 初始迁移是一个空壳（``pass``），因此**无法从空库
-把结构建出来**——开发环境一直靠应用启动时的 ``create_all`` 兜底，这个隐式
-行为在全新部署时才暴露为故障（迁移链中途报 ``relation "users" does not exist``）。
+背景：本项目的 Alembic 初始迁移是空壳（``pass``），**无法从空库把结构建出来**——
+开发环境一直靠应用启动时的 ``create_all`` 兜底，这个隐式行为在全新部署时暴露为
+故障（迁移链中途报 ``relation "users" does not exist``）。
 
-在补齐真正的基线迁移之前，这里把隐式行为显式化，让"一条命令把库建到最新结构"
-成立。三种情形分别处理：
+在补出真正的基线迁移之前，这里把隐式行为显式化，让"一条命令把库建到最新结构"成立：
 
 1. 空库            → 按 ORM 模型建全表，再把版本标记为 head
 2. 有表但没版本标记 → 只补打版本标记（历史开发库）
 3. 已有版本标记     → 正常 ``alembic upgrade head``
 
-注意：走情形 1/2 时，结构来源是 ORM 模型而不是迁移脚本。长期正确做法是把
-基线迁移补成真能建表的 DDL，届时本模块的情形 1 应改为直接 ``upgrade head``。
+长期正确做法是把基线迁移补成真能建表的 DDL，届时情形 1 应改为直接 upgrade。
+
+实现约束：Alembic 的 ``env.py`` 内部自己 ``asyncio.run``，因此**不能在本模块的
+事件循环里直接调用 ``alembic.command``**（会撞上"asyncio.run() cannot be called
+from a running event loop"，表现为迁移没执行且协程未被等待）。所有 alembic 操作
+一律通过子进程走命令行，与文档和 CI 的用法保持一致。
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import subprocess
 import sys
 from pathlib import Path
 
@@ -31,23 +35,17 @@ from app.db.database import Base
 
 logger = logging.getLogger(__name__)
 
-_ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
 
-
-def _alembic_config():
-    """构造 Alembic Config（复用项目 env.py，含 async URL 处理）。"""
-    from alembic.config import Config
-
-    cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("script_location", str(_ALEMBIC_INI.parent / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", settings.database_url)
-    return cfg
+# (状态, 后续需要在事件循环外执行的 alembic 动作)
+Action = str  # "none" | "upgrade" | "stamp"
 
 
 async def _probe() -> tuple[bool, bool]:
-    """返回 (有版本标记, 有业务表)。用独立的临时引擎，避免污染应用连接池。"""
+    """返回 (有版本标记, 有业务表)。用临时引擎，不碰应用连接池。"""
     engine = create_async_engine(settings.database_url)
     try:
+
         def _inspect(sync_conn):
             names = set(inspect(sync_conn).get_table_names())
             return ("alembic_version" in names, bool(names - {"alembic_version"}))
@@ -56,18 +54,6 @@ async def _probe() -> tuple[bool, bool]:
             return await conn.run_sync(_inspect)
     finally:
         await engine.dispose()
-
-
-def _stamp_head() -> None:
-    from alembic import command
-
-    command.stamp(_alembic_config(), "head")
-
-
-def _upgrade_head() -> None:
-    from alembic import command
-
-    command.upgrade(_alembic_config(), "head")
 
 
 async def _create_all() -> None:
@@ -79,34 +65,52 @@ async def _create_all() -> None:
         await engine.dispose()
 
 
-async def ensure_schema() -> str:
-    """把数据库结构推进到最新，返回执行了哪种情形（供日志/测试断言）。"""
-    # 方言差异：SQLite 下没有独立的 server 可连，直接按空库处理
+async def _decide() -> tuple[str, Action]:
+    """判定当前库处于哪种情形，返回 (情形标签, 待执行的 alembic 动作)。"""
     if make_url(settings.database_url).get_backend_name() == "sqlite":
+        # 测试/嵌入式场景：没有独立 server，直接按模型建表即可
         await _create_all()
-        return "sqlite-create-all"
+        return "sqlite-create-all", "none"
 
     versioned, has_tables = await _probe()
     if versioned:
-        _upgrade_head()
-        return "upgraded"
+        return "versioned", "upgrade"
     if has_tables:
-        # 历史开发库：结构由 create_all 建出，但从未打版本标记
-        _stamp_head()
-        return "stamped-existing"
+        return "tables-without-version", "stamp"
     await _create_all()
-    _stamp_head()
-    return "bootstrapped-from-models"
+    return "empty-bootstrapped", "stamp"
+
+
+def _run_alembic(verb: str) -> None:
+    """在事件循环外以子进程调用 alembic CLI。失败抛异常。"""
+    result = subprocess.run(  # noqa: S603 - 固定参数，无用户输入
+        ["alembic", verb, "head"],  # noqa: S607 - 容器内 PATH 中的 alembic
+        cwd=str(_BACKEND_DIR),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"alembic {verb} head 失败（退出码 {result.returncode}）：{detail[-800:]}")
+
+
+def run() -> str:
+    """执行引导，返回情形标签。异常向上抛，由入口决定退不退。"""
+    case, action = asyncio.run(_decide())
+    if action != "none":
+        _run_alembic(action)
+    return f"{case}+{action}"
 
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
-        result = asyncio.run(ensure_schema())
+        summary = run()
     except Exception as exc:  # noqa: BLE001 - 引导失败必须让容器退出而不是带病启动
         logger.error("schema bootstrap failed: %s", exc)
         return 1
-    logger.info("schema bootstrap done: %s", result)
+    logger.info("schema bootstrap done: %s", summary)
     return 0
 
 
