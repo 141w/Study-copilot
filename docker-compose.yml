@@ -3,7 +3,13 @@ version: '3.8'
 services:
   # PostgreSQL 数据库
   db:
-    image: pgvector/pgvector:pg16
+    # 自定义镜像：pgvector + zhparser（中文全文检索必需）
+    # 构建步骤见 deploy/postgres/Dockerfile；无法构建自定义镜像时可临时改回
+    # image: pgvector/pgvector:pg16，但中文 hybrid 检索将降级（启动日志 WARNING）
+    build:
+      context: ./deploy/postgres
+      dockerfile: Dockerfile
+    image: study-copilot-db:latest
     container_name: study-copilot-db
     environment:
       POSTGRES_DB: study_copilot

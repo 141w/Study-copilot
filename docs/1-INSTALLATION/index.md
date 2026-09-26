@@ -31,6 +31,24 @@ psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE study_copilot TO study_user;"
 psql study_copilot -c "GRANT ALL ON SCHEMA public TO study_user;"
 ```
 
+### zhparser（中文全文检索，Docker 部署必需）
+
+hybrid 检索（pgvector 向量 + PostgreSQL 中文全文 + RRF 融合）依赖 zhparser
+扩展提供的 `zh` 全文配置。未安装时全文配置降级为 `simple`：中文整句成为一个
+token，全文通道失效、hybrid 顶部召回塌方（评测实测 mmarco R@1 由 0.655
+降至 0.035），且同 query 结果不可复现——降级时后端启动日志会出现 WARNING。
+
+- **Docker 部署**：`docker-compose.yml` 的 db 服务已基于
+  `deploy/postgres/Dockerfile` 构建「pgvector + zhparser」自定义镜像，
+  首次初始化自动创建 `zh` 配置（幂等脚本 `deploy/postgres/init-zhparser.sql`）。
+- **已有数据卷**（非首次初始化）：手工执行一次
+  `docker compose exec db psql -U study_user -d study_copilot -f /dev/stdin < deploy/postgres/init-zhparser.sql`。
+- **原生 PostgreSQL**：自行安装 zhparser（scws + PGXS 编译，参考
+  `deploy/postgres/Dockerfile` 中的构建步骤）并执行 init-zhparser.sql。
+- **验证**：`psql -c "SELECT 1 FROM pg_ts_config WHERE cfgname = 'zh';"`
+  应返回一行；`GET /health` 的 `checks.fts_config` 应为 `zh`
+  （`simple` = 已降级，中文检索受损）。
+
 ## 3. Backend Setup
 
 ```bash

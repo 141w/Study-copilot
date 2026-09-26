@@ -126,6 +126,9 @@ skills-lock.json
 .preview/
 .zcode/
 
+# Retrieval evaluation dataset cache (HuggingFace datasets 缓存，勿入库)
+backend/evaluation/data/
+
 # Local run artifacts / tool skill copies
 *.mp3
 .agents/skills/fluid-orb/
