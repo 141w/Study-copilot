@@ -12,6 +12,7 @@ from openai import AsyncOpenAI
 
 from app.config import settings
 from app.core.tracing import record_generation
+from app.exceptions import LLMNotConfiguredError
 
 SUPPORTED_MESSAGE_FORMATS = {"openai", "anthropic", "gemini", "ollama"}
 
@@ -128,7 +129,20 @@ def normalize_message_format(
     return fmt, filtered, system_instr
 
 
+# 凭据缺失时用于通过 SDK 构造校验的占位串。它永远不该真正发出请求：
+# 任何调用前都会先经过 _require_configured() 拦截并给出明确引导。
+_UNCONFIGURED_KEY_PLACEHOLDER = "missing-api-key"
+
+
 class LLM:
+    def _require_configured(self) -> None:
+        """调用前的凭据检查：未配置时给出可操作的中文引导，而非 SDK 认证错误。"""
+        if not getattr(self, "configured", True):
+            raise LLMNotConfiguredError(
+                "尚未配置模型服务。请登录后进入「模型设置」填写 API Key 并保存，"
+                "或部署时在环境变量中设置 OPENAI_API_KEY。"
+            )
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -137,6 +151,11 @@ class LLM:
         reasoning_fields: list[str] | None = None,
     ) -> None:
         # 创建不使用代理的 httpx 客户端（避免 VPN 劫持）
+        # 凭据缺失时不再在构造阶段抛异常（那会让整个进程在导入期崩溃，
+        # 用户连"去设置里填 Key"的界面都打不开）。这里用占位值构造，
+        # 并把状态记在 self.configured 上，真正发起调用时再给出明确引导。
+        resolved_key = api_key or settings.openai_api_key
+        self.configured = bool(resolved_key and resolved_key.strip())
         http_client = httpx.AsyncClient(
             proxy=None,
             transport=httpx.AsyncHTTPTransport(proxy=None),
@@ -146,7 +165,7 @@ class LLM:
         # cast 说明：openai 2.x 对 timeout/http_client 使用其内嵌 httpx 类型别名，
         # 与外部标准 httpx 对象在运行时完全兼容，仅静态命名空间不同。
         self.client = AsyncOpenAI(
-            api_key=api_key or settings.openai_api_key,
+            api_key=self.configured and resolved_key or _UNCONFIGURED_KEY_PLACEHOLDER,
             base_url=base_url or settings.openai_base_url,
             timeout=cast(Any, httpx.Timeout(connect=8.0, read=120.0, write=30.0, pool=10.0)),
             http_client=cast(Any, http_client),
@@ -169,6 +188,7 @@ class LLM:
         max_tokens: int | None = None,
         max_retries: int = 2,
     ) -> str | None:
+        self._require_configured()
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -206,6 +226,7 @@ class LLM:
         max_retries: int = 3,
     ) -> str:
         """带重试的聊天接口"""
+        self._require_configured()
         budget = resolve_completion_max_tokens(
             self.model, max_tokens, prompt_chars=_prompt_chars(messages)
         )
@@ -257,6 +278,7 @@ class LLM:
           {"type": "reasoning" | "token", "content": str}
         若 include_reasoning=False，返回纯字符串流（默认向后兼容）。
         """
+        self._require_configured()
         budget = resolve_completion_max_tokens(
             self.model, max_tokens, prompt_chars=_prompt_chars(messages)
         )
@@ -385,6 +407,7 @@ class LLM:
             "usage": dict | None,
         }
         """
+        self._require_configured()
         for attempt in range(max_retries):
             try:
                 budget = resolve_completion_max_tokens(
@@ -506,4 +529,6 @@ class LLM:
         return filtered, system_instr
 
 
-llm = LLM()
+# 注意：此处曾有一个模块级 `llm = LLM()` 单例。它在全仓库零引用（所有调用方
+# 都用 LLM.from_config(用户配置) 构造），但会在 import 阶段就要求全局 API Key，
+# 导致"用户还没机会填自己的 Key"时整个进程起不来。已移除。

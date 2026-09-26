@@ -6,6 +6,9 @@ HTTP status code and a machine-readable error type string.
 """
 
 
+import re
+
+
 class AppError(Exception):
     """Base exception for the application.
 
@@ -77,6 +80,18 @@ class ContentTooLargeError(AppError):
 
     status_code = 413
     error_type = "content_too_large_error"
+
+
+class LLMNotConfiguredError(AppError):
+    """Raised when no usable model credentials exist (neither the user's own
+    configuration nor a deployment-level default).
+
+    与 ExternalServiceError 区分开：这不是上游服务故障，而是"还没配置"，
+    用户能自己解决（去模型设置里填 Key），所以给出可操作的引导而不是重试提示。
+    """
+
+    status_code = 400
+    error_type = "llm_not_configured"
 
 
 # ---------------------------------------------------------------------------
@@ -186,9 +201,19 @@ def classify_llm_error(exception: BaseException) -> AppError:
     error_type_name = type(exception).__name__.lower()
     combined = f"{error_type_name}: {error_str}"
 
+    # 已经是分类过的应用内异常（如 LLMNotConfiguredError）直接透传，
+    # 否则会被下面的关键词规则重新包装、丢掉可操作的引导文案。
+    if isinstance(exception, AppError):
+        return exception
+
     for keywords, exc_class, message in _CLASSIFICATION_RULES:
         for keyword in keywords:
-            if keyword in combined:
+            matched = (
+                bool(re.search(rf"\b{keyword}\b", combined))
+                if keyword.isdigit()
+                else (keyword in combined)
+            )
+            if matched:
                 user_message = message if message is not None else _truncate(str(exception))
                 return exc_class(user_message)
 
