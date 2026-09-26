@@ -10,7 +10,9 @@
 # 中文全文依赖 zhparser 解析器；缺失时 _get_fts_config 降级 'simple'，
 # 中文整句成为一个 token，全文通道失效、hybrid 顶部召回塌方
 # （评测实测 mmarco R@1 0.655 -> 0.035），且结果不可复现。
-FROM pgvector/pgvector:pg16
+# 国内服务器上 docker.io 常解析失败，基础镜像走 DaoCloud 镜像加速
+# （与 backend/Dockerfile 的 base image 策略一致）；GitHub 拉取源码不受影响。
+FROM docker.m.daocloud.io/pgvector/pgvector:pg16
 
 RUN set -eux; \
     apt-get update; \
