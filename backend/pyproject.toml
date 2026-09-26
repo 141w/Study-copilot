@@ -51,6 +51,14 @@ dev = [
     "types-PyYAML>=6.0.12",
 ]
 
+eval = [
+    # 检索召回率评测（backend/evaluation/，独立于 app/，不随主安装链安装）
+    "mteb>=1.31.0",
+    "beir>=2.0.0",
+    "ragas>=0.2.0",
+    "datasets>=3.0.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

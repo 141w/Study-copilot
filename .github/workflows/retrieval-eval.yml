@@ -1,0 +1,375 @@
+# 检索召回率评测 CI（与 test.yml 解耦，不阻塞现有 CI 门禁）
+#
+# 触发：手动 workflow_dispatch（可更新基线）/ PR（检索相关路径）/ 每周一定时。
+# 数据流：HF 数据集在线下载（与 test.yml 的 HF_HUB_OFFLINE=1 相反，必须联网）
+#   -> PG16+pgvector service 容器 -> 全链路评测 -> 基线对比门禁 -> 报表 artifact。
+#
+# 基线机制：evaluation/results/baseline.json 记录各数据集×方法的 recall@10。
+# 当前运行 recall@10 较基线下降超过阈值（默认 2pt）即失败；确认是预期改进时，
+# 用 workflow_dispatch 的 update_baseline=true 重跑并提交新的 baseline.json。
+# 注意：本 workflow 主 job 的 PG service 未装 zhparser（CI 环境限制），中文 FTS 为
+# simple 降级态——基线与门禁反映该配置下的回归检测，不是生产最优值。
+# 生产口径（zh FTS）复测：workflow_dispatch 勾选 fts_zh=true，会追加独立 job
+# （deploy/postgres 自建容器 + baseline-zh.json，结果文件带 -zh 标，互不污染）。
+
+name: Retrieval Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      n_queries:
+        description: "每个数据集抽样 query 数"
+        required: false
+        default: "200"
+      methods:
+        description: "逗号分隔的方法列表"
+        required: false
+        default: "bm25,dense,hybrid,hybrid-rerank"
+      update_baseline:
+        description: "true = 用本次结果更新 baseline.json"
+        type: boolean
+        required: false
+        default: false
+      fts_zh:
+        description: "true = 追加运行 zhparser 口径 job（deploy/postgres 镜像，zh FTS）"
+        type: boolean
+        required: false
+        default: false
+  pull_request:
+    branches: [master]
+    paths:
+      - "backend/app/core/**"
+      - "backend/app/services/chat*.py"
+      - "backend/app/services/document*.py"
+      - "backend/app/core/pgvector_store.py"
+      - "backend/app/core/rag_engine.py"
+      - "backend/evaluation/**"
+      - ".github/workflows/retrieval-eval.yml"
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  retrieval-eval:
+    name: Retrieval Recall Evaluation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: eval
+          POSTGRES_PASSWORD: eval
+          POSTGRES_DB: evaldb
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://eval:eval@127.0.0.1:55432/evaldb
+      HF_ENDPOINT: https://hf-mirror.com
+      OPENAI_API_KEY: sk-dummy
+      JWT_SECRET_KEY: ci-test-secret-key
+      ENCRYPTION_KEY: m6577GFSHBCYck63gksojMSWoolIXIRMIi8jEWiULTo=
+      EVAL_N_QUERIES: ${{ github.event.inputs.n_queries || '200' }}
+      EVAL_METHODS: ${{ github.event.inputs.methods || 'bm25,dense,hybrid,hybrid-rerank' }}
+      EVAL_UPDATE_BASELINE: ${{ github.event.inputs.update_baseline || 'false' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libglib2.0-0t64 || sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install Python dependencies with uv
+        working-directory: backend
+        run: UV_CACHE_DIR=/tmp/uv-cache uv pip install --system -e '.[dev,eval]'
+
+      - name: Run retrieval evaluation
+        working-directory: backend
+        run: |
+          set -o pipefail
+          python -m evaluation.run --dataset all --methods "$EVAL_METHODS" --n-queries "$EVAL_N_QUERIES" --top-k 100 --seed 42 | tee /tmp/eval-out.txt
+          status=${PIPESTATUS[0]}
+          {
+            echo "### Retrieval Eval exit=$status"
+            echo "#### Metrics"
+            echo "```"
+            grep -E "^\[.*\]|recall@" /tmp/eval-out.txt || true
+            echo "```"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - name: Compare against baseline (regression gate)
+        working-directory: backend
+        if: env.EVAL_UPDATE_BASELINE != 'true'
+        run: |
+          python - <<'PYEOF'
+          import json
+          import sys
+          from pathlib import Path
+
+          THRESHOLD = 0.02  # recall@10 环比下降阈值
+          baseline_path = Path("evaluation/results/baseline.json")
+          if not baseline_path.exists():
+              print("baseline.json 不存在，跳过门槛（首次运行）")
+              sys.exit(0)
+          baseline = json.loads(baseline_path.read_text())
+
+          latest = {}
+          for p in sorted(Path("evaluation/results").glob("*-2*.json")):
+              data = json.loads(p.read_text())
+              if not isinstance(data, dict):
+                  continue  # 专项评测 JSON（chunking/agentic 等顶层为 list）不参与环比
+              m = data.get("metrics", {})
+              name = m.get("name")
+              r10 = (m.get("recall") or {}).get("10")
+              if name and r10 is not None:
+                  latest[name] = float(r10)
+
+          failures = []
+          for name, prev in baseline.items():
+              cur = latest.get(name)
+              if cur is None:
+                  continue
+              if cur < prev - THRESHOLD:
+                  failures.append(f"{name}: recall@10 {prev:.4f} -> {cur:.4f} (drop {cur - prev:+.4f})")
+          if failures:
+              print("### Recall@10 regression detected")
+              for f in failures:
+                  print(f"- {f}")
+              print("确认是预期改进请用 workflow_dispatch(update_baseline=true) 更新基线")
+              sys.exit(1)
+          print("No recall@10 regression vs baseline")
+          PYEOF
+
+      - name: Update baseline
+        working-directory: backend
+        if: env.EVAL_UPDATE_BASELINE == 'true'
+        run: |
+          python - <<'PYEOF'
+          import json
+          from pathlib import Path
+
+          baseline = {}
+          for p in sorted(Path("evaluation/results").glob("*-2*.json")):
+              data = json.loads(p.read_text())
+              if not isinstance(data, dict):
+                  continue
+              m = data.get("metrics", {})
+              name = m.get("name")
+              r10 = (m.get("recall") or {}).get("10")
+              if name and r10 is not None:
+                  baseline[name] = round(float(r10), 4)
+          Path("evaluation/results/baseline.json").write_text(
+              json.dumps(baseline, ensure_ascii=False, indent=2), encoding="utf-8"
+          )
+          print(json.dumps(baseline, ensure_ascii=False, indent=2))
+          PYEOF
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-eval-report
+          path: backend/evaluation/results/
+          retention-days: 90
+
+  # ── zhparser 口径复测（仅手动 dispatch 且 fts_zh=true 时运行）──────────────
+  # 与上方 simple job 完全隔离：自建容器（deploy/postgres = pgvector + zhparser），
+  # 结果文件带 -zh 标识、基线独立于 baseline-zh.json、门禁按 JSON 内 meta 过滤，
+  # 不触碰 simple 口径的 baseline.json 语义。
+  retrieval-eval-zh:
+    name: Retrieval Recall Evaluation (zhparser FTS)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.fts_zh || 'false')
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://eval:eval@127.0.0.1:55432/evaldb
+      HF_ENDPOINT: https://hf-mirror.com
+      OPENAI_API_KEY: sk-dummy
+      JWT_SECRET_KEY: ci-test-secret-key
+      ENCRYPTION_KEY: m6577GFSHBCYck63gksojMSWoolIXIRMIi8jEWiULTo=
+      EVAL_N_QUERIES: ${{ github.event.inputs.n_queries || '200' }}
+      EVAL_METHODS: bm25,dense,hybrid
+      EVAL_TAG: zh
+      EVAL_BASELINE_PATH: evaluation/results/baseline-zh.json
+      EVAL_UPDATE_BASELINE: ${{ github.event.inputs.update_baseline || 'false' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libglib2.0-0t64 postgresql-client || {
+            sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 postgresql-client; }
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install Python dependencies with uv
+        working-directory: backend
+        run: UV_CACHE_DIR=/tmp/uv-cache uv pip install --system -e '.[dev,eval]'
+
+      - name: Build zhparser PG image
+        run: docker build -t eval-pg-zh deploy/postgres
+
+      - name: Start zhparser PG container
+        run: |
+          docker run -d --name evaldb-zh -p 55432:5432 \
+            -e POSTGRES_USER=eval -e POSTGRES_PASSWORD=eval -e POSTGRES_DB=evaldb \
+            eval-pg-zh
+          for i in $(seq 1 60); do
+            docker exec evaldb-zh pg_isready -U eval -d evaldb && break
+            sleep 2
+          done
+
+      - name: Assert zh FTS config present (fail loudly, never silently degrade)
+        run: |
+          hit=$(docker exec evaldb-zh psql -U eval -d evaldb -tAc \
+            "SELECT 1 FROM pg_ts_config WHERE cfgname='zh'" || true)
+          if [ "$hit" != "1" ]; then
+            echo "::error::zh 全文配置缺失——zhparser/init SQL 未生效，hybrid 结果不可信，终止评测"
+            exit 1
+          fi
+          echo "zh FTS config OK"
+
+      - name: Run sampled-corpus evaluation (zh)
+        working-directory: backend
+        run: |
+          set -o pipefail
+          python -m evaluation.run --dataset all --methods "$EVAL_METHODS" \
+            --n-queries "$EVAL_N_QUERIES" --top-k 100 --seed 42 --name-suffix zh \
+            | tee /tmp/eval-zh-out.txt
+          status=${PIPESTATUS[0]}
+          {
+            echo "### Retrieval Eval zh (sampled) exit=$status"
+            echo "#### Metrics"
+            echo "```"
+            grep -E "^\[.*\]|recall@" /tmp/eval-zh-out.txt || true
+            echo "```"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - name: Run full-corpus evaluation (zh, bm25 only — embedding 全库编码超 CI 窗口)
+        working-directory: backend
+        run: |
+          python -m evaluation.run --dataset all --methods bm25 \
+            --n-queries "$EVAL_N_QUERIES" --top-k 100 --seed 42 \
+            --corpus full --name-suffix zh
+
+      - name: Compare against zh baseline (regression gate, meta-filtered)
+        working-directory: backend
+        if: env.EVAL_UPDATE_BASELINE != 'true'
+        run: |
+          python - <<'PYEOF'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          THRESHOLD = 0.02
+          TAG = os.environ.get("EVAL_TAG", "zh")
+          BASELINE = os.environ.get("EVAL_BASELINE_PATH", "evaluation/results/baseline-zh.json")
+          baseline_path = Path(BASELINE)
+          if not baseline_path.exists():
+              print(f"{BASELINE} 不存在，跳过门槛（首次运行用 update_baseline=true 生成）")
+              sys.exit(0)
+          baseline = json.loads(baseline_path.read_text())
+
+          latest = {}
+          for p in sorted(Path("evaluation/results").glob("*-2*.json")):
+              data = json.loads(p.read_text())
+              if not isinstance(data, dict):
+                  continue  # 专项评测 JSON 顶层为 list，跳过
+              meta = data.get("meta") or {}
+              # 按 meta 过滤口径：只比较同 tag 且 sampled 口径的文件
+              if str(meta.get("corpus") or "sampled") != "sampled":
+                  continue
+              if str(meta.get("tag") or "") != TAG:
+                  continue
+              m = data.get("metrics", {})
+              name = m.get("name")
+              r10 = (m.get("recall") or {}).get("10")
+              if name and r10 is not None:
+                  latest[name] = float(r10)
+
+          failures = []
+          for name, prev in baseline.items():
+              cur = latest.get(name)
+              if cur is None:
+                  continue
+              if cur < prev - THRESHOLD:
+                  failures.append(f"{name}: recall@10 {prev:.4f} -> {cur:.4f} ({cur - prev:+.4f})")
+          if failures:
+              print(f"### Recall@10 regression vs zh baseline")
+              for f in failures:
+                  print(f"- {f}")
+              sys.exit(1)
+          print("No recall@10 regression vs zh baseline")
+          PYEOF
+
+      - name: Update zh baseline (meta-filtered, never touches simple baseline)
+        working-directory: backend
+        if: env.EVAL_UPDATE_BASELINE == 'true'
+        run: |
+          python - <<'PYEOF'
+          import json
+          import os
+          from pathlib import Path
+
+          TAG = os.environ.get("EVAL_TAG", "zh")
+          BASELINE = os.environ.get("EVAL_BASELINE_PATH", "evaluation/results/baseline-zh.json")
+          baseline = {}
+          for p in sorted(Path("evaluation/results").glob("*-2*.json")):
+              data = json.loads(p.read_text())
+              if not isinstance(data, dict):
+                  continue
+              meta = data.get("meta") or {}
+              if str(meta.get("corpus") or "sampled") != "sampled":
+                  continue
+              if str(meta.get("tag") or "") != TAG:
+                  continue
+              m = data.get("metrics", {})
+              name = m.get("name")
+              r10 = (m.get("recall") or {}).get("10")
+              if name and r10 is not None:
+                  baseline[name] = round(float(r10), 4)
+          Path(BASELINE).write_text(
+              json.dumps(baseline, ensure_ascii=False, indent=2), encoding="utf-8"
+          )
+          print(json.dumps(baseline, ensure_ascii=False, indent=2))
+          PYEOF
+
+      - name: Upload zh evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-eval-zh-report
+          path: backend/evaluation/results/
+          retention-days: 90

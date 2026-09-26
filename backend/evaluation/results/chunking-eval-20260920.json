@@ -1,0 +1,89 @@
+[
+  {
+    "doc": "stress-pdf",
+    "variants": {
+      "fixed": {
+        "n_chunks": 190,
+        "avg_chars": 407.6,
+        "recall@1": 0.5,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "n_queries": 1
+      },
+      "semantic": {
+        "n_chunks": 1,
+        "avg_chars": 46397.0,
+        "recall@1": 1.0,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "n_queries": 1
+      },
+      "hierarchical": {
+        "n_chunks": 343,
+        "avg_chars": 427.0,
+        "recall@1": 0.3333,
+        "recall@5": 0.6667,
+        "recall@10": 0.6667,
+        "n_queries": 1
+      }
+    }
+  },
+  {
+    "doc": "testing",
+    "variants": {
+      "fixed": {
+        "n_chunks": 41,
+        "avg_chars": 457.1,
+        "recall@1": 0.5,
+        "recall@5": 0.75,
+        "recall@10": 0.875,
+        "n_queries": 12
+      },
+      "semantic": {
+        "n_chunks": 1,
+        "avg_chars": 14425.0,
+        "recall@1": 1.0,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "n_queries": 12
+      },
+      "hierarchical": {
+        "n_chunks": 60,
+        "avg_chars": 545.6,
+        "recall@1": 0.2292,
+        "recall@5": 0.3542,
+        "recall@10": 0.3542,
+        "n_queries": 12
+      }
+    }
+  },
+  {
+    "doc": "index",
+    "variants": {
+      "fixed": {
+        "n_chunks": 39,
+        "avg_chars": 441.2,
+        "recall@1": 0.4583,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "n_queries": 12
+      },
+      "semantic": {
+        "n_chunks": 1,
+        "avg_chars": 12636.0,
+        "recall@1": 1.0,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "n_queries": 12
+      },
+      "hierarchical": {
+        "n_chunks": 46,
+        "avg_chars": 616.8,
+        "recall@1": 0.1667,
+        "recall@5": 0.5278,
+        "recall@10": 0.5833,
+        "n_queries": 12
+      }
+    }
+  }
+]

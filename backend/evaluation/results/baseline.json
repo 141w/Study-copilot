@@ -1,0 +1,14 @@
+{
+  "cmedqa-bm25": 0.3536,
+  "cmedqa-dense": 0.4585,
+  "cmedqa-hybrid": 0.3431,
+  "cmedqa-hybrid-rerank": 0.347,
+  "financeqa-bm25": 0.9303,
+  "financeqa-dense": 0.4426,
+  "financeqa-hybrid": 0.8057,
+  "financeqa-hybrid-rerank": 0.8057,
+  "mmarco-bm25": 0.845,
+  "mmarco-dense": 0.83,
+  "mmarco-hybrid": 0.7017,
+  "mmarco-hybrid-rerank": 0.6767
+}

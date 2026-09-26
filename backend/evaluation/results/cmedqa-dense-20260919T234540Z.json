@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "datasets": [
+      "mmarco",
+      "cmedqa",
+      "financeqa"
+    ],
+    "methods": [
+      "bm25",
+      "dense",
+      "hybrid",
+      "hybrid-rerank"
+    ],
+    "n_queries": 300,
+    "seed": 42,
+    "distractor_ratio": 10.0,
+    "top_k": 100,
+    "k_values": [
+      1,
+      5,
+      10,
+      100
+    ],
+    "embedding_model": "shibing624/text2vec-base-chinese",
+    "pgvector_url": "127.0.0.1:55432/evaldb"
+  },
+  "metrics": {
+    "name": "cmedqa-dense",
+    "n_queries": 300,
+    "recall": {
+      "1": 0.1554,
+      "5": 0.3693,
+      "10": 0.4585,
+      "100": 0.7771
+    },
+    "hit_rate": {
+      "1": 0.28,
+      "5": 0.4967,
+      "10": 0.58,
+      "100": 0.8533
+    },
+    "mrr": {
+      "1": 0.28,
+      "5": 0.3574,
+      "10": 0.3687,
+      "100": 0.3797
+    },
+    "ndcg": {
+      "1": 0.28,
+      "5": 0.317,
+      "10": 0.3457,
+      "100": 0.426
+    }
+  }
+}

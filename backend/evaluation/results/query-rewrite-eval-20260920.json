@@ -1,0 +1,14 @@
+{
+  "dataset": "mmarco",
+  "n_queries": 100,
+  "changed_queries": 60,
+  "direct": {
+    "recall@5": 0.2,
+    "recall@10": 0.4
+  },
+  "rewrite": {
+    "recall@5": 0.16,
+    "recall@10": 0.365
+  },
+  "delta_recall@10": -0.03500000000000003
+}

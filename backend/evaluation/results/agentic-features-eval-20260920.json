@@ -1,0 +1,21 @@
+{
+  "dataset": "mmarco",
+  "n_queries": 100,
+  "strategy_distribution": {
+    "single": 85,
+    "standard": 10,
+    "multi_hop": 3,
+    "compare": 2
+  },
+  "grader_trigger_rate": 0.0,
+  "empty_result_rate": 0.0,
+  "avg_llm_calls_per_query": 2.0,
+  "plain_hybrid": {
+    "recall@1": 0.03,
+    "recall@5": 0.135
+  },
+  "agentic_path": {
+    "recall@1": 0.05,
+    "recall@5": 0.135
+  }
+}

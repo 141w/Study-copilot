@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "datasets": [
+      "mmarco",
+      "cmedqa",
+      "financeqa"
+    ],
+    "methods": [
+      "bm25",
+      "dense",
+      "hybrid",
+      "hybrid-rerank"
+    ],
+    "n_queries": 300,
+    "seed": 42,
+    "distractor_ratio": 10.0,
+    "top_k": 100,
+    "k_values": [
+      1,
+      5,
+      10,
+      100
+    ],
+    "embedding_model": "shibing624/text2vec-base-chinese",
+    "pgvector_url": "127.0.0.1:55432/evaldb"
+  },
+  "metrics": {
+    "name": "mmarco-hybrid",
+    "n_queries": 300,
+    "recall": {
+      "1": 0.035,
+      "5": 0.3367,
+      "10": 0.7183,
+      "100": 0.92
+    },
+    "hit_rate": {
+      "1": 0.0367,
+      "5": 0.3433,
+      "10": 0.7267,
+      "100": 0.9233
+    },
+    "mrr": {
+      "1": 0.0367,
+      "5": 0.1237,
+      "10": 0.1777,
+      "100": 0.1871
+    },
+    "ndcg": {
+      "1": 0.0367,
+      "5": 0.174,
+      "10": 0.3018,
+      "100": 0.3471
+    }
+  }
+}

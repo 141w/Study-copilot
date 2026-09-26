@@ -136,6 +136,47 @@ backend/tests/fixtures/
 
 ---
 
+## Retrieval Evaluation（检索召回率评测）
+
+`backend/evaluation/` 是独立的检索召回评测脚手架：不进 `app/`（wheel 排除）、
+不进 pytest 收集（`testpaths=["tests"]`）、不进覆盖率统计（`--cov=app`）、
+不随主安装链安装（可选依赖组 `eval`）。完整规划见
+[retrieval-evaluation.md](retrieval-evaluation.md)。
+
+```bash
+cd backend
+# 安装评测依赖（可选组，不影响常规开发/CI）
+uv sync --extra eval
+
+# 冒烟自检：合成数据验证 harness 指标计算，无需数据集/网络
+python -m evaluation.run --self-test
+
+# harness 指标单测（进常规套件，纯计算无外部依赖）
+pytest tests/test_evaluation_harness.py -v
+```
+
+进度：P0–P7 全部落地（2026-09-19 完成首轮全量实测）。常用命令：
+
+```bash
+cd backend
+# embedding 模型横评（需 HF_HUB_CACHE 指向有模型的缓存目录）
+HF_HUB_CACHE=/tmp/hf-hub HF_DATASETS_CACHE=/tmp/hf-datasets \
+  .venv/bin/python -m evaluation.run --dataset mmarco,cmedqa \
+  --methods bm25,dense,dense-bge,hybrid
+
+# RAGAS 端到端（两步：主 venv 备数据 -> 隔离 ragas venv 评测）
+# 备数据（需 DATABASE_URL 指向评测 PG 实例与 LLM key）
+HF_HUB_CACHE=/tmp/hf-hub HF_DATASETS_CACHE=/tmp/hf-datasets \
+  .venv/bin/python -m evaluation.ragas_prep --datasets mmarco,cmedqa --n-queries 30
+# 评测（ragas venv：uv pip install ragas langchain-openai；注意 langchain-community
+# 新版缺失 chat_models.vertexai 需打桩）
+/tmp/ragas-venv/bin/python -m evaluation.ragas_eval --input /tmp/ragas_data.json
+```
+
+完整结果与关键发现见 [retrieval-evaluation.md](retrieval-evaluation.md) 第 8.5 节。
+
+---
+
 ## Frontend Tests
 
 ### Setup
