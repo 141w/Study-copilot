@@ -28,15 +28,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PIP_DEFAULT_TIMEOUT=120
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=5
 
 WORKDIR /app
 COPY backend/pyproject.toml ./
 COPY backend/app/ ./app/
 
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# torch 固定走 PyTorch 官方 CPU 索引（换成普通 PyPI 会装到带 CUDA 的大包）。
+# PIP_INDEX_URL 仅作为补充索引，供 torch 的依赖从国内源解析；留空则行为与原先一致。
+ARG PIP_INDEX_URL=
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
+    ${PIP_INDEX_URL:+--extra-index-url ${PIP_INDEX_URL}}
 RUN pip install --no-cache-dir uv
-RUN uv pip install --system --prefix=/install . --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match
+RUN uv pip install --system --prefix=/install . \
+    ${PIP_INDEX_URL:+--index-url ${PIP_INDEX_URL}} \
+    --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match
 
 RUN mkdir -p /opt/hf
 
