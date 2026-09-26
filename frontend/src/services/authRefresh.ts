@@ -10,6 +10,8 @@
  * 刷新失败：清除凭证并返回 null（调用方自行决定跳转登录）。
  */
 
+import { withBase } from './base'
+
 export interface RefreshOutcome {
   ok: boolean
   accessToken?: string
@@ -23,7 +25,7 @@ export async function refreshAccessToken(): Promise<RefreshOutcome> {
   if (!refreshToken) return { ok: false }
 
   try {
-    const resp = await fetch('/api/auth/refresh', {
+    const resp = await fetch(withBase('/api/auth/refresh'), {
       method: 'POST',
       headers: { Authorization: `Bearer ${refreshToken}` }
     })
@@ -59,6 +61,6 @@ export function redirectToLogin(): void {
       router.push({ path: '/login', query: { redirect: window.location.pathname } })
     })
   } catch {
-    window.location.href = '/login'
+    window.location.href = withBase('/login')
   }
 }

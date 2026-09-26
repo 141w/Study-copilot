@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { useToastStore } from '../stores/toast'
 import { refreshAccessToken, redirectToLogin } from './authRefresh'
+import { API_BASE } from './base'
 
 // Extend AxiosRequestConfig to include _retry
 declare module 'axios' {
@@ -10,7 +11,8 @@ declare module 'axios' {
 }
 
 const api: AxiosInstance = axios.create({
-  baseURL: '/api'
+  // 部署在子路径时前缀由 base path 统一提供，见 services/base.ts
+  baseURL: API_BASE
 })
 
 // ── Request dedup (idempotent GET/HEAD only) ──────────────────────────────

@@ -54,6 +54,9 @@ function subpathElementPlusResolver() {
 }
 
 export default defineConfig({
+  // 部署子路径：构建时 VITE_BASE=/study/ 即可整体挂到子目录。
+  // 默认 '/'，本地开发与独立域名部署行为不变。
+  base: process.env.VITE_BASE || '/',
   plugins: [
     vue(),
     Components({

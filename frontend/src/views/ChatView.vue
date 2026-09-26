@@ -269,10 +269,12 @@ import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../services/api'
 import { useChatStore } from '../stores/chat'
+import { withBase } from '../services/base'
 import type { ChatStreamMessage } from '../stores/chat'
 import type { BotMood } from '../components/CopilotBotAvatar.vue'
 import type { ExpressionId } from '../bot/expressions'
 import { useDocumentStore } from '../stores/document'
+import { useCourseStore } from '../stores/course'
 import ChatInput from '../components/chat/ChatInput.vue'
 import ChatHistoryPanel from '../components/chat/ChatHistoryPanel.vue'
 import DocumentPicker from '../components/common/DocumentPicker.vue'
@@ -315,6 +317,7 @@ const { prefs } = useUserPrefs()
 const { containerHeightStyle } = useVisualViewport()
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
+const courseStore = useCourseStore()
 const readyDocs = computed(() => documentStore.readyDocuments)
 const selectedDocs = ref<string[]>([])
 
@@ -336,18 +339,25 @@ function removeScope(chip: { kind: string; id: string }): void {
   }
 }
 
-function addScope(chip: { kind: string; id: string }): void {
+async function addScope(chip: { kind: string; id: string }): Promise<void> {
   if (chip.kind === 'doc' && !selectedDocs.value.includes(chip.id)) {
     selectedDocs.value = [...selectedDocs.value, chip.id]
   }
   // 课程维度：选中课程下 ready 文档一并纳入范围
   if (chip.kind === 'course') {
-    // 课程文档关联由 courseStore 提供；此处按已加载文档的 course_space_id 过滤
-    const courseDocs = (documentStore.documents || [])
-      .filter(d => (d as any).course_space_id === chip.id && d.status === 'ready')
-      .map(d => d.id)
-    const merged = new Set([...selectedDocs.value, ...courseDocs])
-    selectedDocs.value = [...merged]
+    try {
+      const docs = await courseStore.fetchCourseDocuments(chip.id)
+      const courseDocs = (docs || []).filter(d => d.status === 'ready').map(d => d.id)
+      const merged = new Set([...selectedDocs.value, ...courseDocs])
+      selectedDocs.value = [...merged]
+    } catch {
+      // 降级使用 documentStore 关联过滤
+      const courseDocs = (documentStore.documents || [])
+        .filter(d => (d as any).course_space_id === chip.id && d.status === 'ready')
+        .map(d => d.id)
+      const merged = new Set([...selectedDocs.value, ...courseDocs])
+      selectedDocs.value = [...merged]
+    }
   }
 }
 const showHistory = ref(false)
@@ -705,7 +715,7 @@ function scrollToSource(index: number): void {
   }, 100)
 }
 
-async function handleSend(content: string): Promise<void> {
+async function handleSend(content: string, modelOverride?: string): Promise<void> {
   if (chatMode.value === 'discuss') {
     collapseAllSourceCards()
     await handleDiscuss(content)
@@ -718,7 +728,7 @@ async function handleSend(content: string): Promise<void> {
   const attachmentIds = collectReadyAttachmentIds()
   // 启动流式但不等结束：立刻让「刚发出的 user + 占位回答」进入可视区
   const streamPromise = chatStore.askQuestionStream(
-    content, selectedDocs.value, null, researchMode.value, attachmentIds
+    content, selectedDocs.value, null, researchMode.value, attachmentIds, modelOverride
   )
   void nextTick().then(() => {
     forceScrollToBottom()
@@ -778,7 +788,7 @@ async function handleDiscuss(content: string): Promise<void> {
   void nextTick().then(() => forceScrollToBottom())
 
   try {
-    const res = await fetch('/api/chat/discuss', {
+    const res = await fetch(withBase('/api/chat/discuss'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1393,7 +1403,10 @@ onMounted(async () => {
   // 消息 DOM id 与 proximity sections 对齐：msg-${id}
 
   await chatStore.fetchSessions()
-  await documentStore.fetchDocuments()
+  await Promise.allSettled([
+    documentStore.fetchDocuments(),
+    courseStore.fetchCourses(),
+  ])
 
   await loadPersonas()
 
@@ -1519,37 +1532,45 @@ onUnmounted(() => {
   background: transparent;
   padding: 0;
 }
+/* WeKnora 风格引用微胶囊角标 (.source-badge) */
 .prose .source-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.25rem;
-  margin-left: 0.125rem;
-  margin-right: 0.125rem;
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: var(--text-inverse);
-  background: var(--gradient-brand);
-  border-radius: 9999px;
+  box-sizing: border-box;
+  vertical-align: baseline;
+  transform: translateY(-0.06em);
+  padding: 0 5px;
+  margin: 0 0.12em;
+  font-size: 0.72em;
+  line-height: 1.45;
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  border-radius: 999px;
   cursor: pointer;
-  vertical-align: super;
-  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-primary));
+  border: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 12%, transparent);
+  transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 .prose .source-badge:hover {
-  transform: scale(1.1);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-brand-from) 40%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 22%, transparent);
+  color: var(--text-primary);
 }
 .dark .prose .source-badge {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 .dark .prose .source-badge:hover {
-  background: rgba(255, 255, 255, 0.28);
-  border-color: rgba(255, 255, 255, 0.45);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 /* 来源卡高亮动效：解决暗色模式下纯黑 ring 隐形缺陷 */

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import api, { cancelAll } from '../services/api'
 import { refreshAccessToken } from '../services/authRefresh'
+import { withBase } from '../services/base'
 import { useUserPrefs } from '../composables/useUserPrefs'
 import type { Source } from '../types/models'
 
@@ -253,7 +254,8 @@ export const useChatStore = defineStore('chat', () => {
     documentIds: string[],
     sessionId: string | null = null,
     mode: 'fast' | 'deep_research' = 'fast',
-    attachmentIds: string[] = []
+    attachmentIds: string[] = [],
+    modelOverride?: string
   ): Promise<{ success: boolean; cancelled?: boolean }> {
     loading.value = true
     isStreaming.value = true
@@ -409,14 +411,17 @@ export const useChatStore = defineStore('chat', () => {
     async function doFetch(token: string | null): Promise<Response> {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
-      return await fetch('/api/chat/ask', {
+      return await fetch(withBase('/api/chat/ask'), {
         method: 'POST',
         headers,
         body: JSON.stringify({
           question,
           document_ids: documentIds,
           session_id: sessionId || currentSession.value,
-          config: { ai_style: prefs.value.aiStyle },
+          config: {
+            ai_style: prefs.value.aiStyle,
+            ...(modelOverride ? { model: modelOverride, model_name: modelOverride } : {}),
+          },
           stream: true,
           mode,
           agent_enabled: mode === 'deep_research',
@@ -501,7 +506,7 @@ export const useChatStore = defineStore('chat', () => {
           const headers: Record<string, string> = {}
           if (token) headers['Authorization'] = `Bearer ${token}`
           if (lastEventId > 0) headers['Last-Event-ID'] = String(lastEventId)
-          const resumeUrl = `/api/chat/stream/${activeStreamId}/resume?last_event_id=${lastEventId}`
+          const resumeUrl = withBase(`/api/chat/stream/${activeStreamId}/resume?last_event_id=${lastEventId}`)
           const resumeRes = await fetch(resumeUrl, { headers, signal: controller.signal })
           if (resumeRes.ok && resumeRes.body) {
             const rReader = resumeRes.body.getReader()
@@ -581,7 +586,7 @@ export const useChatStore = defineStore('chat', () => {
       const token = localStorage.getItem('token')
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const url = `/api/chat/messages/${messageId}/resume?last_event_id=${lastEventId}`
+      const url = withBase(`/api/chat/messages/${messageId}/resume?last_event_id=${lastEventId}`)
       const response = await fetch(url, {
         method: 'POST',
         headers,

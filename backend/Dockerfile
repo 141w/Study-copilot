@@ -9,6 +9,9 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./
+# 子路径部署：构建时传 VITE_BASE=/study/，默认 '/' 表示挂在域名根路径。
+ARG VITE_BASE=/
+ENV VITE_BASE=${VITE_BASE}
 RUN npm run build
 
 # ---- Backend Builder ----

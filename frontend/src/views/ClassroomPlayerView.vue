@@ -312,6 +312,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useCourseStore } from '../stores/course'
+import { withBase } from '../services/base'
 import { useThemeStore } from '../stores/theme'
 import { parseCourseDescription } from '../utils/course'
 import {
@@ -374,7 +375,7 @@ const courseId = computed(() => {
 const engineSrc = computed(() => {
   if (!resolvedClassroomId.value) return ''
   const theme = themeStore.isDark ? 'dark' : 'light'
-  return `/classroom-engine/classroom/${resolvedClassroomId.value}?embedded=true&theme=${theme}`
+  return withBase(`/classroom-engine/classroom/${resolvedClassroomId.value}?embedded=true&theme=${theme}`)
 })
 
 // 监听宿主主题变化，跨 iframe 实时向 OpenMAIC 发送主题切换消息
@@ -415,7 +416,7 @@ function goBack() {
 
 function openInNewWindow() {
   if (resolvedClassroomId.value) {
-    window.open(`/classroom-engine/classroom/${resolvedClassroomId.value}`, '_blank')
+    window.open(withBase(`/classroom-engine/classroom/${resolvedClassroomId.value}`), '_blank')
   }
 }
 
@@ -544,7 +545,7 @@ async function initClassroom() {
     }
 
     try {
-      const resp = await fetch(`/classroom-engine/api/classroom?id=${resolvedClassroomId.value}`)
+      const resp = await fetch(withBase(`/classroom-engine/api/classroom?id=${resolvedClassroomId.value}`))
       if (resp.ok) {
         const data = await resp.json()
         const classroom = data?.data?.classroom || data?.classroom

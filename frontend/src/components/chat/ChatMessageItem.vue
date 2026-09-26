@@ -362,6 +362,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, reactive } from 'vue'
+import { withBase } from '../../services/base'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, DocumentCopy, EditPen, Reading } from '@/components/icons'
@@ -559,7 +560,7 @@ function navigateToNote(noteId?: string) {
   if (router) {
     router.push({ path: '/notes', query: noteId ? { id: noteId } : undefined })
   } else if (typeof window !== 'undefined') {
-    window.location.href = noteId ? `/notes?id=${noteId}` : '/notes'
+    window.location.href = withBase(noteId ? `/notes?id=${noteId}` : '/notes')
   }
 }
 
