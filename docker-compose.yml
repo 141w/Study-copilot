@@ -38,6 +38,7 @@ services:
       args:
         APT_MIRROR: ${APT_MIRROR:-}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-}
     container_name: study-copilot-app
     environment:
       - DATABASE_URL=postgresql+asyncpg://study_user:${POSTGRES_PASSWORD}@db:5432/study_copilot
