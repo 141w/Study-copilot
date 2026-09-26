@@ -35,15 +35,20 @@ WORKDIR /app
 COPY backend/pyproject.toml ./
 COPY backend/app/ ./app/
 
-# torch 固定走 PyTorch 官方 CPU 索引（换成普通 PyPI 会装到带 CUDA 的大包）。
-# PIP_INDEX_URL 仅作为补充索引，供 torch 的依赖从国内源解析；留空则行为与原先一致。
+# torch 固定走 PyTorch CPU 专用索引（换成普通 PyPI 会装到带 CUDA 的大包）。
+# 国内服务器直连 download.pytorch.org 的 CDN 会慢到超时，故把索引做成可配置：
+# TORCH_INDEX_URL 指向国内 PyTorch 轮子镜像即可（如 https://mirror.sjtu.edu.cn/pytorch-wheels/cpu）。
+# PIP_INDEX_URL 仅作为其余依赖的补充索引。两者留空则行为与原先完全一致。
 ARG PIP_INDEX_URL=
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
+ARG TORCH_INDEX_URL=
+RUN pip install --no-cache-dir torch torchvision \
+    --index-url ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu} \
     ${PIP_INDEX_URL:+--extra-index-url ${PIP_INDEX_URL}}
 RUN pip install --no-cache-dir uv
 RUN uv pip install --system --prefix=/install . \
     ${PIP_INDEX_URL:+--index-url ${PIP_INDEX_URL}} \
-    --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match
+    --extra-index-url ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu} \
+    --index-strategy unsafe-best-match
 
 RUN mkdir -p /opt/hf
 

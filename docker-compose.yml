@@ -49,10 +49,16 @@ services:
     env_file:
       - ./backend/.env
     ports:
-      - "127.0.0.1:80:80"
+      # 宿主端口可配置：与同机上已有的 nginx（占 80/443）共存时，
+      # 在 .env 里设 APP_HOST_PORT=8080，由宿主 nginx 反代对外提供 HTTPS。
+      # 默认仍为 127.0.0.1:80，单机开发行为不变。
+      - "${APP_BIND:-127.0.0.1}:${APP_HOST_PORT:-80}:80"
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/.embedding_cache:/app/.embedding_cache
+      # 向量模型缓存（镜像内 HF_HOME=/opt/hf）。不挂卷则每次重建容器都要重新
+      # 下载几百 MB 模型；国内服务器上这一步还极易超时，表现为"上传后永远处理中"。
+      - hf-cache:/opt/hf
     depends_on:
       db:
         condition: service_healthy
@@ -60,3 +66,4 @@ services:
 
 volumes:
   postgres_data:
+  hf-cache:
