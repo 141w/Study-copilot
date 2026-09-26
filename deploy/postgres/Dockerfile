@@ -14,6 +14,15 @@
 # （与 backend/Dockerfile 的 base image 策略一致）；GitHub 拉取源码不受影响。
 FROM docker.m.daocloud.io/pgvector/pgvector:pg16
 
+# 可选：构建时传 APT_MIRROR 换国内/内网 Debian 源（默认空=不改）。
+# PGDG 源（apt.postgresql.org）保持原样，包量小、不是瓶颈。
+ARG APT_MIRROR=
+RUN if [ -n "$APT_MIRROR" ]; then \
+      for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
+        [ -f "$f" ] && sed -i "s|http://deb.debian.org/debian|${APT_MIRROR}|g; s|http://security.debian.org/debian-security|${APT_MIRROR}/debian-security|g" "$f"; \
+      done; \
+    fi
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \

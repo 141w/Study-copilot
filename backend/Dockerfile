@@ -14,6 +14,15 @@ RUN npm run build
 # ---- Backend Builder ----
 FROM docker.m.daocloud.io/library/python:3.11-slim AS backend-builder
 
+# 可选：构建时传 APT_MIRROR 把 Debian 源换成国内/内网镜像（默认空=不改，海外环境行为不变）。
+# 国内服务器上 deb.debian.org 常慢到几十分钟，见 docker-compose.yml 的 build.args。
+ARG APT_MIRROR=
+RUN if [ -n "$APT_MIRROR" ]; then \
+      for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
+        [ -f "$f" ] && sed -i "s|http://deb.debian.org/debian|${APT_MIRROR}|g; s|http://security.debian.org/debian-security|${APT_MIRROR}/debian-security|g" "$f"; \
+      done; \
+    fi
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -33,6 +42,13 @@ RUN mkdir -p /opt/hf
 
 # ---- Runtime ----
 FROM docker.m.daocloud.io/library/python:3.11-slim
+
+ARG APT_MIRROR=
+RUN if [ -n "$APT_MIRROR" ]; then \
+      for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
+        [ -f "$f" ] && sed -i "s|http://deb.debian.org/debian|${APT_MIRROR}|g; s|http://security.debian.org/debian-security|${APT_MIRROR}/debian-security|g" "$f"; \
+      done; \
+    fi
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \

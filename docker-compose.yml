@@ -9,6 +9,10 @@ services:
     build:
       context: ./deploy/postgres
       dockerfile: Dockerfile
+      args:
+        # 国内/内网构建时设为镜像站（如 http://mirrors.cloud.aliyuncs.com/debian），
+        # 留空则用官方源，海外环境行为不变。取值写在各机器的 .env 里。
+        APT_MIRROR: ${APT_MIRROR:-}
     image: study-copilot-db:latest
     container_name: study-copilot-db
     environment:
@@ -31,6 +35,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
     container_name: study-copilot-app
     environment:
       - DATABASE_URL=postgresql+asyncpg://study_user:${POSTGRES_PASSWORD}@db:5432/study_copilot
