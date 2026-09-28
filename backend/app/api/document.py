@@ -491,3 +491,17 @@ async def batch_auto_tag_docs(
         raise RateLimitError("单次最多 50 篇")
     result = await document_tag_service.batch_auto_tag(db, current_user, body.document_ids)
     return {"results": result}
+
+
+@router.get("/{doc_id}/parse-spans")
+async def get_parse_spans(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """阶段三：解析进度时间线（最近若干次 attempt）。"""
+    from app.services import document_tag_service, parse_span_service
+
+    await document_tag_service._owned_document(db, current_user, doc_id)
+    spans = await parse_span_service.list_parse_spans(db, doc_id)
+    return {"document_id": doc_id, "spans": spans}

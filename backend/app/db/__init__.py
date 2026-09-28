@@ -8,6 +8,7 @@ from app.db.database import (
     CustomPersona,
     Document,
     DocumentChunk,
+    DocumentParseSpan,
     MemoryItem,
     MemorySubject,
     Message,

@@ -84,6 +84,7 @@
         <div>
           <h2 class="font-medium text-[var(--text-primary)]">{{ selectedDoc.filename }}</h2>
           <p class="text-sm text-[var(--text-muted)] mt-1">共 {{ filteredChunks.length }} 个段落</p>
+          <ParseTimeline :doc-id="selectedDoc.id" />
         </div>
         <div class="flex items-center gap-2">
           <el-button
@@ -373,6 +374,7 @@ import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDi
 import SkeletonList from '../components/common/SkeletonList.vue'
 import FavoriteStar from '../components/FavoriteStar.vue'
 import DocumentBatchTagBar from '../components/DocumentBatchTagBar.vue'
+import ParseTimeline from '../components/ParseTimeline.vue'
 import api from '../services/api'
 
 /** 文档 chunk（GET /documents/:id 响应展平 + 视图序号） */

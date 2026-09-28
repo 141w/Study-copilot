@@ -489,6 +489,31 @@ class UserFavorite(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
 
 
+class DocumentParseSpan(Base):
+    """阶段三：文档解析阶段时间线（root/stage/subspan）。
+
+    status 语义对齐 WeKnora knowledge_span：
+    failed=本阶段出错；cancelled=上游失败后本阶段未执行。
+    """
+
+    __tablename__ = "document_parse_spans"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    parent_span_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), default="stage")  # root|stage|subspan
+    name: Mapped[str] = mapped_column(String(50))  # parse|profile|chunk|embed|index|finalize
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    # pending|running|done|failed|skipped|cancelled
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 async def get_db() -> AsyncIterator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         try:

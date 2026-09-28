@@ -191,10 +191,16 @@ async def _do_process_document(
     fp = doc.file_path
     method = "fixed"
 
+    from app.services.parse_span_service import ParseSpanRecorder
+
+    spans = ParseSpanRecorder(db, doc_id, attempt=1)
+    await spans.start_root()
+
     try:
         # Parse
         if progress_callback:
             await progress_callback(0.1, "正在解析文档...")
+        await spans.start_stage("parse")
         try:
             logger.info("Starting document parsing...")
             pages = await document_parser.extract_pages(fp)
@@ -202,16 +208,20 @@ async def _do_process_document(
             if not pages:
                 raise ValidationError("无法从文档中提取文本内容")
         except ValidationError:
+            await spans.fail_stage("parse", "无法从文档中提取文本内容")
             raise
         except Exception as e:
             logger.error("Failed to extract pages: %s", e)
+            await spans.fail_stage("parse", str(e))
             raise ExternalServiceError(f"文档解析失败: {str(e)}")
+        await spans.end_stage("parse", f"{len(pages)} pages")
 
         if progress_callback:
             await progress_callback(0.3, f"文档解析完成，共提取 {len(pages)} 页内容")
 
         # Document profiling and adaptive strategy chain selection (logged;
         # full chain loop lives in run_chunking_chain)
+        await spans.start_stage("profile")
         all_text = "\n".join(p.get("text", "") for p in pages)
         profile = profile_document(all_text)
         chain = select_chunking_chain(profile, filename=doc.filename or "")
@@ -223,7 +233,9 @@ async def _do_process_document(
             profile.md_heading_total,
             profile.dominant_heading_level(),
         )
+        await spans.end_stage("profile", f"chain={chain}")
 
+        await spans.start_stage("chunk")
         run = await run_chunking_chain(
             pages,
             doc_id,
@@ -236,7 +248,9 @@ async def _do_process_document(
         profile = run.profile or profile
 
         if not chunks:
+            await spans.fail_stage("chunk", "文档内容不足，无法生成知识块")
             raise ValidationError("文档内容不足，无法生成知识块")
+        await spans.end_stage("chunk", f"{len(chunks)} chunks via {selected_method}")
 
         # Enrich context headers / breadcrumbs (already applied inside runner)
         logger.info(
@@ -251,10 +265,13 @@ async def _do_process_document(
         # 叠成多份（已知事故：重建索引后切片重复五倍，检索被脏数据淹没）。
         from sqlalchemy import delete as sa_delete
 
+        await spans.start_stage("embed")
         await db.execute(sa_delete(DocumentChunk).where(DocumentChunk.document_id == doc_id))
         store = PgVectorStore(user_id=user.id)
         await store.add_chunks(chunks, doc_id, db=db)
+        await spans.end_stage("embed", "vectors written")
 
+        await spans.start_stage("finalize")
         if progress_callback:
             await progress_callback(0.95, "正在完成数据库同步...")
 
@@ -262,12 +279,20 @@ async def _do_process_document(
         doc.status = "ready"
         doc.chunk_count = len(chunks)
         await db.commit()
+        await spans.end_stage("finalize", "ready")
+        await spans.end_root("done")
         if progress_callback:
             await progress_callback(1.0, "处理完成")
         logger.info("Processing complete: %s (%d chunks)", doc_id, len(chunks))
         return len(chunks), method
 
     except Exception as e:
+        try:
+            stage = spans.current_stage or "parse"
+            await spans.fail_stage(stage, str(e)[:500])
+            await spans.end_root("failed")
+        except Exception:  # noqa: BLE001
+            pass
         await db.rollback()
         # Mark the document as failed
         doc.status = "error"
