@@ -80,6 +80,9 @@ export interface ChatStreamMessage {
   error?: string
   /** 5.5 断线续流：服务端标记未完成回答 */
   incomplete?: boolean
+  /** 5.2 追问建议：回答下的可点后续问题 */
+  suggestions?: string[]
+  suggestionsLoading?: boolean
 }
 
 /** 会话列表条目（后端以 session_id 为键，区别于 models.ChatSession.id） */
@@ -395,6 +398,11 @@ export const useChatStore = defineStore('chat', () => {
           if (doneNote) {
             messages.value[msgIdx].saved_note = doneNote
             messages.value[msgIdx].savedNote = doneNote
+          }
+          // 5.2 追问建议：回答完成后异步生成，不阻断流
+          const finished = messages.value[msgIdx]
+          if (finished.content && finished.content.trim().length > 0) {
+            void loadFollowupSuggestions(question, finished.content, msgIdx)
           }
         }
         if (
@@ -741,6 +749,31 @@ export const useChatStore = defineStore('chat', () => {
     searchQuery.value = ''
   }
 
+  /** 5.2 追问建议：按问题+回答向服务端取 3 条可点后续问题并挂到消息上 */
+  async function loadFollowupSuggestions(
+    question: string,
+    answer: string,
+    msgIdx: number
+  ): Promise<void> {
+    if (!question?.trim() || !answer?.trim()) return
+    if (!messages.value[msgIdx]) return
+    messages.value[msgIdx].suggestionsLoading = true
+    try {
+      const { data } = await api.post<{ suggestions: string[] }>('/chat/suggest-followups', {
+        question,
+        answer,
+        n: 3
+      })
+      const list = Array.isArray(data?.suggestions) ? data.suggestions.filter(Boolean) : []
+      if (messages.value[msgIdx]) {
+        messages.value[msgIdx].suggestions = list
+        messages.value[msgIdx].suggestionsLoading = false
+      }
+    } catch {
+      if (messages.value[msgIdx]) messages.value[msgIdx].suggestionsLoading = false
+    }
+  }
+
   async function saveMessageAsNote(messageId: string | number): Promise<{ id: string; title: string; tags: string[] }> {
     try {
       const response = await api.post<{ success: boolean; note: { id: string; title: string; tags: string[] } }>(
@@ -781,6 +814,7 @@ export const useChatStore = defineStore('chat', () => {
     clearSearch,
     searchMessages,
     saveMessageAsNote,
+    loadFollowupSuggestions,
     findIncompleteMessage,
     resumeMessageStream,
     tryResumeIncomplete,

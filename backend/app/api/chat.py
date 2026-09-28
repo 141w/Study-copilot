@@ -36,6 +36,18 @@ class AskRequest(BaseModel):
     attachment_ids: list[str] | None = None
 
 
+class FollowupSuggestRequest(BaseModel):
+    """5.2 追问建议：为一条回答生成可点后续问题。"""
+
+    question: str = Field(..., min_length=1, max_length=4000)
+    answer: str = Field(..., min_length=1, max_length=20000)
+    n: int = Field(3, ge=1, le=5)
+
+
+class FollowupSuggestResponse(BaseModel):
+    suggestions: list[str]
+
+
 class Source(BaseModel):
     index: int
     document_id: str
@@ -218,6 +230,23 @@ async def ask(
         filtered_sources=[Source(**s) for s in result.get("filtered_sources", [])],
         session_id=result["session_id"],
     )
+
+
+@router.post("/suggest-followups", response_model=FollowupSuggestResponse)
+async def suggest_followups(
+    request: Request,
+    req: FollowupSuggestRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """5.2：为一条回答生成可点追问建议（计入用量）。"""
+    if not _chat_limiter.check(request):
+        raise RateLimitError("请求过于频繁，请稍后再试")
+
+    suggestions = await chat_service.generate_followup_suggestions(
+        db, current_user, req.question, req.answer, n=req.n
+    )
+    return FollowupSuggestResponse(suggestions=suggestions)
 
 
 @router.get("/stream/{stream_id}/resume")

@@ -943,3 +943,78 @@ describe('ChatMessageItem & ChatDiscussionItem', () => {
   })
 })
 
+
+describe('5.2 追问建议芯片', () => {
+  const baseStubs = {
+    CopilotBotAvatar: true,
+    TTSPlayer: true,
+    'el-icon': true,
+    'el-button': {
+      template: '<button data-test="btn" @click="$emit(\'click\')"><slot /></button>',
+      emits: ['click']
+    }
+  }
+
+  it('有 suggestions 时渲染芯片并支持点击发送', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 's1',
+          role: 'assistant',
+          content: 'RAG 是检索增强生成。',
+          suggestions: ['它和微调有什么区别？', '有哪些落地场景？', '如何评估效果？'],
+          created_at: new Date().toISOString()
+        }
+      },
+      global: { stubs: baseStubs }
+    })
+    await wrapper.vm.$nextTick()
+
+    const area = wrapper.find('[data-test="followup-suggestions"]')
+    expect(area.exists()).toBe(true)
+    expect(wrapper.text()).toContain('继续追问')
+    expect(wrapper.find('[data-test="followup-chip-0"]').text()).toContain('它和微调有什么区别？')
+    expect(wrapper.find('[data-test="followup-chip-2"]').text()).toContain('如何评估效果？')
+
+    await wrapper.find('[data-test="followup-chip-1"]').trigger('click')
+    expect(wrapper.emitted('ask')).toBeTruthy()
+    expect(wrapper.emitted('ask')[0]).toEqual(['有哪些落地场景？'])
+  })
+
+  it('suggestionsLoading 时显示生成中且无芯片', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 's2',
+          role: 'assistant',
+          content: '回答',
+          suggestionsLoading: true,
+          created_at: new Date().toISOString()
+        }
+      },
+      global: { stubs: baseStubs }
+    })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-test="followup-suggestions"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('生成建议中')
+    expect(wrapper.find('[data-test="followup-chip-0"]').exists()).toBe(false)
+  })
+
+  it('流式中或无建议时不渲染追问区', async () => {
+    const wrapper = mount(ChatMessageItem, {
+      props: {
+        message: {
+          id: 's3',
+          role: 'assistant',
+          content: '正在输出',
+          isStreaming: true,
+          suggestions: ['不应出现？'],
+          created_at: new Date().toISOString()
+        }
+      },
+      global: { stubs: baseStubs }
+    })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-test="followup-suggestions"]').exists()).toBe(false)
+  })
+})

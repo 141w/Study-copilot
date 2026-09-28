@@ -220,6 +220,7 @@
                 :is-copied="copiedMsgId === msg.id"
                 @copy="copyMessage"
                 @scroll-to-source="scrollToSource"
+                @ask="handleSend"
               />
             </div>
           </template>

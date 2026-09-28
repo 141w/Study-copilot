@@ -256,6 +256,30 @@
           </el-button>
         </div>
 
+        <!-- 5.2 追问建议：回答下的可点后续问题 -->
+        <div
+          v-if="!message.isStreaming && message.content && ((message.suggestions && message.suggestions.length) || message.suggestionsLoading)"
+          class="mt-3 flex flex-wrap items-center gap-2"
+          data-test="followup-suggestions"
+        >
+          <span class="text-[11px] text-[var(--text-muted)] shrink-0">继续追问</span>
+          <template v-if="message.suggestionsLoading">
+            <span class="text-[11px] text-[var(--text-muted)] animate-pulse">生成建议中…</span>
+          </template>
+          <template v-else>
+            <button
+              v-for="(s, i) in message.suggestions"
+              :key="i"
+              type="button"
+              class="px-2.5 py-1 rounded-full border border-[var(--border-default)] text-[12px] text-[var(--text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer"
+              :data-test="`followup-chip-${i}`"
+              @click="emit('ask', s)"
+            >
+              {{ s }}
+            </button>
+          </template>
+        </div>
+
         <!-- Actions -->
         <div
           v-if="!message.isStreaming && message.content"
@@ -395,6 +419,8 @@ const emit = defineEmits<{
   (e: 'copy', msg: ChatStreamMessage): void
   (e: 'scrollToSource', index: number): void
   (e: 'saveNote', msg: ChatStreamMessage): void
+  /** 5.2 追问建议：点击建议芯片发送该问题 */
+  (e: 'ask', question: string): void
 }>()
 
 const router = useRouter()

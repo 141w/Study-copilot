@@ -650,6 +650,104 @@ async def save_message_as_note(
     return note
 
 
+async def generate_followup_suggestions(
+    db: AsyncSession,
+    user: User,
+    question: str,
+    answer: str,
+    n: int = 3,
+) -> list[str]:
+    """为一条回答生成 n 条可点追问建议（一次 LLM 调用，计入用量）。
+
+    解析失败或模型异常时返回空列表，不抛错——建议是增强项，不阻断主流程。
+    """
+    question = (question or "").strip()
+    answer = (answer or "").strip()
+    if not question or not answer:
+        return []
+    n = max(1, min(int(n or 3), 5))
+
+    from app.core.llm import LLM
+    from app.core.template_manager import render_template
+
+    user_config = await get_llm_config_with_secret(db, user)
+    llm_config = dict(user_config)
+    llm_config["user_id"] = user.id
+
+    prompt = render_template(
+        "rag/followup_suggestions.jinja2",
+        question=question[:2000],
+        answer=answer[:6000],
+        n=n,
+    )
+    messages = [
+        {"role": "system", "content": "你只输出合法 JSON 数组，不要任何其他文字。"},
+        {"role": "user", "content": prompt},
+    ]
+    llm = LLM.from_config(llm_config)
+    try:
+        raw = await llm.chat(messages, temperature=0.7, max_tokens=300)
+    except Exception as exc:
+        logger.warning("followup suggestions LLM failed: %s", exc)
+        return []
+
+    suggestions = _parse_suggestion_list(raw, n)
+
+    try:
+        from app.services.usage_service import record_usage
+
+        model_name = llm_config.get("model_name") or llm_config.get("model") or "unknown"
+        provider = llm_config.get("provider", "openai")
+        prompt_est = int((len(question) + len(answer) + 200) * 0.7)
+        comp_est = int(len(raw or "") * 0.7) + 1
+        await record_usage(
+            db=db,
+            user_id=user.id,
+            source="chat",
+            kind="llm",
+            provider=provider,
+            model_name=model_name,
+            prompt_tokens=prompt_est,
+            completion_tokens=comp_est,
+            extra_meta={"mode": "followup_suggestions", "count": len(suggestions)},
+        )
+    except Exception as exc:
+        logger.debug("followup suggestions usage record failed: %s", exc)
+
+    return suggestions
+
+
+def _parse_suggestion_list(raw: str | None, n: int) -> list[str]:
+    """从 LLM 输出解析 JSON 字符串数组；容错代码块与序号前缀。"""
+    if not raw:
+        return []
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    start = text.find("[")
+    end = text.rfind("]")
+    if start < 0 or end <= start:
+        return []
+    try:
+        data = json.loads(text[start : end + 1])
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[str] = []
+    for item in data:
+        s = str(item).strip().strip('"').strip()
+        s = s.lstrip("0123456789.、)） ").strip()
+        if s and s not in out:
+            out.append(s)
+        if len(out) >= n:
+            break
+    return out
+
+
 async def list_sessions(
     db: AsyncSession,
     user: User,

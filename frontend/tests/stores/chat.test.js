@@ -200,3 +200,46 @@ describe('Chat Store', () => {
     expect(store.messages[0].saved_note).toEqual({ id: 'n-1', title: '深度学习', tags: ['DL'] })
   })
 })
+
+describe('5.2 追问建议 store', () => {
+  let store
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useChatStore()
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
+
+  it('loadFollowupSuggestions 成功时挂到消息上', async () => {
+    store.messages.push({ id: 'm1', role: 'assistant', content: '回答' })
+    api.post.mockResolvedValue({ data: { suggestions: ['A？', 'B？', 'C？'] } })
+
+    await store.loadFollowupSuggestions('问题', '回答', 0)
+
+    expect(api.post).toHaveBeenCalledWith('/chat/suggest-followups', {
+      question: '问题',
+      answer: '回答',
+      n: 3
+    })
+    expect(store.messages[0].suggestions).toEqual(['A？', 'B？', 'C？'])
+    expect(store.messages[0].suggestionsLoading).toBe(false)
+  })
+
+  it('接口失败时 suggestionsLoading 复位且不抛错', async () => {
+    store.messages.push({ id: 'm2', role: 'assistant', content: '回答' })
+    api.post.mockRejectedValue(new Error('network'))
+
+    await store.loadFollowupSuggestions('问题', '回答', 0)
+
+    expect(store.messages[0].suggestions).toBeUndefined()
+    expect(store.messages[0].suggestionsLoading).toBe(false)
+  })
+
+  it('空问题/空回答不发起请求', async () => {
+    store.messages.push({ id: 'm3', role: 'assistant', content: '' })
+    await store.loadFollowupSuggestions('', '回答', 0)
+    await store.loadFollowupSuggestions('问题', '  ', 0)
+    expect(api.post).not.toHaveBeenCalled()
+  })
+})
