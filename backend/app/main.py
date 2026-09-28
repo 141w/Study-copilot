@@ -22,6 +22,7 @@ from app.api.tasks import router as tasks_router
 from app.api.transform import router as transform_router
 from app.api.tts import router as tts_router
 from app.api.usage import router as usage_router
+from app.api.wiki import router as wiki_router
 from app.config import settings
 from app.core.logger import setup_logging
 from app.db import ensure_current_schema, get_current_revision, get_db, run_migrations, stamp_head
@@ -167,6 +168,7 @@ app.include_router(courses_router, prefix="/api")
 app.include_router(notes_router, prefix="/api")
 app.include_router(favorites_router, prefix="/api")
 app.include_router(evaluation_router, prefix="/api")
+app.include_router(wiki_router, prefix="/api")
 app.include_router(transform_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")

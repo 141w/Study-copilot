@@ -13,7 +13,7 @@
            transition-transform duration-300 ease-in-out
            md:translate-x-0"
     :class="sidebarStore.isOpen ? 'translate-x-0' : '-translate-x-full'"
-    style="background: var(--gradient-sidebar); box-shadow: 1px 0 0 var(--border-default);"
+    style="background: var(--bg-primary); box-shadow: 1px 0 0 var(--border-default);"
   >
     <el-menu
       :default-active="currentRoute"
@@ -69,7 +69,7 @@ import { useSidebarStore } from '../../stores/sidebar'
 import type { Document as DocumentModel } from '../../types/models'
 import {
   HomeFilled, Upload, Document, Reading, Edit,
-  ChatDotSquare, DocumentChecked, TrendCharts, Setting, List
+  ChatDotSquare, DocumentChecked, TrendCharts, Setting, List, Link
 } from '@/components/icons'
 import type { Component } from 'vue'
 
@@ -94,6 +94,7 @@ const menuItems: MenuItem[] = [
   { path: '/documents', label: '文档阅读', icon: Document },
   { path: '/courses', label: '课程空间', icon: Reading },
   { path: '/notes', label: '笔记', icon: Edit },
+  { path: '/wiki', label: '知识Wiki', icon: Link },
   { path: '/chat', label: 'AI问答', icon: ChatDotSquare },
   { path: '/quiz', label: '做题练习', icon: DocumentChecked },
   { path: '/analysis', label: '学习分析', icon: TrendCharts },

@@ -20,6 +20,7 @@ from app.db.database import (
     User,
     UserFavorite,
     UserLLMConfig,
+    WikiPage,
     document_tags,
     engine,
     ensure_current_schema,

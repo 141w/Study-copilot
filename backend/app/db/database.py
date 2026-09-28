@@ -514,6 +514,32 @@ class DocumentParseSpan(Base):
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class WikiPage(Base):
+    """阶段五 5.1：知识 Wiki 概念页（单用户）。
+
+    slug 全局（用户内）唯一，用于 [[slug]] 双向链接。
+    """
+
+    __tablename__ = "wiki_pages"
+    __table_args__ = (
+        UniqueConstraint("user_id", "slug", name="uq_wiki_pages_user_slug"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(128), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    page_type: Mapped[str] = mapped_column(String(32), default="concept")  # concept|entity|summary|index
+    status: Mapped[str] = mapped_column(String(20), default="published")  # draft|published|archived
+    content: Mapped[str] = mapped_column(Text, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow_naive, onupdate=_utcnow_naive
+    )
+
+
 async def get_db() -> AsyncIterator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         try:

@@ -94,6 +94,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/wiki',
+    name: 'wiki',
+    component: () => import('../views/WikiView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/tasks',
     name: 'tasks',
     component: () => import('../views/TasksView.vue'),
