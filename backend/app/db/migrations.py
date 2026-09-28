@@ -20,8 +20,9 @@ logger = logging.getLogger(__name__)
 # 导致 alembic Config 读不到 script_location，应用启动即崩
 # 修复（2026-08-30）：Docker 部署时代码安装在 site-packages，同时支持多路径搜索
 _CANDIDATES = [
-    Path(__file__).parent.parent.parent / "alembic.ini",  # 源码树: /app/alembic.ini
-    Path("/app/alembic.ini"),  # Docker 容器固定路径
+    Path(__file__).parent.parent.parent / "alembic.ini",  # 源码树: backend/alembic.ini
+    Path("/app/alembic.ini"),  # Docker：与 /app/app 包布局对齐
+    Path("/alembic.ini"),  # Docker：stage-2 无 WORKDIR 时 COPY 落在根目录
     Path(__file__).parent.parent.parent.parent / "alembic.ini",  # site-packages 上级
 ]
 

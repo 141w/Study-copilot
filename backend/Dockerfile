@@ -84,10 +84,13 @@ COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html/
 # Nginx config (proxy to localhost:8000)
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Backend code
+# Backend code + Alembic（路径必须与 migrations.py 候选一致：
+# 优先 /app/alembic.ini，其次 /alembic.ini。stage-2 默认 WORKDIR 是 /，
+# 这里显式落到 /app，避免 site-packages 运行时找不到 script_location。）
+WORKDIR /app
 COPY backend/app/ ./app/
 COPY backend/alembic/ ./alembic/
-COPY backend/alembic.ini ./
+COPY backend/alembic.ini ./alembic.ini
 COPY backend/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh && \
     chown -R www-data:www-data /usr/share/nginx/html && \
