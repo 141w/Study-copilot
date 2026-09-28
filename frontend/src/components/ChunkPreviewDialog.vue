@@ -43,49 +43,73 @@
       <div v-if="result" class="space-y-3" data-test="preview-result">
         <!-- 策略链与拒绝原因 -->
         <div class="rounded-xl border border-[var(--border-default)] p-3 bg-[var(--bg-secondary)]/40">
-          <div class="text-xs font-semibold text-[var(--text-primary)] mb-1.5">
-            采用：<span class="text-[var(--color-primary)]">{{ result.selected_strategy }}</span>
-            <span v-if="result.fallback_used" class="ml-2 text-[var(--color-warning)]">（兜底 fixed）</span>
+          <div class="flex items-center flex-wrap gap-2 text-xs font-semibold text-[var(--text-primary)] mb-1.5">
+            <span>采用：</span>
+            <span class="px-2 py-0.5 rounded font-mono font-bold text-xs bg-[var(--color-primary-light,rgba(0,0,0,0.06))] text-[var(--color-primary)]">
+              {{ result.selected_strategy }}
+            </span>
+            <span v-if="result.fallback_used" class="px-2 py-0.5 rounded text-[11px] bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+              （兜底 fixed）
+            </span>
           </div>
-          <div class="text-[11px] text-[var(--text-muted)] mb-1">候选链：{{ result.chain.join(' → ') }}</div>
-          <div v-if="result.rejected?.length" class="space-y-0.5 text-[11px]">
-            <div v-for="(r, i) in result.rejected" :key="i" class="text-[var(--color-error)]">
+          <div class="text-[11px] text-[var(--text-muted)] mb-1.5">候选链：{{ result.chain?.join(' → ') }}</div>
+          <div v-if="result.rejected?.length" class="flex flex-wrap gap-1.5 text-[11px]">
+            <div
+              v-for="(r, i) in result.rejected"
+              :key="i"
+              class="px-2 py-0.5 rounded bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-100 dark:border-rose-900/50"
+            >
               被拒：{{ r.strategy }}（{{ r.reason }}）
             </div>
           </div>
           <div v-else class="text-[11px] text-[var(--text-muted)]">无被拒层级</div>
         </div>
 
-        <!-- 画像指标 -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <div v-for="(val, key) in profileCards" :key="key" class="card !p-3 !rounded-lg">
-            <div class="text-[10px] text-[var(--text-muted)]">{{ key }}</div>
-            <div class="text-sm font-semibold text-[var(--text-primary)] tabular-nums">{{ val }}</div>
+        <!-- 画像指标 (复刻 WeKnora profile-grid 6 宫格) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+          <div v-for="(card, idx) in profileCards" :key="idx" class="rounded-xl border border-[var(--border-default)] p-2.5 bg-[var(--surface-card)]">
+            <div class="text-[10px] text-[var(--text-muted)] mb-0.5">{{ card.label }}</div>
+            <div class="text-sm font-semibold text-[var(--text-primary)] tabular-nums">{{ card.val }}</div>
+            <div v-if="card.sub" class="text-[9px] text-[var(--text-muted)] mt-0.5">{{ card.sub }}</div>
           </div>
         </div>
 
         <!-- 统计 + 块列表 -->
-        <div class="text-xs text-[var(--text-secondary)]">
-          块数 {{ result.stats?.count }}
-          · 均值 {{ result.stats?.avg_chars }}
-          · 最小 {{ result.stats?.min }}
-          · 最大 {{ result.stats?.max }}
-          <span v-if="result.stats?.truncated_to" class="text-[var(--color-warning)]">
-            · 已截断至 {{ result.stats.truncated_to }}
-          </span>
+        <div class="flex items-center justify-between text-xs text-[var(--text-secondary)] px-1">
+          <div>
+            块数 {{ result.stats?.count }}
+            · 均值 {{ result.stats?.avg_chars }}
+            · 最小 {{ result.stats?.min }}
+            · 最大 {{ result.stats?.max }}
+            <span v-if="result.stats?.truncated_to" class="text-[var(--color-warning)]">
+              · 已截断至 {{ result.stats.truncated_to }}
+            </span>
+          </div>
         </div>
-        <div class="max-h-72 overflow-y-auto space-y-2">
+
+        <div class="max-h-80 overflow-y-auto space-y-2 pr-1">
           <div
             v-for="c in result.chunks"
             :key="c.seq"
-            class="card !p-3 !rounded-lg"
+            class="rounded-xl border border-[var(--border-default)] p-3 bg-[var(--surface-card)] hover:border-[var(--border-hover)] transition-colors"
             data-test="preview-chunk"
           >
-            <div class="flex items-center justify-between text-[11px] text-[var(--text-muted)] mb-1">
-              <span>#{{ c.seq }} · P{{ c.page || '-' }}</span>
-              <span v-if="c.context_header" class="truncate max-w-[60%]">{{ c.context_header }}</span>
+            <div class="flex items-center justify-between gap-2 text-[11px] text-[var(--text-muted)] mb-1.5">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-primary)]">
+                  #{{ c.seq }}
+                </span>
+                <span>{{ c.content?.length || 0 }} 字符</span>
+                <span v-if="c.char_start != null && c.char_end != null">
+                  [{{ c.char_start }}:{{ c.char_end }}]
+                </span>
+                <span v-if="c.page">· P{{ c.page }}</span>
+              </div>
+              <span v-if="c.context_header" class="truncate max-w-[50%] px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[10px]" :title="c.context_header">
+                {{ c.context_header }}
+              </span>
             </div>
-            <p class="text-xs text-[var(--text-secondary)] leading-relaxed line-clamp-4">{{ c.content }}</p>
+            <p class="text-xs text-[var(--text-secondary)] font-mono leading-relaxed whitespace-pre-wrap line-clamp-6 select-text">{{ c.content }}</p>
           </div>
         </div>
       </div>
@@ -96,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import api from '@/services/api'
 
 const props = defineProps<{ visible: boolean; initialText?: string }>()
@@ -116,12 +140,15 @@ const result = ref<any>(null)
 
 const profileCards = computed(() => {
   const p = result.value?.profile || {}
-  return {
-    字符: p.total_chars ?? '—',
-    行数: p.total_lines ?? '—',
-    标题: p.md_heading_total ?? '—',
-    主层级: p.dominant_heading_level ?? '—',
-  }
+  const chapterCount = (p.chinese_chapter_count || 0) + (p.english_chapter_count || 0) + (p.numbered_section_count || 0)
+  return [
+    { label: '总行数', val: p.total_lines ?? '—' },
+    { label: '总字符', val: p.total_chars ?? '—' },
+    { label: 'Markdown 标题', val: p.md_heading_total ?? '—', sub: p.dominant_heading_level ? `主 H${p.dominant_heading_level}` : '' },
+    { label: '分页符', val: p.form_feed_count ?? 0 },
+    { label: '章节标记', val: chapterCount },
+    { label: '平均行长', val: p.avg_line_len ? `${p.avg_line_len} 字` : '—' },
+  ]
 })
 
 function reset(): void {
@@ -154,7 +181,6 @@ async function runPreview(): Promise<void> {
 }
 
 // 打开时若有初始文本，自动预览
-import { watch } from 'vue'
 watch(
   () => props.visible,
   (v) => {

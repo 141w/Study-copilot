@@ -139,8 +139,7 @@ class LLM:
         """调用前的凭据检查：未配置时给出可操作的中文引导，而非 SDK 认证错误。"""
         if not getattr(self, "configured", True):
             raise LLMNotConfiguredError(
-                "尚未配置模型服务。请登录后进入「模型设置」填写 API Key 并保存，"
-                "或部署时在环境变量中设置 OPENAI_API_KEY。"
+                "尚未配置模型服务。请登录后进入「模型设置」填写 API Key 并保存。"
             )
 
     def __init__(
@@ -154,8 +153,11 @@ class LLM:
         # 凭据缺失时不再在构造阶段抛异常（那会让整个进程在导入期崩溃，
         # 用户连"去设置里填 Key"的界面都打不开）。这里用占位值构造，
         # 并把状态记在 self.configured 上，真正发起调用时再给出明确引导。
-        resolved_key = api_key or settings.openai_api_key
-        self.configured = bool(resolved_key and resolved_key.strip())
+        #
+        # 安全：默认不回落 settings.openai_api_key —— 用户流量必须 BYOK。
+        # 脚本/内部任务若确需服务器 Key，请显式传入 api_key=settings.openai_api_key。
+        resolved_key = (api_key or "").strip()
+        self.configured = bool(resolved_key)
         http_client = httpx.AsyncClient(
             proxy=None,
             transport=httpx.AsyncHTTPTransport(proxy=None),

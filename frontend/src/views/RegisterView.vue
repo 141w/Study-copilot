@@ -62,15 +62,23 @@
                   v-model="form.password"
                   type="password"
                   show-password
-                  placeholder="请输入密码"
+                  placeholder="至少 8 位，含字母和数字"
+                  minlength="8"
+                  maxlength="128"
                   required
                 />
+                <p class="mt-1 text-xs text-[var(--text-muted)]">至少 8 位，需同时包含字母和数字</p>
+              </div>
+
+              <!-- Turnstile（服务端配置了 site key 才渲染） -->
+              <div v-if="turnstileSiteKey" class="turnstile-box">
+                <div ref="turnstileEl" class="cf-turnstile" :data-sitekey="turnstileSiteKey"></div>
               </div>
 
               <el-button
                 type="primary"
                 class="login-btn w-full !h-11 text-[15px] font-medium"
-                :disabled="loading"
+                :disabled="loading || !canSubmit"
                 native-type="submit"
               >
                 {{ loading ? '注册中...' : '注册' }}
@@ -93,13 +101,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
 import gsap from 'gsap'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
 import { useReducedMotion } from '../composables/useReducedMotion'
+import { validatePassword } from '../utils/passwordPolicy'
+import api from '../services/api'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -107,6 +117,7 @@ const { prefersReduced } = useReducedMotion()
 
 const registerCard = ref<HTMLElement | null>(null)
 const botLogo = ref<InstanceType<typeof CopilotBotAvatar> | null>(null)
+const turnstileEl = ref<HTMLElement | null>(null)
 let ctx: gsap.Context | null = null
 
 const form = ref({
@@ -116,6 +127,56 @@ const form = ref({
 })
 const loading = ref(false)
 const error = ref('')
+const turnstileSiteKey = ref('')
+const turnstileToken = ref('')
+const registerAllowed = ref(true)
+
+const passwordIssue = computed(() =>
+  form.value.password ? validatePassword(form.value.password) : null
+)
+const canSubmit = computed(
+  () =>
+    registerAllowed.value &&
+    !!form.value.username &&
+    !!form.value.email &&
+    !!form.value.password &&
+    !passwordIssue.value
+)
+
+function readTurnstileToken(): void {
+  // 官方 widget 渲染后会把 token 写进隐藏 input
+  const input = document.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')
+  turnstileToken.value = input?.value || ''
+}
+
+async function loadTurnstile(siteKey: string): Promise<void> {
+  if (!siteKey || document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]')) {
+    readTurnstileToken()
+    return
+  }
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+    s.async = true
+    s.onload = () => resolve()
+    s.onerror = () => reject(new Error('turnstile load failed'))
+    document.head.appendChild(s)
+  })
+  await nextTick()
+  const w = window as unknown as {
+    turnstile?: {
+      render: (el: HTMLElement, opts: Record<string, unknown>) => void
+    }
+  }
+  if (w.turnstile && turnstileEl.value) {
+    w.turnstile.render(turnstileEl.value, {
+      sitekey: siteKey,
+      callback: (token: string) => {
+        turnstileToken.value = token
+      }
+    })
+  }
+}
 
 const particles = [
   { left: 10, size: 3, delay: 0, duration: 18 },
@@ -131,8 +192,33 @@ async function handleRegister(): Promise<void> {
   loading.value = true
   error.value = ''
 
+  if (!registerAllowed.value) {
+    error.value = '当前未开放注册'
+    loading.value = false
+    return
+  }
+  const pwdErr = validatePassword(form.value.password)
+  if (pwdErr) {
+    error.value = pwdErr
+    loading.value = false
+    return
+  }
+  if (turnstileSiteKey.value) {
+    readTurnstileToken()
+    if (!turnstileToken.value) {
+      error.value = '请完成人机验证后再注册'
+      loading.value = false
+      return
+    }
+  }
+
   try {
-    await authStore.register(form.value.username, form.value.email, form.value.password)
+    await authStore.register(
+      form.value.username,
+      form.value.email,
+      form.value.password,
+      turnstileToken.value || undefined
+    )
     router.push('/login')
   } catch (e) {
     const axiosError = e as AxiosError<{ detail: string }>
@@ -142,7 +228,25 @@ async function handleRegister(): Promise<void> {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const resp = await api.get<{
+      allow_registration?: boolean
+      turnstile_site_key?: string
+    }>('/auth/register-meta')
+    registerAllowed.value = resp.data.allow_registration !== false
+    turnstileSiteKey.value = resp.data.turnstile_site_key || ''
+    if (turnstileSiteKey.value) {
+      try {
+        await loadTurnstile(turnstileSiteKey.value)
+      } catch {
+        // 加载失败时仍允许提交，由服务端拒绝
+      }
+    }
+  } catch {
+    // 元数据拉取失败不阻塞表单，服务端仍会校验
+  }
+
   if (prefersReduced.value) return
   ctx = gsap.context(() => {
     if (registerCard.value) {
@@ -283,6 +387,11 @@ html.dark .card-shell {
 /* ── 注册按钮 ── */
 .login-btn {
   transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.turnstile-box {
+  display: flex;
+  justify-content: center;
+  min-height: 65px;
 }
 .login-btn:hover {
   transform: translateY(-1px);

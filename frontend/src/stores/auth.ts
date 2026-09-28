@@ -28,11 +28,17 @@ export const useAuthStore = defineStore('auth', () => {
     return response.data
   }
 
-  async function register(username: string, email: string, password: string): Promise<User> {
+  async function register(
+    username: string,
+    email: string,
+    password: string,
+    turnstileToken?: string
+  ): Promise<User> {
     const response = await api.post<User>('/auth/register', {
       username,
       email,
-      password
+      password,
+      turnstile_token: turnstileToken || null
     })
 
     return response.data
@@ -69,7 +75,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 修改密码：需提供原密码，新密码 ≥ 6 位（后端校验）。
+   * 修改密码：需提供原密码，新密码 ≥ 8 位且含字母+数字（后端校验）。
    */
   async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
     await api.put('/auth/password', {

@@ -1,0 +1,11 @@
+# 开发专用覆盖文件 —— 不会被裸 `docker compose` 自动合并。
+# 用法：docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# 生产请只用 docker-compose.yml（或 deploy/deploy.sh），切勿把本文件当 override.yml。
+services:
+  app:
+    volumes:
+      - ./backend/app:/app/app:ro
+      - ./backend/alembic:/app/alembic:ro
+    environment:
+      - DEBUG=true
+      - HF_PREFETCH=1

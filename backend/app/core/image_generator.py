@@ -38,11 +38,11 @@ async def test_image_connectivity(config: dict[str, Any]) -> dict[str, Any]:
     provider = config.get("image_provider", "siliconflow")
 
     # SSRF: user-supplied base_url must not probe internal/metadata networks
-    from app.core.url_extractor import _validate_url
+    from app.core.ssrf import validate_url
     from app.exceptions import ValidationError as _ValErr
 
     try:
-        _validate_url(base_url)
+        validate_url(base_url)
     except _ValErr as e:
         return {
             "success": False,
@@ -119,6 +119,10 @@ async def generate_image(
     api_key = (config.get("image_api_key") or config.get("api_key") or "").strip()
     base_url = _normalize_base_url(config.get("image_base_url") or config.get("base_url"))
     model = (config.get("image_model") or DEFAULT_IMAGE_MODEL).strip()
+
+    from app.core.ssrf import validate_url
+
+    validate_url(base_url)
 
     if not api_key:
         raise ValueError("缺少图像生成 API Key，无法发起生图")

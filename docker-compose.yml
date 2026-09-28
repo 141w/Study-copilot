@@ -47,10 +47,14 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-in-production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required (见 .env.example)}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (见 .env.example)}
     env_file:
       - ./backend/.env
+    # 课堂引擎（OpenMAIC）若跑在宿主 3001：容器内用 host.docker.internal 访问。
+    # nginx 的 /classroom-engine/ 与 CLASSROOM_BASE_URL 都指向它。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       # 宿主端口可配置：与同机上已有的 nginx（占 80/443）共存时，
       # 在 .env 里设 APP_HOST_PORT=8080，由宿主 nginx 反代对外提供 HTTPS。

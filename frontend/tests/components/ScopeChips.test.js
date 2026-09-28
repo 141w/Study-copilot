@@ -4,7 +4,7 @@ import ScopeChips from '@/components/chat/ScopeChips.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 
 vi.mock('@/stores/document', () => ({
-  useDocumentStore: () => ({ documents: [], fetchDocuments: vi.fn().mockResolvedValue([]) }),
+  useDocumentStore: () => ({ documents: [], readyDocuments: [], fetchDocuments: vi.fn().mockResolvedValue([]) }),
 }))
 vi.mock('@/stores/course', () => ({
   useCourseStore: () => ({ courses: [], fetchCourses: vi.fn().mockResolvedValue([]) }),
@@ -22,6 +22,62 @@ describe('ScopeChips', () => {
     expect(wrapper.find('[data-test="scope-chip-doc"]').exists()).toBe(true)
     await wrapper.find('[aria-label="移除 ml.pdf"]').trigger('click')
     expect(wrapper.emitted('remove')).toBeTruthy()
+  })
+
+  it('候选浮层展开：支持点击候选项目触发 pick 事件并关闭浮层', async () => {
+    const wrapper = mount(ScopeChips, {
+      props: {
+        chips: [],
+        mentionOpen: true,
+        candidates: [
+          { key: 'course:1', kind: 'course', id: '1', label: '高等数学' },
+          { key: 'doc:2', kind: 'doc', id: '2', label: '线性代数.pdf' },
+        ],
+      },
+    })
+    await flushPromises()
+    const popup = wrapper.find('[data-test="mention-popup"]')
+    expect(popup.exists()).toBe(true)
+
+    const items = wrapper.findAll('[data-test="mention-item"]')
+    expect(items.length).toBe(2)
+    expect(items[0].text()).toContain('高等数学')
+    expect(items[1].text()).toContain('线性代数.pdf')
+
+    // 点击第二个候选（文档）
+    await items[1].trigger('click')
+    const pickEmitted = wrapper.emitted('pick')
+    expect(pickEmitted).toBeTruthy()
+    expect(pickEmitted[0][0]).toEqual({ key: 'doc:2', kind: 'doc', id: '2', label: '线性代数.pdf' })
+    expect(wrapper.emitted('update:mentionOpen')?.[0][0]).toBe(false)
+  })
+
+  it('候选浮层通过键盘 Enter 选择当前高亮项', async () => {
+    const wrapper = mount(ScopeChips, {
+      props: {
+        chips: [],
+        mentionOpen: true,
+        candidates: [
+          { key: 'doc:1', kind: 'doc', id: '1', label: 'ml.pdf' },
+        ],
+      },
+    })
+    await flushPromises()
+    const item = wrapper.find('[data-test="mention-item"]')
+    await item.trigger('keydown.enter')
+    expect(wrapper.emitted('pick')?.[0][0].id).toBe('1')
+  })
+
+  it('无匹配候选时展示空状态提示', async () => {
+    const wrapper = mount(ScopeChips, {
+      props: {
+        chips: [{ key: 'doc:1', kind: 'doc', id: '1', label: 'ml.pdf' }],
+        mentionOpen: true,
+        candidates: [{ key: 'doc:1', kind: 'doc', id: '1', label: 'ml.pdf' }],
+      },
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-test="mention-popup"]').text()).toContain('所有文档已在引用范围中')
   })
 
   it('IME 组合态不误弹 @（由 ChatInput 守卫）', async () => {

@@ -161,22 +161,39 @@ describe('ProfileView Component', () => {
   it('密码修改校验：两次密码不一致时报错', async () => {
     const wrapper = createWrapper()
     wrapper.vm.passwordForm.oldPassword = 'currentPassword'
-    wrapper.vm.passwordForm.newPassword = 'password123'
-    wrapper.vm.passwordForm.confirmPassword = 'mismatchedPassword'
+    wrapper.vm.passwordForm.newPassword = 'StudyPass9'
+    wrapper.vm.passwordForm.confirmPassword = 'OtherPass9'
 
     await wrapper.vm.handleChangePassword()
     expect(wrapper.vm.passwordError).toBe('两次输入的新密码不一致')
     expect(wrapper.vm.passwordChanged).toBe(false)
   })
 
-  it('密码修改校验：新密码少于6位时报错', async () => {
+  it('密码修改校验：新密码少于 8 位时报错', async () => {
     const wrapper = createWrapper()
     wrapper.vm.passwordForm.oldPassword = 'currentPassword'
     wrapper.vm.passwordForm.newPassword = '123'
     wrapper.vm.passwordForm.confirmPassword = '123'
 
     await wrapper.vm.handleChangePassword()
-    expect(wrapper.vm.passwordError).toBe('新密码至少需要 6 位')
+    expect(wrapper.vm.passwordError).toBe('密码至少需要 8 位')
+    expect(wrapper.vm.passwordChanged).toBe(false)
+  })
+
+  it('密码修改校验：纯数字/常见弱口令被拒', async () => {
+    const wrapper = createWrapper()
+    wrapper.vm.passwordForm.oldPassword = 'currentPassword'
+    wrapper.vm.passwordForm.newPassword = '12345678'
+    wrapper.vm.passwordForm.confirmPassword = '12345678'
+
+    await wrapper.vm.handleChangePassword()
+    expect(wrapper.vm.passwordError).toBe('密码需包含字母')
+    expect(wrapper.vm.passwordChanged).toBe(false)
+
+    wrapper.vm.passwordForm.newPassword = 'password123'
+    wrapper.vm.passwordForm.confirmPassword = 'password123'
+    await wrapper.vm.handleChangePassword()
+    expect(wrapper.vm.passwordError).toMatch(/常见/)
     expect(wrapper.vm.passwordChanged).toBe(false)
   })
 })

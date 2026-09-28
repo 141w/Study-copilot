@@ -1048,10 +1048,36 @@ _CHAT_ATTACH_ROOT = "chat_attachments"
 _CHAT_ATTACH_META = "meta.json"
 
 
-def _attach_dir(user_id: str, attachment_id: str) -> Any:
+def _assert_attachment_id(attachment_id: str) -> str:
+    """Reject non-UUID attachment ids (path traversal / cross-user)."""
+    aid = (attachment_id or "").strip()
+    try:
+        parsed = uuid.UUID(aid)
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise ValidationError("无效的附件 ID") from exc
+    canonical = str(parsed)
+    # Only accept standard 8-4-4-4-12 hyphenated form (any case)
+    if aid.lower() != canonical:
+        raise ValidationError("无效的附件 ID")
+    return canonical
+
+
+def _user_attach_base(user_id: str) -> Any:
     from pathlib import Path
 
-    return Path(settings.upload_dir) / _CHAT_ATTACH_ROOT / user_id / attachment_id
+    return (Path(settings.upload_dir) / _CHAT_ATTACH_ROOT / str(user_id)).resolve()
+
+
+def _attach_dir(user_id: str, attachment_id: str) -> Any:
+    """Resolve attachment dir and enforce containment under the user base."""
+    from pathlib import Path
+
+    aid = _assert_attachment_id(attachment_id)
+    base = _user_attach_base(user_id)
+    dir_path = (base / aid).resolve()
+    if not dir_path.is_relative_to(base):
+        raise ValidationError("无效的附件路径")
+    return dir_path
 
 
 def _classify_attachment(filename: str) -> str:

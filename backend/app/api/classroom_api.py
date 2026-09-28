@@ -396,6 +396,44 @@ async def _fetch_classroom_payload(
     }
 
 
+@router.get("/classroom/health")
+async def classroom_health(current_user: User = Depends(get_current_user)) -> dict:
+    """课堂链路体检：引擎是否可达、Webhook 是否已配（生产 fail-closed）。
+
+    注意：本路由必须注册在 /classroom/{classroom_id} 之前，否则会被路径参数吞掉。
+    """
+    import httpx
+
+    enabled = bool(settings.classroom_enabled)
+    base_url = (settings.classroom_base_url or "").rstrip("/")
+    reachable = False
+    error = ""
+    if enabled and base_url:
+        # 轻量 TCP/HTTP 探测；引擎提供 /api/server-providers 或任意可响应路径
+        probe = f"{base_url}/api/server-providers"
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(probe)
+                reachable = resp.status_code < 500
+                if not reachable:
+                    error = f"引擎返回 HTTP {resp.status_code}"
+        except Exception as exc:  # noqa: BLE001 - 健康检查不抛
+            error = f"{type(exc).__name__}: {exc}"
+    elif enabled and not base_url:
+        error = "未配置 CLASSROOM_BASE_URL"
+
+    return {
+        "enabled": enabled,
+        "base_url": base_url or None,
+        "engine_reachable": reachable,
+        "engine_error": error or None,
+        "webhook_configured": bool((settings.classroom_webhook_secret or "").strip()),
+        # 生产 DEBUG=false 时 webhook 无密钥会 fail-closed 拒收回调
+        "webhook_required_in_production": not settings.debug,
+        "ready": enabled and reachable and bool((settings.classroom_webhook_secret or "").strip()),
+    }
+
+
 @router.get("/classroom/{classroom_id}")
 async def get_classroom_detail_by_path(
     classroom_id: str,

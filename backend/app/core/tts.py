@@ -157,6 +157,9 @@ class OpenAITTSProvider:
         clean_url = (base_url or "https://api.openai.com/v1").strip().rstrip("/")
         if not clean_url.endswith("/v1") and not clean_url.endswith("/v1/audio"):
             clean_url = f"{clean_url}/v1"
+        from app.core.ssrf import validate_url
+
+        validate_url(clean_url)
         self.base_url = clean_url
         self.api_key = (api_key or "").strip()
         self.model = (model or "tts-1").strip()

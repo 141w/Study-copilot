@@ -14,6 +14,23 @@ from app.db import DocumentChunk, User, get_db
 from app.exceptions import ValidationError
 from app.services import config_service
 
+
+def _require_safe_base_url(base_url: str | None) -> None:
+    """Reject user-supplied base_url that targets internal/private networks."""
+    if not base_url or not str(base_url).strip():
+        return
+    from app.core.ssrf import validate_url
+
+    validate_url(str(base_url).strip())
+
+
+def _require_safe_classroom_urls(classroom_config: dict | None) -> None:
+    """Validate user-controlled URLs nested in classroom_config."""
+    if not classroom_config or not isinstance(classroom_config, dict):
+        return
+    for key in ("tts_base_url", "image_base_url", "web_search_base_url"):
+        _require_safe_base_url(classroom_config.get(key))
+
 router = APIRouter(prefix="/config", tags=["配置"])
 
 
@@ -195,6 +212,8 @@ async def create_llm_config(
             f"Embedding 维度必须与系统底层数据库配置（{settings.embedding_dimension} 维）一致。"
             f"切换至不同维度模型需要全量重新迁移数据库列与历史向量。"
         )
+    _require_safe_base_url(req.base_url)
+    _require_safe_classroom_urls(req.classroom_config)
 
     effective_ctx = req.context_window
     effective_max_tokens = req.max_tokens
@@ -240,6 +259,8 @@ async def update_llm_config(
             f"Embedding 维度必须与系统底层数据库配置（{settings.embedding_dimension} 维）一致。"
             f"切换至不同维度模型需要全量重新迁移数据库列与历史向量。"
         )
+    _require_safe_base_url(req.base_url)
+    _require_safe_classroom_urls(req.classroom_config)
 
     effective_ctx = req.context_window
     effective_max_tokens = req.max_tokens
@@ -365,6 +386,7 @@ async def detect_llm_endpoint(
         effective_key = secret_cfg.get("api_key")
 
     base_url = req.base_url.strip() if req.base_url else None
+    _require_safe_base_url(base_url)
     model_name = (
         req.model_name.strip() if req.model_name else (settings.openai_model or "gpt-4o-mini")
     )
@@ -435,11 +457,10 @@ async def test_llm_connection(
 
     # SSRF: user-supplied base_url must not probe internal/metadata networks
     if base_url:
-        from app.core.url_extractor import _validate_url
         from app.exceptions import ValidationError as _ValErr
 
         try:
-            _validate_url(base_url)
+            _require_safe_base_url(base_url)
         except _ValErr as e:
             return LLMTestResp(success=False, message=str(e))
 
@@ -527,6 +548,7 @@ async def test_image_connection(
 
     from app.core.image_generator import test_image_connectivity
 
+    _require_safe_base_url(req.image_base_url)
     res = await test_image_connectivity(
         {
             "image_provider": req.image_provider,
@@ -568,6 +590,8 @@ async def test_tts_connection(
 
     from app.core.tts import test_tts_connectivity
 
+    if (req.tts_provider or "edge-tts") != "edge-tts":
+        _require_safe_base_url(req.tts_base_url)
     res = await test_tts_connectivity(
         {
             "tts_provider": req.tts_provider,
@@ -608,6 +632,7 @@ async def test_web_search_connection(
 
     from app.core.web_search import test_web_search_connectivity
 
+    _require_safe_base_url(req.web_search_base_url)
     res = await test_web_search_connectivity(
         {
             "web_search_provider": req.web_search_provider,

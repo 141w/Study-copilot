@@ -65,14 +65,29 @@ describe('Auth Store', () => {
     const registerResponse = { data: { id: 1, username: 'newuser' } }
     api.post.mockResolvedValue(registerResponse)
 
-    const result = await store.register('newuser', 'new@example.com', 'pass123')
+    const result = await store.register('newuser', 'new@example.com', 'StudyPass9', 'ts-token')
 
     expect(api.post).toHaveBeenCalledWith('/auth/register', {
       username: 'newuser',
       email: 'new@example.com',
-      password: 'pass123',
+      password: 'StudyPass9',
+      turnstile_token: 'ts-token',
     })
     expect(result).toEqual(registerResponse.data)
+  })
+
+  it('register omits turnstile token when not provided', async () => {
+    const registerResponse = { data: { id: 1, username: 'newuser' } }
+    api.post.mockResolvedValue(registerResponse)
+
+    await store.register('newuser', 'new@example.com', 'StudyPass9')
+
+    expect(api.post).toHaveBeenCalledWith('/auth/register', {
+      username: 'newuser',
+      email: 'new@example.com',
+      password: 'StudyPass9',
+      turnstile_token: null,
+    })
   })
 
   it('logout clears state and redirects', () => {

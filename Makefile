@@ -1,8 +1,9 @@
-.PHONY: help build up down restart logs logs-backend logs-frontend logs-db \
+.PHONY: help build up up-dev down restart logs logs-backend logs-frontend logs-db \
         shell backend-shell migrate migrate-create clean pull prune test-backend
 
 SHELL := /bin/bash
 COMPOSE := docker compose
+COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
 help: ## Show this help
 	@echo "Study Copilot - Docker Commands"
@@ -13,8 +14,11 @@ help: ## Show this help
 build: ## Build all Docker images
 	$(COMPOSE) build --parallel
 
-up: ## Start all services (detached)
+up: ## Start all services (detached; production-like, no DEBUG override)
 	$(COMPOSE) up -d
+
+up-dev: ## Start with docker-compose.dev.yml (DEBUG=true, live mounts)
+	$(COMPOSE_DEV) up -d
 
 down: ## Stop all services (keep volumes)
 	$(COMPOSE) down

@@ -482,9 +482,14 @@ class SemanticChunker(BaseChunker):
         返回 List[(chunk_text, page_num)]，page_num 取该 chunk 中出现最多的页号。
         """
         if not breakpoints:
-            text = " ".join(sentences)
+            # 连贯文档（语义相似度全程高于阈值）不产生任何边界：若整文档
+            # 合成单块，会超出 embedding 模型的 token 上限（截断成垃圾向量）
+            # 与 LLM 上下文预算。2026-09-20 实测：40 页技术书 46K 字被合成
+            # 1 个 chunk。此处退化为尺寸受限的句子级切分（含句级 overlap）。
+            if not sentences:
+                return []
             page = page_markers[0] if page_markers else 1
-            return [(text, page)] if text.strip() else []
+            return [(sub, page) for sub in self._split_large_chunk(sentences)]
 
         boundaries = [0] + breakpoints + [len(sentences)]
         chunks = []

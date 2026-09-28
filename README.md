@@ -11,7 +11,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-hybrid_RRF-336791?style=flat-square)](https://github.com/pgvector/pgvector)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
-[快速开始](#-快速开始) · [功能](#-核心能力) · [架构](#-架构) · [文档](docs/0-START-HERE/index.md) · [第三方归属](#-第三方与归属)
+[快速开始](#-快速开始) · [功能](#-核心能力) · [架构](#-架构) · [评测](#-评测) · [文档](docs/0-START-HERE/index.md) · [第三方归属](#-第三方与归属)
 
 </div>
 
@@ -166,10 +166,14 @@ pnpm dev -- -p 3001
 ### 方式二：Docker Compose
 
 ```bash
-cp .env.example .env                 # 根目录：POSTGRES_PASSWORD / ENCRYPTION_KEY / JWT_SECRET_KEY / OPENAI_*
+cp .env.example .env                 # 根目录：POSTGRES_PASSWORD / ENCRYPTION_KEY / JWT_SECRET_KEY 等
 cp backend/.env.example backend/.env # compose 的 env_file 还需要这一份
-make build && make up                # 或 docker compose up -d
-# 应用: http://127.0.0.1  ·  API: /api/docs  ·  健康检查: /health
+# 生产建议：DEBUG=false、ALLOW_REGISTRATION=false（见 .env.example）
+make build && make up                # 或 docker compose up -d（不会自动开 DEBUG）
+# 应用: http://127.0.0.1  ·  健康检查: /health
+# 开发叠加（挂载代码 + DEBUG=true）：make up-dev
+#   或 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# 勿把 docker-compose.dev.yml 当作自动合并的 override 用于生产
 ```
 
 生成密钥：
@@ -202,6 +206,39 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ## 评测
 
+### 检索召回评测（`backend/evaluation/`）
+
+对 RAG **检索层**的可复现量化评测体系：统一指标口径（Recall@k / MRR@k / nDCG@k）、
+公开数据集（C-MSMARCO / CMedQA / FinanceQA）、6 种检索方法——BM25 基线、纯向量、
+**自研 pgvector hybrid 生产路径**（向量 + 全文 + RRF，真实 PG 实例）、hybrid-rerank、
+以及 embedding 模型横评。与 `app/` 完全隔离：不进 wheel、不进 pytest 收集、不进覆盖率统计。
+
+```bash
+cd backend
+python -m evaluation.run --self-test   # 冒烟：合成数据，无需数据集/网络/PG
+# 全量：需真实 PG+pgvector 实例与 HF 数据集在线下载
+HF_HUB_CACHE=<模型缓存> HF_DATASETS_CACHE=<数据缓存> \
+  python -m evaluation.run --dataset all --methods bm25,dense,hybrid,hybrid-rerank
+```
+
+**首轮实测结论与处置**（2026-09，每数据集 300 条抽样，完整数据见
+[retrieval-evaluation.md](docs/4-DEVELOPMENT/retrieval-evaluation.md)）：
+
+| 评测发现 | 实测数据 | 处置 |
+|----------|----------|------|
+| 中文全文未配置 zhparser → hybrid 顶部召回塌方且不可复现 | mmarco R@1 **0.035** vs bm25 0.655 | 降级 WARNING + `/health` 暴露 + zhparser 部署产物（`deploy/postgres/`） |
+| reranker（英文 MiniLM）全线负增益 | cmedqa R@10 0.097 < 不 rerank 的 0.323 | `reranker_enabled` 默认关闭 |
+| embedding 落后一代 | bge-small-zh R@10 **+12~25pt** | 迁移脚本就绪，待真实 query 验证后激活 |
+| SemanticChunker 连贯文档退化为单巨块 | 40 页书 → **1 个 46K 字块** | ✅ 已修复：无语义边界时尺寸受限切分（1 → 66 块） |
+| 纠错检索触发率 0% 且触发即有害 | 改写 -3.5pt + 空结果悬崖 | ✅ `corrective_retrieval_enabled` 默认关闭 + 悬崖修复 |
+| 单轮改写负收益 | R@10 -3.5pt，白费 1 次 LLM 调用 | ✅ 无会话历史跳过改写 |
+
+**CI 门禁**：PR 触碰检索代码自动跑评测，recall@10 较基线下降 >2pt 即失败
+（`.github/workflows/retrieval-eval.yml` + `evaluation/results/baseline.json`）。
+优化计划见 [rag-retrieval-optimization.md](docs/compose/spec/rag-retrieval-optimization.md)。
+
+### 轻量冒烟（`backend/evals/`）
+
 ```bash
 cd backend
 python -m evals.run_eval                 # 校验 dataset.jsonl 结构
@@ -209,7 +246,7 @@ python -m evals.run_eval --lexical       # 无 LLM 的关键词基线
 python -m evals.run_eval --live --token $JWT --doc-id <id>  # 调用真实 /api/chat/ask
 ```
 
-数据集：`backend/evals/dataset.jsonl`。
+数据集：`backend/evals/dataset.jsonl`（小规模冒烟，无需 PG/网络）。
 
 ---
 
@@ -222,6 +259,7 @@ Study-copilot/
 ├── classroom/        # OpenMAIC 课堂引擎（vendored，非自研，见下）
 ├── docs/             # 0–6 编号文档 + assets + archive/plans（历史方案稿）
 ├── scripts/          # 冒烟与辅助脚本
+├── deploy/           # 自定义 PostgreSQL 镜像（pgvector + zhparser）
 └── docker-compose.yml
 ```
 
@@ -230,7 +268,7 @@ Study-copilot/
 ## 开发与测试
 
 ```bash
-# 后端：约 55 个测试文件 / 634 个测试函数，覆盖率门禁 ≥65%
+# 后端：66 个测试文件 / 719 个用例（含评测脚手架单测），覆盖率门禁 ≥65%
 cd backend && pytest tests/ -v
 
 # 前端：约 298 用例（含 bot 引擎）

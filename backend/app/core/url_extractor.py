@@ -1,42 +1,14 @@
 import asyncio
-import ipaddress
 import json
 import logging
-import socket
 from datetime import UTC, datetime
-from urllib.parse import urlparse
 
 import trafilatura
 
+from app.core.ssrf import validate_url as _validate_url
 from app.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
-
-_ALLOWED_SCHEMES = {"http", "https"}
-_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]", "::1"}
-_TUN_FAKE_IP_NET = ipaddress.ip_network("198.18.0.0/15")
-
-
-def _validate_url(url: str) -> None:
-    """Validate URL against SSRF and local file access."""
-    parsed = urlparse(url)
-    if not parsed.scheme or parsed.scheme.lower() not in _ALLOWED_SCHEMES:
-        raise ValidationError(f"不支持的 URL 协议: '{parsed.scheme}'，仅支持 http/https")
-
-    host = parsed.hostname or ""
-    if not host or host.lower() in _BLOCKED_HOSTS:
-        raise ValidationError("不允许访问内部或本地网络地址")
-
-    try:
-        resolved = socket.getaddrinfo(host, None)
-        for _, _, _, _, addr in resolved:
-            ip = ipaddress.ip_address(addr[0])
-            if ip in _TUN_FAKE_IP_NET:
-                continue  # 兼容 VPN / TUN 模式的 Fake-IP 地址池
-            if ip.is_private or ip.is_loopback or ip.is_link_local:
-                raise ValidationError("不允许访问内部或私有网络地址")
-    except socket.gaierror:
-        pass
 
 
 async def extract_from_url(url: str, timeout: int = 15) -> dict:

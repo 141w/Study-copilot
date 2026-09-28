@@ -80,11 +80,11 @@ async def sync_classroom_providers(db: AsyncSession, user: User | None = None) -
 
         # 1. 教学大模型配置
         if cls_cfg.get("use_custom_llm"):
+            # BYOK：不回落服务器 OPENAI_API_KEY / dummy-key
             llm_key = (
                 cls_cfg.get("classroom_llm_api_key")
                 or secret_cfg.get("api_key")
-                or settings.openai_api_key
-                or "dummy-key"
+                or ""
             )
             llm_base_url = (
                 cls_cfg.get("classroom_llm_base_url")
@@ -99,7 +99,8 @@ async def sync_classroom_providers(db: AsyncSession, user: User | None = None) -
                 or "step-3.7-flash"
             )
         else:
-            llm_key = secret_cfg.get("api_key") or settings.openai_api_key or "dummy-key"
+            # BYOK：不回落服务器 OPENAI_API_KEY / dummy-key
+            llm_key = secret_cfg.get("api_key") or ""
             llm_base_url = (
                 secret_cfg.get("base_url")
                 or settings.openai_base_url

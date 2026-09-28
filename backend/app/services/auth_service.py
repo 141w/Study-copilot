@@ -8,6 +8,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.password_policy import validate_password
 from app.db import User
 from app.exceptions import (
     AuthenticationError,
@@ -32,6 +33,7 @@ async def register_user(
     password: str,
 ) -> User:
     """Register a new user. Raises ConflictError if username or email exists."""
+    validate_password(password)
     result = await db.execute(select(User).where(User.username == username))
     if result.scalar_one_or_none():
         raise ConflictError("用户名已存在")
@@ -176,8 +178,7 @@ async def change_password(
     if not verify_password(old_password, user.password_hash):
         raise AuthenticationError("原密码不正确")
 
-    if len(new_password) < 6:
-        raise ValidationError("新密码至少需要 6 位")
+    validate_password(new_password)
 
     user.password_hash = get_password_hash(new_password)
     await db.commit()

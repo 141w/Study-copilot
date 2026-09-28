@@ -24,7 +24,7 @@ export const useCourseStore = defineStore('course', () => {
     loading.value = true
     try {
       const response = await api.get<Course[]>('/courses')
-      courses.value = response.data
+      courses.value = Array.isArray(response.data) ? response.data : []
       lastFetched.value = Date.now()
     } catch (error) {
       console.error('Error fetching courses:', error)

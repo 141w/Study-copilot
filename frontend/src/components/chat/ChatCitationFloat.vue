@@ -3,21 +3,32 @@
     <div
       v-if="visible && source"
       ref="floatRef"
-      class="citation-float"
+      class="chat-citation-float"
       data-test="citation-float"
       role="tooltip"
       :style="floatStyle"
       @mouseenter="emit('enter')"
       @mouseleave="emit('leave')"
     >
-      <div class="citation-float__meta">
-        <span class="citation-float__index" data-test="citation-float-index">[{{ source.index }}]</span>
-        <span class="citation-float__name" :title="displayName">{{ displayName }}</span>
-        <span v-if="pageLabel" class="citation-float__page" data-test="citation-float-page">{{ pageLabel }}</span>
+      <!-- 顶部元信息 (复刻 WeKnora chat-citation-float__title) -->
+      <div class="chat-citation-float__header flex items-center justify-between gap-2 pb-2 mb-2 border-b border-[var(--border-subtle,rgba(0,0,0,0.06))]">
+        <div class="flex items-center gap-1.5 min-w-0 flex-1">
+          <span class="chat-citation-float__index shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-[var(--color-primary-light,rgba(16,185,129,0.1))] text-[var(--color-primary,#10b981)]">
+            [{{ source.index }}]
+          </span>
+          <span class="chat-citation-float__title font-semibold text-xs text-[var(--text-primary)] truncate" :title="displayName">
+            {{ displayName }}
+          </span>
+        </div>
+        <span v-if="pageLabel" class="chat-citation-float__page text-[10px] px-1.5 py-0.5 rounded font-mono text-[var(--text-muted)] bg-[var(--bg-secondary)] shrink-0" data-test="citation-float-page">
+          {{ pageLabel }}
+        </span>
       </div>
-      <p class="citation-float__text" data-test="citation-float-text">
+
+      <!-- 切片正文 (复刻 WeKnora chat-citation-float__body，最大高度 200px 优雅滚动) -->
+      <div class="chat-citation-float__body max-h-[190px] overflow-y-auto text-[12px] leading-relaxed text-[var(--text-secondary)] pr-1 scrollbar-thin select-text" data-test="citation-float-text">
         {{ source.text || '无正文摘要' }}
-      </p>
+      </div>
     </div>
   </Teleport>
 </template>
@@ -76,7 +87,6 @@ function updatePosition(): void {
 
 const floatStyle = computed(() => {
   if (!pos.value) {
-    // 尚未测量完成时先放到锚点下方，避免闪到 (0,0)
     if (!props.anchor) return { visibility: 'hidden' as const }
     return {
       left: `${props.anchor.x}px`,
@@ -100,7 +110,6 @@ watch(
     }
     await nextTick()
     updatePosition()
-    // 布局完成后再夹紧一次（首次测量可能拿不到真实高度）
     await nextTick()
     updatePosition()
   },
@@ -110,84 +119,44 @@ watch(
 defineExpose({ updatePosition, floatRef })
 </script>
 
-<!--
-  样式说明：与来源卡同语言——无边框、同色系卡片，Teleport 到 body 后
-  不受消息容器 overflow 裁剪。令牌取自 variables.css。
--->
 <style scoped>
-.citation-float {
+/* 参照 WeKnora chat-citations.less 浮层规范 */
+.chat-citation-float {
   position: fixed;
-  z-index: 4000;
+  z-index: 9999;
   width: 320px;
-  max-width: calc(100vw - 16px);
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 0.625rem 0.75rem;
-  border-radius: var(--radius-xl);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-default);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--text-primary) 12%, transparent);
+  max-width: calc(100vw - 24px);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-default, #e5e7eb);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
   pointer-events: auto;
-}
-.dark .citation-float {
-  background: #111113;
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  animation: floatFadeIn 0.15s ease-out;
 }
 
-.citation-float__meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  margin-bottom: 0.375rem;
+.dark .chat-citation-float {
+  background: #18181b;
+  border-color: #27272a;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
 }
-.citation-float__index {
-  flex-shrink: 0;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 600;
+
+@keyframes floatFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
-.citation-float__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary);
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 3px;
 }
-.citation-float__page {
-  flex-shrink: 0;
-  padding: 2px 6px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xs);
-  background: var(--surface-card);
-  color: var(--text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  line-height: 1;
-}
-.citation-float__text {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.65;
-  color: var(--text-secondary);
-  overflow-wrap: break-word;
-  white-space: pre-wrap;
-}
-.dark .citation-float__text {
-  color: #d4d4d8;
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--border-default, #e5e7eb);
+  border-radius: 999px;
 }
 </style>

@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.rate_limit import IPRateLimiter
+from app.config import settings
+from app.core import password_policy, turnstile
+from app.core.rate_limit import IPRateLimiter, resolve_client_ip
 from app.db import User, get_db
 from app.services import auth_service
 
@@ -26,7 +28,9 @@ def _enforce_auth_rate_limit(request: Request) -> None:
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=8, max_length=128)
+    # Turnstile token；服务端配置了 SECRET 时必填
+    turnstile_token: str | None = None
 
 
 class Token(BaseModel):
@@ -51,7 +55,7 @@ class ProfileUpdate(BaseModel):
 
 class PasswordChange(BaseModel):
     old_password: str
-    new_password: str
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 # ── Dependency ─────────────────────────────────────────────────────────────
@@ -78,11 +82,26 @@ async def get_optional_user(
 # ── Endpoints ──────────────────────────────────────────────────────────────
 
 
+@router.get("/register-meta")
+async def register_meta() -> dict:
+    """注册页公开元数据（无需登录）：开关、Turnstile site key、密码策略。"""
+    return {
+        "allow_registration": settings.allow_registration,
+        "turnstile_site_key": turnstile.site_key(),
+        "password": password_policy.POLICY,
+    }
+
+
 @router.post("/register", response_model=UserResponse)
 async def register(
     request: Request, user_data: UserCreate, db: AsyncSession = Depends(get_db)
 ):
     _enforce_auth_rate_limit(request)
+    if not settings.allow_registration:
+        raise HTTPException(status_code=403, detail="当前未开放注册，请联系管理员")
+    await turnstile.verify_turnstile_token(
+        user_data.turnstile_token, remote_ip=resolve_client_ip(request)
+    )
     new_user = await auth_service.register_user(
         db, user_data.username, user_data.email, user_data.password
     )

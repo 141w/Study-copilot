@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.config import settings
 from app.core.rag_engine import RAGEngine, extract_source_indices
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -401,6 +402,60 @@ class TestRAGEngineAsync:
 
     @pytest.mark.asyncio
     @patch("app.core.rag_engine.LLM")
+    async def test_rewrite_query_single_turn_skips_llm(self, MockLLM, engine):
+        """单轮（无历史）query 本就是独立问题：不调 LLM 直接返回。
+
+        2026-09-19 评测实测：无历史改写对单轮 query 净负收益（R@10 -3.5pt），
+        且每次改写浪费一次 LLM 调用。
+        """
+        mock_llm = AsyncMock()
+        mock_llm.chat.side_effect = AssertionError("单轮改写不应调用 LLM")
+        MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
+
+        result = await engine._rewrite_query("什么是特殊教育需要", [])
+
+        assert result == "什么是特殊教育需要"
+        MockLLM.from_config.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_corrective_disabled_by_config(self, engine, monkeypatch):
+        """corrective_retrieval_enabled=False（默认）时跳过评分与重试。
+
+        评测实测：grader 触发率 0%，但每次查询固定多花 2 次 LLM 调用。
+        """
+        monkeypatch.setattr(settings, "corrective_retrieval_enabled", False)
+        first = [{"chunk": {"text": "first"}, "relevance": 0.9}]
+        engine.retrieve = AsyncMock(return_value=first)
+
+        with patch("app.core.rag_engine.retrieval_grader.grade", new_callable=AsyncMock) as mock_grade:
+            out, _events = await engine._corrective_retrieve(["d"], "q")
+
+        assert out == first
+        mock_grade.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_corrective_poor_twice_returns_first_not_empty(self, engine, monkeypatch):
+        """两次评分都差时返回首次检索结果（历史上的空结果悬崖已修复）。"""
+        from app.core.retrieval_grader import RetrievalQuality
+
+        monkeypatch.setattr(settings, "corrective_retrieval_enabled", True)
+        first = [{"chunk": {"text": "first"}, "relevance": 0.5}]
+        retry = [{"chunk": {"text": "retry"}, "relevance": 0.4}]
+        engine.retrieve = AsyncMock(side_effect=[first, retry])
+        bad = RetrievalQuality(quality="poor", reason="bad", score=0.1)
+
+        with patch(
+            "app.core.rag_engine.retrieval_grader.grade",
+            new_callable=AsyncMock,
+            return_value=bad,
+        ):
+            out, _events = await engine._corrective_retrieve(["d"], "q")
+
+        assert out == first  # 而非历史上的空列表
+
+    @pytest.mark.asyncio
+    @patch("app.core.rag_engine.LLM")
     async def test_rewrite_query_truncates_history(self, MockLLM, engine):
         """History should be truncated to last 10 messages."""
         mock_llm = AsyncMock()
@@ -593,13 +648,25 @@ class TestRAGEngineAsync:
     def test_pg_vector_store_init(self, engine):
         assert engine._pg_vector_store is None
 
-    def test_ensure_reranker_failure(self, engine):
+    def test_ensure_reranker_failure(self, engine, monkeypatch):
         """When CrossEncoder can't be imported, reranker should be None."""
+        monkeypatch.setattr(settings, "reranker_enabled", True)
         engine._reranker_loaded = False
         with patch.dict("sys.modules", {"sentence_transformers": None}):
             reranker = engine._ensure_reranker()
             assert reranker is None
             assert engine._reranker_loaded is True
+
+    def test_ensure_reranker_disabled_by_config(self, engine, monkeypatch):
+        """reranker_enabled=False（默认）时不加载模型。
+
+        评测实测英文 ms-marco MiniLM 对中文/QA 式查询全线负增益，默认关闭止血。
+        """
+        monkeypatch.setattr(settings, "reranker_enabled", False)
+        engine._reranker_loaded = False
+        reranker = engine._ensure_reranker()
+        assert reranker is None
+        assert engine._reranker_loaded is True
 
     def test_ensure_reranker_caching(self, engine):
         """_ensure_reranker should not re-import on second call."""

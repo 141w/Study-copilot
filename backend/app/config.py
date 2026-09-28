@@ -13,6 +13,16 @@ class Settings(BaseSettings):
     embedding_model: str = "shibing624/text2vec-base-chinese"
     embedding_dimension: int = 768
     top_k: int = 5
+    # 纠错检索（RetrievalGrader 评分 + 改写重试）开关。评测实测
+    # （2026-09-19）：mmarco 100 条触发率 0%（形同虚设）；且触发即有害
+    # （改写 -3.5pt、两次都差返回空结果的悬崖）。默认关闭止血；
+    # grader 阈值重校后可经评测 A/B 再开。
+    corrective_retrieval_enabled: bool = False
+    # Reranker（CrossEncoder）开关。评测实测（2026-09-19）：英文 ms-marco
+    # MiniLM 对中文语料与 QA 式长查询全线负增益（cmedqa hybrid-rerank R@10
+    # 0.097 < hybrid 0.323），默认关闭止血；待接入中文 reranker 并经评测
+    # A/B 验证后再开。详见 docs/compose/spec/rag-retrieval-optimization.md。
+    reranker_enabled: bool = False
     # Deprecated (kept for .env backward compatibility; vector store is DB-backed):
     vectorstore_dir: str = "./vectorstore"
 
@@ -69,6 +79,16 @@ class Settings(BaseSettings):
 
     # 仅当反向代理会覆写 X-Forwarded-For 时再打开；默认 False，防止客户端伪造绕过限流
     trust_proxy_headers: bool = False
+
+    # 开放自助注册。默认 True 保持「注册即用」；生产若要关闭注册，
+    # 在 .env 设 ALLOW_REGISTRATION=false。用户模型走 BYOK，注册本身
+    # 不再消耗服务器 LLM Key，开放注册的成本面已与 Key 解耦。
+    allow_registration: bool = True
+
+    # Cloudflare Turnstile 人机验证（可选，免费）。配置 SECRET 后注册强制核销；
+    # SITE_KEY 下发给前端渲染组件。两者都空 = 跳过验证（本地/内网）。
+    turnstile_site_key: str = ""
+    turnstile_secret_key: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

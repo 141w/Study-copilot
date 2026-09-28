@@ -11,8 +11,8 @@ Full reindex changes vector inputs — run retrieval eval before/after and compa
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
-import uuid
 
 from sqlalchemy import select
 
@@ -20,33 +20,50 @@ from app.db import AsyncSessionLocal, Document, User
 from app.services import document_service
 
 
-async def main() -> int:
+async def _reindex_doc(user_id: str, doc_id: str, filename: str) -> tuple[bool, str]:
+    """One document per session to avoid MissingGreenlet on shared session."""
     async with AsyncSessionLocal() as db:
-        users = (await db.execute(select(User))).scalars().all()
-        ok = fail = 0
-        for user in users:
+        try:
+            user = await db.get(User, user_id)
+            if not user:
+                return False, f"user {user_id} gone"
+            count, method = await document_service._do_process_document(db, user, doc_id)
+            await db.commit()
+            return True, f"{filename} -> {count} chunks via {method}"
+        except Exception as e:
+            await db.rollback()
+            return False, f"{filename}: {e}"
+
+
+async def main() -> int:
+    logging.basicConfig(level=logging.WARNING)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    async with AsyncSessionLocal() as db:
+        users = (await db.execute(select(User.id, User.username))).all()
+        pairs: list[tuple[str, str, str]] = []
+        for uid, uname in users:
             docs = (
                 await db.execute(
-                    select(Document).where(
-                        Document.user_id == user.id,
+                    select(Document.id, Document.filename).where(
+                        Document.user_id == uid,
                         Document.deleted_at.is_(None),
                     )
                 )
-            ).scalars().all()
-            for doc in docs:
-                try:
-                    count, method = await document_service._do_process_document(
-                        db, user, doc.id
-                    )
-                    await db.commit()
-                    ok += 1
-                    print(f"OK  {doc.filename} -> {count} chunks via {method}")
-                except Exception as e:
-                    await db.rollback()
-                    fail += 1
-                    print(f"FAIL {doc.filename}: {e}", file=sys.stderr)
-        print(f"reindex done ok={ok} fail={fail}")
-        return 0 if fail == 0 else 1
+            ).all()
+            for did, fname in docs:
+                pairs.append((uid, did, fname or did))
+
+    ok = fail = 0
+    for uid, did, fname in pairs:
+        success, msg = await _reindex_doc(uid, did, fname)
+        if success:
+            ok += 1
+            print(f"OK  {msg}")
+        else:
+            fail += 1
+            print(f"FAIL {msg}", file=sys.stderr)
+    print(f"reindex done ok={ok} fail={fail} total={len(pairs)}")
+    return 0 if fail == 0 else 1
 
 
 if __name__ == "__main__":

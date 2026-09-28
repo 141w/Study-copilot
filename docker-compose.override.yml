@@ -1,8 +1,0 @@
-services:
-  app:
-    volumes:
-      - ./backend/app:/app/app:ro
-      - ./backend/alembic:/app/alembic:ro
-    environment:
-      - DEBUG=true
-      - HF_PREFETCH=1

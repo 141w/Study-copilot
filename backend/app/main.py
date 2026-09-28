@@ -40,15 +40,40 @@ async def lifespan(app: FastAPI):
 
     # 生产模式拒绝弱/缺失关键配置：与 ENCRYPTION_KEY、JWT 同级的启动期 fail-fast。
     if not settings.debug:
-        weak_secrets = {"", "change-this-in-production", "secret", "changeme"}
-        if settings.jwt_secret_key.strip().lower() in weak_secrets:
+        jwt_key = settings.jwt_secret_key.strip().lower()
+        weak_secrets = {
+            "",
+            "change-this-in-production",
+            "changethisinproduction",
+            "secret",
+            "changeme",
+            "please-replace",
+            "please-replace-with-a-strong-random-secret-key",
+            "please-replace-with-a-strong-random-secret-key-at-least-32-chars",
+            "your-secret-key",
+            "jwt-secret",
+            "jwt_secret",
+            "dev",
+            "development",
+            "test",
+            "testing",
+        }
+        # 前缀/子串命中常见占位符（如 please-replace-...、change-this-...）
+        weak_substrings = ("please-replace", "change-this", "changeme", "your-secret")
+        if (
+            jwt_key in weak_secrets
+            or len(jwt_key) < 32
+            or any(s in jwt_key for s in weak_substrings)
+        ):
             raise RuntimeError(
-                "JWT_SECRET_KEY 未配置或为已知默认值：生产环境(debug=false)拒绝启动。"
-                "请在 .env 中设置强随机密钥（如 openssl rand -hex 32 生成）。"
+                "JWT_SECRET_KEY 未配置或为已知弱/占位默认值：生产环境(debug=false)拒绝启动。"
+                "请在 .env 中设置强随机密钥（如 openssl rand -hex 32 生成，至少 32 字符）。"
             )
+        # 用户流量 BYOK：不再强制服务器 OPENAI_API_KEY。未配置时仅告警。
         if not settings.openai_api_key.strip():
-            raise RuntimeError(
-                "OPENAI_API_KEY 未配置：生产环境拒绝启动。请在 .env 中设置有效的 LLM API Key。"
+            logger.warning(
+                "OPENAI_API_KEY 未配置：用户须在「模型设置」自备 Key（BYOK）；"
+                "服务器 Key 不再作为用户请求兜底。"
             )
 
     # Run Alembic migrations on startup
@@ -92,7 +117,15 @@ async def lifespan(app: FastAPI):
     shutdown_tracing()
 
 
-app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    lifespan=lifespan,
+    # 生产关闭 Swagger/ReDoc，避免未鉴权暴露 API 面
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
+)
 
 setup_exception_handlers(app)
 
@@ -160,6 +193,14 @@ async def health_check():
 
         async with AsyncSessionLocal() as db:
             await db.execute(text("SELECT 1"))
+            # 检索健康信号：中文全文检索依赖 zhparser 的 'zh' 配置；
+            # 'simple' 意味着中文 FTS 近乎失效、hybrid 顶部召回塌方（见评测结论）
+            try:
+                res = await db.execute(text("SELECT 1 FROM pg_ts_config WHERE cfgname = 'zh'"))
+                checks["fts_config"] = "zh" if res.scalar() else "simple"
+            except Exception as fts_exc:  # noqa: BLE001 - FTS 探测失败不影响主健康态
+                logger.debug("Health check FTS probe skipped: %s", fts_exc)
+                checks["fts_config"] = "unknown"
         checks["database"] = "ok"
     except Exception as e:  # noqa: BLE001 - health must never raise
         logger.warning("Health check DB failure: %s", e)

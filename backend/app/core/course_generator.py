@@ -22,7 +22,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.llm import LLM
 from app.core.quiz_generator import quiz_generator
 from app.db import Document, DocumentChunk, User
@@ -285,8 +284,9 @@ async def generate_course(
     # 5. 若配置了专属生图模型或开启了生图，异步为课程生成配图封面与核心概念插画
     cls_cfg = (llm_config or {}).get("classroom_config") or {}
     should_gen_image = enable_image_generation or cls_cfg.get("image_enabled", False)
+    # BYOK：生图也不回落服务器 OPENAI_API_KEY
     effective_img_key = (
-        cls_cfg.get("image_api_key") or (llm_config or {}).get("api_key") or settings.openai_api_key
+        cls_cfg.get("image_api_key") or (llm_config or {}).get("api_key") or ""
     )
 
     if should_gen_image and effective_img_key:

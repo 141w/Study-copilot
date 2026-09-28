@@ -289,7 +289,7 @@ class PgVectorStore:
             FROM document_chunks
             WHERE document_id = ANY(:doc_ids)
               AND embedding IS NOT NULL
-              AND (is_parent IS NULL OR is_parent = false OR is_parent = 0)
+              AND (is_parent IS NOT TRUE)
             ORDER BY embedding <=> CAST(:q_emb AS vector)
             LIMIT :overfetch
         ),
@@ -301,7 +301,7 @@ class PgVectorStore:
             FROM document_chunks,
                  plainto_tsquery('{fts_cfg}', :query) AS query
             WHERE document_id = ANY(:doc_ids)
-              AND (is_parent IS NULL OR is_parent = false OR is_parent = 0)
+              AND (is_parent IS NOT TRUE)
             ORDER BY ts_rank(to_tsvector('{fts_cfg}', content), query) DESC
             LIMIT :overfetch
         ),

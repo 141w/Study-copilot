@@ -247,6 +247,11 @@ async def _do_process_document(
         if progress_callback:
             await progress_callback(0.7, f"分块完成（{len(chunks)} 块），正在计算向量并构建索引...")
         logger.info("Building vector store...")
+        # 替换语义：先清旧切片再写入。reindex / 重复处理只 INSERT 会把切片
+        # 叠成多份（已知事故：重建索引后切片重复五倍，检索被脏数据淹没）。
+        from sqlalchemy import delete as sa_delete
+
+        await db.execute(sa_delete(DocumentChunk).where(DocumentChunk.document_id == doc_id))
         store = PgVectorStore(user_id=user.id)
         await store.add_chunks(chunks, doc_id, db=db)
 

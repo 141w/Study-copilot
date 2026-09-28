@@ -26,6 +26,10 @@ async def test_web_search_connectivity(config: dict[str, Any]) -> dict[str, Any]
     provider = (config.get("web_search_provider") or "bocha").strip().lower()
     api_key = (config.get("web_search_api_key") or "").strip()
     raw_base_url = config.get("web_search_base_url")
+    if raw_base_url and str(raw_base_url).strip():
+        from app.core.ssrf import validate_url
+
+        validate_url(str(raw_base_url).strip())
 
     # 1. 检查 API Key
     if provider in ("bocha", "tavily", "baidu") and not api_key:

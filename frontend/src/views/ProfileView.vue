@@ -396,7 +396,9 @@
                   v-model="passwordForm.newPassword"
                   type="password"
                   show-password
-                  placeholder="请输入新密码（至少 6 位）"
+                  placeholder="至少 8 位，含字母和数字"
+                  minlength="8"
+                  maxlength="128"
                   :disabled="passwordSaving"
                   required
                 />
@@ -561,6 +563,7 @@ import MemoryManager from '@/components/profile/MemoryManager.vue'
 import TokenUsageDashboard from '@/components/profile/TokenUsageDashboard.vue'
 import LearningActivityGraph from '@/components/profile/LearningActivityGraph.vue'
 import { useUserPrefs } from '@/composables/useUserPrefs'
+import { validatePassword } from '@/utils/passwordPolicy'
 import {
   Document, Reading, EditPen, ChatDotSquare, TrendCharts,
   Sunny, Moon, Edit, Setting
@@ -798,8 +801,9 @@ async function handleChangePassword(): Promise<void> {
   passwordError.value = ''
   passwordChanged.value = false
 
-  if (passwordForm.value.newPassword.length < 6) {
-    passwordError.value = '新密码至少需要 6 位'
+  const pwdErr = validatePassword(passwordForm.value.newPassword)
+  if (pwdErr) {
+    passwordError.value = pwdErr
     return
   }
   if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {

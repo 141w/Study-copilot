@@ -18,6 +18,7 @@
         <!-- Content area -->
         <span class="source-card__content">
           <span class="source-card__index">{{ source.index }}</span>
+          <el-icon class="w-3.5 h-3.5 text-[var(--color-primary)] opacity-60 shrink-0"><Document /></el-icon>
           <span
             v-if="source.source"
             class="source-card__name"
@@ -257,13 +258,20 @@ defineExpose({ expand })
 .source-card {
   border-radius: var(--radius-xl);
   background: var(--bg-primary);
-  transition: background-color 0.2s ease;
+  border: 1px solid var(--border-default);
+  transition: all 0.2s ease;
 }
 .dark .source-card {
-  background: #000000;
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 .source-card:hover {
   background: color-mix(in srgb, var(--bg-primary) 97%, var(--text-primary));
+  border-color: var(--border-hover);
+}
+.dark .source-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 /* 触发按钮：剥掉 UA 原生皮肤，恢复成普通容器 */

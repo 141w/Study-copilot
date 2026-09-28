@@ -106,6 +106,16 @@ def build_bigrams(tokens: list[str]) -> list[str]:
     return bigrams
 
 
+# 高频无实义单字（虚词/泛动词/代词/方位词等）：单字匹配时剔除。
+# CJK 逐字分词下，「及/有/的/中」等常见字会造成跨主题虚假匹配
+# （已知事故：「超时机制」查询因「及」「有」重叠命中加涅学习记忆，score=2.0 蒙混过关）。
+# bigram 匹配本身抗假阳性（相邻两字组合语义具体），保持原权重。
+_HIGH_FREQ_CHARS = frozenset(
+    "的了及有中于会对其和与等为就都也很更最这那你不我他她它们个之并或而被把从"
+    "向以往来到去上下里外间时是在要以能可将很非常进行相关通过根据"
+)
+
+
 def compute_lexical_score(
     query_tokens: set[str],
     query_bigrams: set[str],
@@ -115,9 +125,19 @@ def compute_lexical_score(
     """Calculate lexical overlap score between query and a memory item.
 
     Bigram matches carry 3x weight of individual single-character tokens.
+    Single-character tokens that are high-frequency function words are excluded
+    from token matching to avoid cross-topic false positives.
     """
     bigram_matches = len(query_bigrams & item_bigrams)
-    token_matches = len(query_tokens & item_tokens)
+
+    def _content_chars(tokens: set[str]) -> set[str]:
+        return {
+            t
+            for t in tokens
+            if not (_HAN_RE.match(t) and t in _HIGH_FREQ_CHARS)
+        }
+
+    token_matches = len(_content_chars(query_tokens) & _content_chars(item_tokens))
     return float(bigram_matches * 3.0 + token_matches * 1.0)
 
 
@@ -227,13 +247,18 @@ class MemoryService:
             active_items = list(result.scalars().all())
 
             for item in active_items:
-                if item.kind == KIND_INTEREST:
-                    interest_items.append(item)
-                    continue
-
                 item_tokens = set(tokenize_lexical(item.content))
                 item_bigrams = set(build_bigrams(tokenize_lexical(item.content)))
                 score = compute_lexical_score(q_tokens, q_bigrams, item_tokens, item_bigrams)
+                if item.kind == KIND_INTEREST:
+                    # interest 的语义是「检索意图」：仅在与当前查询词法相关时注入。
+                    # 无过滤全量注入会把无关兴趣（如教育心理学兴趣）带进技术类问答的
+                    # 上下文，导致模型跑题（已知事故：问分布式系统答加涅学习理论）。
+                    # 阈值比 fact/task 宽松（领域级相关即可，不要求精确匹配）。
+                    if score >= 1.0:
+                        interest_items.append(item)
+                    continue
+
                 # Filter threshold: at least 1 bigram or 2 single tokens
                 if score >= 2.0 or (len(query) <= 4 and score >= 1.0):
                     situational_matches.append((score, item))

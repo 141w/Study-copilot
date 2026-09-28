@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from typing import Any
@@ -85,6 +86,43 @@ def _bind_trusted_tool_args(
     return args
 
 
+# Module-level close tags for XML tool-call parsing (built by concatenation
+# to keep this source file free of literal XML close-tag text).
+_XML_CLOSE_FN = chr(60) + chr(47) + "function" + chr(62)
+_XML_CLOSE_PARAM = chr(60) + chr(47) + "parameter" + chr(62)
+
+
+def _parse_xml_tool_calls(content: str) -> list[dict[str, Any]]:
+    """Parse XML-style tool calls embedded in model content.
+
+    Some models occasionally ignore the OpenAI tool_calls protocol and
+    emit tool invocations as XML text inside content. Without this
+    parser the raw XML leaks into the final answer.
+    """
+    calls: list[dict[str, Any]] = []
+    pattern = re.compile(r"<function=(\w+)>([\s\S]*?)" + _XML_CLOSE_FN)
+    param_pattern = re.compile(
+        r"<parameter=(\w+)>\s*([\s\S]*?)\s*" + _XML_CLOSE_PARAM, re.S
+    )
+    for m in pattern.finditer(content):
+        name = m.group(1)
+        body = m.group(2)
+        args: dict[str, Any] = {}
+        for pm in param_pattern.finditer(body):
+            key, val = pm.group(1), pm.group(2).strip()
+            try:
+                args[key] = json.loads(val)
+            except Exception:
+                args[key] = val
+        calls.append(
+            {
+                "id": f"xml_{len(calls)}",
+                "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)},
+            }
+        )
+    return calls
+
+
 def _shingle_set(text: str, n: int = 10) -> set[str]:
     norm = "".join((text or "").split())
     if len(norm) < n:
@@ -129,6 +167,8 @@ def _sources_from_tool_result(data: Any) -> list[dict[str, Any]]:
         sources.append(
             {
                 "index": i,
+                # 稳定切片 id：供前端引用浮层/全文展开回查原文（缺省时前端降级为摘录）
+                "chunk_id": chunk.get("id") or chunk.get("chunk_id") or (chunk.get("metadata") or {}).get("chunk_id") or "",
                 "document_id": chunk.get("document_id", ""),
                 "page": page,
                 "source": chunk.get("source", ""),
@@ -405,6 +445,21 @@ class AgentEngine:
             content = llm_res.get("content") or ""
             tool_calls = llm_res.get("tool_calls") or []
             finish_reason = llm_res.get("finish_reason") or "stop"
+
+            # XML tool-call compat: some models emit tool invocations as XML text
+            # inside content instead of the structured tool_calls field. Parse
+            # them and strip the raw XML so it never leaks into the answer.
+            if not tool_calls and "<function=" in content:
+                xml_calls = _parse_xml_tool_calls(content)
+                if xml_calls:
+                    logger.info(
+                        "[AgentEngine] Parsed %d XML tool call(s)", len(xml_calls)
+                    )
+                    tool_calls = xml_calls
+                    _fn_pattern = re.compile(
+                        r"<function=\w+>[\s\S]*?" + _XML_CLOSE_FN
+                    )
+                    content = _fn_pattern.sub("", content).strip()
 
             # 累计 provider 真实用量（优先于启发式 estimate）
             _u = llm_res.get("usage") or {}

@@ -245,6 +245,8 @@ def serialize_chunks(chunks: list[dict[str, Any]], max_chunks: int) -> list[dict
         out.append(
             {
                 "seq": i,
+                # 稳定切片 id：引用浮层/全文展开按 chunk_id 回查原文
+                "chunk_id": c.get("id") or c.get("chunk_id") or meta.get("chunk_id") or "",
                 "content": c.get("text", "") or "",
                 "page": c.get("page", meta.get("page", "")),
                 "context_header": meta.get("context_header") or c.get("context_header") or "",

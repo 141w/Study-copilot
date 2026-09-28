@@ -180,6 +180,66 @@ class PDFParser(BaseParser):
                 "error": str(e),
             }
 
+    @staticmethod
+    def _strip_repeating_headers_footers(page_texts: list[str]) -> list[str]:
+        """剔除跨页重复的页眉/页脚行。
+
+        页眉页脚的典型特征是：内容较短，且在绝大多数页面中重复出现
+        （页码数字的差异通过数字归一化消除后再比对）。判定规则：
+
+        - 行长度 8~60 字符（归一化后）
+        - 出现在 >=30% 的页面中（至少 2 页）
+
+        纯数字/短符号行不参与判定，避免误删表格中的短行。
+        仅对 >=3 页的文档生效，单页/双页文档直接返回原文。
+        """
+        import re as _re
+        from collections import Counter
+
+        page_count = len(page_texts)
+        if page_count < 3:
+            return page_texts
+
+        def _norm(line: str) -> str:
+            return _re.sub(r"\d+", "#", line.strip())
+
+        # 页眉/页脚只可能出现在页面文本的边缘（PyMuPDF 提取序的前 3 或后 3 行），
+        # 仅统计边缘行可避免误删正文中的模式化编号行（如「第 N 章」）。
+        _EDGE = 3
+
+        split_pages: list[list[str]] = []
+        counter: Counter = Counter()
+        for text in page_texts:
+            lines = [ln for ln in text.split("\n") if ln.strip()]
+            split_pages.append(lines)
+            for pos, ln in enumerate(lines):
+                if not (pos < _EDGE or pos >= len(lines) - _EDGE):
+                    continue
+                n = _norm(ln)
+                if 4 <= len(n) <= 60 and _re.search(
+                    r"[一-鿿A-Za-z]", ln
+                ):
+                    counter[n] += 1
+
+        threshold = max(2, int(page_count * 0.3))
+        junk = {n for n, c in counter.items() if c >= threshold}
+        if not junk:
+            return page_texts
+
+        removed = sum(
+            1 for lines in split_pages for ln in lines if _norm(ln) in junk
+        )
+        cleaned = [
+            "\n".join(ln for ln in lines if _norm(ln) not in junk)
+            or "\n".join(lines)  # 全行被剔除时保留原文，避免产生空页
+            for lines in split_pages
+        ]
+        logger.info(
+            f"[PDF] Stripped header/footer: {removed} lines removed, "
+            f"{len(junk)} patterns detected"
+        )
+        return cleaned
+
     def _convert_fallback(self, file_path: str) -> dict[str, Any]:
         """回退方案：使用 PyMuPDF"""
         try:
@@ -195,6 +255,9 @@ class PDFParser(BaseParser):
                     text_content.append(text)
 
             doc.close()
+
+            # 剔除跨页重复的页眉/页脚（页码行会被归一化后识别）
+            text_content = self._strip_repeating_headers_footers(text_content)
 
             markdown_text = "\n\n".join(text_content)
 
@@ -360,6 +423,12 @@ class PDFParser(BaseParser):
 
             pages = self._split_markdown_pages(markdown_text, page_count)
 
+            # 覆盖 Docling 路径：对分页结果统一做页眉/页脚过滤
+            if len(pages) >= 3:
+                page_texts = [p.get("text", "") for p in pages]
+                page_texts = self._strip_repeating_headers_footers(page_texts)
+                pages = [{**p, "text": t} for p, t in zip(pages, page_texts)]
+
             logger.info(f"PDF parsed: {len(pages)} pages, {len(markdown_text)} chars")
 
             return {"metadata": result["metadata"], "pages": pages}
@@ -400,6 +469,13 @@ class PDFParser(BaseParser):
                         real_pages.append({"page": page_num, "text": text, "images": []})
                 doc.close()
                 if real_pages:
+                    # 剔除跨页重复的页眉/页脚（逐页提取同样会带入）
+                    texts = self._strip_repeating_headers_footers(
+                        [p["text"] for p in real_pages]
+                    )
+                    real_pages = [
+                        {**p, "text": t} for p, t in zip(real_pages, texts)
+                    ]
                     logger.info(f"PyMuPDF repaginated: {len(real_pages)} pages")
                     return real_pages
             except Exception as e:

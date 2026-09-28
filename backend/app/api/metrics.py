@@ -13,8 +13,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import get_current_user
 from app.core import metrics_counters
-from app.db import AsyncTask, get_db
+from app.db import AsyncTask, User, get_db
 
 router = APIRouter()
 
@@ -22,8 +23,14 @@ _STARTED_AT = datetime.now(UTC)
 
 
 @router.get("/metrics")
-async def get_metrics(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
-    """Operational snapshot: app info + task breakdown by status."""
+async def get_metrics(
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Operational snapshot: app info + task breakdown by status.
+
+    需登录（与其它业务 API 一致）；未认证返回 401。
+    """
     now = datetime.now(UTC)
     uptime_sec = round((now - _STARTED_AT).total_seconds(), 1)
 

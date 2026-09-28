@@ -1,24 +1,39 @@
 <template>
   <!-- 多选标签模式（Chat 风格） -->
-  <div v-if="mode === 'multiple'" class="flex items-center gap-3 flex-wrap">
-    <span class="text-sm text-[var(--text-muted)]">{{ label }}:</span>
-    <label
+  <div v-if="mode === 'multiple'" class="flex items-center gap-2.5 flex-wrap">
+    <span class="text-sm text-[var(--text-muted)] font-medium">{{ label }}:</span>
+    <button
       v-for="doc in documents"
       :key="doc.id"
-      class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors"
+      type="button"
+      role="checkbox"
+      :aria-checked="selectedIds().includes(doc.id)"
+      class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-all duration-150 border select-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
       :class="selectedIds().includes(doc.id)
-        ? 'bg-[var(--color-primary)] text-[var(--text-inverse)]'
-        : 'bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'"
+        ? 'bg-[var(--color-primary)] text-[var(--text-inverse)] border-[var(--color-primary)] shadow-sm'
+        : 'bg-[var(--surface-card)] border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-hover)]'"
+      @click="toggleMultiple(doc.id)"
     >
-      <input
-        type="checkbox"
-        :value="doc.id"
-        :checked="selectedIds().includes(doc.id)"
-        class="hidden"
-        @change="toggleMultiple(doc.id)"
-      />
-      {{ doc.filename }}
-    </label>
+      <svg
+        v-if="selectedIds().includes(doc.id)"
+        class="w-3.5 h-3.5 shrink-0"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+      >
+        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+      </svg>
+      <svg
+        v-else
+        class="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <span class="truncate max-w-[200px]">{{ doc.filename }}</span>
+    </button>
     <span v-if="documents.length === 0" class="text-sm text-[var(--text-muted)]">{{ emptyText }}</span>
   </div>
 

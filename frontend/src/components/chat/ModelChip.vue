@@ -1,80 +1,460 @@
 <template>
-  <el-dropdown trigger="click" @command="onCommand" data-test="model-chip">
-    <button
-      type="button"
-      class="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border border-[var(--border-default)] bg-[var(--surface-card)] text-[11px] text-[var(--text-secondary)] hover:border-[var(--border-hover)] transition-colors"
-      title="切换模型"
+  <div class="model-display relative inline-block select-none" data-test="model-chip">
+    <!-- 胶囊触发按钮 (参照 WeKnora model-selector-trigger 规范) -->
+    <div
+      ref="triggerRef"
+      class="model-selector-trigger"
+      :class="{ 'is-active': dropdownVisible }"
+      title="切换当前对话模型"
+      @click.stop="toggleDropdown"
     >
-      <span class="max-w-[120px] truncate font-medium text-[var(--text-primary)]">{{ modelName }}</span>
-      <span class="tabular-nums text-[10px] text-[var(--text-muted)]">{{ windowHint }}</span>
-    </button>
-    <template #dropdown>
-      <el-dropdown-menu>
-        <el-dropdown-item command="config">模型配置…</el-dropdown-item>
-        <el-dropdown-item
-          v-for="m in models"
-          :key="m.id"
-          :command="'pick:' + m.id"
+      <span class="model-icon">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 01-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L4.2 15.3" />
+        </svg>
+      </span>
+      <span class="model-selector-name">{{ currentModelName }}</span>
+      <span v-if="currentContextLabel" class="model-selector-ctx">{{ currentContextLabel }}</span>
+      <svg
+        class="model-dropdown-arrow w-2.5 h-2.5 transition-transform duration-200"
+        :class="{ 'rotate-180': dropdownVisible }"
+        viewBox="0 0 12 12"
+        fill="currentColor"
+      >
+        <path d="M2.5 4.5L6 8L9.5 4.5H2.5Z" />
+      </svg>
+    </div>
+
+    <!-- 弹层菜单 (Teleport 到 body，精确跟随锚点，参照 WeKnora model-selector-dropdown 规范) -->
+    <Teleport to="body">
+      <div
+        v-if="dropdownVisible"
+        class="model-selector-overlay fixed inset-0 z-[9998] bg-transparent"
+        @click="closeDropdown"
+      >
+        <div
+          class="model-selector-dropdown fixed z-[9999]"
+          :style="dropdownStyle"
+          @click.stop
         >
-          {{ m.label }}
-        </el-dropdown-item>
-      </el-dropdown-menu>
-    </template>
-  </el-dropdown>
+          <div class="model-selector-header">
+            <span class="font-medium text-[var(--text-secondary)]">对话模型</span>
+            <button
+              type="button"
+              class="model-selector-add"
+              @click="goToConfig"
+            >
+              <span class="text-xs">配置模型</span>
+              <svg class="w-3 h-3 ml-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="model-selector-content max-h-64 overflow-y-auto py-1">
+            <div
+              v-for="item in computedModels"
+              :key="item.id"
+              class="model-option"
+              :class="{ 'is-selected': item.id === activeModelId }"
+              @click="selectModel(item.id)"
+            >
+              <div class="model-option-left">
+                <div class="model-option-icon">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+                  </svg>
+                </div>
+                <div class="model-option-name-wrap">
+                  <span class="model-option-name">{{ item.label }}</span>
+                  <span v-if="item.id !== item.label" class="model-option-raw-name">{{ item.id }}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span v-if="item.contextLabel" class="model-option-ctx">{{ item.contextLabel }}</span>
+                <span v-if="item.id === activeModelId" class="text-[var(--color-primary)] font-bold text-xs">✓</span>
+              </div>
+            </div>
+
+            <div v-if="computedModels.length === 0" class="px-3 py-3 text-center text-xs text-[var(--text-muted)]">
+              暂无可用模型，请先配置
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useChatStore } from '@/stores/chat'
+import { useConfigStore } from '@/stores/config'
+
+export interface ModelOptionItem {
+  id: string
+  label: string
+  contextWindow?: number
+  contextLabel?: string
+}
 
 const LS_KEY = 'study-copilot.chat-model'
 
 const props = withDefaults(
   defineProps<{
-    models?: { id: string; label: string; contextWindow?: number }[]
+    models?: ModelOptionItem[]
   }>(),
   { models: () => [] }
 )
 
 const emit = defineEmits<{ (e: 'select', id: string): void }>()
 const router = useRouter()
-const chatStore = useChatStore()
-const selectedId = ref('')
+const configStore = useConfigStore()
 
-const modelName = computed(() => {
-  const fromStore = chatStore.config?.modelName || ''
-  const hit = props.models.find(m => m.id === selectedId.value)
-  return hit?.label || fromStore || '默认模型'
-})
+const triggerRef = ref<HTMLElement | null>(null)
+const dropdownVisible = ref(false)
+const dropdownStyle = ref<Record<string, string>>({})
+const activeModelId = ref<string>('')
+const primaryConfig = ref<{ model_name?: string; context_window?: number } | null>(null)
 
-const windowHint = computed(() => {
-  const hit = props.models.find(m => m.id === selectedId.value)
-  const n = hit?.contextWindow
-  if (!n) return ''
-  return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
-})
-
-function onCommand(cmd: string | number | object): void {
-  const s = String(cmd)
-  if (s === 'config') {
-    router.push('/model-config')
-    return
+// 格式化上下文窗口数字（如 131072 -> 128k, 200000 -> 200k）
+function formatCtx(num?: number): string {
+  if (!num || num <= 0) return ''
+  if (num >= 1048576) {
+    return `${(num / 1048576).toFixed(1).replace(/\.0$/, '')}M`
   }
-  if (s.startsWith('pick:')) {
-    const id = s.slice(5)
-    selectedId.value = id
-    try {
-      localStorage.setItem(LS_KEY, id)
-    } catch { /* ignore */ }
-    emit('select', id)
+  if (num >= 1000) {
+    return `${Math.round(num / 1024)}K`
+  }
+  return String(num)
+}
+
+// 综合模型列表（外部 props + 主配置 + 常用已知规格注册表）
+const computedModels = computed<ModelOptionItem[]>(() => {
+  const result: ModelOptionItem[] = []
+  const seenIds = new Set<string>()
+
+  // 1. 如果有传入 props.models 且有内容
+  for (const m of props.models) {
+    if (m.id && !seenIds.has(m.id)) {
+      seenIds.add(m.id)
+      result.push({
+        id: m.id,
+        label: m.label || m.id,
+        contextWindow: m.contextWindow,
+        contextLabel: m.contextLabel || formatCtx(m.contextWindow),
+      })
+    }
+  }
+
+  // 2. 融入当前主配置模型
+  if (primaryConfig.value?.model_name) {
+    const pName = primaryConfig.value.model_name
+    if (!seenIds.has(pName)) {
+      seenIds.add(pName)
+      const ctx = primaryConfig.value.context_window || 131072
+      result.unshift({
+        id: pName,
+        label: `${pName} (当前主配置)`,
+        contextWindow: ctx,
+        contextLabel: formatCtx(ctx),
+      })
+    }
+  }
+
+  // 3. 常见预设补全（如果列表太少）
+  const presets: { id: string; label: string; ctx: number }[] = [
+    { id: 'deepseek-chat', label: 'DeepSeek-V3', ctx: 131072 },
+    { id: 'deepseek-reasoner', label: 'DeepSeek-R1 (深度思考)', ctx: 131072 },
+    { id: 'gpt-4o', label: 'GPT-4o', ctx: 128000 },
+    { id: 'qwen-plus', label: '通义千问 Qwen-Plus', ctx: 131072 },
+  ]
+  for (const p of presets) {
+    if (!seenIds.has(p.id)) {
+      seenIds.add(p.id)
+      result.push({
+        id: p.id,
+        label: p.label,
+        contextWindow: p.ctx,
+        contextLabel: formatCtx(p.ctx),
+      })
+    }
+  }
+
+  return result
+})
+
+const currentModelName = computed(() => {
+  const hit = computedModels.value.find(m => m.id === activeModelId.value)
+  if (hit) return hit.label.replace(/\s*\(当前主配置\)/, '')
+  return activeModelId.value || primaryConfig.value?.model_name || '默认模型'
+})
+
+const currentContextLabel = computed(() => {
+  const hit = computedModels.value.find(m => m.id === activeModelId.value)
+  return hit?.contextLabel || (hit?.contextWindow ? formatCtx(hit.contextWindow) : '')
+})
+
+function updateDropdownPos(): void {
+  if (!triggerRef.value) return
+  const rect = triggerRef.value.getBoundingClientRect()
+  const width = 240
+  // 向上或向下展开（如果在输入框内部底部，向上展开体验更好）
+  const spaceBelow = window.innerHeight - rect.bottom
+  const showAbove = spaceBelow < 280
+
+  dropdownStyle.value = {
+    minWidth: `${width}px`,
+    left: `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`,
+    top: showAbove ? 'auto' : `${rect.bottom + 6}px`,
+    bottom: showAbove ? `${window.innerHeight - rect.top + 6}px` : 'auto',
   }
 }
 
-onMounted(() => {
+function toggleDropdown(): void {
+  dropdownVisible.value = !dropdownVisible.value
+  if (dropdownVisible.value) {
+    nextTick(updateDropdownPos)
+  }
+}
+
+function closeDropdown(): void {
+  dropdownVisible.value = false
+}
+
+function selectModel(id: string): void {
+  activeModelId.value = id
+  try {
+    localStorage.setItem(LS_KEY, id)
+  } catch { /* ignore */ }
+  dropdownVisible.value = false
+  emit('select', id)
+}
+
+function goToConfig(): void {
+  dropdownVisible.value = false
+  router.push('/model-config')
+}
+
+onMounted(async () => {
   try {
     const saved = localStorage.getItem(LS_KEY)
-    if (saved) selectedId.value = saved
+    if (saved) activeModelId.value = saved
+  } catch { /* ignore */ }
+
+  // 异步加载服务端实际配置
+  try {
+    const cfg = await configStore.fetchLLMConfig()
+    if (cfg) {
+      primaryConfig.value = {
+        model_name: cfg.model_name,
+        context_window: (cfg as any).context_window,
+      }
+      if (!activeModelId.value) {
+        activeModelId.value = cfg.model_name || 'default'
+      }
+    }
   } catch { /* ignore */ }
 })
 </script>
+
+<style scoped>
+/* 参照 WeKnora model-selector-trigger 规范样式 */
+.model-selector-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--surface-card, #ffffff);
+  color: var(--text-secondary, #4b5563);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.model-selector-trigger:hover,
+.model-selector-trigger.is-active {
+  background: var(--bg-hover, #f3f4f6);
+  border-color: var(--border-hover, #d1d5db);
+  color: var(--text-primary, #111827);
+}
+
+.dark .model-selector-trigger {
+  background: #1c1c1f;
+  border-color: #2e2e32;
+  color: #9ca3af;
+}
+
+.dark .model-selector-trigger:hover,
+.dark .model-selector-trigger.is-active {
+  background: #27272b;
+  border-color: #3f3f46;
+  color: #f3f4f6;
+}
+
+.model-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary, #10b981);
+}
+
+.model-selector-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-selector-ctx {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-muted, #9ca3af);
+  background: var(--bg-secondary, #f3f4f6);
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+
+.dark .model-selector-ctx {
+  background: #2a2a2e;
+  color: #71717a;
+}
+
+.model-dropdown-arrow {
+  color: var(--text-muted, #9ca3af);
+}
+
+/* 浮层菜单 */
+.model-selector-dropdown {
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  animation: dropdownIn 0.15s ease-out;
+}
+
+.dark .model-selector-dropdown {
+  background: #18181b;
+  border-color: #27272a;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes dropdownIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.model-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border-subtle, #f3f4f6);
+}
+
+.dark .model-selector-header {
+  border-color: #27272a;
+}
+
+.model-selector-add {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary, #10b981);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  transition: opacity 0.15s;
+}
+
+.model-selector-add:hover {
+  opacity: 0.8;
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 12px;
+}
+
+.model-option:hover {
+  background: var(--bg-hover, #f9fafb);
+}
+
+.dark .model-option:hover {
+  background: #27272a;
+}
+
+.model-option.is-selected {
+  background: var(--color-primary-light, rgba(16, 185, 129, 0.08));
+}
+
+.model-option-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.model-option-icon {
+  color: var(--text-muted, #9ca3af);
+  display: flex;
+  align-items: center;
+}
+
+.model-option-name-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.model-option-name {
+  font-weight: 500;
+  color: var(--text-primary, #111827);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dark .model-option-name {
+  color: #f3f4f6;
+}
+
+.model-option-raw-name {
+  font-size: 10px;
+  color: var(--text-muted, #9ca3af);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.model-option-ctx {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-muted, #9ca3af);
+  background: var(--bg-secondary, #f3f4f6);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.dark .model-option-ctx {
+  background: #27272a;
+}
+</style>
