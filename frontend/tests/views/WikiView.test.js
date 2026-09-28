@@ -76,3 +76,33 @@ describe('WikiView 5.1', () => {
     expect(w.find('[data-test="wiki-save"]').exists()).toBe(true)
   })
 })
+
+describe('WikiView 5.3 死链巡检', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('巡检展示死链与孤页', async () => {
+    api.get.mockImplementation(url => {
+      if (url === '/wiki') return Promise.resolve({ data: list })
+      if (url === '/wiki/audit/dead-links') {
+        return Promise.resolve({
+          data: {
+            stats: { pages: 2, links: 3, dead_links: 1, orphan_pages: 1 },
+            pages: [{ id: 'p1', slug: 'gd', title: '梯度下降', dead_links: ['ghost'] }],
+            orphan_pages: [{ id: 'p2', slug: 'x', title: '孤页' }]
+          }
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+    const w = mountView()
+    await w.vm.$nextTick()
+    await w.vm.$nextTick()
+    await w.find('[data-test="wiki-audit"]').trigger('click')
+    await w.vm.$nextTick()
+    await w.vm.$nextTick()
+    expect(w.find('[data-test="wiki-audit-report"]').exists()).toBe(true)
+    expect(w.find('[data-test="audit-dead-count"]').text()).toContain('1')
+    expect(w.text()).toContain('[[ghost]]')
+    expect(w.text()).toContain('孤页')
+  })
+})

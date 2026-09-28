@@ -300,3 +300,95 @@ async def resolve_links(
     for p in rows:
         out[p.slug] = {"id": p.id, "slug": p.slug, "title": p.title, "summary": p.summary}
     return out
+
+
+async def audit_dead_links(db: AsyncSession, user: User) -> dict[str, Any]:
+    """5.3 全局死链巡检：扫全部页面的 [[slug]]，汇总死链与孤页。
+
+    返回：
+      pages: [{id, slug, title, dead_links:[slug...]}]  — 仅含有死链的页
+      orphan_pages: 没有任何入链的页面 slug
+      stats: {pages, links, dead_links, orphan_pages}
+    """
+    rows = (
+        await db.execute(
+            select(WikiPage).where(WikiPage.user_id == user.id).order_by(WikiPage.title)
+        )
+    ).scalars().all()
+    all_slugs = {p.slug for p in rows}
+
+    # 收集出链
+    out_links: dict[str, list[str]] = {}
+    in_links: dict[str, set[str]] = {s: set() for s in all_slugs}
+    total_links = 0
+    dead_by_page: list[dict[str, Any]] = []
+
+    for p in rows:
+        links = extract_links(p.content or "")
+        out_links[p.slug] = links
+        total_links += len(links)
+        dead = [s for s in links if s not in all_slugs]
+        for s in links:
+            if s in in_links:
+                in_links[s].add(p.slug)
+        if dead:
+            dead_by_page.append(
+                {
+                    "id": p.id,
+                    "slug": p.slug,
+                    "title": p.title,
+                    "dead_links": dead,
+                }
+            )
+
+    # 孤页 = 没有入链（排除自链）
+    orphan_pages = []
+    for p in rows:
+        sources = in_links.get(p.slug, set()) - {p.slug}
+        if not sources:
+            orphan_pages.append({"id": p.id, "slug": p.slug, "title": p.title})
+
+    dead_total = sum(len(d["dead_links"]) for d in dead_by_page)
+    return {
+        "pages": dead_by_page,
+        "orphan_pages": orphan_pages,
+        "stats": {
+            "pages": len(rows),
+            "links": total_links,
+            "dead_links": dead_total,
+            "orphan_pages": len(orphan_pages),
+        },
+    }
+
+
+async def wiki_index(db: AsyncSession, user: User) -> dict[str, Any]:
+    """5.3 索引页数据：按 page_type 分组 + 最近更新，供前端目录展示。"""
+    rows = (
+        await db.execute(
+            select(WikiPage).where(WikiPage.user_id == user.id).order_by(WikiPage.updated_at.desc())
+        )
+    ).scalars().all()
+    by_type: dict[str, list[dict[str, Any]]] = {}
+    for p in rows:
+        by_type.setdefault(p.page_type or "concept", []).append(
+            {
+                "id": p.id,
+                "slug": p.slug,
+                "title": p.title,
+                "summary": p.summary,
+                "updated_at": str(p.updated_at) if p.updated_at else None,
+            }
+        )
+    return {
+        "total": len(rows),
+        "by_type": by_type,
+        "recent": [
+            {
+                "id": p.id,
+                "slug": p.slug,
+                "title": p.title,
+                "updated_at": str(p.updated_at) if p.updated_at else None,
+            }
+            for p in rows[:10]
+        ],
+    }

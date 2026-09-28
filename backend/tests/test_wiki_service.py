@@ -127,3 +127,40 @@ async def test_revert_missing_404(db_session, user):
     p = await wiki_service.create_page(db_session, user, slug="miss", title="M")
     with pytest.raises(NotFoundError):
         await wiki_service.revert_page(db_session, user, p["id"], revision=99)
+
+
+@pytest.mark.asyncio
+async def test_audit_dead_links_and_orphans(db_session, user):
+    a = await wiki_service.create_page(
+        db_session, user, slug="alpha", title="A", content="链接 [[beta]] 与 [[ghost]]"
+    )
+    await wiki_service.create_page(
+        db_session, user, slug="beta", title="B", content="回链 [[alpha]]"
+    )
+    await wiki_service.create_page(db_session, user, slug="lonely", title="孤页", content="无入链")
+
+    audit = await wiki_service.audit_dead_links(db_session, user)
+    assert audit["stats"]["pages"] == 3
+    assert audit["stats"]["dead_links"] == 1
+    dead_page = audit["pages"][0]
+    assert dead_page["slug"] == "alpha"
+    assert dead_page["dead_links"] == ["ghost"]
+    orphan_slugs = {o["slug"] for o in audit["orphan_pages"]}
+    # lonely 无入链；ghost 是死链不是页面
+    assert "lonely" in orphan_slugs
+    assert "alpha" not in orphan_slugs  # beta 链向 alpha
+    assert "beta" not in orphan_slugs   # alpha 链向 beta
+
+
+@pytest.mark.asyncio
+async def test_wiki_index_groups_by_type(db_session, user):
+    await wiki_service.create_page(
+        db_session, user, slug="c1", title="概念", page_type="concept"
+    )
+    await wiki_service.create_page(
+        db_session, user, slug="e1", title="实体", page_type="entity"
+    )
+    idx = await wiki_service.wiki_index(db_session, user)
+    assert idx["total"] == 2
+    assert set(idx["by_type"].keys()) == {"concept", "entity"}
+    assert len(idx["recent"]) == 2

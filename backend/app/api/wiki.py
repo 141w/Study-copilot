@@ -163,3 +163,21 @@ async def revert_wiki_page(
     current_user: User = Depends(get_current_user),
 ):
     return await wiki_service.revert_page(db, current_user, page_id, revision)
+
+
+@router.get("/audit/dead-links")
+async def audit_wiki_dead_links(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """5.3：全局死链巡检 + 孤页统计。"""
+    return await wiki_service.audit_dead_links(db, current_user)
+
+
+@router.get("/meta/index")
+async def wiki_meta_index(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """5.3：按类型分组的索引数据。"""
+    return await wiki_service.wiki_index(db, current_user)

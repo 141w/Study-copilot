@@ -6,10 +6,75 @@
         <p class="text-sm text-[var(--text-muted)] mt-1">概念页 + [[双链]]，把资料串成可点的知识网</p>
       </div>
       <div class="flex gap-2">
+        <el-button data-test="wiki-audit" :loading="auditing" @click="runAudit">
+          死链巡检
+        </el-button>
         <el-button data-test="wiki-ingest" :loading="ingesting" @click="ingestFromDocs">
           从文档提炼
         </el-button>
         <el-button type="primary" data-test="wiki-new" @click="startCreate()">新建概念页</el-button>
+      </div>
+    </div>
+
+    <!-- 5.3 死链巡检报告 -->
+    <div
+      v-if="audit"
+      class="card p-4 mb-6"
+      data-test="wiki-audit-report"
+    >
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-semibold text-[var(--text-primary)]">死链巡检</h3>
+        <button class="text-xs text-[var(--text-muted)] underline cursor-pointer" @click="audit = null">关闭</button>
+      </div>
+      <div class="flex flex-wrap gap-3 text-xs mb-3">
+        <span class="px-2 py-1 rounded bg-[var(--bg-secondary)]">页面 <b class="tabular-nums">{{ audit.stats.pages }}</b></span>
+        <span class="px-2 py-1 rounded bg-[var(--bg-secondary)]">链接 <b class="tabular-nums">{{ audit.stats.links }}</b></span>
+        <span
+          class="px-2 py-1 rounded tabular-nums"
+          :class="audit.stats.dead_links ? 'bg-amber-500/10 text-amber-600' : 'bg-emerald-500/10 text-emerald-600'"
+          data-test="audit-dead-count"
+        >
+          死链 <b>{{ audit.stats.dead_links }}</b>
+        </span>
+        <span class="px-2 py-1 rounded bg-[var(--bg-secondary)]">
+          孤页 <b class="tabular-nums">{{ audit.stats.orphan_pages }}</b>
+        </span>
+      </div>
+
+      <div v-if="audit.pages.length" class="mb-3">
+        <div class="text-xs text-[var(--text-muted)] mb-1.5">含死链的页面</div>
+        <div
+          v-for="p in audit.pages"
+          :key="p.id"
+          class="flex items-start gap-2 text-xs py-1.5 border-b border-[var(--border-default)] last:border-0"
+        >
+          <button class="text-[var(--color-primary)] underline cursor-pointer" @click="openPage(p.id)">
+            {{ p.title }}
+          </button>
+          <div class="flex flex-wrap gap-1">
+            <button
+              v-for="d in p.dead_links"
+              :key="d"
+              type="button"
+              class="px-1.5 py-0.5 rounded border border-dashed border-amber-400 text-amber-600 cursor-pointer"
+              @click="startCreate(d)"
+            >[[{{ d }}]]</button>
+          </div>
+        </div>
+      </div>
+      <div v-else class="text-xs text-emerald-600 mb-3">没有死链 ✓</div>
+
+      <div v-if="audit.orphan_pages.length">
+        <div class="text-xs text-[var(--text-muted)] mb-1.5">孤页（无人引用）</div>
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="o in audit.orphan_pages"
+            :key="o.id"
+            type="button"
+            class="px-2 py-0.5 rounded-full border border-[var(--border-default)] text-xs cursor-pointer hover:border-[var(--color-primary)]"
+            @click="openPage(o.id)"
+          >{{ o.title }}</button>
+        </div>
       </div>
     </div>
 
@@ -188,6 +253,12 @@ const saving = ref(false)
 const editing = ref(false)
 const ingesting = ref(false)
 const history = ref<{ id: string; revision: number; title: string }[] | null>(null)
+const auditing = ref(false)
+const audit = ref<{
+  stats: { pages: number; links: number; dead_links: number; orphan_pages: number }
+  pages: { id: string; slug: string; title: string; dead_links: string[] }[]
+  orphan_pages: { id: string; slug: string; title: string }[]
+} | null>(null)
 const pages = ref<WikiListItem[]>([])
 const current = ref<WikiPage | null>(null)
 const linkStatus = ref<Record<string, string | null>>({})
@@ -213,6 +284,21 @@ const rendered = computed(() => {
 
 function linkTitle(slug: string): string {
   return linkStatus.value[slug] || slug
+}
+
+/** 5.3：全局死链巡检 */
+async function runAudit(): Promise<void> {
+  auditing.value = true
+  try {
+    const { data } = await api.get('/wiki/audit/dead-links')
+    audit.value = data
+    const n = data?.stats?.dead_links ?? 0
+    ElMessage.success(n ? `发现 ${n} 条死链` : '没有死链')
+  } catch {
+    ElMessage.error('巡检失败')
+  } finally {
+    auditing.value = false
+  }
 }
 
 async function loadHistory(): Promise<void> {
