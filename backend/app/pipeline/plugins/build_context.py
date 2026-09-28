@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from app.core.rag_engine import _display_relevance, rag_engine
+from app.core.rag_engine import build_source_entry, rag_engine
 from app.pipeline.base import EventType, NextFn, PipelineState, Plugin, emit_event
 
 logger = logging.getLogger(__name__)
@@ -12,26 +12,7 @@ logger = logging.getLogger(__name__)
 
 def build_sources_list(retrieved: list[dict]) -> list[dict]:
     """Format retrieved chunks into the SSE sources payload (top 10)."""
-    sources_list = []
-    for i, r in enumerate(retrieved[:10]):
-        chunk = r.get("chunk", {})
-        chunk_text = chunk.get("text", "")
-        page = chunk.get("page", "")
-        if page is None:
-            page = ""
-        elif not isinstance(page, str):
-            page = str(page)
-        sources_list.append(
-            {
-                "index": i + 1,
-                "document_id": chunk.get("document_id", ""),
-                "page": page,
-                "source": chunk.get("source", ""),
-                "text": chunk_text,
-                "relevance_score": _display_relevance(r),
-            }
-        )
-    return sources_list
+    return [build_source_entry(i + 1, r) for i, r in enumerate(retrieved[:10])]
 
 
 class BuildContextPlugin(Plugin):

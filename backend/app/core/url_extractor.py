@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import trafilatura
 

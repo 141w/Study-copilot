@@ -1,7 +1,7 @@
 ---
 feature: weknora-ui-upgrade
 status: delivered
-updated: 2026-09-25
+updated: 2026-09-28
 branch: master
 commits: 902997f..a50c42b
 ---
@@ -20,6 +20,20 @@ commits: 902997f..a50c42b
 - `content_revision/index_status/is_parent` 必须 `server_default`，否则 raw INSERT 触发 SQLite NOT NULL。
 - 深链契约 `?doc=`（兼容 `document_id`）；生产方 ChatMessageItem / NoteViewer / TaskPanel。
 - 4B 引用浮层与 5.5/5.6 由并行子任务交付；4B 曾遇 API 中断，文件已落盘并通过门禁。
+
+**2026-09-28 收尾（对照计划 §12/§13）**
+- ✅ 主链路 `chunk_id` 透传：`pgvector_store.search()` → `build_source_entry` → 全部 `sources_list`（含 pipeline）→ `Source` 契约。4B「展开全文」可回查切片。
+- ✅ 5.3 模型胶囊真接线（`@select` → `modelOverride` → `llm_config`）；`ModelChip` 读真实 `context_window`。
+- ✅ `alembic current == heads`；`_do_process_document` 先删旧 chunk（根因堵住）。
+- ✅ 坐标语义文档化 + 变长编辑路径测试：坐标=原点区间，等长编辑维持等式，变长后等式不成立属预期（父块重建仍按原点 splice）。
+- ✅ `/health` 增加 `chunk_count_sync` 不变量哨兵（`mismatch:N` → degraded）。
+- ✅ **存量清理 + 重跑 + 前后对比已完成**（2026-09-28）：备份 3.1GB → 删 stale 10463 + dup 150 → reindex ok=16/fail=12 → `ready_mismatch=0`、hit@5 保持 100%。详见 `backend/evaluation/results/reindex-compare-20260928.md`。
+
+### 待补（勿再按「全交付」字面理解）
+1. **`rag-stress-corpus.pdf` 源文件缺失**：待恢复后单独 reprocess（11 篇空 `t.txt` 残留建议 purge）。
+2. **5.2 追问建议**：计划阶段五子项，明确未做。
+3. **6B/6C 三态全文视图 / 虚拟滚动**：按计划留待迭代。
+4. **hierarchical 子块列级坐标**：目前坐标在 metadata，父块有列级坐标；子块上列级坐标属增强项。
 
 ## [S1] Problem
 Study Copilot 对照 WeKnora v0.8.0 的 UI/检索体验缺口（详见根目录 `WeKnora吸收-UI升级实施计划.md`）。

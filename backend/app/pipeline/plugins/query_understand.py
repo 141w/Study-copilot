@@ -231,23 +231,11 @@ class QueryUnderstandPlugin(Plugin):
             ),
         )
 
-        from app.core.rag_engine import _display_relevance
+        from app.core.rag_engine import build_source_entry
 
         ctx = rag_engine.build_context(all_results, max_context_tokens=60000)
         sources_text = rag_engine.build_sources_text(all_results)
-        sources_list = []
-        for i, r in enumerate(all_results[:10]):
-            chunk = r.get("chunk", {})
-            sources_list.append(
-                {
-                    "index": i + 1,
-                    "document_id": chunk.get("document_id", ""),
-                    "page": str(chunk.get("page", "")),
-                    "source": chunk.get("source", ""),
-                    "text": chunk.get("text", ""),
-                    "relevance_score": _display_relevance(r),
-                }
-            )
+        sources_list = [build_source_entry(i + 1, r) for i, r in enumerate(all_results[:10])]
         await emit_event(
             state,
             {"type": "sources", "sources": sources_list, "filtered_sources": sources_list},
@@ -323,25 +311,10 @@ class QueryUnderstandPlugin(Plugin):
                 ),
             )
             if results:
+                from app.core.rag_engine import build_source_entry
+
                 ctx = rag_engine.build_context(results, max_context_tokens=16000)
-                sources_list = []
-                for i, r in enumerate(results[:10]):
-                    chunk = r.get("chunk", {})
-                    page = chunk.get("page", "")
-                    if page is None:
-                        page = ""
-                    elif not isinstance(page, str):
-                        page = str(page)
-                    sources_list.append(
-                        {
-                            "index": i + 1,
-                            "document_id": chunk.get("document_id", ""),
-                            "page": page,
-                            "source": chunk.get("source", ""),
-                            "text": chunk.get("text", ""),
-                            "relevance_score": _display_relevance(r),
-                        }
-                    )
+                sources_list = [build_source_entry(i + 1, r) for i, r in enumerate(results[:10])]
                 await emit_event(
                     state,
                     {"type": "sources", "sources": sources_list, "filtered_sources": sources_list},

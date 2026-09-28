@@ -7,10 +7,11 @@ Phase-3 (WeKnora chunk.go 设计参考，Python 落地)：
 - 父块重建：把已编辑子块区间按 char_start 倒序覆盖回 source_content
 - 回滚 = 又一次编辑（可再回滚）
 
-坐标约定：``char_start`` / ``char_end`` / ``source_content`` 是解析器坐标，
-编辑时不改坐标；``content == source_content[char_start:char_end]`` 仅在
-新旧等长时保持成立（"when possible"）。父块重建用原始坐标做倒序 splice，
-因此长度变化不会使前面的坐标失效。
+坐标约定：``char_start`` / ``char_end`` 是**解析原文中的原点区间**（不可变），
+``source_content`` 为解析器原文副本。等长编辑时就地改写 ``source_content``，
+使 ``content == source_content[char_start:char_end]`` 继续成立；变长编辑后
+等式不再成立（content 是新正文，坐标仍指原点区间），父块重建仍按原点坐标
+倒序 splice 当前子块正文。读坐标的下游必须理解这是原点坐标，不是"当前正文切片"。
 """
 
 from __future__ import annotations
@@ -223,13 +224,15 @@ async def rebuild_parent_content(db: AsyncSession, edited: DocumentChunk) -> Doc
 
 
 def _preserve_invariant_if_possible(chunk: DocumentChunk, new_content: str) -> None:
-    """Keep content == source_content[char_start:char_end] when length is unchanged."""
-    if (
-        chunk.char_start is None
-        or chunk.char_end is None
-        or chunk.source_content is None
-        or len(new_content) != chunk.char_end - chunk.char_start
-    ):
+    """等长编辑时维持 content == source_content[char_start:char_end]。
+
+    变长编辑不改坐标、不改 source_content：坐标是原点区间，供父块重建倒序
+    splice 当前正文用；此时等式不再成立属预期，勿为"修等式"就地改写
+    source_content（等长才安全，变长会使其后兄弟块坐标漂移）。
+    """
+    if chunk.char_start is None or chunk.char_end is None or chunk.source_content is None:
+        return
+    if len(new_content) != chunk.char_end - chunk.char_start:
         return
     s, e = chunk.char_start, chunk.char_end
     chunk.source_content = chunk.source_content[:s] + new_content + chunk.source_content[e:]

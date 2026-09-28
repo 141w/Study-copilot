@@ -210,6 +210,46 @@ async def test_parent_rebuild_reverse_char_start(db_session: AsyncSession, user:
 
 
 @pytest.mark.asyncio
+async def test_length_change_keeps_origin_coords(db_session: AsyncSession, user: User, doc: Document):
+    """§12-4：变长编辑后坐标保持原点区间、source_content 不动、等式不再成立属预期。"""
+    c = _chunk(doc.id, "AAAA", char_start=0, char_end=4, source="AAAA BBBB CCCC")
+    db_session.add(c)
+    await db_session.commit()
+
+    with _reindex_ok():
+        await chunk_service.update_chunk(db_session, user, doc.id, c.id, "AA")  # 4 → 2
+    await db_session.refresh(c)
+    assert c.content == "AA"
+    # 原点坐标保留（父块重建仍要按此 splice）
+    assert c.char_start == 0 and c.char_end == 4
+    # source_content 保持解析器原文不动（变长就地改写会使兄弟坐标漂移）
+    assert c.source_content == "AAAA BBBB CCCC"
+    # 等式在变长后不再成立——这正是"条件常驻"的边界
+    assert c.content != c.source_content[c.char_start : c.char_end]
+
+
+@pytest.mark.asyncio
+async def test_length_change_parent_rebuild_still_overlays(
+    db_session: AsyncSession, user: User, doc: Document
+):
+    """变长编辑后父块重建仍按原点坐标倒序 splice 当前正文。"""
+    src = "AAAA BBBB"
+    parent = _chunk(doc.id, src, index=0, is_parent=True, char_start=0, char_end=len(src), source=src)
+    child = _chunk(doc.id, "AAAA", index=1, char_start=0, char_end=4, source=src)
+    db_session.add_all([parent, child])
+    await db_session.commit()
+
+    with _reindex_ok():
+        await chunk_service.update_chunk(db_session, user, doc.id, child.id, "AAAAA")  # 4 → 5
+    await db_session.refresh(child)
+    await db_session.refresh(parent)
+    assert child.content == "AAAAA"
+    assert child.char_start == 0 and child.char_end == 4
+    # 父块正文 = 原点区间 [0,4) 被当前子块正文 "AAAAA" 覆盖
+    assert parent.content == "AAAAA BBBB"
+
+
+@pytest.mark.asyncio
 async def test_apply_child_slices_reverse_helper():
     base = "0123456789"
     out = chunk_service.apply_child_slices_reverse(

@@ -1057,3 +1057,117 @@ class TestRAGEngineExtended:
         result = await engine.ask(["doc1"], "q")
         score = result["sources"][0]["relevance_score"]
         assert abs(score - 0.667) < 0.001
+
+
+class TestSourceChunkId:
+    """§12-1：主链路 sources 必须带稳定 chunk_id，供引用浮层回查切片原文。"""
+
+    @pytest.fixture
+    def engine(self):
+        engine = RAGEngine()
+        engine._reranker = None
+        engine._reranker_loaded = True
+        return engine
+
+    def test_build_source_entry_reads_chunk_id(self):
+        from app.core.rag_engine import build_source_entry
+
+        r = {
+            "chunk": {
+                "id": "chunk-42",
+                "text": "原文",
+                "page": 2,
+                "source": "a.pdf",
+                "document_id": "d1",
+                "metadata": {},
+            },
+            "relevance": 0.9,
+        }
+        entry = build_source_entry(1, r)
+        assert entry["chunk_id"] == "chunk-42"
+        assert entry["index"] == 1
+        assert entry["page"] == "2"
+
+    def test_build_source_entry_falls_back_to_metadata(self):
+        from app.core.rag_engine import build_source_entry
+
+        r = {
+            "chunk": {
+                "text": "t",
+                "document_id": "d1",
+                "metadata": {"chunk_id": "meta-7"},
+            },
+            "relevance": 0.5,
+        }
+        assert build_source_entry(2, r)["chunk_id"] == "meta-7"
+
+    def test_build_source_entry_missing_id_is_empty_string(self):
+        from app.core.rag_engine import build_source_entry
+
+        r = {"chunk": {"text": "t", "document_id": "d1"}, "relevance": 0.5}
+        assert build_source_entry(1, r)["chunk_id"] == ""
+
+    @pytest.mark.asyncio
+    @patch("app.core.rag_engine.LLM")
+    async def test_ask_sources_carry_chunk_id(self, MockLLM, engine):
+        mock_llm = AsyncMock()
+        mock_llm.chat.return_value = "answer [来源1]"
+        MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
+
+        mock_store = AsyncMock()
+        mock_store.search.return_value = [
+            {
+                "chunk": {
+                    "id": "c-abc",
+                    "text": "t",
+                    "page": 1,
+                    "source": "s",
+                    "document_id": "d",
+                    "metadata": {},
+                },
+                "relevance": 0.8,
+                "retrieval_type": "pgvector_hybrid",
+            }
+        ]
+        engine._pg_vector_store = mock_store
+
+        result = await engine.ask(["doc1"], "q")
+        assert result["sources"][0]["chunk_id"] == "c-abc"
+        assert result["filtered_sources"][0]["chunk_id"] == "c-abc"
+
+    @pytest.mark.asyncio
+    @patch("app.core.rag_engine.LLM")
+    async def test_ask_stream_sources_carry_chunk_id(self, MockLLM, engine):
+        async def fake_stream(*args, **kwargs):
+            yield "answer"
+
+        mock_llm = AsyncMock()
+        mock_llm.chat_stream = fake_stream
+        mock_llm.chat.return_value = "answer"
+        MockLLM.return_value = mock_llm
+        MockLLM.from_config.return_value = mock_llm
+
+        mock_store = AsyncMock()
+        mock_store.search.return_value = [
+            {
+                "chunk": {
+                    "id": "c-stream",
+                    "text": "t",
+                    "page": "",
+                    "source": "s",
+                    "document_id": "d",
+                    "metadata": {},
+                },
+                "relevance": 0.7,
+                "retrieval_type": "pgvector_hybrid",
+            }
+        ]
+        engine._pg_vector_store = mock_store
+
+        events = []
+        async for ev in engine.ask_stream(["doc1"], "q"):
+            events.append(ev)
+        sources_events = [e for e in events if e.get("type") == "sources"]
+        assert sources_events, "ask_stream 未产出 sources 事件"
+        assert sources_events[0]["sources"][0]["chunk_id"] == "c-stream"

@@ -1,0 +1,375 @@
+{
+  "meta": {
+    "kind": "app-corpus-probe",
+    "generated_at": "2026-09-28T11:16:36.152463+00:00",
+    "n_queries": 15,
+    "top_k": 5,
+    "hit_rate@1": 0.9333,
+    "hit_rate@5": 1.0
+  },
+  "results": [
+    {
+      "doc_id": "c574849a-8877-44b4-9667-21a74dcc5477",
+      "filename": "test_doc.txt",
+      "query": "This is a test document for chunking.",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "c574849a-8877-44b4-9667-21a74dcc5477",
+          "chunk_id": "21d6ef6f-af11-4738-80ad-fcbf61c807ca",
+          "score": 1.0,
+          "preview": "This is a test document for chunking."
+        }
+      ]
+    },
+    {
+      "doc_id": "9d56e5b7-84ea-472b-8e25-6442ec2002b0",
+      "filename": "thermo.txt",
+      "query": "热力学第一定律：能量守恒。第二定律：孤立系统熵增。",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "9d56e5b7-84ea-472b-8e25-6442ec2002b0",
+          "chunk_id": "a4eb8edb-5e66-4c80-a84c-b7376b65afe5",
+          "score": 1.0,
+          "preview": "热力学第一定律：能量守恒。第二定律：孤立系统熵增。"
+        }
+      ]
+    },
+    {
+      "doc_id": "eddc3bba-7308-45aa-965d-ef42751934ee",
+      "filename": "bgetest.txt",
+      "query": "这是一个用于测试维度预检的足够长的文档内容，包含多个句子。量子力学描述微观粒子的行为规律。波函数坍缩是测量问题中的核心概念。",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "eddc3bba-7308-45aa-965d-ef42751934ee",
+          "chunk_id": "54c3a4dc-437f-41ea-b410-0bb8c7607202",
+          "score": 1.0,
+          "preview": "这是一个用于测试维度预检的足够长的文档内容，包含多个句子。量子力学描述微观粒子的行为规律。波函数坍缩是测量问题中的核心概"
+        }
+      ]
+    },
+    {
+      "doc_id": "9c48a3c8-6e68-4975-b8af-901f37c07dfd",
+      "filename": "relativity.txt",
+      "query": "狭义相对论：光速不变原理。广义相对论：时空弯曲。",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "9c48a3c8-6e68-4975-b8af-901f37c07dfd",
+          "chunk_id": "0ef16a70-9341-4e08-b93d-0079c7837679",
+          "score": 1.0,
+          "preview": "狭义相对论：光速不变原理。广义相对论：时空弯曲。"
+        }
+      ]
+    },
+    {
+      "doc_id": "077da992-7fbd-46a5-a2ed-1cb4aa859344",
+      "filename": "t.md",
+      "query": "## RAG RAG is retrieval augmented generation with sources [1].",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "077da992-7fbd-46a5-a2ed-1cb4aa859344",
+          "chunk_id": "a6fbc59b-93db-450e-9efa-5f2f724e6023",
+          "score": 1.0,
+          "preview": "## RAG RAG is retrieval augmented generation with sources [1"
+        }
+      ]
+    },
+    {
+      "doc_id": "afce2f71-ad56-4364-a194-0ea30e0140be",
+      "filename": "第四组-学习层次八类方法.pptx",
+      "query": "第四组-学习层次八类方法",
+      "recalled@1": false,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "05e8ea1d-5288-4037-80fc-8d63c746e314",
+          "chunk_id": "3cef4bc1-e141-4c72-8f77-ecc1bb7429b0",
+          "score": 1.0,
+          "preview": "Inspection-Multiple Defects Associated with CAPA OQ-26回到首页>>"
+        },
+        {
+          "document_id": "afce2f71-ad56-4364-a194-0ea30e0140be",
+          "chunk_id": "3a683aa2-9953-4591-b5de-44815f166b81",
+          "score": 1.0,
+          "preview": "加涅的八层次理论是系统化课程设计的基石，它强调了学习的累积性和层次性，为培训目标设定、内容排序和效果评估提供了经典的理论"
+        },
+        {
+          "document_id": "afce2f71-ad56-4364-a194-0ea30e0140be",
+          "chunk_id": "a703c850-71fa-42be-8e23-5c5677817af4",
+          "score": 0.9839,
+          "preview": "针对性 不同的学习类型需要不同的教学方法和条件（如反馈、举例、练习等）。 局限性 其线性的、从零开始的假设可能与成人经验"
+        },
+        {
+          "document_id": "05e8ea1d-5288-4037-80fc-8d63c746e314",
+          "chunk_id": "254fadd4-b176-4d0d-9011-2b70e125c71b",
+          "score": 0.9839,
+          "preview": "You need to enter the rectification plan for each defect ite"
+        },
+        {
+          "document_id": "afce2f71-ad56-4364-a194-0ea30e0140be",
+          "chunk_id": "cc08b371-2b2e-4252-8d01-faa9a648c9e3",
+          "score": 0.9683,
+          "preview": "按照高低阶来划分八大类 低阶（1-4） 中阶（5-6） 高阶（7-8） 问题解决学习 机械性模仿练习 机械性模仿练习 依"
+        }
+      ]
+    },
+    {
+      "doc_id": "05e8ea1d-5288-4037-80fc-8d63c746e314",
+      "filename": "009.eGMP QMS系统运行确认方案(14).docx",
+      "query": "eGMP QMS系统运行确认方案 eGMP QMS System Operation Qualification Protocol 验证项目：",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "05e8ea1d-5288-4037-80fc-8d63c746e314",
+          "chunk_id": "377a1448-e3f0-4e9d-99ff-54a25d8cc3fa",
+          "score": 1.0,
+          "preview": "eGMP QMS系统运行确认方案 eGMP QMS System Operation Qualification Pro"
+        },
+        {
+          "document_id": "05e8ea1d-5288-4037-80fc-8d63c746e314",
+          "chunk_id": "5a723ea9-a597-46f4-9d1f-ce74491e409d",
+          "score": 0.9839,
+          "preview": "eGMP QMS系统运行确认方案 eGMP QMS System Operation Qualification Pro"
+        },
+        {
+          "document_id": "05e8ea1d-5288-4037-80fc-8d63c746e314",
+          "chunk_id": "854f8c8d-709e-410f-9834-676382e29ebf",
+          "score": 0.9387,
+          "preview": "This operational qualification protocol has been approved. e"
+        },
+        {
+          "document_id": "05e8ea1d-5288-4037-80fc-8d63c746e314",
+          "chunk_id": "1652f39f-cc58-4f87-8058-4f901e154bc8",
+          "score": 0.9245,
+          "preview": "This operational qualification protocol has been approved. e"
+        },
+        {
+          "document_id": "05e8ea1d-5288-4037-80fc-8d63c746e314",
+          "chunk_id": "45311df5-24ab-4e07-b5d3-6bef271c4fe9",
+          "score": 0.9113,
+          "preview": "Participate in the review of the eGMP QMS system operation q"
+        }
+      ]
+    },
+    {
+      "doc_id": "96667e55-d444-48c1-b50e-2a751b012f3b",
+      "filename": "ml_notes.md",
+      "query": "## 梯度下降 梯度下降是一种优化算法。它通过计算损失函数相对于参数的梯度，沿负梯度方向迭代更新参数，从而最小化损失函数。",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "96667e55-d444-48c1-b50e-2a751b012f3b",
+          "chunk_id": "43ec8b8f-6a32-4a3e-8e2e-89a85b0556b4",
+          "score": 1.0,
+          "preview": "## 梯度下降 梯度下降是一种优化算法。它通过计算损失函数相对于参数的梯度，沿负梯度方向迭代更新参数，从而最小化损失函数"
+        },
+        {
+          "document_id": "96667e55-d444-48c1-b50e-2a751b012f3b",
+          "chunk_id": "84cf6169-262b-4b1b-b4e7-56adf864076f",
+          "score": 0.9839,
+          "preview": "## 过拟合 过拟合指模型在训练集上表现很好，但在未见数据上泛化能力差。"
+        }
+      ]
+    },
+    {
+      "doc_id": "96b3bd67-d0fe-4142-8307-43cf10aff910",
+      "filename": "ml_notes.md",
+      "query": "## 梯度下降 梯度下降是一种优化算法。它通过计算损失函数相对于参数的梯度，沿负梯度方向迭代更新参数，从而最小化损失函数。",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "96b3bd67-d0fe-4142-8307-43cf10aff910",
+          "chunk_id": "8571693f-2015-4ce6-91e1-f079cd0b8997",
+          "score": 1.0,
+          "preview": "## 梯度下降 梯度下降是一种优化算法。它通过计算损失函数相对于参数的梯度，沿负梯度方向迭代更新参数，从而最小化损失函数"
+        },
+        {
+          "document_id": "96b3bd67-d0fe-4142-8307-43cf10aff910",
+          "chunk_id": "855f9628-e75c-48ce-adfa-7697e55db0f2",
+          "score": 0.9839,
+          "preview": "## 过拟合 过拟合指模型在训练集上表现很好，但在未见数据上泛化能力差。"
+        }
+      ]
+    },
+    {
+      "doc_id": "48808c39-ca5a-49c0-a43e-df531b9aad92",
+      "filename": "t.md",
+      "query": "## RAG RAG combines retrieval with generation.",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "48808c39-ca5a-49c0-a43e-df531b9aad92",
+          "chunk_id": "8d23a1e6-c247-42d2-ad51-809d9c97adca",
+          "score": 1.0,
+          "preview": "## RAG RAG combines retrieval with generation."
+        }
+      ]
+    },
+    {
+      "doc_id": "496acd7d-902c-4812-ad6a-85106fa206da",
+      "filename": "ml_notes.md",
+      "query": "ml_notes",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "496acd7d-902c-4812-ad6a-85106fa206da",
+          "chunk_id": "57bbacef-5702-4f11-abc4-3b60e306fbcd",
+          "score": 1.0,
+          "preview": "## 梯度下降 梯度下降是优化算法，沿负梯度方向更新参数以最小化损失。 ## 过拟合 过拟合指训练好但泛化差。"
+        }
+      ]
+    },
+    {
+      "doc_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+      "filename": "smoke_transformer.md",
+      "query": "## 多头注意力 多头注意力（Multi-Head Attention）将 Query、Key、Value 分别线性投影 h 次，在不同子空间并行计算注意力，再",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+          "chunk_id": "153b10ee-70d6-4489-891c-3cbe4c8bf1b7",
+          "score": 1.0,
+          "preview": "## 多头注意力 多头注意力（Multi-Head Attention）将 Query、Key、Value 分别线性投影"
+        },
+        {
+          "document_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+          "chunk_id": "b0cceea1-0fa6-4c05-adb9-b038481fe7af",
+          "score": 0.9685,
+          "preview": "## 自注意力机制 Transformer 的核心是自注意力（Self-Attention）机制。给定序列中的每个位置，"
+        },
+        {
+          "document_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+          "chunk_id": "74f78a6e-9df7-4f5f-a184-a7f3f0098b8e",
+          "score": 0.9462,
+          "preview": "## 编码器-解码器 编码器由 N=6 层堆叠，每层包含多头自注意力与前馈网络，均配有残差连接和层归一化。解码器额外有交"
+        },
+        {
+          "document_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+          "chunk_id": "a93dc4bf-bdbb-474d-8d9e-504ec5bd98f5",
+          "score": 0.9458,
+          "preview": "## 位置编码 由于自注意力本身不含顺序信息，Transformer 使用位置编码（Positional Encodin"
+        },
+        {
+          "document_id": "179707bc-861c-4ac4-833c-e2765eeb468c",
+          "chunk_id": "daf29e10-ca75-48b2-8dfc-06386036c285",
+          "score": 0.934,
+          "preview": "## 前馈网络 FFN 是两层线性变换夹一个 ReLU：FFN(x)=max(0, xW1+b1)W2+b2。位置间参数"
+        }
+      ]
+    },
+    {
+      "doc_id": "e10784f7-5ae0-4472-ba56-bf5669e1e0ea",
+      "filename": "smoke_optim.md",
+      "query": "# 优化器笔记 Adam 优化器结合了动量与自适应学习率。RMSProp 通过平方梯度的指数移动平均缩放学习率。SGD+Momentum 在凸问题上理论性质更好",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "e10784f7-5ae0-4472-ba56-bf5669e1e0ea",
+          "chunk_id": "dd3ad32d-c823-42ac-a0bc-c2ce6787e641",
+          "score": 1.0,
+          "preview": "# 优化器笔记 Adam 优化器结合了动量与自适应学习率。RMSProp 通过平方梯度的指数移动平均缩放学习率。SGD+"
+        },
+        {
+          "document_id": "179707bc-861c-4ac4-833c-e2765eeb468c",
+          "chunk_id": "56020450-80dd-4fe2-a61a-e90351a92590",
+          "score": 0.9607,
+          "preview": "## 训练细节 Adam 优化器，warmup 后线性衰减；Label Smoothing 0.1；Dropout 0."
+        },
+        {
+          "document_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+          "chunk_id": "a93dc4bf-bdbb-474d-8d9e-504ec5bd98f5",
+          "score": 0.9541,
+          "preview": "## 位置编码 由于自注意力本身不含顺序信息，Transformer 使用位置编码（Positional Encodin"
+        },
+        {
+          "document_id": "179707bc-861c-4ac4-833c-e2765eeb468c",
+          "chunk_id": "daf29e10-ca75-48b2-8dfc-06386036c285",
+          "score": 0.9405,
+          "preview": "## 前馈网络 FFN 是两层线性变换夹一个 ReLU：FFN(x)=max(0, xW1+b1)W2+b2。位置间参数"
+        },
+        {
+          "document_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+          "chunk_id": "b94482eb-3a0f-4c0d-b7d1-a95b9d12b39f",
+          "score": 0.9327,
+          "preview": "## 为什么有效 Transformer 具备并行计算、长距离依赖建模与可扩展性，是 BERT、GPT 等大模型的基础架"
+        }
+      ]
+    },
+    {
+      "doc_id": "179707bc-861c-4ac4-833c-e2765eeb468c",
+      "filename": "smoke_attention2.md",
+      "query": "## 残差连接 每个子层外有残差连接与 LayerNorm：x + Sublayer(LayerNorm(x))。残差让深层网络更易优化。",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "179707bc-861c-4ac4-833c-e2765eeb468c",
+          "chunk_id": "d34b256e-eb51-438a-b07d-4d85e3acd1ca",
+          "score": 1.0,
+          "preview": "## 残差连接 每个子层外有残差连接与 LayerNorm：x + Sublayer(LayerNorm(x))。残差让"
+        },
+        {
+          "document_id": "179707bc-861c-4ac4-833c-e2765eeb468c",
+          "chunk_id": "daf29e10-ca75-48b2-8dfc-06386036c285",
+          "score": 0.9839,
+          "preview": "## 前馈网络 FFN 是两层线性变换夹一个 ReLU：FFN(x)=max(0, xW1+b1)W2+b2。位置间参数"
+        },
+        {
+          "document_id": "179707bc-861c-4ac4-833c-e2765eeb468c",
+          "chunk_id": "56020450-80dd-4fe2-a61a-e90351a92590",
+          "score": 0.9534,
+          "preview": "## 训练细节 Adam 优化器，warmup 后线性衰减；Label Smoothing 0.1；Dropout 0."
+        },
+        {
+          "document_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+          "chunk_id": "74f78a6e-9df7-4f5f-a184-a7f3f0098b8e",
+          "score": 0.9394,
+          "preview": "## 编码器-解码器 编码器由 N=6 层堆叠，每层包含多头自注意力与前馈网络，均配有残差连接和层归一化。解码器额外有交"
+        },
+        {
+          "document_id": "db08d60c-55c0-4604-a7e9-a268402850cd",
+          "chunk_id": "a93dc4bf-bdbb-474d-8d9e-504ec5bd98f5",
+          "score": 0.9387,
+          "preview": "## 位置编码 由于自注意力本身不含顺序信息，Transformer 使用位置编码（Positional Encodin"
+        }
+      ]
+    },
+    {
+      "doc_id": "df0eecff-861b-43c6-a320-7596a3226934",
+      "filename": "ml_notes.md",
+      "query": "## 梯度下降 梯度下降是一种优化算法。它通过计算损失函数相对于参数的梯度，沿负梯度方向迭代更新参数，从而最小化损失函数。",
+      "recalled@1": true,
+      "recalled@5": true,
+      "top": [
+        {
+          "document_id": "df0eecff-861b-43c6-a320-7596a3226934",
+          "chunk_id": "19028b78-b40d-4a73-b78c-7873bb380f69",
+          "score": 1.0,
+          "preview": "## 梯度下降 梯度下降是一种优化算法。它通过计算损失函数相对于参数的梯度，沿负梯度方向迭代更新参数，从而最小化损失函数"
+        },
+        {
+          "document_id": "df0eecff-861b-43c6-a320-7596a3226934",
+          "chunk_id": "def4740b-6da6-4f6a-accd-3cb3b1a5d773",
+          "score": 0.9839,
+          "preview": "## 过拟合 过拟合指模型在训练集上表现很好，但在未见数据上泛化能力差。"
+        }
+      ]
+    }
+  ]
+}

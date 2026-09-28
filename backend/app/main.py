@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.analysis import router as analysis_router
@@ -22,7 +22,7 @@ from app.api.tts import router as tts_router
 from app.api.usage import router as usage_router
 from app.config import settings
 from app.core.logger import setup_logging
-from app.db import ensure_current_schema, get_current_revision, run_migrations, stamp_head
+from app.db import ensure_current_schema, get_current_revision, get_db, run_migrations, stamp_head
 from app.exception_handlers import setup_exception_handlers
 
 setup_logging(debug=settings.debug, level=settings.log_level)
@@ -183,32 +183,58 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
-    """Liveness + dependency readiness (DB ping)."""
+async def health_check(db=Depends(get_db)):
+    """Liveness + dependency readiness (DB ping + chunk_count invariant).
+
+    走 get_db 依赖：测试可注入 SQLite 会话；生产用配置库。
+    """
     checks = {}
     try:
         from sqlalchemy import text
 
-        from app.db import AsyncSessionLocal
-
-        async with AsyncSessionLocal() as db:
-            await db.execute(text("SELECT 1"))
-            # 检索健康信号：中文全文检索依赖 zhparser 的 'zh' 配置；
-            # 'simple' 意味着中文 FTS 近乎失效、hybrid 顶部召回塌方（见评测结论）
-            try:
-                res = await db.execute(text("SELECT 1 FROM pg_ts_config WHERE cfgname = 'zh'"))
-                checks["fts_config"] = "zh" if res.scalar() else "simple"
-            except Exception as fts_exc:  # noqa: BLE001 - FTS 探测失败不影响主健康态
-                logger.debug("Health check FTS probe skipped: %s", fts_exc)
-                checks["fts_config"] = "unknown"
+        await db.execute(text("SELECT 1"))
+        # 检索健康信号：中文全文检索依赖 zhparser 的 'zh' 配置；
+        # 'simple' 意味着中文 FTS 近乎失效、hybrid 顶部召回塌方（见评测结论）
+        try:
+            res = await db.execute(text("SELECT 1 FROM pg_ts_config WHERE cfgname = 'zh'"))
+            checks["fts_config"] = "zh" if res.scalar() else "simple"
+        except Exception as fts_exc:  # noqa: BLE001 - FTS 探测失败不影响主健康态
+            logger.debug("Health check FTS probe skipped: %s", fts_exc)
+            checks["fts_config"] = "unknown"
+        # 切片行数不变量：每篇 ready 文档的 document_chunks 实际行数
+        # 必须等于 documents.chunk_count（重跑/清理事故的常驻哨兵）
+        try:
+            mismatch = await db.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM documents d
+                    WHERE d.deleted_at IS NULL
+                      AND d.status = 'ready'
+                      AND (
+                        SELECT COUNT(*) FROM document_chunks c
+                        WHERE c.document_id = d.id
+                      ) <> COALESCE(d.chunk_count, 0)
+                    """
+                )
+            )
+            n = int(mismatch.scalar() or 0)
+            checks["chunk_count_sync"] = "ok" if n == 0 else f"mismatch:{n}"
+        except Exception as cc_exc:  # noqa: BLE001 - 不变量探测失败不拖垮健康态
+            logger.debug("Health chunk_count probe skipped: %s", cc_exc)
+            checks["chunk_count_sync"] = "unknown"
         checks["database"] = "ok"
     except Exception as e:  # noqa: BLE001 - health must never raise
         logger.warning("Health check DB failure: %s", e)
         # Do not leak driver/connection details on unauthenticated /health
         checks["database"] = "error: unavailable"
 
+    chunk_ok = checks.get("chunk_count_sync") in ("ok", "unknown")
     return {
-        "status": "healthy" if checks.get("database") == "ok" else "degraded",
+        "status": (
+            "healthy"
+            if checks.get("database") == "ok" and chunk_ok
+            else "degraded"
+        ),
         "version": settings.app_version,
         "checks": checks,
     }

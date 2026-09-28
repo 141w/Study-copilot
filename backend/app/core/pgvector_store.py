@@ -360,6 +360,8 @@ class PgVectorStore:
                         # 扁平字段与 legacy vector_store 保持同一契约：
                         # rag_engine 从顶层读取 page/source/document_id
                         # 构建来源卡（此前嵌套在 metadata 里，来源卡页码恒空）
+                        "id": str(row.id),
+                        "chunk_id": str(row.id),
                         "text": row.content,
                         "page": meta.get("page", ""),
                         "source": meta.get("source", ""),

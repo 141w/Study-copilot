@@ -37,6 +37,29 @@ def _display_relevance(r: dict) -> float:
     return 1.0 / (1.0 + r.get("distance", 1))
 
 
+def build_source_entry(index: int, r: dict, *, text: str | None = None) -> dict:
+    """组装单条来源条目。带稳定 chunk_id 供引用浮层/全文展开回查切片原文。"""
+    chunk = r.get("chunk", {})
+    page = chunk.get("page", "")
+    if page is None:
+        page = ""
+    elif not isinstance(page, str):
+        page = str(page)
+    meta = chunk.get("metadata") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    chunk_id = chunk.get("id") or chunk.get("chunk_id") or meta.get("chunk_id") or ""
+    return {
+        "index": index,
+        "chunk_id": chunk_id,
+        "document_id": chunk.get("document_id", ""),
+        "page": page,
+        "source": chunk.get("source", ""),
+        "text": text if text is not None else chunk.get("text", ""),
+        "relevance_score": _display_relevance(r),
+    }
+
+
 def extract_source_indices(text: str) -> list[int]:
     pattern = r"\[来源(\d+)\]"
     matches = re.findall(pattern, text)
@@ -324,17 +347,7 @@ class RAGEngine:
             if results:
                 ctx = self.build_context(results, max_context_tokens=16000)
                 for i, r in enumerate(results[:10]):
-                    chunk = r.get("chunk", {})
-                    sources_list.append(
-                        {
-                            "index": i + 1,
-                            "document_id": chunk.get("document_id", ""),
-                            "page": str(chunk.get("page", "") or ""),
-                            "source": chunk.get("source", ""),
-                            "text": chunk.get("text", ""),
-                            "relevance_score": _display_relevance(r),
-                        }
-                    )
+                    sources_list.append(build_source_entry(i + 1, r))
 
         llm = LLM.from_config(user_config)
         prompt = render_template("notes/synthesize_note.jinja2", query=query, context=ctx)
@@ -390,22 +403,7 @@ class RAGEngine:
 
         sources_list = []
         for i, r in enumerate(all_results[:10]):
-            chunk = r.get("chunk", {})
-            page = chunk.get("page", "")
-            if page is None:
-                page = ""
-            elif not isinstance(page, str):
-                page = str(page)
-            sources_list.append(
-                {
-                    "index": i + 1,
-                    "document_id": chunk.get("document_id", ""),
-                    "page": page,
-                    "source": chunk.get("source", ""),
-                    "text": chunk.get("text", ""),
-                    "relevance_score": _display_relevance(r),
-                }
-            )
+            sources_list.append(build_source_entry(i + 1, r))
 
         return {
             "answer": answer,
@@ -770,23 +768,7 @@ class RAGEngine:
 
         sources_list = []
         for i, r in enumerate(retrieved[:10]):
-            chunk = r.get("chunk", {})
-            chunk_text = chunk.get("text", "")
-            page = chunk.get("page", "")
-            if page is None:
-                page = ""
-            elif not isinstance(page, str):
-                page = str(page)
-            sources_list.append(
-                {
-                    "index": i + 1,
-                    "document_id": chunk.get("document_id", ""),
-                    "page": page,
-                    "source": chunk.get("source", ""),
-                    "text": chunk_text,
-                    "relevance_score": _display_relevance(r),
-                }
-            )
+            sources_list.append(build_source_entry(i + 1, r))
 
         if used_indices:
             filtered_sources = [s for s in sources_list if s["index"] in used_indices]
@@ -922,17 +904,7 @@ class RAGEngine:
             sources_text = self.build_sources_text(all_results)
             sources_list = []
             for i, r in enumerate(all_results[:10]):
-                chunk = r.get("chunk", {})
-                sources_list.append(
-                    {
-                        "index": i + 1,
-                        "document_id": chunk.get("document_id", ""),
-                        "page": str(chunk.get("page", "")),
-                        "source": chunk.get("source", ""),
-                        "text": chunk.get("text", ""),
-                        "relevance_score": _display_relevance(r),
-                    }
-                )
+                sources_list.append(build_source_entry(i + 1, r))
             yield {"type": "sources", "sources": sources_list, "filtered_sources": sources_list}
             async for chunk in self.generate_answer_stream(
                 "请总结文档内容", ctx, sources_text, llm_config=user_config
@@ -992,23 +964,7 @@ class RAGEngine:
                 if results:
                     ctx = self.build_context(results, max_context_tokens=16000)
                     for i, r in enumerate(results[:10]):
-                        chunk = r.get("chunk", {})
-                        chunk_text = chunk.get("text", "")
-                        page = chunk.get("page", "")
-                        if page is None:
-                            page = ""
-                        elif not isinstance(page, str):
-                            page = str(page)
-                        sources_list.append(
-                            {
-                                "index": i + 1,
-                                "document_id": chunk.get("document_id", ""),
-                                "page": page,
-                                "source": chunk.get("source", ""),
-                                "text": chunk_text,
-                                "relevance_score": _display_relevance(r),
-                            }
-                        )
+                        sources_list.append(build_source_entry(i + 1, r))
                     yield {
                         "type": "sources",
                         "sources": sources_list,
@@ -1167,23 +1123,7 @@ class RAGEngine:
 
         sources_list = []
         for i, r in enumerate(retrieved[:10]):
-            chunk = r.get("chunk", {})
-            chunk_text = chunk.get("text", "")
-            page = chunk.get("page", "")
-            if page is None:
-                page = ""
-            elif not isinstance(page, str):
-                page = str(page)
-            sources_list.append(
-                {
-                    "index": i + 1,
-                    "document_id": chunk.get("document_id", ""),
-                    "page": page,
-                    "source": chunk.get("source", ""),
-                    "text": chunk_text,
-                    "relevance_score": _display_relevance(r),
-                }
-            )
+            sources_list.append(build_source_entry(i + 1, r))
 
         yield {"type": "sources", "sources": sources_list, "filtered_sources": sources_list}
 

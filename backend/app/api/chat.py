@@ -43,6 +43,7 @@ class Source(BaseModel):
     page: str | None = ""
     source: str | None = ""
     relevance_score: float
+    chunk_id: str | None = ""
 
 
 class AskResponse(BaseModel):
