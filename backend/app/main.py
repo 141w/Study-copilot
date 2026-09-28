@@ -11,6 +11,7 @@ from app.api.classroom_api import router as classroom_router
 from app.api.config import router as config_router
 from app.api.courses import router as courses_router
 from app.api.document import router as document_router
+from app.api.favorites import router as favorites_router
 from app.api.memory import router as memory_router
 from app.api.metrics import router as metrics_router
 from app.api.notes import router as notes_router
@@ -163,6 +164,7 @@ app.include_router(analysis_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
 app.include_router(courses_router, prefix="/api")
 app.include_router(notes_router, prefix="/api")
+app.include_router(favorites_router, prefix="/api")
 app.include_router(transform_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")

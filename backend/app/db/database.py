@@ -460,6 +460,21 @@ class TokenUsage(Base):
         }
 
 
+class UserFavorite(Base):
+    """P0-B：文档 / 笔记 / 消息收藏（书签）。type 白名单见 service。"""
+
+    __tablename__ = "user_favorites"
+    __table_args__ = (
+        UniqueConstraint("user_id", "resource_type", "resource_id", name="uq_user_favorites"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    resource_type: Mapped[str] = mapped_column(String(20))  # document | note | message
+    resource_id: Mapped[str] = mapped_column(String, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+
+
 async def get_db() -> AsyncIterator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         try:

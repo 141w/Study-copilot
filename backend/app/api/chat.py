@@ -48,6 +48,13 @@ class FollowupSuggestResponse(BaseModel):
     suggestions: list[str]
 
 
+class StarterSuggestRequest(BaseModel):
+    """P0-A 起始问题：空态 / 新会话引导。"""
+
+    document_ids: list[str] | None = None
+    n: int = Field(3, ge=1, le=5)
+
+
 class Source(BaseModel):
     index: int
     document_id: str
@@ -245,6 +252,23 @@ async def suggest_followups(
 
     suggestions = await chat_service.generate_followup_suggestions(
         db, current_user, req.question, req.answer, n=req.n
+    )
+    return FollowupSuggestResponse(suggestions=suggestions)
+
+
+@router.post("/suggest-starters", response_model=FollowupSuggestResponse)
+async def suggest_starters(
+    request: Request,
+    req: StarterSuggestRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """P0-A：空态 / 新会话起始问题引导（计入用量）。"""
+    if not _chat_limiter.check(request):
+        raise RateLimitError("请求过于频繁，请稍后再试")
+
+    suggestions = await chat_service.generate_starter_suggestions(
+        db, current_user, document_ids=req.document_ids, n=req.n
     )
     return FollowupSuggestResponse(suggestions=suggestions)
 

@@ -179,6 +179,39 @@
               <span class="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{{ q.label }}</span>
             </router-link>
           </div>
+          <!-- P0-A 起始问题 -->
+          <div
+            v-if="!startersDismissed && (chatStore.starterSuggestions.length || chatStore.starterSuggestionsLoading)"
+            class="mt-8 max-w-xl mx-auto"
+            data-test="starter-suggestions"
+          >
+            <div class="flex items-center justify-center gap-2 mb-3">
+              <span class="text-xs text-[var(--text-muted)]">
+                {{ chatStore.starterSuggestionsLoading ? '生成引导问题中…' : '试试这样开始' }}
+              </span>
+              <button
+                v-if="!chatStore.starterSuggestionsLoading"
+                type="button"
+                class="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline cursor-pointer"
+                data-test="dismiss-starters"
+                @click="dismissStarters"
+              >
+                不再显示
+              </button>
+            </div>
+            <div class="flex flex-wrap justify-center gap-2">
+              <button
+                v-for="(s, i) in chatStore.starterSuggestions"
+                :key="i"
+                type="button"
+                class="px-3 py-1.5 rounded-full border border-[var(--border-default)] text-sm text-[var(--text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer"
+                :data-test="`starter-chip-${i}`"
+                @click="handleSend(s)"
+              >
+                {{ s }}
+              </button>
+            </div>
+          </div>
         </div>
 
         <div v-else class="max-w-3xl mx-auto px-4 py-6 space-y-6">
@@ -1390,6 +1423,14 @@ function playFlip(): void {
   }
 }
 
+/** P0-A 起始问题：可关闭并记住 */
+const STARTERS_DISMISS_KEY = 'study-copilot.starters-dismissed'
+const startersDismissed = ref(localStorage.getItem(STARTERS_DISMISS_KEY) === '1')
+function dismissStarters(): void {
+  startersDismissed.value = true
+  localStorage.setItem(STARTERS_DISMISS_KEY, '1')
+}
+
 onMounted(async () => {
   // P8-2：空闲瞌睡——活动重置计时（瞌睡本身即低动效，不受动画偏好影响）
   _onPointer = (e) => onActivity(e)
@@ -1416,6 +1457,11 @@ onMounted(async () => {
       .filter(d => d.status === 'ready')
       .slice(0, 1)
       .map(d => d.id)
+  }
+
+  // P0-A 空态起始问题（未关闭且当前无消息时拉取）
+  if (!startersDismissed.value && chatStore.messages.length === 0) {
+    void chatStore.loadStarterSuggestions(selectedDocs.value)
   }
 
   const contextQuery = route.query.context

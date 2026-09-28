@@ -47,6 +47,9 @@
               <el-icon v-if="doc.status === 'processing'" class="is-loading text-[10px]"><Loading /></el-icon>
               {{ doc.status === 'ready' ? '已就绪' : (doc.status === 'processing' ? '处理中' : '错误') }}
             </span>
+            <span class="ml-auto">
+              <FavoriteStar type="document" :id="doc.id" />
+            </span>
           </div>
           <p class="text-sm font-medium text-[var(--text-primary)] truncate">{{ doc.filename }}</p>
           <p class="text-xs text-[var(--text-muted)] mt-1">{{ formatSize(doc.file_size) }}</p>
@@ -348,6 +351,7 @@ import ChunkEditDialog from '../components/ChunkEditDialog.vue'
 import ChunkRevisionList from '../components/ChunkRevisionList.vue'
 import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import SkeletonList from '../components/common/SkeletonList.vue'
+import FavoriteStar from '../components/FavoriteStar.vue'
 import api from '../services/api'
 
 /** 文档 chunk（GET /documents/:id 响应展平 + 视图序号） */

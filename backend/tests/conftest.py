@@ -59,6 +59,16 @@ def _should_mock_embedder() -> bool:
 
 
 @pytest.fixture(autouse=True)
+async def _disable_turnstile_in_tests(monkeypatch):
+    """单元测试不打真实 Cloudflare：强制走本地算术验证码。"""
+    from app.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "turnstile_secret_key", "")
+    monkeypatch.setattr(app_settings, "turnstile_site_key", "")
+    yield
+
+
+@pytest.fixture(autouse=True)
 async def _fake_embedder_in_ci(monkeypatch):
     """HF_HUB_OFFLINE=1 或 CI 时替换全局 embedder，避免 Runner 拉模型。"""
     if not _should_mock_embedder():

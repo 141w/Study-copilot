@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
 import { ElMessage } from 'element-plus'
 import { Close, EditPen, Search } from '@/components/icons'
@@ -18,6 +18,9 @@ const chatStore = useChatStore()
 const editingSessionId = ref<string | null>(null)
 const editingTitle = ref('')
 
+/** P0-C 时间筛选 */
+const timeFilter = ref<'all' | 'today' | 'yesterday' | 'week' | 'older'>('all')
+
 const deleteModal = ref({
   show: false,
   sessionId: '',
@@ -26,6 +29,39 @@ const deleteModal = ref({
 
 const searchInput = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+function dayKey(ts: string): 'today' | 'yesterday' | 'week' | 'older' {
+  if (!ts) return 'older'
+  const d = new Date(ts)
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const t = d.getTime()
+  if (t >= startOfToday) return 'today'
+  if (t >= startOfToday - 86400000) return 'yesterday'
+  if (t >= startOfToday - 7 * 86400000) return 'week'
+  return 'older'
+}
+
+const filteredSessions = computed(() => {
+  if (timeFilter.value === 'all') return chatStore.sessions
+  return chatStore.sessions.filter(s => dayKey(s.created_at || '') === timeFilter.value)
+})
+
+/** 分组：今天 / 昨天 / 本周 / 更早（空组不渲染） */
+const groupedSessions = computed(() => {
+  const buckets: { key: string; label: string; items: ChatSessionSummary[] }[] = [
+    { key: 'today', label: '今天', items: [] },
+    { key: 'yesterday', label: '昨天', items: [] },
+    { key: 'week', label: '本周', items: [] },
+    { key: 'older', label: '更早', items: [] },
+  ]
+  const idx = Object.fromEntries(buckets.map((b, i) => [b.key, i]))
+  for (const s of filteredSessions.value) {
+    const k = dayKey(s.created_at || '')
+    buckets[idx[k]].items.push(s)
+  }
+  return buckets.filter(b => b.items.length > 0)
+})
 
 // P2-1：formatDate 由 useFormat.formatRelativeTime 替换（原为平行实现之一）
 const formatDate = (ts: string) => {
@@ -175,18 +211,47 @@ async function deleteSession() {
       </div>
     </div>
 
+    <!-- Time Filter（P0-C） -->
+    <div class="px-3 pt-2 pb-1 flex flex-wrap gap-1.5" data-test="session-time-filter">
+      <button
+        v-for="f in [
+          { key: 'all', label: '全部' },
+          { key: 'today', label: '今天' },
+          { key: 'yesterday', label: '昨天' },
+          { key: 'week', label: '本周' },
+          { key: 'older', label: '更早' }
+        ]"
+        :key="f.key"
+        type="button"
+        class="px-2 py-0.5 text-[11px] rounded-full border transition-colors cursor-pointer"
+        :class="timeFilter === f.key
+          ? 'border-[var(--color-primary)] text-[var(--color-primary)] bg-[var(--color-primary)]/10'
+          : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'"
+        :data-test="`time-filter-${f.key}`"
+        @click="timeFilter = f.key"
+      >
+        {{ f.label }}
+      </button>
+    </div>
+
     <!-- Session List -->
     <div class="flex-1 overflow-y-auto">
-      <div v-if="chatStore.sessions.length === 0" class="p-4 text-center text-[var(--text-muted)] text-sm">
+      <div v-if="groupedSessions.length === 0" class="p-4 text-center text-[var(--text-muted)] text-sm">
         暂无历史对话
       </div>
-      <div
-        v-else
-        v-for="session in chatStore.sessions"
-        :key="session.session_id"
-        class="border-b border-[var(--border-default)] hover:bg-[var(--bg-hover)] group"
-        :class="{ 'bg-[var(--bg-hover)]': session.session_id === chatStore.currentSession }"
-      >
+      <template v-for="group in groupedSessions" :key="group.key">
+        <div
+          class="px-3 py-1.5 text-[11px] font-medium text-[var(--text-muted)] bg-[var(--bg-secondary)] sticky top-0 z-10"
+          :data-test="`session-group-${group.key}`"
+        >
+          {{ group.label }}
+        </div>
+        <div
+          v-for="session in group.items"
+          :key="session.session_id"
+          class="border-b border-[var(--border-default)] hover:bg-[var(--bg-hover)] group"
+          :class="{ 'bg-[var(--bg-hover)]': session.session_id === chatStore.currentSession }"
+        >
         <!-- Session Item -->
         <div
           class="p-3 cursor-pointer"
@@ -234,7 +299,8 @@ async function deleteSession() {
             删除
           </button>
         </div>
-      </div>
+        </div>
+      </template>
     </div>
   </div>
 

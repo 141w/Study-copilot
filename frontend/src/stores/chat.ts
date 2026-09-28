@@ -85,6 +85,8 @@ export interface ChatStreamMessage {
   suggestionsLoading?: boolean
 }
 
+/** P0-A 空态起始问题（不挂在单条消息上） */
+
 /** 会话列表条目（后端以 session_id 为键，区别于 models.ChatSession.id） */
 export interface ChatSessionSummary {
   session_id: string
@@ -124,6 +126,9 @@ export interface MessageSearchResult {
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatStreamMessage[]>([])
   const sessions = ref<ChatSessionSummary[]>([])
+  /** P0-A 空态起始问题 */
+  const starterSuggestions = ref<string[]>([])
+  const starterSuggestionsLoading = ref(false)
   const currentSession = ref<string | null>(null)
   const currentSessionTitle = ref('')
   const loading = ref(false)
@@ -749,6 +754,23 @@ export const useChatStore = defineStore('chat', () => {
     searchQuery.value = ''
   }
 
+  /** P0-A：空态起始问题（有/无文档均可；失败静默） */
+  async function loadStarterSuggestions(documentIds: string[] = []): Promise<void> {
+    if (starterSuggestionsLoading.value) return
+    starterSuggestionsLoading.value = true
+    try {
+      const { data } = await api.post<{ suggestions: string[] }>('/chat/suggest-starters', {
+        document_ids: documentIds.length ? documentIds : undefined,
+        n: 3
+      })
+      starterSuggestions.value = Array.isArray(data?.suggestions) ? data.suggestions.filter(Boolean) : []
+    } catch {
+      starterSuggestions.value = []
+    } finally {
+      starterSuggestionsLoading.value = false
+    }
+  }
+
   /** 5.2 追问建议：按问题+回答向服务端取 3 条可点后续问题并挂到消息上 */
   async function loadFollowupSuggestions(
     question: string,
@@ -803,6 +825,8 @@ export const useChatStore = defineStore('chat', () => {
     searchResults,
     searchQuery,
     isSearching,
+    starterSuggestions,
+    starterSuggestionsLoading,
     fetchSessions,
     fetchHistory,
     askQuestion,
@@ -815,6 +839,7 @@ export const useChatStore = defineStore('chat', () => {
     searchMessages,
     saveMessageAsNote,
     loadFollowupSuggestions,
+    loadStarterSuggestions,
     findIncompleteMessage,
     resumeMessageStream,
     tryResumeIncomplete,

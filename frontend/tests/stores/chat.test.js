@@ -243,3 +243,41 @@ describe('5.2 追问建议 store', () => {
     expect(api.post).not.toHaveBeenCalled()
   })
 })
+
+describe('P0-A 起始问题 store', () => {
+  let store
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useChatStore()
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
+
+  it('loadStarterSuggestions 成功写入 starterSuggestions', async () => {
+    api.post.mockResolvedValue({ data: { suggestions: ['A？', 'B？', 'C？'] } })
+    await store.loadStarterSuggestions(['d1'])
+    expect(api.post).toHaveBeenCalledWith('/chat/suggest-starters', {
+      document_ids: ['d1'],
+      n: 3
+    })
+    expect(store.starterSuggestions).toEqual(['A？', 'B？', 'C？'])
+    expect(store.starterSuggestionsLoading).toBe(false)
+  })
+
+  it('无文档时不传 document_ids', async () => {
+    api.post.mockResolvedValue({ data: { suggestions: [] } })
+    await store.loadStarterSuggestions()
+    expect(api.post).toHaveBeenCalledWith('/chat/suggest-starters', {
+      document_ids: undefined,
+      n: 3
+    })
+  })
+
+  it('接口失败静默清空', async () => {
+    api.post.mockRejectedValue(new Error('x'))
+    await store.loadStarterSuggestions()
+    expect(store.starterSuggestions).toEqual([])
+    expect(store.starterSuggestionsLoading).toBe(false)
+  })
+})

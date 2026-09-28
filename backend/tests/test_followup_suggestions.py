@@ -93,3 +93,88 @@ async def test_generate_followup_suggestions_empty_inputs():
     user.id = "u1"
     assert await generate_followup_suggestions(db, user, "", "a") == []
     assert await generate_followup_suggestions(db, user, "q", "  ") == []
+
+
+class TestStarterSuggestions:
+    @pytest.mark.asyncio
+    async def test_starters_without_docs(self):
+        from app.services.chat_service import generate_starter_suggestions
+
+        async def fake_chat(*args, **kwargs):
+            return '["怎么开始学习？","如何提问？","能做什么？"]'
+
+        mock_llm = AsyncMock()
+        mock_llm.chat = fake_chat
+        mock_cfg = {"model_name": "m", "provider": "openai"}
+
+        with (
+            patch("app.core.llm.LLM.from_config", return_value=mock_llm),
+            patch(
+                "app.services.chat_service.get_llm_config_with_secret",
+                new=AsyncMock(return_value=mock_cfg),
+            ),
+            patch("app.services.usage_service.record_usage", new=AsyncMock()),
+        ):
+            db = AsyncMock()
+            user = AsyncMock()
+            user.id = "u1"
+            out = await generate_starter_suggestions(db, user, document_ids=None, n=3)
+
+        assert out == ["怎么开始学习？", "如何提问？", "能做什么？"]
+
+    @pytest.mark.asyncio
+    async def test_starters_with_owned_docs(self):
+        from app.services.chat_service import generate_starter_suggestions
+
+        async def fake_chat(*args, **kwargs):
+            return '["这份资料讲什么？","核心概念？","怎么用？"]'
+
+        mock_llm = AsyncMock()
+        mock_llm.chat = fake_chat
+        mock_cfg = {"model_name": "m", "provider": "openai"}
+
+        with (
+            patch("app.core.llm.LLM.from_config", return_value=mock_llm),
+            patch(
+                "app.services.chat_service.get_llm_config_with_secret",
+                new=AsyncMock(return_value=mock_cfg),
+            ),
+            patch("app.services.usage_service.record_usage", new=AsyncMock()),
+            patch(
+                "app.services.chat_service._validate_document_ids",
+                new=AsyncMock(return_value=["d1"]),
+            ),
+        ):
+            class _Result:
+                def all(self):
+                    return [("机器学习笔记.md",)]
+
+            db = AsyncMock()
+            db.execute = AsyncMock(return_value=_Result())
+            user = AsyncMock()
+            user.id = "u1"
+            out = await generate_starter_suggestions(db, user, document_ids=["d1"], n=3)
+
+        assert len(out) == 3
+        assert out[0] == "这份资料讲什么？"
+
+    @pytest.mark.asyncio
+    async def test_starters_llm_error_returns_empty(self):
+        from app.services.chat_service import generate_starter_suggestions
+
+        mock_llm = AsyncMock()
+        mock_llm.chat = AsyncMock(side_effect=RuntimeError("boom"))
+        mock_cfg = {"model_name": "m", "provider": "openai"}
+
+        with (
+            patch("app.core.llm.LLM.from_config", return_value=mock_llm),
+            patch(
+                "app.services.chat_service.get_llm_config_with_secret",
+                new=AsyncMock(return_value=mock_cfg),
+            ),
+        ):
+            db = AsyncMock()
+            user = AsyncMock()
+            user.id = "u1"
+            out = await generate_starter_suggestions(db, user)
+        assert out == []

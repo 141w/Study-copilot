@@ -12,6 +12,7 @@
     <div class="flex items-start justify-between mb-2">
       <h3 class="font-semibold text-[var(--text-primary)] truncate flex-1 pr-2">{{ note.title || '未命名笔记' }}</h3>
       <div class="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity flex-shrink-0">
+        <FavoriteStar type="note" :id="note.id" />
         <el-button
           @click.stop="$emit('edit', note)"
           title="编辑笔记"
@@ -53,6 +54,7 @@ import { Edit, Delete } from '@/components/icons'
 import { useMarkdown } from '../composables/useMarkdown'
 import { formatRelativeTime } from '../composables/useFormat'
 import type { NoteDetail } from '../stores/note'
+import FavoriteStar from './FavoriteStar.vue'
 
 const props = defineProps<{
   /** NoteDetail 的 tags 兼容 string 与对象两种后端形态（渲染前归一化） */

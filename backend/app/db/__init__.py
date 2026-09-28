@@ -17,6 +17,7 @@ from app.db.database import (
     Tag,
     TokenUsage,
     User,
+    UserFavorite,
     UserLLMConfig,
     engine,
     ensure_current_schema,

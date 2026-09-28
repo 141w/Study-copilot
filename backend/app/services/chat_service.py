@@ -650,6 +650,100 @@ async def save_message_as_note(
     return note
 
 
+async def _suggest_via_llm(
+    db: AsyncSession,
+    user: User,
+    template_path: str,
+    template_vars: dict[str, Any],
+    n: int,
+    usage_mode: str,
+    prompt_chars: int,
+) -> list[str]:
+    """一次 LLM 调用生成 JSON 字符串数组建议（起始问题 / 追问共用）。失败返回 []。"""
+    from app.core.llm import LLM
+    from app.core.template_manager import render_template
+
+    user_config = await get_llm_config_with_secret(db, user)
+    llm_config = dict(user_config)
+    llm_config["user_id"] = user.id
+
+    prompt = render_template(template_path, n=n, **template_vars)
+    messages = [
+        {"role": "system", "content": "你只输出合法 JSON 数组，不要任何其他文字。"},
+        {"role": "user", "content": prompt},
+    ]
+    llm = LLM.from_config(llm_config)
+    try:
+        raw = await llm.chat(messages, temperature=0.7, max_tokens=300)
+    except Exception as exc:
+        logger.warning("%s LLM failed: %s", usage_mode, exc)
+        return []
+
+    suggestions = _parse_suggestion_list(raw, n)
+
+    try:
+        from app.services.usage_service import record_usage
+
+        model_name = llm_config.get("model_name") or llm_config.get("model") or "unknown"
+        provider = llm_config.get("provider", "openai")
+        prompt_est = int(prompt_chars * 0.7)
+        comp_est = int(len(raw or "") * 0.7) + 1
+        await record_usage(
+            db=db,
+            user_id=user.id,
+            source="chat",
+            kind="llm",
+            provider=provider,
+            model_name=model_name,
+            prompt_tokens=prompt_est,
+            completion_tokens=comp_est,
+            extra_meta={"mode": usage_mode, "count": len(suggestions)},
+        )
+    except Exception as exc:
+        logger.debug("%s usage record failed: %s", usage_mode, exc)
+
+    return suggestions
+
+
+async def generate_starter_suggestions(
+    db: AsyncSession,
+    user: User,
+    document_ids: list[str] | None = None,
+    n: int = 3,
+) -> list[str]:
+    """空态 / 新会话的起始问题引导（P0-A）。有文档时基于文档名生成。"""
+    n = max(1, min(int(n or 3), 5))
+    doc_names: list[str] = []
+    if document_ids:
+        owned = await _validate_document_ids(db, user.id, document_ids)
+        if owned:
+            rows = (
+                await db.execute(select(Document.filename).where(Document.id.in_(owned)))
+            ).all()
+            doc_names = [r[0] or "未命名文档" for r in rows]
+
+    if doc_names:
+        ctx = "、".join(doc_names[:10])
+        template_vars = {
+            "has_docs": True,
+            "doc_names": ctx,
+        }
+        prompt_chars = len(ctx) + 400
+    else:
+        template_vars = {"has_docs": False, "doc_names": ""}
+        prompt_chars = 300
+
+    return await _suggest_via_llm(
+        db,
+        user,
+        "rag/starter_suggestions.jinja2",
+        template_vars,
+        n,
+        usage_mode="starter_suggestions",
+        prompt_chars=prompt_chars,
+    )
+
+
 async def generate_followup_suggestions(
     db: AsyncSession,
     user: User,
@@ -667,54 +761,15 @@ async def generate_followup_suggestions(
         return []
     n = max(1, min(int(n or 3), 5))
 
-    from app.core.llm import LLM
-    from app.core.template_manager import render_template
-
-    user_config = await get_llm_config_with_secret(db, user)
-    llm_config = dict(user_config)
-    llm_config["user_id"] = user.id
-
-    prompt = render_template(
+    return await _suggest_via_llm(
+        db,
+        user,
         "rag/followup_suggestions.jinja2",
-        question=question[:2000],
-        answer=answer[:6000],
-        n=n,
+        {"question": question[:2000], "answer": answer[:6000]},
+        n,
+        usage_mode="followup_suggestions",
+        prompt_chars=len(question) + len(answer) + 200,
     )
-    messages = [
-        {"role": "system", "content": "你只输出合法 JSON 数组，不要任何其他文字。"},
-        {"role": "user", "content": prompt},
-    ]
-    llm = LLM.from_config(llm_config)
-    try:
-        raw = await llm.chat(messages, temperature=0.7, max_tokens=300)
-    except Exception as exc:
-        logger.warning("followup suggestions LLM failed: %s", exc)
-        return []
-
-    suggestions = _parse_suggestion_list(raw, n)
-
-    try:
-        from app.services.usage_service import record_usage
-
-        model_name = llm_config.get("model_name") or llm_config.get("model") or "unknown"
-        provider = llm_config.get("provider", "openai")
-        prompt_est = int((len(question) + len(answer) + 200) * 0.7)
-        comp_est = int(len(raw or "") * 0.7) + 1
-        await record_usage(
-            db=db,
-            user_id=user.id,
-            source="chat",
-            kind="llm",
-            provider=provider,
-            model_name=model_name,
-            prompt_tokens=prompt_est,
-            completion_tokens=comp_est,
-            extra_meta={"mode": "followup_suggestions", "count": len(suggestions)},
-        )
-    except Exception as exc:
-        logger.debug("followup suggestions usage record failed: %s", exc)
-
-    return suggestions
 
 
 def _parse_suggestion_list(raw: str | None, n: int) -> list[str]:
