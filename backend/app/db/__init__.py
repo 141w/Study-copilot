@@ -19,6 +19,7 @@ from app.db.database import (
     User,
     UserFavorite,
     UserLLMConfig,
+    document_tags,
     engine,
     ensure_current_schema,
     get_db,

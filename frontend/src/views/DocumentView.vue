@@ -14,6 +14,13 @@
         <div class="flex items-center justify-between">
           <p class="text-sm text-[var(--text-muted)]">点击选择文档阅读</p>
           <div class="flex gap-2">
+            <DocumentBatchTagBar
+              :selected="batchSelected"
+              :select-mode="batchSelectMode"
+              @update:select-mode="batchSelectMode = $event"
+              @update:selected="batchSelected = $event"
+              @done="documentStore.fetchDocuments(true)"
+            />
             <el-button
               size="small"
               type="default"
@@ -30,13 +37,16 @@
         <div
           v-for="doc in documentStore.documents"
           :key="doc.id"
-          @click="selectDocument(doc)"
-          @keydown.enter="selectDocument(doc)"
+          @click="batchSelectMode ? toggleBatchSelect(doc.id) : selectDocument(doc)"
+          @keydown.enter="batchSelectMode ? toggleBatchSelect(doc.id) : selectDocument(doc)"
           role="button"
           tabindex="0"
           :aria-label="`阅读文档 ${doc.filename}`"
           class="p-4 border rounded-lg cursor-pointer transition-all bg-[var(--surface-card)] shadow-sm hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)]/30"
-          :class="selectedDoc?.id === doc.id ? 'border-l-4 border-l-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)]'"
+          :class="[
+            selectedDoc?.id === doc.id ? 'border-l-4 border-l-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)]',
+            batchSelected.includes(doc.id) ? 'ring-2 ring-[var(--color-primary)]' : ''
+          ]"
           :data-doc-card="doc.id"
         >
           <div class="flex items-center gap-2 mb-2">
@@ -53,6 +63,16 @@
           </div>
           <p class="text-sm font-medium text-[var(--text-primary)] truncate">{{ doc.filename }}</p>
           <p class="text-xs text-[var(--text-muted)] mt-1">{{ formatSize(doc.file_size) }}</p>
+          <div v-if="doc.tag_names?.length" class="flex flex-wrap gap-1 mt-2">
+            <span
+              v-for="t in doc.tag_names.slice(0, 4)"
+              :key="t"
+              class="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-secondary)]"
+            >{{ t }}</span>
+            <span v-if="doc.tag_names.length > 4" class="text-[10px] text-[var(--text-muted)]">
+              +{{ doc.tag_names.length - 4 }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -352,6 +372,7 @@ import ChunkRevisionList from '../components/ChunkRevisionList.vue'
 import GenerateClassroomDialog from '../components/classroom/GenerateClassroomDialog.vue'
 import SkeletonList from '../components/common/SkeletonList.vue'
 import FavoriteStar from '../components/FavoriteStar.vue'
+import DocumentBatchTagBar from '../components/DocumentBatchTagBar.vue'
 import api from '../services/api'
 
 /** 文档 chunk（GET /documents/:id 响应展平 + 视图序号） */
@@ -379,6 +400,15 @@ const toast = useToastStore()
 const { renderMarkdown } = useMarkdown()
 
 const selectedDoc = ref<DocumentModel | null>(null)
+/** 阶段二：批量打标选择 */
+const batchSelectMode = ref(false)
+const batchSelected = ref<string[]>([])
+
+function toggleBatchSelect(docId: string): void {
+  const i = batchSelected.value.indexOf(docId)
+  if (i >= 0) batchSelected.value.splice(i, 1)
+  else batchSelected.value.push(docId)
+}
 const chunks = ref<DocChunk[]>([])
 // 原始文件本页预览
 const showOriginalPreview = ref(false)

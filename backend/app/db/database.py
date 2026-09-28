@@ -122,6 +122,9 @@ class Document(Base):
     # 软删除标记：NULL=正常；非空=回收站（文件与索引保留，可恢复）
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
 
+    # 阶段二：文档标签（复用 tags 池）
+    tags: Mapped[list["Tag"]] = relationship(secondary="document_tags", back_populates="documents")
+
 
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
@@ -209,6 +212,14 @@ note_tags = Table(
     Column("tag_id", String, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
 )
 
+# 阶段二：文档标签（同一 tags 池）
+document_tags = Table(
+    "document_tags",
+    Base.metadata,
+    Column("document_id", String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", String, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class CourseSpace(Base):
     """A course space groups notes, documents, and chat sessions for a specific course."""
@@ -234,7 +245,7 @@ class CourseSpace(Base):
 
 
 class Tag(Base):
-    """Reusable tag for categorizing notes."""
+    """Reusable tag for categorizing notes and documents."""
 
     __tablename__ = "tags"
 
@@ -245,6 +256,9 @@ class Tag(Base):
 
     # relationships
     notes: Mapped[list["Note"]] = relationship(secondary=note_tags, back_populates="tags")
+    documents: Mapped[list["Document"]] = relationship(
+        secondary="document_tags", back_populates="tags"
+    )
 
 
 class Note(Base):

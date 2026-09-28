@@ -24,6 +24,7 @@ class DocResponse(BaseModel):
     chunk_count: int
     file_size: int
     created_at: str
+    tag_names: list[str] = []
 
 
 class DocProcessResponse(BaseModel):
@@ -145,6 +146,23 @@ async def list_docs(
     current_user: User = Depends(get_current_user),
 ):
     docs = await document_service.list_documents(db, current_user, limit=limit, offset=offset)
+    # 一次查出所有文档标签，避免 N+1
+    from sqlalchemy import select as sa_select
+
+    from app.db.database import Tag as TagModel
+    from app.db.database import document_tags as dt
+
+    tag_rows = (
+        await db.execute(
+            sa_select(dt.c.document_id, TagModel.name)
+            .select_from(dt)
+            .join(TagModel, dt.c.tag_id == TagModel.id)
+            .where(dt.c.document_id.in_([d.id for d in docs] or [""]))
+        )
+    ).all()
+    tags_by_doc: dict[str, list[str]] = {}
+    for did, name in tag_rows:
+        tags_by_doc.setdefault(did, []).append(name)
     return [
         DocResponse(
             id=d.id,
@@ -153,6 +171,7 @@ async def list_docs(
             chunk_count=d.chunk_count,
             file_size=d.file_size,
             created_at=str(d.created_at),
+            tag_names=sorted(tags_by_doc.get(d.id, [])),
         )
         for d in docs
     ]
@@ -385,3 +404,90 @@ async def delete_chat_attachment(
 
     await chat_service.delete_chat_attachment(current_user, attachment_id)
     return {"message": "附件已删除"}
+
+
+# ── 阶段二：文档标签 ──────────────────────────────────────────────────────
+
+
+class DocTagsUpdate(BaseModel):
+    tag_names: list[str]
+
+
+class BatchTagRequest(BaseModel):
+    document_ids: list[str]
+    tag_names: list[str]
+
+
+class DocTagsResp(BaseModel):
+    document_id: str
+    tag_names: list[str]
+
+
+@router.get("/{doc_id}/tags", response_model=DocTagsResp)
+async def get_doc_tags(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services import document_tag_service
+
+    names = await document_tag_service.list_document_tag_names(db, current_user, doc_id)
+    return DocTagsResp(document_id=doc_id, tag_names=names)
+
+
+@router.put("/{doc_id}/tags", response_model=DocTagsResp)
+async def put_doc_tags(
+    doc_id: str,
+    body: DocTagsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services import document_tag_service
+
+    names = await document_tag_service.set_document_tags(db, current_user, doc_id, body.tag_names)
+    return DocTagsResp(document_id=doc_id, tag_names=names)
+
+
+@router.post("/{doc_id}/auto-tag", response_model=DocTagsResp)
+async def auto_tag_doc(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """从已有标签池自动匹配（只增不覆盖人工标签）。"""
+    from app.services import document_tag_service
+
+    added = await document_tag_service.auto_tag_document(db, current_user, doc_id)
+    all_names = await document_tag_service.list_document_tag_names(db, current_user, doc_id)
+    return DocTagsResp(document_id=doc_id, tag_names=all_names or added)
+
+
+@router.post("/batch-tag")
+async def batch_tag_docs(
+    body: BatchTagRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services import document_tag_service
+
+    if len(body.document_ids) > 100:
+        raise RateLimitError("单次最多 100 篇")
+    result = await document_tag_service.batch_add_tags(
+        db, current_user, body.document_ids, body.tag_names
+    )
+    return {"results": result}
+
+
+@router.post("/batch-auto-tag")
+async def batch_auto_tag_docs(
+    body: BatchTagRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """批量自动打标。tag_names 忽略；document_ids 为目标题。"""
+    from app.services import document_tag_service
+
+    if len(body.document_ids) > 50:
+        raise RateLimitError("单次最多 50 篇")
+    result = await document_tag_service.batch_auto_tag(db, current_user, body.document_ids)
+    return {"results": result}

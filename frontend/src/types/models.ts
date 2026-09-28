@@ -24,6 +24,8 @@ export interface Document {
   chunk_count?: number
   /** 字节大小（列表接口返回；DocumentView 格式化展示用） */
   file_size?: number
+  /** 阶段二：文档标签 */
+  tag_names?: string[]
 }
 
 export interface Source {
