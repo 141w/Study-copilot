@@ -26,6 +26,9 @@
     <!-- 阶段一：检索参数 -->
     <RetrievalSettings />
 
+    <!-- 阶段四：评测台 -->
+    <EvaluationLab />
+
     <!-- LLM 参数配置表单 -->
     <div class="card p-6 mb-6">
       <div class="flex items-center justify-between pb-4 mb-6 border-b border-[var(--border-default)]">
@@ -882,6 +885,7 @@ import { useToastStore } from '../stores/toast'
 import type { SystemStatus, LLMCapabilities, ImageTestResult, TTSTestResult, WebSearchTestResult } from '../types/models'
 import CopilotBotAvatar from '../components/CopilotBotAvatar.vue'
 import RetrievalSettings from '../components/settings/RetrievalSettings.vue'
+import EvaluationLab from '../components/settings/EvaluationLab.vue'
 
 type MessageFormat = 'openai' | 'anthropic' | 'gemini' | 'ollama'
 
