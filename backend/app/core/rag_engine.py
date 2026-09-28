@@ -259,9 +259,10 @@ class RAGEngine:
             (retrieved, thinking_events) — 检索结果列表和思考事件列表。
         """
         thinking_events: list[dict] = []
+        ret_cfg = (user_config or {}).get("retrieval") or {}
 
         # 第一次检索
-        retrieved = await self.retrieve(doc_ids, query, top_k)
+        retrieved = await self.retrieve(doc_ids, query, top_k, retrieval_config=ret_cfg)
 
         # 配置门控：corrective_retrieval_enabled=False（默认）时跳过评分与
         # 重试，直接返回首次检索结果。2026-09-19 评测实测：grader 触发率 0%
@@ -300,7 +301,7 @@ class RAGEngine:
         )
 
         rewritten = await self._rewrite_query(query, [], user_config)
-        retrieved_retry = await self.retrieve(doc_ids, rewritten, top_k)
+        retrieved_retry = await self.retrieve(doc_ids, rewritten, top_k, retrieval_config=ret_cfg)
         quality_retry = await retrieval_grader.grade(query, retrieved_retry, user_config)
 
         thinking_events.append(
@@ -343,7 +344,9 @@ class RAGEngine:
         ctx = ""
         sources_list = []
         if doc_ids:
-            results = await self.retrieve(doc_ids, query, top_k=5)
+            results = await self.retrieve(
+                doc_ids, query, top_k=5, retrieval_config=(user_config or {}).get("retrieval")
+            )
             if results:
                 ctx = self.build_context(results, max_context_tokens=16000)
                 for i, r in enumerate(results[:10]):
@@ -447,14 +450,24 @@ class RAGEngine:
 
         return deduped
 
-    async def retrieve(self, doc_ids, query, top_k=5):
+    async def retrieve(self, doc_ids, query, top_k=5, retrieval_config: dict | None = None):
         """Retrieve relevant chunks via pgvector hybrid search (vector + FTS RRF).
 
         Replaces the old per-document FAISS search with a single SQL query
         that combines cosine similarity and full-text search.
+        ``retrieval_config`` 可覆盖 top_k / rrf_k / 权重（阶段一在线调参）。
         """
+        cfg = retrieval_config or {}
+        effective_top = int(cfg.get("embedding_top_k") or top_k)
         store = self._get_pg_vector_store()
-        all_results = await store.search(query, doc_ids, top_k * 2)
+        all_results = await store.search(
+            query,
+            doc_ids,
+            effective_top * 2,
+            rrf_k=cfg.get("rrf_k"),
+            vector_weight=cfg.get("rrf_vector_weight"),
+            keyword_weight=cfg.get("rrf_keyword_weight"),
+        )
 
         if not all_results:
             return []

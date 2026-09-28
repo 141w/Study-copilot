@@ -647,3 +647,35 @@ async def test_web_search_connection(
 # 该端点会把解密后的 API Key 明文返回给前端（经浏览器/扩展/日志可截获）。
 # 后端内部仍通过 config_service.get_llm_config_with_secret() 获取明文（chat/quiz/transform），
 # 前端只需要 has_api_key / api_key_masked（见 GET /llm）。
+
+
+# ── 阶段一：检索参数在线调节 ──────────────────────────────────────────────
+
+
+class RetrievalConfigIn(BaseModel):
+    embedding_top_k: int | None = None
+    vector_threshold: float | None = None
+    keyword_threshold: float | None = None
+    rerank_top_k: int | None = None
+    rerank_threshold: float | None = None
+    rrf_k: int | None = None
+    rrf_vector_weight: float | None = None
+    rrf_keyword_weight: float | None = None
+
+
+@router.get("/retrieval")
+async def get_retrieval(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await config_service.get_retrieval_config(db, current_user)
+
+
+@router.put("/retrieval")
+async def put_retrieval(
+    body: RetrievalConfigIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    raw = body.model_dump(exclude_none=True)
+    return await config_service.update_retrieval_config(db, current_user, raw)

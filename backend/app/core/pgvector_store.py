@@ -260,7 +260,16 @@ class PgVectorStore:
     # 检索（混合：向量 + 全文 RRF）
     # ------------------------------------------------------------------
 
-    async def search(self, query: str, doc_ids: list[str], top_k: int = 5) -> list[dict[str, Any]]:
+    async def search(
+        self,
+        query: str,
+        doc_ids: list[str],
+        top_k: int = 5,
+        *,
+        rrf_k: int | None = None,
+        vector_weight: float | None = None,
+        keyword_weight: float | None = None,
+    ) -> list[dict[str, Any]]:
         """混合检索：向量相似度 + PostgreSQL 全文搜索，RRF 融合。
 
         一次 SQL 完成，支持任意 doc_ids 过滤。
@@ -269,12 +278,18 @@ class PgVectorStore:
             query: 用户查询文本。
             doc_ids: 限定检索的文档 ID 列表。
             top_k: 返回结果数。
+            rrf_k: RRF 平滑常数（默认 60，与历史行为一致）。
+            vector_weight / keyword_weight: 两路 RRF 权重（默认 1.0/1.0=等权求和）。
 
         Returns:
             按融合分数降序排列的结果列表，每项含 ``chunk``、``relevance``、``retrieval_type``。
         """
         if not doc_ids:
             return []
+
+        rrf = int(rrf_k or _RRF_K)
+        w_v = float(vector_weight if vector_weight is not None else 1.0)
+        w_k = float(keyword_weight if keyword_weight is not None else 1.0)
 
         q_emb = await embedder.embed_query(query)
         q_emb_list = q_emb.tolist() if hasattr(q_emb, "tolist") else list(q_emb)
@@ -285,7 +300,7 @@ class PgVectorStore:
         sql = f"""
         WITH vector_results AS (
             SELECT id, document_id, content, chunk_metadata,
-                   1.0 / ({_RRF_K} + ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:q_emb AS vector))) AS v_score
+                   1.0 / ({rrf} + ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:q_emb AS vector))) AS v_score
             FROM document_chunks
             WHERE document_id = ANY(:doc_ids)
               AND embedding IS NOT NULL
@@ -295,7 +310,7 @@ class PgVectorStore:
         ),
         text_results AS (
             SELECT id, document_id, content, chunk_metadata,
-                   1.0 / ({_RRF_K} + ROW_NUMBER() OVER (
+                   1.0 / ({rrf} + ROW_NUMBER() OVER (
                        ORDER BY ts_rank(to_tsvector('{fts_cfg}', content), plainto_tsquery('{fts_cfg}', :query)) DESC
                    )) AS t_score
             FROM document_chunks,
@@ -311,7 +326,7 @@ class PgVectorStore:
                 COALESCE(v.document_id, t.document_id) AS document_id,
                 COALESCE(v.content, t.content) AS content,
                 COALESCE(v.chunk_metadata, t.chunk_metadata) AS chunk_metadata,
-                COALESCE(v.v_score, 0) + COALESCE(t.t_score, 0) AS rrf_score
+                {w_v} * COALESCE(v.v_score, 0) + {w_k} * COALESCE(t.t_score, 0) AS rrf_score
             FROM vector_results v
             FULL OUTER JOIN text_results t USING (id)
         )

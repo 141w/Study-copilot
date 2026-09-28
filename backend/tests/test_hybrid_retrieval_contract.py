@@ -25,7 +25,7 @@ def _fake_pgvector_result(idx: int, fused: float) -> dict:
 class FakePgVectorStore:
     """只实现 rag_engine.retrieve() 用到的 search() 接口。"""
 
-    async def search(self, query: str, doc_ids: list[str], top_k: int):
+    async def search(self, query: str, doc_ids: list[str], top_k: int, **kwargs):
         results = [_fake_pgvector_result(0, 0.0164), _fake_pgvector_result(1, 0.0082)]
         return results[:top_k]
 

@@ -206,6 +206,7 @@ async def get_llm_config_with_secret(
         "base_url": config.base_url,
         "temperature": config.temperature,
         "classroom_config": decrypted_cls,
+        "retrieval": normalize_retrieval_config(extra.get("retrieval")),
     }
 
 
@@ -413,3 +414,84 @@ def _config_to_dict(config: UserLLMConfig) -> dict:
         "created_at": str(config.created_at),
         "updated_at": str(config.updated_at),
     }
+
+
+# ── 阶段一：检索参数（存 extra_config["retrieval"]） ─────────────────────────
+
+#: 默认值 = 现网硬编码行为（rrf 权重 1/1 = 两路等权求和，勿改成 0.7/0.3）
+DEFAULT_RETRIEVAL_CONFIG: dict = {
+    "embedding_top_k": 5,
+    "vector_threshold": 0.0,
+    "keyword_threshold": 0.0,
+    "rerank_top_k": 5,
+    "rerank_threshold": 0.0,
+    "rrf_k": 60,
+    "rrf_vector_weight": 1.0,
+    "rrf_keyword_weight": 1.0,
+}
+
+
+def normalize_retrieval_config(raw: dict | None) -> dict:
+    """把用户存的检索参数夹到合法区间；缺省回落 DEFAULT（=旧行为）。"""
+    raw = raw or {}
+    out = dict(DEFAULT_RETRIEVAL_CONFIG)
+
+    def _int(key: str, default: int) -> int:
+        v = raw.get(key, default)
+        if v is None:
+            return default
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+
+    def _float(key: str, default: float) -> float:
+        v = raw.get(key, default)
+        if v is None:
+            return default
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return default
+
+    out["embedding_top_k"] = max(1, min(_int("embedding_top_k", 5), 50))
+    out["rerank_top_k"] = max(1, min(_int("rerank_top_k", 5), 50))
+    out["rrf_k"] = max(1, min(_int("rrf_k", 60), 200))
+    out["vector_threshold"] = max(0.0, min(_float("vector_threshold", 0.0), 1.0))
+    out["keyword_threshold"] = max(0.0, min(_float("keyword_threshold", 0.0), 1.0))
+    out["rerank_threshold"] = max(-10.0, min(_float("rerank_threshold", 0.0), 10.0))
+    out["rrf_vector_weight"] = max(0.0, min(_float("rrf_vector_weight", 1.0), 1.0))
+    out["rrf_keyword_weight"] = max(0.0, min(_float("rrf_keyword_weight", 1.0), 1.0))
+    return out
+
+
+async def get_retrieval_config(db: AsyncSession, user: User) -> dict:
+    result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
+    config = result.scalar_one_or_none()
+    extra = (getattr(config, "extra_config", None) or {}) if config else {}
+    return normalize_retrieval_config(extra.get("retrieval"))
+
+
+async def update_retrieval_config(db: AsyncSession, user: User, raw: dict) -> dict:
+    cleaned = normalize_retrieval_config(raw)
+    result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
+    config = result.scalar_one_or_none()
+    if not config:
+        config = UserLLMConfig(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            provider="openrouter",
+            model_name="gpt-4o-mini",
+            temperature=0.7,
+            max_tokens=8192,
+            embedding_model="shibing624/text2vec-base-chinese",
+            embedding_dimension=768,
+            extra_config={"retrieval": cleaned},
+        )
+        db.add(config)
+    else:
+        extra = dict(config.extra_config or {})
+        extra["retrieval"] = cleaned
+        config.extra_config = extra
+    await db.commit()
+    return cleaned

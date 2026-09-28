@@ -218,7 +218,14 @@ class TestRAGEngineAsync:
         engine._pg_vector_store = mock_store
 
         results = await engine.retrieve(["doc1"], "test query", top_k=3)
-        mock_store.search.assert_called_once_with("test query", ["doc1"], 6)
+        mock_store.search.assert_called_once_with(
+            "test query",
+            ["doc1"],
+            6,
+            rrf_k=None,
+            vector_weight=None,
+            keyword_weight=None,
+        )
         assert len(results) <= 3
 
     @pytest.mark.asyncio
