@@ -21,6 +21,7 @@ from app.db.database import (
     UserFavorite,
     UserLLMConfig,
     WikiPage,
+    WikiPageRevision,
     document_tags,
     engine,
     ensure_current_schema,

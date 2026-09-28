@@ -91,6 +91,7 @@
               </p>
             </div>
             <div class="flex gap-2">
+              <el-button size="small" data-test="wiki-history" @click="loadHistory">历史</el-button>
               <el-button size="small" data-test="wiki-edit" @click="startEdit">编辑</el-button>
               <el-button size="small" type="danger" plain data-test="wiki-delete" @click="remove">删除</el-button>
             </div>
@@ -128,6 +129,29 @@
               </button>
             </div>
           </div>
+
+          <!-- 5.4 版本历史 -->
+          <div v-if="history?.length" class="mt-6 pt-4 border-t border-[var(--border-default)]" data-test="wiki-history-list">
+            <div class="text-xs text-[var(--text-muted)] mb-2">版本历史</div>
+            <div class="space-y-1.5">
+              <div
+                v-for="h in history"
+                :key="h.id"
+                class="flex items-center justify-between text-xs"
+              >
+                <div class="min-w-0">
+                  <span class="text-[var(--text-primary)]">rev {{ h.revision }}</span>
+                  <span class="text-[var(--text-muted)] ml-2 truncate">{{ h.title }}</span>
+                </div>
+                <el-button
+                  size="small"
+                  text
+                  :data-test="`wiki-revert-${h.revision}`"
+                  @click="revert(h.revision)"
+                >回滚</el-button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div v-else class="card p-10 text-center text-sm text-[var(--text-muted)]">
@@ -163,6 +187,7 @@ const loading = ref(false)
 const saving = ref(false)
 const editing = ref(false)
 const ingesting = ref(false)
+const history = ref<{ id: string; revision: number; title: string }[] | null>(null)
 const pages = ref<WikiListItem[]>([])
 const current = ref<WikiPage | null>(null)
 const linkStatus = ref<Record<string, string | null>>({})
@@ -188,6 +213,35 @@ const rendered = computed(() => {
 
 function linkTitle(slug: string): string {
   return linkStatus.value[slug] || slug
+}
+
+async function loadHistory(): Promise<void> {
+  if (!current.value) return
+  try {
+    const { data } = await api.get<{ id: string; revision: number; title: string }[]>(
+      `/wiki/${current.value.id}/revisions`
+    )
+    history.value = Array.isArray(data) ? data : []
+  } catch {
+    history.value = []
+  }
+}
+
+async function revert(revision: number): Promise<void> {
+  if (!current.value) return
+  try {
+    const { data } = await api.post<WikiPage>(
+      `/wiki/${current.value.id}/revert`,
+      undefined,
+      { params: { revision } }
+    )
+    current.value = data
+    ElMessage.success(`已回滚到 rev ${revision}`)
+    await loadHistory()
+    await loadPages()
+  } catch {
+    ElMessage.error('回滚失败')
+  }
 }
 
 /** 5.2：从就绪文档批量提炼概念页（取前 2 篇，避免单次过重） */

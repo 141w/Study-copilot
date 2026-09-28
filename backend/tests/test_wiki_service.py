@@ -95,3 +95,35 @@ async def test_search_by_title(db_session, user):
     await wiki_service.create_page(db_session, user, slug="ll", title="线性代数", summary="数学")
     hits = await wiki_service.list_pages(db_session, user, q="神经")
     assert len(hits) == 1 and hits[0]["title"] == "神经网络"
+
+
+@pytest.mark.asyncio
+async def test_revision_snapshot_and_revert(db_session, user):
+    p = await wiki_service.create_page(db_session, user, slug="hist", title="原题", content="v1 正文")
+    await wiki_service.update_page(db_session, user, p["id"], title="新题", content="v2 正文")
+    await wiki_service.update_page(db_session, user, p["id"], content="v3 正文")
+
+    revs = await wiki_service.list_revisions(db_session, user, p["id"])
+    # v1、v2 各留一份快照
+    assert [r["revision"] for r in revs] == [2, 1]
+    assert revs[1]["title"] == "原题"
+    assert "v1" in revs[1]["content_preview"]
+
+    # 回滚到 rev=1（原题 + v1）→ 本身成为一次新编辑
+    back = await wiki_service.revert_page(db_session, user, p["id"], revision=1)
+    assert back["title"] == "原题"
+    assert "v1" in back["content"]
+    assert back["revision"] == 4  # 1→2→3→4
+
+    # 回滚可再回滚：再回退到刚被替换掉的 v3
+    revs2 = await wiki_service.list_revisions(db_session, user, p["id"])
+    assert revs2[0]["revision"] == 3
+    again = await wiki_service.revert_page(db_session, user, p["id"], revision=3)
+    assert "v3" in again["content"]
+
+
+@pytest.mark.asyncio
+async def test_revert_missing_404(db_session, user):
+    p = await wiki_service.create_page(db_session, user, slug="miss", title="M")
+    with pytest.raises(NotFoundError):
+        await wiki_service.revert_page(db_session, user, p["id"], revision=99)

@@ -540,6 +540,25 @@ class WikiPage(Base):
     )
 
 
+class WikiPageRevision(Base):
+    """Wiki 概念页被取代版本快照（5.4 回滚用）。"""
+
+    __tablename__ = "wiki_page_revisions"
+    __table_args__ = (
+        UniqueConstraint("page_id", "revision", name="uq_wiki_page_revisions"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    page_id: Mapped[str] = mapped_column(
+        ForeignKey("wiki_pages.id", ondelete="CASCADE"), index=True
+    )
+    revision: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(255))
+    content: Mapped[str] = mapped_column(Text, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+
+
 async def get_db() -> AsyncIterator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         try:

@@ -144,3 +144,22 @@ async def ingest_wiki(
         note_ids=body.note_ids,
         max_pages=body.max_pages,
     )
+
+
+@router.get("/{page_id}/revisions")
+async def list_wiki_revisions(
+    page_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await wiki_service.list_revisions(db, current_user, page_id)
+
+
+@router.post("/{page_id}/revert")
+async def revert_wiki_page(
+    page_id: str,
+    revision: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await wiki_service.revert_page(db, current_user, page_id, revision)

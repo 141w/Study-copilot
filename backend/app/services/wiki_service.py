@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import User, WikiPage
+from app.db import User, WikiPage, WikiPageRevision
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -190,28 +190,93 @@ async def update_page(
     status: str | None = None,
 ) -> dict[str, Any]:
     p = await _get_owned(db, user, page_id)
+    old_title, old_content, old_summary = p.title, p.content, p.summary
+    changed = False
     if title is not None:
         title = title.strip()
         if not title:
             raise ValidationError("标题不能为空")
         if len(title) > MAX_TITLE:
             raise ValidationError(f"标题最长 {MAX_TITLE} 字")
-        p.title = title
+        if title != p.title:
+            p.title = title
+            changed = True
     if content is not None:
         if len(content) > MAX_CONTENT:
             raise ValidationError("内容过长")
         if content != p.content:
             p.content = content
-            p.revision = (p.revision or 1) + 1
-    if summary is not None:
+            changed = True
+    if summary is not None and summary[:500] != (p.summary or ""):
         p.summary = summary[:500]
+        changed = True
     if page_type in ("concept", "entity", "summary", "index"):
         p.page_type = page_type
     if status in ("draft", "published", "archived"):
         p.status = status
+    if changed:
+        # 先快照被取代的版本（回滚用），再抬 revision
+        db.add(
+            WikiPageRevision(
+                id=str(uuid.uuid4()),
+                page_id=p.id,
+                revision=p.revision or 1,
+                title=old_title,
+                content=old_content or "",
+                summary=old_summary or "",
+            )
+        )
+        p.revision = (p.revision or 1) + 1
     await db.commit()
     await db.refresh(p)
     return await get_page(db, user, p.id)
+
+
+async def list_revisions(db: AsyncSession, user: User, page_id: str) -> list[dict[str, Any]]:
+    await _get_owned(db, user, page_id)
+    rows = (
+        await db.execute(
+            select(WikiPageRevision)
+            .where(WikiPageRevision.page_id == page_id)
+            .order_by(WikiPageRevision.revision.desc())
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "revision": r.revision,
+            "title": r.title,
+            "summary": r.summary,
+            "created_at": str(r.created_at) if r.created_at else None,
+            "content_preview": (r.content or "")[:120],
+        }
+        for r in rows
+    ]
+
+
+async def revert_page(
+    db: AsyncSession, user: User, page_id: str, revision: int
+) -> dict[str, Any]:
+    """回滚到历史版本 —— 实现为又一次编辑（可再回滚）。"""
+    await _get_owned(db, user, page_id)
+    hist = (
+        await db.execute(
+            select(WikiPageRevision).where(
+                WikiPageRevision.page_id == page_id,
+                WikiPageRevision.revision == revision,
+            )
+        )
+    ).scalar_one_or_none()
+    if not hist:
+        raise NotFoundError("版本不存在")
+    return await update_page(
+        db,
+        user,
+        page_id,
+        title=hist.title,
+        content=hist.content,
+        summary=hist.summary,
+    )
 
 
 async def delete_page(db: AsyncSession, user: User, page_id: str) -> None:
