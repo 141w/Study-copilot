@@ -120,3 +120,27 @@ async def delete_wiki_page(
 ):
     await wiki_service.delete_page(db, current_user, page_id)
     return {"success": True}
+
+
+class WikiIngestReq(BaseModel):
+    document_ids: list[str] | None = None
+    note_ids: list[str] | None = None
+    max_pages: int = 8
+
+
+@router.post("/ingest")
+async def ingest_wiki(
+    body: WikiIngestReq,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """阶段五 5.2：从文档/笔记摄入概念页（同 slug 合并）。"""
+    from app.services import wiki_ingest_service
+
+    return await wiki_ingest_service.ingest_from_sources(
+        db,
+        current_user,
+        document_ids=body.document_ids,
+        note_ids=body.note_ids,
+        max_pages=body.max_pages,
+    )

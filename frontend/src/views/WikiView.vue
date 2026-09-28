@@ -5,7 +5,12 @@
         <h1 class="text-2xl font-semibold text-[var(--text-primary)]">知识 Wiki</h1>
         <p class="text-sm text-[var(--text-muted)] mt-1">概念页 + [[双链]]，把资料串成可点的知识网</p>
       </div>
-      <el-button type="primary" data-test="wiki-new" @click="startCreate()">新建概念页</el-button>
+      <div class="flex gap-2">
+        <el-button data-test="wiki-ingest" :loading="ingesting" @click="ingestFromDocs">
+          从文档提炼
+        </el-button>
+        <el-button type="primary" data-test="wiki-new" @click="startCreate()">新建概念页</el-button>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -157,6 +162,7 @@ const search = ref('')
 const loading = ref(false)
 const saving = ref(false)
 const editing = ref(false)
+const ingesting = ref(false)
 const pages = ref<WikiListItem[]>([])
 const current = ref<WikiPage | null>(null)
 const linkStatus = ref<Record<string, string | null>>({})
@@ -182,6 +188,33 @@ const rendered = computed(() => {
 
 function linkTitle(slug: string): string {
   return linkStatus.value[slug] || slug
+}
+
+/** 5.2：从就绪文档批量提炼概念页（取前 2 篇，避免单次过重） */
+async function ingestFromDocs(): Promise<void> {
+  ingesting.value = true
+  try {
+    const { data: docs } = await api.get<{ id: string; status: string }[]>('/documents')
+    const ids = (Array.isArray(docs) ? docs : [])
+      .filter(d => d.status === 'ready')
+      .slice(0, 2)
+      .map(d => d.id)
+    if (!ids.length) {
+      ElMessage.warning('没有可提炼的就绪文档')
+      return
+    }
+    const { data } = await api.post<{ created: number; merged: number; errors: string[] }>(
+      '/wiki/ingest',
+      { document_ids: ids, max_pages: 6 }
+    )
+    const n = (data?.created || 0) + (data?.merged || 0)
+    ElMessage.success(n ? `已生成/合并 ${n} 个概念页` : '未提炼出概念页')
+    await loadPages()
+  } catch {
+    ElMessage.error('提炼失败')
+  } finally {
+    ingesting.value = false
+  }
 }
 
 async function loadPages(): Promise<void> {
