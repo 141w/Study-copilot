@@ -39,16 +39,30 @@
           :key="doc.id"
           @click="batchSelectMode ? toggleBatchSelect(doc.id) : selectDocument(doc)"
           @keydown.enter="batchSelectMode ? toggleBatchSelect(doc.id) : selectDocument(doc)"
-          role="button"
+          :role="batchSelectMode ? 'checkbox' : 'button'"
+          :aria-checked="batchSelectMode ? batchSelected.includes(doc.id) : undefined"
           tabindex="0"
-          :aria-label="`阅读文档 ${doc.filename}`"
-          class="p-4 border rounded-lg cursor-pointer transition-all bg-[var(--surface-card)] shadow-sm hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)]/30"
+          :aria-label="`${batchSelectMode ? '选择' : '阅读'}文档 ${doc.filename}`"
+          class="doc-card relative p-4 border rounded-lg cursor-pointer transition-all bg-[var(--surface-card)] shadow-sm hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)]/30"
           :class="[
             selectedDoc?.id === doc.id ? 'border-l-4 border-l-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--border-default)]',
-            batchSelected.includes(doc.id) ? 'ring-2 ring-[var(--color-primary)]' : ''
+            batchSelected.includes(doc.id) ? 'ring-2 ring-[var(--color-primary)] is-batch-selected' : ''
           ]"
           :data-doc-card="doc.id"
         >
+          <!-- 批量勾选角标：仅批量模式出现，占据右上角；此时收藏星让位隐藏 -->
+          <span
+            v-if="batchSelectMode"
+            class="batch-check absolute top-2 right-2 w-[22px] h-[22px] rounded-full border flex items-center justify-center"
+            :class="batchSelected.includes(doc.id) ? 'is-on' : ''"
+            aria-hidden="true"
+            data-test="doc-batch-check"
+          >
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+
           <div class="flex items-center gap-2 mb-2">
             <el-icon class="w-5 h-5 text-[var(--text-secondary)]"><Document /></el-icon>
             <span class="text-xs px-2 py-0.5 rounded flex items-center gap-1"
@@ -57,7 +71,7 @@
               <el-icon v-if="doc.status === 'processing'" class="is-loading text-[10px]"><Loading /></el-icon>
               {{ doc.status === 'ready' ? '已就绪' : (doc.status === 'processing' ? '处理中' : '错误') }}
             </span>
-            <span class="ml-auto">
+            <span v-if="!batchSelectMode" class="ml-auto">
               <FavoriteStar type="document" :id="doc.id" />
             </span>
           </div>
@@ -776,5 +790,45 @@ onUnmounted(() => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(6px);
+}
+
+/* ==================== 批量勾选角标与选中态 ====================
+   原先选中只靠 ring-2 描边表达，且与"正在阅读"的 ring-1 只差 1px，
+   肉眼几乎分辨不出；这里补一个右上角勾选角标做确定性标识。
+   未启用 Tailwind preflight，故显式声明 appearance 与盒模型。 */
+.batch-check {
+  appearance: none;
+  box-sizing: border-box;
+  border: 1.5px solid var(--border-default);
+  background: var(--surface-card);
+  color: transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast), transform var(--transition-fast);
+}
+/* 未勾选时描边加重一档，提示此处可点选 */
+.doc-card:hover .batch-check {
+  border-color: var(--border-hover);
+}
+.batch-check.is-on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  /* 前景取反色令牌：亮色黑底白勾 / 暗色白底黑勾，不会白底白勾 */
+  color: var(--text-inverse);
+  transform: scale(1.08);
+}
+
+/* 选中卡片底色：用 color-mix 在卡片色上压一档主色，
+   特异性 (0,3,0) 高于静态的 bg-[var(--surface-card)]，故能稳定覆盖 */
+.doc-card.is-batch-selected {
+  background-color: color-mix(in srgb, var(--color-primary) 4%, var(--surface-card));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .batch-check,
+  .batch-check.is-on {
+    transition: none;
+    transform: none;
+  }
 }
 </style>

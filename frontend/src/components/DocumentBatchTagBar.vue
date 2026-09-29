@@ -1,17 +1,16 @@
 <template>
   <div class="space-y-2">
-    <div class="flex items-center gap-2">
-      <button
-        type="button"
-        class="px-2 py-1 text-xs rounded-md border transition-colors cursor-pointer"
-        :class="selectMode
-          ? 'border-[var(--color-primary)] text-[var(--color-primary)] bg-[var(--color-primary)]/10'
-          : 'border-[var(--border-default)] text-[var(--text-secondary)]'"
+    <div class="flex items-center gap-2 batch-bar">
+      <!-- 批量入口：统一为 el-button，与它展开出的三颗操作钮同一套皮肤。
+           选中态沿用全站既有惯用法 :type="active ? 'primary' : 'default'"。 -->
+      <el-button
+        size="small"
+        :type="selectMode ? 'primary' : 'default'"
         data-test="doc-batch-toggle"
         @click="toggleSelectMode"
       >
         {{ selectMode ? `已选 ${selected.length}` : '批量' }}
-      </button>
+      </el-button>
       <template v-if="selectMode">
         <el-button size="small" :disabled="selected.length === 0" @click="openTagDialog">
           打标签
@@ -128,3 +127,12 @@ async function runAutoTag(): Promise<void> {
   }
 }
 </script>
+
+<style scoped>
+/* 排布修正：EP 有 `.el-button + .el-button { margin-left: 12px }`。
+   「批量」toggle 转成 el-button 后，它与展开出的三颗全部成为相邻兄弟，
+   会与容器的 gap-2 叠加成 20px 间距。这里归零，间距统一由 gap 决定。 */
+.batch-bar :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+</style>

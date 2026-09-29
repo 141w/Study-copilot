@@ -4,7 +4,7 @@
     <div
       ref="triggerRef"
       class="model-selector-trigger"
-      :class="{ 'is-active': dropdownVisible }"
+      :class="{ 'is-active': dropdownVisible, 'is-empty': isEmpty }"
       title="切换当前对话模型"
       @click.stop="toggleDropdown"
     >
@@ -76,8 +76,11 @@
               </div>
             </div>
 
-            <div v-if="computedModels.length === 0" class="px-3 py-3 text-center text-xs text-[var(--text-muted)]">
-              暂无可用模型，请先配置
+            <div v-if="isEmpty" class="model-selector-empty px-3 py-4 text-center" @click.stop="goToConfig">
+              <p class="text-xs text-[var(--text-secondary)]">未检测到已配置的模型</p>
+              <p class="text-[11px] text-[var(--text-muted)] mt-1">
+                请先在「模型配置」中填写服务商与模型名，此处只列出配置页真实存在的模型
+              </p>
             </div>
           </div>
         </div>
@@ -100,13 +103,6 @@ export interface ModelOptionItem {
 
 const LS_KEY = 'study-copilot.chat-model'
 
-const props = withDefaults(
-  defineProps<{
-    models?: ModelOptionItem[]
-  }>(),
-  { models: () => [] }
-)
-
 const emit = defineEmits<{ (e: 'select', id: string): void }>()
 const router = useRouter()
 const configStore = useConfigStore()
@@ -115,7 +111,12 @@ const triggerRef = ref<HTMLElement | null>(null)
 const dropdownVisible = ref(false)
 const dropdownStyle = ref<Record<string, string>>({})
 const activeModelId = ref<string>('')
-const primaryConfig = ref<{ model_name?: string; context_window?: number } | null>(null)
+/**
+ * 配置页真实存在的对话模型。
+ * 唯一事实源是服务端 GET /config/llm（单条主配置），
+ * 因此可选项数量恒为 0 或 1——不再注入任何预设/默认模型。
+ */
+const configuredModel = ref<{ name: string; contextWindow?: number } | null>(null)
 
 // 格式化上下文窗口数字（如 131072 -> 128k, 200000 -> 200k）
 function formatCtx(num?: number): string {
@@ -129,71 +130,23 @@ function formatCtx(num?: number): string {
   return String(num)
 }
 
-// 综合模型列表（外部 props + 主配置 + 常用已知规格注册表）
+// 模型列表：严格等于配置页真实存在的模型，未配置则为空数组
 const computedModels = computed<ModelOptionItem[]>(() => {
-  const result: ModelOptionItem[] = []
-  const seenIds = new Set<string>()
-
-  // 1. 如果有传入 props.models 且有内容
-  for (const m of props.models) {
-    if (m.id && !seenIds.has(m.id)) {
-      seenIds.add(m.id)
-      result.push({
-        id: m.id,
-        label: m.label || m.id,
-        contextWindow: m.contextWindow,
-        contextLabel: m.contextLabel || formatCtx(m.contextWindow),
-      })
-    }
-  }
-
-  // 2. 融入当前主配置模型
-  if (primaryConfig.value?.model_name) {
-    const pName = primaryConfig.value.model_name
-    if (!seenIds.has(pName)) {
-      seenIds.add(pName)
-      const ctx = primaryConfig.value.context_window || 131072
-      result.unshift({
-        id: pName,
-        label: `${pName} (当前主配置)`,
-        contextWindow: ctx,
-        contextLabel: formatCtx(ctx),
-      })
-    }
-  }
-
-  // 3. 常见预设补全（如果列表太少）
-  const presets: { id: string; label: string; ctx: number }[] = [
-    { id: 'deepseek-chat', label: 'DeepSeek-V3', ctx: 131072 },
-    { id: 'deepseek-reasoner', label: 'DeepSeek-R1 (深度思考)', ctx: 131072 },
-    { id: 'gpt-4o', label: 'GPT-4o', ctx: 128000 },
-    { id: 'qwen-plus', label: '通义千问 Qwen-Plus', ctx: 131072 },
-  ]
-  for (const p of presets) {
-    if (!seenIds.has(p.id)) {
-      seenIds.add(p.id)
-      result.push({
-        id: p.id,
-        label: p.label,
-        contextWindow: p.ctx,
-        contextLabel: formatCtx(p.ctx),
-      })
-    }
-  }
-
-  return result
+  const m = configuredModel.value
+  if (!m?.name) return []
+  return [{
+    id: m.name,
+    label: m.name,
+    contextWindow: m.contextWindow,
+    contextLabel: formatCtx(m.contextWindow),
+  }]
 })
 
-const currentModelName = computed(() => {
-  const hit = computedModels.value.find(m => m.id === activeModelId.value)
-  if (hit) return hit.label.replace(/\s*\(当前主配置\)/, '')
-  return activeModelId.value || primaryConfig.value?.model_name || '默认模型'
-})
+const isEmpty = computed(() => computedModels.value.length === 0)
 
-const currentContextLabel = computed(() => {
-  const hit = computedModels.value.find(m => m.id === activeModelId.value)
-  return hit?.contextLabel || (hit?.contextWindow ? formatCtx(hit.contextWindow) : '')
-})
+const currentModelName = computed(() => computedModels.value[0]?.label || '未配置模型')
+
+const currentContextLabel = computed(() => computedModels.value[0]?.contextLabel || '')
 
 function updateDropdownPos(): void {
   if (!triggerRef.value) return
@@ -237,24 +190,25 @@ function goToConfig(): void {
 }
 
 onMounted(async () => {
-  try {
-    const saved = localStorage.getItem(LS_KEY)
-    if (saved) activeModelId.value = saved
-  } catch { /* ignore */ }
+  // 唯一事实源：服务端 GET /config/llm
+  const cfg = await configStore.fetchLLMConfig().catch(() => null)
+  const name = cfg?.model_name?.trim() || ''
+  configuredModel.value = name ? { name, contextWindow: cfg?.context_window } : null
 
-  // 异步加载服务端实际配置
-  try {
-    const cfg = await configStore.fetchLLMConfig()
-    if (cfg) {
-      primaryConfig.value = {
-        model_name: cfg.model_name,
-        context_window: (cfg as any).context_window,
-      }
-      if (!activeModelId.value) {
-        activeModelId.value = cfg.model_name || 'default'
-      }
-    }
-  } catch { /* ignore */ }
+  let saved = ''
+  try { saved = localStorage.getItem(LS_KEY) || '' } catch { /* ignore */ }
+
+  if (!name) {
+    // 未配置：清空选中与本地残留，触发按钮走「未配置模型」空态
+    activeModelId.value = ''
+    try { localStorage.removeItem(LS_KEY) } catch { /* ignore */ }
+    return
+  }
+
+  // 本地记录只有仍等于真实配置时才沿用，
+  // 否则一律回落到真实配置——避免显示配置页已改名/已删除的模型
+  activeModelId.value = (saved && saved === name) ? saved : name
+  try { localStorage.setItem(LS_KEY, activeModelId.value) } catch { /* ignore */ }
 })
 </script>
 
@@ -282,6 +236,29 @@ onMounted(async () => {
   background: var(--bg-hover, #f3f4f6);
   border-color: var(--border-hover, #d1d5db);
   color: var(--text-primary, #111827);
+}
+
+/* 未配置态：虚线描边 + 弱化前景，与"已选中一个真实模型"明确区分 */
+.model-selector-trigger.is-empty {
+  border-style: dashed;
+  border-color: var(--border-default);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.model-selector-trigger.is-empty .model-icon {
+  opacity: 0.55;
+}
+.model-selector-trigger.is-empty:hover {
+  border-color: var(--color-primary);
+  color: var(--text-secondary);
+}
+.model-selector-empty {
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background-color 0.15s ease;
+}
+.model-selector-empty:hover {
+  background: var(--bg-hover);
 }
 
 .dark .model-selector-trigger {

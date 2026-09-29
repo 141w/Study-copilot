@@ -2,7 +2,7 @@
   <div class="answers-input w-full relative">
     <!-- 富文本输入大容器 (复刻 WeKnora rich-input-container 规范) -->
     <div
-      class="rich-input-container relative w-full bg-[var(--bg-primary)] border border-[var(--border-default)] rounded-2xl transition-all duration-200 shadow-sm hover:shadow-md focus-within:border-[var(--color-primary)] focus-within:shadow-[0_4px_20px_rgba(16,185,129,0.12)]"
+      class="rich-input-container relative w-full bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded-2xl transition-all duration-200 shadow-sm hover:shadow-md focus-within:border-[var(--color-primary)] focus-within:shadow-[0_4px_20px_rgba(16,185,129,0.12)]"
       data-guide="chat-input"
     >
       <!-- 附件行 (5.6 临时附件) -->
@@ -54,49 +54,52 @@
       <div class="control-bar absolute bottom-2.5 left-3 right-3 flex items-center justify-between gap-2 pointer-events-auto">
         <!-- 左侧工具组 -->
         <div class="control-left flex items-center gap-1.5 min-w-0 flex-1">
-          <!-- @ 范围/知识库选择按钮 (带已选数量角标) -->
-          <button
-            type="button"
-            class="control-btn kb-btn relative inline-flex items-center justify-center w-7 h-7 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
-            :class="{ 'is-active text-[var(--color-primary)] bg-[var(--color-primary-light)]': scopeChips.length > 0 }"
-            title="选择参考课程或文档范围 (@)"
-            aria-label="选择参考范围"
-            data-guide="chat-kb-mention"
-            @click.stop="triggerMentionButton"
-          >
-            <svg class="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="10" cy="10" r="3.5" />
-              <path d="M13.5 10V11.5C13.5 12.163 13.7634 12.7989 14.2322 13.2678C14.7011 13.7366 15.337 14 16 14C16.663 14 17.2989 13.7366 17.7678 13.2678C18.2366 12.7989 18.5 12.163 18.5 11.5V10C18.5 7.74566 17.6045 5.58365 16.0104 3.98959C14.4163 2.39553 12.2543 1.5 10 1.5C7.74566 1.5 5.58365 2.39553 3.98959 3.98959C2.39553 5.58365 1.5 7.74566 1.5 10C1.5 12.2543 2.39553 14.4163 3.98959 16.0104C5.58365 17.6045 7.74566 18.5 10 18.5H12" />
-            </svg>
+          <!-- @ 范围/知识库选择按钮 (统一为 el-button circle 图标圆钮；角标移到外层锚点) -->
+          <span class="icon-btn-wrap relative inline-flex">
+            <el-button
+              circle
+              :type="scopeChips.length > 0 ? 'primary' : 'default'"
+              class="control-btn kb-btn"
+              title="选择参考课程或文档范围 (@)"
+              aria-label="选择参考范围"
+              data-guide="chat-kb-mention"
+              @click.stop="triggerMentionButton"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="10" cy="10" r="3.5" />
+                <path d="M13.5 10V11.5C13.5 12.163 13.7634 12.7989 14.2322 13.2678C14.7011 13.7366 15.337 14 16 14C16.663 14 17.2989 13.7366 17.7678 13.2678C18.2366 12.7989 18.5 12.163 18.5 11.5V10C18.5 7.74566 17.6045 5.58365 16.0104 3.98959C14.4163 2.39553 12.2543 1.5 10 1.5C7.74566 1.5 5.58365 2.39553 3.98959 3.98959C2.39553 5.58365 1.5 7.74566 1.5 10C1.5 12.2543 2.39553 14.4163 3.98959 16.0104C5.58365 17.6045 7.74566 18.5 10 18.5H12" />
+              </svg>
+            </el-button>
             <span
               v-if="scopeChips.length > 0"
-              class="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[9px] font-bold flex items-center justify-center border-2 border-[var(--bg-primary)] leading-none"
+              class="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[9px] font-bold flex items-center justify-center border-2 border-[var(--bg-primary)] leading-none pointer-events-none"
             >{{ scopeChips.length }}</span>
-          </button>
+          </span>
 
-          <!-- 附件上传按钮 (带文件数角标) -->
-          <button
-            type="button"
-            class="control-btn attach-btn relative inline-flex items-center justify-center w-7 h-7 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
-            :class="{ 'is-active text-[var(--color-primary)] bg-[var(--color-primary-light)]': attachments.length > 0 }"
-            title="添加图片或文档附件"
-            aria-label="添加附件"
-            data-test="attach-btn"
-            @click="openFilePicker"
-          >
-            <!-- 回形针图标 -->
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-            </svg>
+          <!-- 附件上传按钮 (统一为 el-button circle 图标圆钮) -->
+          <span class="icon-btn-wrap relative inline-flex">
+            <el-button
+              circle
+              :type="attachments.length > 0 ? 'primary' : 'default'"
+              class="control-btn attach-btn"
+              title="添加图片或文档附件"
+              aria-label="添加附件"
+              data-test="attach-btn"
+              @click.stop="openFilePicker"
+            >
+              <!-- 回形针图标 -->
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </el-button>
             <span
               v-if="attachments.length > 0"
-              class="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[9px] font-bold flex items-center justify-center border-2 border-[var(--bg-primary)] leading-none"
+              class="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-[var(--color-primary)] text-[var(--text-inverse)] text-[9px] font-bold flex items-center justify-center border-2 border-[var(--bg-primary)] leading-none pointer-events-none"
             >{{ attachments.length }}</span>
-          </button>
+          </span>
 
-          <!-- 模型选择胶囊 (真接线与精致浮层，复刻 WeKnora model-selector-trigger) -->
+          <!-- 模型选择胶囊：可选项由 ModelChip 直接向 /config/llm 取真实配置，不再由父级注入 -->
           <ModelChip
-            :models="modelOptions"
             class="shrink-0"
             @select="onModelSelect"
           />
@@ -104,27 +107,29 @@
 
         <!-- 右侧操作区 (发送 / 停止生成) -->
         <div class="control-right flex items-center gap-1.5 shrink-0">
-          <!-- 停止生成按钮 (生成中呼吸动效，复刻 WeKnora stop-btn 规范) -->
-          <button
+          <!-- 停止生成：统一为 el-button circle type=danger，不再手写 rose 硬编码色板 -->
+          <el-button
             v-if="loading"
-            type="button"
-            class="stop-btn flex items-center justify-center w-8 h-8 rounded-lg text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer active:scale-95 dark:bg-rose-950/30 dark:border-rose-900/50 dark:hover:bg-rose-950/50"
+            circle
+            type="danger"
+            class="stop-btn"
             title="停止生成"
             aria-label="停止生成"
             data-test="stop-btn"
             @click="stopStream"
           >
             <!-- 呼吸小方块 SVG -->
-            <svg class="w-3.5 h-3.5 text-rose-500 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+            <svg class="stop-pulse w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
               <rect x="5" y="5" width="14" height="14" rx="2" />
             </svg>
-          </button>
+          </el-button>
 
-          <!-- 发送按钮 (复刻 WeKnora send-btn 规范) -->
-          <button
+          <!-- 发送：统一为 el-button circle type=primary（32px 正圆，前景由 --el-color-white 反转） -->
+          <el-button
             v-else
-            type="button"
-            class="send-btn flex items-center justify-center w-8 h-8 rounded-lg text-[var(--text-inverse)] bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-35 disabled:cursor-not-allowed transition-all cursor-pointer active:scale-95 shadow-sm"
+            circle
+            type="primary"
+            class="send-btn"
             :disabled="sendDisabled"
             title="发送消息 (Enter 发送，Shift+Enter 换行)"
             aria-label="发送消息"
@@ -137,7 +142,7 @@
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
-          </button>
+          </el-button>
         </div>
       </div>
     </div>
@@ -202,13 +207,6 @@ const dynamicPlaceholder = computed(() => {
     return `基于已选的 ${props.scopeChips.length} 项范围提问...`
   }
   return props.placeholder || '输入您的问题... (输入 @ 可选择课程或文档范围)'
-})
-
-const modelOptions = computed(() => {
-  const currentSaved = (localStorage.getItem('study-copilot.chat-model') || '') as string
-  return [
-    { id: currentSaved || 'default', label: currentSaved ? currentSaved : '默认主模型', contextWindow: 131072 },
-  ]
 })
 
 const mentionCandidates = computed<ScopeChip[]>(() => {
@@ -392,5 +390,34 @@ onMounted(() => {
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background-color: var(--border-default, #e5e7eb);
   border-radius: 9999px;
+}
+
+/* 图标圆钮排布修正：EP 有 `.el-button + .el-button { margin-left: 12px }`，
+   控制栏与图标网格里并排的 circle 按钮会被这条规则逐个撑开 12px，
+   与容器的 gap 叠加成 18px。这里归零，间距统一交给 flex/grid 的 gap。 */
+.control-left :deep(.el-button + .el-button),
+.control-right :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+/* 保留原先 active:scale-95 的按压手感——EP 按钮没有这个反馈 */
+.send-btn:active,
+.stop-btn:active {
+  transform: scale(0.95);
+}
+
+/* 停止按钮的呼吸方块。原先用 Tailwind animate-pulse，
+   但图标前景色来自 EP 的 danger 反色，无需再单独指定 text-rose-500 */
+.stop-pulse {
+  animation: stop-pulse 1.4s ease-in-out infinite;
+}
+@keyframes stop-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stop-pulse {
+    animation: none;
+  }
 }
 </style>

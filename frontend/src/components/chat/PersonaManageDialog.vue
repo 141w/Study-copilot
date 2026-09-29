@@ -228,21 +228,22 @@
               {{ getIconLabel(formData.avatar) }}
             </span>
           </div>
-          <!-- 快捷 SVG 矢量图标选择器 -->
-          <div class="grid grid-cols-8 gap-1.5 p-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)]/40">
-            <button
+          <!-- 快捷 SVG 矢量图标选择器（统一为 el-button circle 图标圆钮） -->
+          <div class="icon-grid grid grid-cols-8 gap-1.5 p-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)]/40">
+            <el-button
               v-for="icon in availableIcons"
               :key="icon.name"
-              type="button"
+              circle
+              :type="formData.avatar === icon.name ? 'primary' : 'default'"
               :title="icon.label"
-              class="w-7 h-7 rounded-md flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
-              :class="formData.avatar === icon.name ? 'ring-2 ring-[var(--color-primary)] bg-[var(--bg-hover)] text-[var(--color-primary)]' : ''"
+              :aria-label="icon.label"
+              class="icon-pick"
               @click="formData.avatar = icon.name"
             >
               <el-icon :size="15">
                 <component :is="iconComponents[icon.name]" />
               </el-icon>
-            </button>
+            </el-button>
           </div>
         </div>
 
@@ -596,5 +597,12 @@ const deletePersona = async (persona: PersonaItem) => {
 .persona-manage-dialog :deep(.el-dialog__body) {
   padding-top: 10px;
   padding-bottom: 12px;
+}
+
+/* 图标圆钮排布修正：EP 有 `.el-button + .el-button { margin-left: 12px }`，
+   在 grid-cols-8 里每个格子会被这条规则额外撑开 12px 而溢出列宽。
+   归零后间距统一由 grid 的 gap 决定。 */
+.icon-grid :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 </style>

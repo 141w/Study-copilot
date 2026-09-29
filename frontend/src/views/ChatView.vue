@@ -2,8 +2,12 @@
   <div class="flex" :style="containerHeightStyle">
     <!-- Chat Area -->
     <div class="flex-1 flex flex-col" @mouseenter="mouseInChat = true" @mouseleave="mouseInChat = false">
-      <!-- Top Bar -->
-      <div class="border-b border-[var(--border-default)] px-4 sm:px-6 py-2.5 bg-[var(--surface-card)] flex items-center justify-between gap-3 overflow-x-auto">
+      <!-- Top Bar
+           底色取 --bg-secondary（亮 #e9e9f2 / 暗 #0a0a0a）：
+           比纯白 --surface-card 暗一档，不再是压在 #f0f0fa 页面上的"高光横档"；
+           又比页面底色深一档，让工具栏与消息区保留可辨的分层。
+           与 AnalysisView / WikiView 的顶部底色取值一致。 -->
+      <div class="border-b border-[var(--border-default)] px-4 sm:px-6 py-2.5 bg-[var(--bg-secondary)] flex items-center justify-between gap-3 overflow-x-auto">
         <div class="flex items-center gap-3 min-w-0 shrink">
           <h1 class="text-lg sm:text-xl font-semibold text-[var(--text-primary)] shrink-0">AI 问答</h1>
           <span
@@ -146,11 +150,6 @@
             </router-link>
           </el-tooltip>
         </div>
-      </div>
-
-      <!-- Document Selector -->
-      <div class="border-b border-[var(--border-default)] px-6 py-3 bg-[var(--bg-secondary)]">
-        <DocumentPicker v-model="selectedDocs" mode="multiple" label="参考文档" :documents="readyDocs" />
       </div>
 
       <!-- Messages Area -->
@@ -325,7 +324,6 @@ import { useDocumentStore } from '../stores/document'
 import { useCourseStore } from '../stores/course'
 import ChatInput from '../components/chat/ChatInput.vue'
 import ChatHistoryPanel from '../components/chat/ChatHistoryPanel.vue'
-import DocumentPicker from '../components/common/DocumentPicker.vue'
 import ChatMessageItem from '../components/chat/ChatMessageItem.vue'
 import ChatDiscussionItem from '../components/chat/ChatDiscussionItem.vue'
 import ProximitySidebar from '../components/chat/ProximitySidebar.vue'
@@ -366,7 +364,6 @@ const { containerHeightStyle } = useVisualViewport()
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 const courseStore = useCourseStore()
-const readyDocs = computed(() => documentStore.readyDocuments)
 const selectedDocs = ref<string[]>([])
 
 const scopeChips = computed(() =>
