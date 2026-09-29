@@ -360,3 +360,24 @@ async def test_f13_attempt_increments_on_reprocess(db_session, doc, span_factory
     spans = await list_parse_spans(db_session, doc.id)
     parse_rows = [s for s in spans if s["name"] == "parse"]
     assert {s["attempt"] for s in parse_rows} == {1, 2}
+
+
+# F20
+@pytest.mark.asyncio
+async def test_f20_fail_stage_no_duplicate_cancelled(db_session, doc, span_factory):
+    """fail_stage 两次不得重复插 cancelled、不得覆盖已 done 阶段。"""
+    rec = ParseSpanRecorder(doc.id, session_factory=span_factory)
+    await rec.start_root()
+    await rec.start_stage("parse")
+    await rec.end_stage("parse")
+    await rec.start_stage("chunk")
+    await rec.fail_stage("chunk", "boom")
+    await rec.fail_stage("chunk", "boom again")
+    await rec.close()
+    spans = await list_parse_spans(db_session, doc.id)
+    stages = [s for s in spans if s["kind"] == "stage"]
+    names = [s["name"] for s in stages]
+    assert len(names) == len(set(names)), names
+    by = {s["name"]: s for s in stages}
+    assert by["parse"]["status"] == "done"
+    assert by["chunk"]["status"] == "failed"

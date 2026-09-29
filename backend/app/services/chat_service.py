@@ -106,6 +106,12 @@ async def _insert_message(
                 created_at=datetime.now(UTC).replace(tzinfo=None),
             )
             db.add(msg)
+        # F17：新消息写入时更新会话最后活动时间
+        await db.execute(
+            update(ChatSession)
+            .where(ChatSession.id == session_id)
+            .values(updated_at=datetime.now(UTC).replace(tzinfo=None))
+        )
         await db.commit()
     except Exception as exc:
         logger.warning(
@@ -136,6 +142,11 @@ async def _insert_message(
                 created_at=datetime.now(UTC).replace(tzinfo=None),
             )
             db.add(msg)
+        await db.execute(
+            update(ChatSession)
+            .where(ChatSession.id == session_id)
+            .values(updated_at=datetime.now(UTC).replace(tzinfo=None))
+        )
         await db.commit()
 
 
@@ -735,7 +746,7 @@ async def generate_starter_suggestions(
                 # 每篇取第 1 段前 120 字，最多 10 篇
                 first_paras: list[str] = []
                 for did in owned[:10]:
-                    rows = (
+                    chunk_rows = (
                         await db.execute(
                             select(DocumentChunk.content)
                             .where(DocumentChunk.document_id == did)
@@ -743,7 +754,7 @@ async def generate_starter_suggestions(
                             .limit(1)
                         )
                     ).all()
-                    chunk = rows[0][0] if rows else ""
+                    chunk = chunk_rows[0][0] if chunk_rows else ""
                     para = (chunk or "").split("\n")[0][:120]
                     if para:
                         first_paras.append(para)
@@ -842,11 +853,11 @@ async def list_sessions(
     db: AsyncSession,
     user: User,
 ) -> list[ChatSession]:
-    """Return all chat sessions for the user, newest first."""
+    """F17：置顶优先，其后按最后活动时间倒序（老会话继续聊会回到「今天」）。"""
     result = await db.execute(
         select(ChatSession)
         .where(ChatSession.user_id == user.id)
-        .order_by(ChatSession.created_at.desc())
+        .order_by(ChatSession.is_pinned.desc(), ChatSession.updated_at.desc())
     )
     return list(result.scalars().all())
 
@@ -975,17 +986,26 @@ async def update_session_title(
     session_id: str,
     title: str,
 ) -> str:
-    """Update session title. Returns the new title. Raises NotFoundError if missing."""
+    """F18：更新会话标题。长度 ≤80；no-op 直接返回。"""
+    from app.exceptions import ValidationError
+
+    t = (title or "").strip()
+    if not t:
+        raise ValidationError("标题不能为空")
+    if len(t) > 80:
+        raise ValidationError("标题最长 80 字")
     result = await db.execute(
         select(ChatSession).where(ChatSession.id == session_id, ChatSession.user_id == user.id)
     )
     session = result.scalar_one_or_none()
     if not session:
         raise NotFoundError("会话不存在")
+    if session.title == t:
+        return t  # no-op
 
-    session.title = title
+    session.title = t
     await db.commit()
-    return title
+    return t
 
 
 # ── internal helpers ────────────────────────────────────────────────────────

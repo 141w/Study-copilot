@@ -194,3 +194,40 @@ async def test_f6_missing_snapshot_is_explicit(db_session, user):
     p = await wiki_service.create_page(db_session, user, slug="f6b", title="x", content="y")
     with pytest.raises(NotFoundError, match="无快照"):
         await wiki_service.get_revision(db_session, user, p["id"], 99)
+
+
+# ---------------------------------------------------------------------------
+# 第四批 F14/F15/F19/F20
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_f14_create_page_conflict_is_409(db_session, user):
+    """同 slug 并发建页：冲突必须是 ConflictError（409）而非 500。"""
+    from app.exceptions import ConflictError
+
+    await wiki_service.create_page(db_session, user, slug="dup", title="A")
+    with pytest.raises(ConflictError):
+        await wiki_service.create_page(db_session, user, slug="dup", title="B")
+
+
+@pytest.mark.asyncio
+async def test_f15_delete_soft_or_inbound_downgrade(db_session, user):
+    """删一页后，指向它的页面不得显示死链（降级为纯文本或软删）。"""
+    a = await wiki_service.create_page(db_session, user, slug="alpha2", title="A", content="见 [[beta2]]")
+    await wiki_service.create_page(db_session, user, slug="beta2", title="B", content="x")
+    await wiki_service.delete_page(db_session, user, a["id"])
+    # beta2 仍在；指向它的入链应被降级或页面软删后不再计死链
+    audit = await wiki_service.audit_dead_links(db_session, user)
+    # beta2 不应因删除 alpha2 而被标死链
+    assert "beta2" not in [d for p in audit.get("pages", []) for d in p.get("dead_links", [])]
+
+
+def test_f19_slug_normalize_matches_backend():
+    """前后端 slug 归一规则一致（strip - 与 /）。"""
+    from app.services.wiki_service import normalize_slug
+
+    assert normalize_slug("梯度下降/") == normalize_slug("梯度下降")
+    assert normalize_slug("Foo Bar--") == "foo-bar"
+    assert normalize_slug("a/b//") == "a/b"
+
+

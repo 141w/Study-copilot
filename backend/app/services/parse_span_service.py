@@ -24,7 +24,8 @@ from app.utils.timefmt import isoformat_utc
 logger = logging.getLogger(__name__)
 
 # 与 _do_process_document 各阶段一一对应（勿抄 WeKnora 的 5 阶段名）
-STAGE_ORDER = ["parse", "profile", "chunk", "embed", "index", "finalize"]
+# F20：去掉从未埋点的 index，保持时间线段数稳定
+STAGE_ORDER = ["parse", "profile", "chunk", "embed", "finalize"]
 
 
 def _now() -> datetime:

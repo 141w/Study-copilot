@@ -103,10 +103,16 @@ async function saveTitle(sessionId?: string) {
   if (!sessionId || editingSessionId.value !== sessionId) return
 
   const newTitle = editingTitle.value.trim()
-  if (newTitle) {
-    await chatStore.updateSessionTitle(sessionId, newTitle)
-  }
+  const old = chatStore.sessions.find(s => s.session_id === sessionId)?.title
+  // F18：先同步退出编辑态，再发请求（防连按 Enter 重复 PUT）
+  editingSessionId.value = null
+  editingTitle.value = ''
+  if (!newTitle || newTitle.length > 80) return
+  if (newTitle === old) return // no-op 不发请求
+  await chatStore.updateSessionTitle(sessionId, newTitle)
+}
 
+function cancelEdit(): void {
   editingSessionId.value = null
   editingTitle.value = ''
 }
@@ -258,7 +264,9 @@ async function deleteSession() {
               <div v-if="editingSessionId === session.session_id" class="flex items-center gap-2">
                 <input
                   v-model="editingTitle"
+                  maxlength="80"
                   @keyup.enter="saveTitle(session.session_id)"
+                  @keyup.esc="cancelEdit"
                   @blur="saveTitle(session.session_id)"
                   class="flex-1 px-2 py-1 text-sm border border-[var(--border-focus)] rounded focus:outline-none bg-[var(--bg-primary)] text-[var(--text-primary)]"
                   @click.stop

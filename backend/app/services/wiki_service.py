@@ -70,7 +70,8 @@ async def _get_owned(db: AsyncSession, user: User, page_id: str) -> WikiPage:
             select(WikiPage).where(WikiPage.id == page_id, WikiPage.user_id == user.id)
         )
     ).scalar_one_or_none()
-    if not p:
+    # F15：软删页（slug 前缀 __deleted__）视为不存在
+    if not p or (p.slug or "").startswith("__deleted__"):
         raise NotFoundError("Wiki 页面不存在")
     return p
 
@@ -311,9 +312,34 @@ async def revert_page(
 
 
 async def delete_page(db: AsyncSession, user: User, page_id: str) -> None:
+    """软删概念页，并把入站 [[slug]] 降级为纯文本（F15，避免一次删除造出一片死链）。"""
     p = await _get_owned(db, user, page_id)
-    await db.delete(p)
+    slug = p.slug
+    # F15：软删（status=archived + deleted 标记），保留行以便回滚/审计
+    p.status = "archived"
+    p.slug = f"__deleted__{p.id[:8]}__{p.slug}"[:128]
     await db.commit()
+
+    # 处理入站链接：把其他页里的 [[slug]] / [[slug|label]] 降级为纯文本
+    rows = (
+        await db.execute(
+            select(WikiPage).where(WikiPage.user_id == user.id, WikiPage.id != page_id)
+        )
+    ).scalars().all()
+    pat = re.compile(r"\[\[" + re.escape(slug) + r"(?:[|#]([^\]]*))?\]\]")
+
+    def _downgrade(content: str) -> str:
+        return pat.sub(lambda m: (m.group(1) or slug).strip(), content)
+
+    changed = False
+    for other in rows:
+        new_content = _downgrade(other.content or "")
+        if new_content != (other.content or ""):
+            other.content = new_content
+            other.revision = (other.revision or 1) + 1
+            changed = True
+    if changed:
+        await db.commit()
 
 
 async def resolve_links(
@@ -334,41 +360,63 @@ async def resolve_links(
 
 
 async def audit_dead_links(db: AsyncSession, user: User) -> dict[str, Any]:
-    """5.3 全局死链巡检：扫全部页面的 [[slug]]，汇总死链与孤页。
+    """5.3 全局死链巡检：扫全部概念页与笔记的 [[slug]]，汇总死链与孤页。
 
     返回：
-      pages: [{id, slug, title, dead_links:[slug...]}]  — 仅含有死链的页
+      pages: [{id, slug, title, dead_links:[slug...]}]  — 仅含有死链的页/笔记
       orphan_pages: 没有任何入链的页面 slug
       stats: {pages, links, dead_links, orphan_pages}
     """
     rows = (
         await db.execute(
-            select(WikiPage).where(WikiPage.user_id == user.id).order_by(WikiPage.title)
+            select(WikiPage)
+            .where(
+                WikiPage.user_id == user.id,
+                ~WikiPage.slug.like("\\_\\_deleted\\_\\_%"),
+            )
+            .order_by(WikiPage.title)
         )
     ).scalars().all()
     all_slugs = {p.slug for p in rows}
+
+    # F16：笔记正文里的 [[slug]] 也参与巡检
+    from app.db import Note
+
+    note_rows = (
+        await db.execute(
+            select(Note.id, Note.title, Note.content).where(
+                Note.user_id == user.id, Note.deleted_at.is_(None)
+            )
+        )
+    ).all()
 
     # 收集入链（出链仅用于统计 total_links，无需单独建表）
     in_links: dict[str, set[str]] = {s: set() for s in all_slugs}
     total_links = 0
     dead_by_page: list[dict[str, Any]] = []
 
-    for p in rows:
-        links = extract_links(p.content or "")
+    def _scan(source_id: str, source_slug: str, source_title: str, content: str) -> None:
+        nonlocal total_links
+        links = extract_links(content or "")
         total_links += len(links)
         dead = [s for s in links if s not in all_slugs]
         for s in links:
             if s in in_links:
-                in_links[s].add(p.slug)
+                in_links[s].add(source_slug)
         if dead:
             dead_by_page.append(
                 {
-                    "id": p.id,
-                    "slug": p.slug,
-                    "title": p.title,
+                    "id": source_id,
+                    "slug": source_slug,
+                    "title": source_title,
                     "dead_links": dead,
                 }
             )
+
+    for p in rows:
+        _scan(p.id, p.slug, p.title, p.content or "")
+    for nid, ntitle, ncontent in note_rows:
+        _scan(nid, f"note:{nid}", ntitle or "笔记", ncontent or "")
 
     # 孤页 = 没有入链（排除自链）
     orphan_pages = []

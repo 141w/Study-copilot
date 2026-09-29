@@ -370,10 +370,11 @@ const { renderMarkdown } = useMarkdown()
 
 /** 与后端 wiki_service.normalize_slug 对齐，避免前后端 key 不一致把活链标成死链 */
 function normalizeSlug(raw: string): string {
+  // F19：与后端 wiki_service.normalize_slug 对齐（两端同规则）
   let s = (raw || '').trim().toLowerCase().replace(/\s+/g, '-')
   s = s.replace(/[^a-z0-9_\-/一-鿿]/g, '')
   s = s.replace(/-{2,}/g, '-').replace(/\/{2,}/g, '/')
-  return s.replace(/^-+|-+$/g, '').slice(0, 128)
+  return s.replace(/^-+|-+$/g, '').replace(/^\/+|\/+$/g, '').slice(0, 128)
 }
 
 function escapeHtml(v: string): string {
@@ -523,7 +524,8 @@ async function openPage(id: string): Promise<void> {
     editing.value = false
     history.value = null
     // 解析出链生死（截断防 414）
-    const links = (data.links || []).slice(0, 50)
+    // F16：去掉 50 条截断（活链 >50 会被误判死链）
+    const links = data.links || []
     if (links.length) {
       const { data: resolved } = await api.get<
         Record<string, { id: string; title: string } | null>

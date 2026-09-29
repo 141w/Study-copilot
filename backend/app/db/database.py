@@ -133,6 +133,9 @@ class ChatSession(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     title: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive)
+    # F17：最后活动时间（新消息写入时更新）+ 置顶
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow_naive, onupdate=_utcnow_naive)
+    is_pinned: Mapped[bool] = mapped_column(default=False)
 
 
 class Message(Base):
