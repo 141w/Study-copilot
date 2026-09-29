@@ -404,10 +404,10 @@ export const useChatStore = defineStore('chat', () => {
             messages.value[msgIdx].saved_note = doneNote
             messages.value[msgIdx].savedNote = doneNote
           }
-          // 5.2 追问建议：回答完成后异步生成，不阻断流
+          // 5.2 追问建议：回答完成后异步生成，不阻断流（按 id 定位，避免会话切换错挂）
           const finished = messages.value[msgIdx]
           if (finished.content && finished.content.trim().length > 0) {
-            void loadFollowupSuggestions(question, finished.content, msgIdx)
+            void loadFollowupSuggestions(question, finished.content, finished.id)
           }
         }
         if (
@@ -772,14 +772,16 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /** 5.2 追问建议：按问题+回答向服务端取 3 条可点后续问题并挂到消息上 */
+  /** 5.2 追问建议：按问题+回答向服务端取 3 条可点后续问题并挂到消息上（按 id 定位） */
   async function loadFollowupSuggestions(
     question: string,
     answer: string,
-    msgIdx: number
+    messageId: string | number
   ): Promise<void> {
     if (!question?.trim() || !answer?.trim()) return
-    if (!messages.value[msgIdx]) return
-    messages.value[msgIdx].suggestionsLoading = true
+    const target = () => messages.value.find(m => m.id === messageId)
+    if (!target()) return
+    target()!.suggestionsLoading = true
     try {
       const { data } = await api.post<{ suggestions: string[] }>('/chat/suggest-followups', {
         question,
@@ -787,12 +789,15 @@ export const useChatStore = defineStore('chat', () => {
         n: 3
       })
       const list = Array.isArray(data?.suggestions) ? data.suggestions.filter(Boolean) : []
-      if (messages.value[msgIdx]) {
-        messages.value[msgIdx].suggestions = list
-        messages.value[msgIdx].suggestionsLoading = false
+      const msg = target()
+      if (msg) {
+        msg.suggestions = list
+        msg.suggestionsLoading = false
       }
-    } catch {
-      if (messages.value[msgIdx]) messages.value[msgIdx].suggestionsLoading = false
+    } catch (err) {
+      console.warn('followup suggestions failed:', err)
+      const msg = target()
+      if (msg) msg.suggestionsLoading = false
     }
   }
 

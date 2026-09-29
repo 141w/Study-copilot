@@ -215,7 +215,7 @@ describe('5.2 追问建议 store', () => {
     store.messages.push({ id: 'm1', role: 'assistant', content: '回答' })
     api.post.mockResolvedValue({ data: { suggestions: ['A？', 'B？', 'C？'] } })
 
-    await store.loadFollowupSuggestions('问题', '回答', 0)
+    await store.loadFollowupSuggestions('问题', '回答', 'm1')
 
     expect(api.post).toHaveBeenCalledWith('/chat/suggest-followups', {
       question: '问题',
@@ -230,7 +230,7 @@ describe('5.2 追问建议 store', () => {
     store.messages.push({ id: 'm2', role: 'assistant', content: '回答' })
     api.post.mockRejectedValue(new Error('network'))
 
-    await store.loadFollowupSuggestions('问题', '回答', 0)
+    await store.loadFollowupSuggestions('问题', '回答', 'm2')
 
     expect(store.messages[0].suggestions).toBeUndefined()
     expect(store.messages[0].suggestionsLoading).toBe(false)
@@ -238,8 +238,8 @@ describe('5.2 追问建议 store', () => {
 
   it('空问题/空回答不发起请求', async () => {
     store.messages.push({ id: 'm3', role: 'assistant', content: '' })
-    await store.loadFollowupSuggestions('', '回答', 0)
-    await store.loadFollowupSuggestions('问题', '  ', 0)
+    await store.loadFollowupSuggestions('', '回答', 'm3')
+    await store.loadFollowupSuggestions('问题', '  ', 'm3')
     expect(api.post).not.toHaveBeenCalled()
   })
 })
@@ -279,5 +279,31 @@ describe('P0-A 起始问题 store', () => {
     await store.loadStarterSuggestions()
     expect(store.starterSuggestions).toEqual([])
     expect(store.starterSuggestionsLoading).toBe(false)
+  })
+})
+
+describe('追问建议按 id 定位（OCR M4）', () => {
+  let store
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useChatStore()
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
+
+  it('await 期间会话被替换，建议不挂到新消息', async () => {
+    store.messages.push({ id: 'old-1', role: 'assistant', content: '旧回答' })
+    let resolvePost
+    api.post.mockReturnValue(new Promise(r => { resolvePost = r }))
+
+    const p = store.loadFollowupSuggestions('问题', '旧回答', 'old-1')
+    // 模拟会话切换：清空并换入新消息
+    store.messages = [{ id: 'new-9', role: 'assistant', content: '新回答' }]
+    resolvePost({ data: { suggestions: ['A？'] } })
+    await p
+
+    expect(store.messages[0].id).toBe('new-9')
+    expect(store.messages[0].suggestions).toBeUndefined()
   })
 })

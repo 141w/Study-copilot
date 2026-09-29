@@ -25,6 +25,19 @@ class TestParseSuggestionList:
         assert out[0] == "第一问？"
         assert out[1] == "第二问？"
 
+    def test_leading_digits_in_content_preserved(self):
+        """正文以数字开头不得被吞掉（OCR Medium）。"""
+        raw = '["2024年政策影响？","3种排序怎么选？","1. 真正的前缀？"]'
+        out = _parse_suggestion_list(raw, 3)
+        assert out[0] == "2024年政策影响？"
+        assert out[1] == "3种排序怎么选？"
+        assert out[2] == "真正的前缀？"
+
+    def test_non_string_items_skipped(self):
+        raw = '[{"q":"x"}, ["a","b"], 42, "合法？"]'
+        out = _parse_suggestion_list(raw, 3)
+        assert out == ["合法？"]
+
     def test_dedup_and_limit(self):
         raw = '["同？","同？","异？","多？","余？"]'
         out = _parse_suggestion_list(raw, 3)

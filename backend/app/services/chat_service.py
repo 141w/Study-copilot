@@ -774,6 +774,8 @@ async def generate_followup_suggestions(
 
 def _parse_suggestion_list(raw: str | None, n: int) -> list[str]:
     """从 LLM 输出解析 JSON 字符串数组；容错代码块与序号前缀。"""
+    import re
+
     if not raw:
         return []
     text = raw.strip()
@@ -792,10 +794,15 @@ def _parse_suggestion_list(raw: str | None, n: int) -> list[str]:
         return []
     if not isinstance(data, list):
         return []
+    # 只接受字符串；数字开头的枚举前缀（"1." "2）"）剥掉，不吞正文数字
+    prefix_re = re.compile(r"^\s*\d+\s*[.、)）:：-]\s*")
     out: list[str] = []
     for item in data:
-        s = str(item).strip().strip('"').strip()
-        s = s.lstrip("0123456789.、)） ").strip()
+        if not isinstance(item, str):
+            continue
+        s = item.strip().strip('"').strip()
+        if s[:1].isdigit():
+            s = prefix_re.sub("", s, count=1).strip()
         if s and s not in out:
             out.append(s)
         if len(out) >= n:

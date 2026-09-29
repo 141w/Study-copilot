@@ -6,6 +6,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import get_encryption_service
@@ -460,8 +461,9 @@ def normalize_retrieval_config(raw: dict | None) -> dict:
     out["vector_threshold"] = max(0.0, min(_float("vector_threshold", 0.0), 1.0))
     out["keyword_threshold"] = max(0.0, min(_float("keyword_threshold", 0.0), 1.0))
     out["rerank_threshold"] = max(-10.0, min(_float("rerank_threshold", 0.0), 10.0))
-    out["rrf_vector_weight"] = max(0.0, min(_float("rrf_vector_weight", 1.0), 1.0))
-    out["rrf_keyword_weight"] = max(0.0, min(_float("rrf_keyword_weight", 1.0), 1.0))
+    # 权重下限 0.1：两路同为 0 会让 RRF 分全零、检索恒空
+    out["rrf_vector_weight"] = max(0.1, min(_float("rrf_vector_weight", 1.0), 1.0))
+    out["rrf_keyword_weight"] = max(0.1, min(_float("rrf_keyword_weight", 1.0), 1.0))
     return out
 
 
@@ -474,7 +476,9 @@ async def get_retrieval_config(db: AsyncSession, user: User) -> dict:
 
 async def update_retrieval_config(db: AsyncSession, user: User, raw: dict) -> dict:
     cleaned = normalize_retrieval_config(raw)
-    result = await db.execute(select(UserLLMConfig).where(UserLLMConfig.user_id == user.id))
+    result = await db.execute(
+        select(UserLLMConfig).where(UserLLMConfig.user_id == user.id).with_for_update()
+    )
     config = result.scalar_one_or_none()
     if not config:
         config = UserLLMConfig(
@@ -489,9 +493,24 @@ async def update_retrieval_config(db: AsyncSession, user: User, raw: dict) -> di
             extra_config={"retrieval": cleaned},
         )
         db.add(config)
+        try:
+            await db.commit()
+        except IntegrityError:
+            # 并发首发：对方已建行，回退为更新该行
+            await db.rollback()
+            result = await db.execute(
+                select(UserLLMConfig).where(UserLLMConfig.user_id == user.id)
+            )
+            config = result.scalar_one_or_none()
+            if not config:
+                raise
+            extra = dict(config.extra_config or {})
+            extra["retrieval"] = cleaned
+            config.extra_config = extra
+            await db.commit()
     else:
         extra = dict(config.extra_config or {})
         extra["retrieval"] = cleaned
         config.extra_config = extra
-    await db.commit()
+        await db.commit()
     return cleaned

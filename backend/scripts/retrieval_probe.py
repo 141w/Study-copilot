@@ -18,7 +18,7 @@ import logging
 import sys
 from datetime import UTC, datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from app.core.pgvector_store import PgVectorStore
 from app.db import AsyncSessionLocal, Document, DocumentChunk
@@ -30,10 +30,12 @@ async def _build_queries(limit: int) -> list[dict]:
     async with AsyncSessionLocal() as db:
         docs = (
             await db.execute(
-                select(Document.id, Document.filename, Document.user_id).where(
+                select(Document.id, Document.filename, Document.user_id)
+                .where(
                     Document.deleted_at.is_(None),
                     Document.status == "ready",
                 )
+                .order_by(Document.created_at, Document.id)
             )
         ).all()
         for doc_id, filename, user_id in docs:
@@ -62,14 +64,6 @@ async def _build_queries(limit: int) -> list[dict]:
             if len(queries) >= limit:
                 break
     return queries
-
-
-async def _probe_one(user_id: str, query: str, expected_doc: str, top_k: int = 5) -> dict:
-    store = PgVectorStore(user_id=user_id)
-    hits = await store.search(query, [expected_doc] + [], top_k=top_k)
-    # search scoped to the expected doc only would make recall trivial;
-    # instead search across the user's docs via a broad doc_ids list
-    return hits
 
 
 async def _probe_user_docs(user_id: str, query: str, all_doc_ids: list[str], top_k: int = 5) -> list[dict]:
@@ -102,10 +96,19 @@ async def main() -> int:
         print("no ready documents to probe", file=sys.stderr)
         return 1
 
-    # group doc_ids per user
+    # group doc_ids per user — 池用全部 ready 文档，避免 --limit 截断导致召回偏乐观
+    async with AsyncSessionLocal() as db:
+        all_docs = (
+            await db.execute(
+                select(Document.id, Document.user_id).where(
+                    Document.deleted_at.is_(None),
+                    Document.status == "ready",
+                )
+            )
+        ).all()
     by_user: dict[str, list[str]] = {}
-    for q in queries:
-        by_user.setdefault(q["user_id"], []).append(q["doc_id"])
+    for did, uid in all_docs:
+        by_user.setdefault(uid, []).append(did)
 
     results = []
     hit_at_1 = hit_at_5 = 0
@@ -122,7 +125,7 @@ async def main() -> int:
                 "filename": q["filename"],
                 "query": q["query"],
                 "recalled@1": recalled_1,
-                "recalled@5": recalled_5,
+                f"recalled@{args.top_k}": recalled_5,
                 "top": hits,
             }
         )
@@ -139,7 +142,7 @@ async def main() -> int:
             "n_queries": n,
             "top_k": args.top_k,
             "hit_rate@1": round(hit_at_1 / n, 4),
-            "hit_rate@5": round(hit_at_5 / n, 4),
+            f"hit_rate@{args.top_k}": round(hit_at_5 / n, 4),
         },
         "results": results,
     }

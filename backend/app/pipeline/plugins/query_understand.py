@@ -181,7 +181,12 @@ class QueryUnderstandPlugin(Plugin):
                 WINDOW_UNDERSTAND, "问题理解完成，转全篇总结", status="done"
             ),
         )
-        all_results = await rag_engine.retrieve(state.doc_ids, "文档内容总结", top_k=100)
+        all_results = await rag_engine.retrieve(
+            state.doc_ids,
+            "文档内容总结",
+            top_k=100,
+            retrieval_config=(state.user_config or {}).get("retrieval"),
+        )
         if not all_results:
             await emit_event(
                 state,
@@ -288,7 +293,12 @@ class QueryUnderstandPlugin(Plugin):
         )
         ctx = ""
         if state.doc_ids:
-            results = await rag_engine.retrieve(state.doc_ids, state.standalone_query, top_k=5)
+            results = await rag_engine.retrieve(
+                state.doc_ids,
+                state.standalone_query,
+                top_k=5,
+                retrieval_config=(state.user_config or {}).get("retrieval"),
+            )
             await emit_event(
                 state,
                 thinking_event(

@@ -374,7 +374,12 @@ class RAGEngine:
     async def _summarize_docs(self, doc_ids, user_config=None) -> dict:
         """检索全部文档内容并生成摘要。返回与 ask() 相同的格式。"""
         # 用通用查询检索全部 chunks
-        all_results = await self.retrieve(doc_ids, "文档内容总结", top_k=100)
+        all_results = await self.retrieve(
+            doc_ids,
+            "文档内容总结",
+            top_k=100,
+            retrieval_config=(user_config or {}).get("retrieval"),
+        )
 
         if not all_results:
             return {
@@ -455,10 +460,17 @@ class RAGEngine:
 
         Replaces the old per-document FAISS search with a single SQL query
         that combines cosine similarity and full-text search.
-        ``retrieval_config`` 可覆盖 top_k / rrf_k / 权重（阶段一在线调参）。
+        ``retrieval_config`` 可覆盖召回条数 / rrf_k / 权重 / 阈值（阶段一在线调参）。
         """
         cfg = retrieval_config or {}
-        effective_top = int(cfg.get("embedding_top_k") or top_k)
+        # 用户配置只覆盖「常规问答」体量的 top_k（≤10）；总结类 top_k=100 等批量调用保持原样，
+        # 否则滑杆会把全篇总结截成 5 条。同理 rerank_top_k 只在问答路径生效。
+        user_top = int(cfg.get("embedding_top_k") or 0)
+        if user_top and top_k <= 10:
+            effective_top = user_top
+        else:
+            effective_top = top_k
+        vector_threshold = float(cfg.get("vector_threshold") or 0.0)
         store = self._get_pg_vector_store()
         all_results = await store.search(
             query,
@@ -473,8 +485,9 @@ class RAGEngine:
             return []
 
         # Relevance filtering (batch-normalized scores from PgVectorStore)
+        min_rel = max(1e-6, vector_threshold)
         all_results = [
-            r for r in all_results if (rel := result_relevance(r)) is not None and rel > 1e-6
+            r for r in all_results if (rel := result_relevance(r)) is not None and rel > min_rel
         ]
 
         # Sort by relevance descending before dedup (ensures stable ordering)
@@ -501,7 +514,11 @@ class RAGEngine:
         for r in all_results:
             r["reranked"] = reranked
 
-        return all_results[:top_k]
+        final_n = effective_top
+        rerank_top_k = int(cfg.get("rerank_top_k") or 0)
+        if reranked and rerank_top_k and top_k <= 10:
+            final_n = rerank_top_k
+        return all_results[:final_n]
 
     def _get_pg_vector_store(self) -> PgVectorStore:
         """Return the singleton PgVectorStore (replaces per-document LRU cache)."""
@@ -874,7 +891,12 @@ class RAGEngine:
                 status="done",
             )
             t_ret = time.monotonic()
-            all_results = await self.retrieve(doc_ids, "文档内容总结", top_k=100)
+            all_results = await self.retrieve(
+                doc_ids,
+                "文档内容总结",
+                top_k=100,
+                retrieval_config=(user_config or {}).get("retrieval"),
+            )
             ret_ms = int((time.monotonic() - t_ret) * 1000)
             if not all_results:
                 yield thinking_event(
@@ -954,7 +976,12 @@ class RAGEngine:
             note_count = 0
             if doc_ids:
                 t_ret = time.monotonic()
-                results = await self.retrieve(doc_ids, final_query, top_k=5)
+                results = await self.retrieve(
+                    doc_ids,
+                    final_query,
+                    top_k=5,
+                    retrieval_config=(user_config or {}).get("retrieval"),
+                )
                 note_ret_ms = int((time.monotonic() - t_ret) * 1000)
                 note_count = len(results)
                 yield thinking_event(

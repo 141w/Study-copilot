@@ -33,7 +33,7 @@ def test_normalize_clamps_out_of_range():
     assert cfg["rerank_top_k"] == 1
     assert cfg["rrf_k"] == 1
     assert cfg["vector_threshold"] == 1.0
-    assert cfg["rrf_vector_weight"] == 0.0
+    assert cfg["rrf_vector_weight"] == 0.1  # 下限，避免双零权重导致检索恒空
     assert cfg["rrf_keyword_weight"] == 1.0
 
 
@@ -77,3 +77,76 @@ async def test_search_accepts_retrieval_kwargs():
 def test_settings_has_no_hard_dependency_on_new_env():
     # 阶段一不新增环境变量；检索参数走用户配置
     assert not hasattr(settings, "retrieval_top_k") or settings.retrieval_top_k is not None
+
+
+@pytest.mark.asyncio
+async def test_main_path_forwards_retrieval_config_to_store():
+    """High 修复回归：主问答路径（adaptive STANDARD）必须把用户检索参数传到 store.search。"""
+    from unittest.mock import AsyncMock, patch
+
+    from app.core.adaptive_retriever import RetrievalStrategy, adaptive_retriever
+    from app.core.rag_engine import RAGEngine
+
+    engine = RAGEngine()
+    engine._reranker = None
+    engine._reranker_loaded = True
+
+    mock_store = AsyncMock()
+    mock_store.search.return_value = [
+        {
+            "chunk": {
+                "id": "c1",
+                "text": "t",
+                "page": "",
+                "source": "s",
+                "document_id": "d1",
+                "metadata": {},
+            },
+            "relevance": 0.9,
+            "retrieval_type": "pgvector_hybrid",
+        }
+    ]
+    engine._pg_vector_store = mock_store
+
+    user_config = {
+        "retrieval": {
+            "embedding_top_k": 20,
+            "rrf_k": 90,
+            "rrf_vector_weight": 0.8,
+            "rrf_keyword_weight": 0.2,
+            "rerank_top_k": 20,
+            "vector_threshold": 0.0,
+        }
+    }
+    await adaptive_retriever.retrieve_adaptive(
+        ["doc1"], "q", RetrievalStrategy.STANDARD, engine, user_config
+    )
+
+    mock_store.search.assert_called_once()
+    args, kwargs = mock_store.search.call_args
+    # embedding_top_k=20 → 候选池 40
+    assert args[2] == 40
+    assert kwargs.get("rrf_k") == 90
+    assert kwargs.get("vector_weight") == 0.8
+    assert kwargs.get("keyword_weight") == 0.2
+
+
+@pytest.mark.asyncio
+async def test_bulk_top_k_not_shrunk_by_user_config():
+    """总结类 top_k=100 不得被 embedding_top_k=5 截断。"""
+    from unittest.mock import AsyncMock
+
+    from app.core.rag_engine import RAGEngine
+
+    engine = RAGEngine()
+    engine._reranker = None
+    engine._reranker_loaded = True
+    mock_store = AsyncMock()
+    mock_store.search.return_value = []
+    engine._pg_vector_store = mock_store
+
+    await engine.retrieve(
+        ["d"], "总结", top_k=100, retrieval_config={"embedding_top_k": 5}
+    )
+    args, _ = mock_store.search.call_args
+    assert args[2] == 200  # 100 * 2，未被 5 覆盖

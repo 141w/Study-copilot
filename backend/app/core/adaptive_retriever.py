@@ -74,6 +74,8 @@ class AdaptiveRetriever:
             (results, thinking_events) — 检索结果列表和思考事件列表。
         """
         thinking_events: list[dict] = []
+        # 阶段一在线调参：透传到所有 retrieve() 调用（主问答路径也必须生效）
+        ret_cfg = (user_config or {}).get("retrieval") or {}
 
         thinking_events.append(
             {
@@ -84,7 +86,9 @@ class AdaptiveRetriever:
         )
 
         if strategy == RetrievalStrategy.SINGLE:
-            results = await rag_engine.retrieve(doc_ids, query, top_k=1)
+            results = await rag_engine.retrieve(
+                doc_ids, query, top_k=1, retrieval_config=ret_cfg
+            )
             thinking_events.append(
                 {
                     "type": "thinking",
@@ -95,7 +99,9 @@ class AdaptiveRetriever:
             return results, thinking_events
 
         elif strategy == RetrievalStrategy.STANDARD:
-            results = await rag_engine.retrieve(doc_ids, query, top_k=5)
+            results = await rag_engine.retrieve(
+                doc_ids, query, top_k=5, retrieval_config=ret_cfg
+            )
             thinking_events.append(
                 {
                     "type": "thinking",
@@ -116,7 +122,7 @@ class AdaptiveRetriever:
             )
 
         # 兜底
-        results = await rag_engine.retrieve(doc_ids, query, top_k=5)
+        results = await rag_engine.retrieve(doc_ids, query, top_k=5, retrieval_config=ret_cfg)
         return results, thinking_events
 
     async def _multi_hop_retrieve(
@@ -133,6 +139,7 @@ class AdaptiveRetriever:
 
         llm_config = user_config or {}
         llm = LLM.from_config(llm_config)
+        ret_cfg = llm_config.get("retrieval") or {}
 
         sub_queries = await query_decomposer.decompose(query, llm)
         logger.info("[Adaptive] MULTI_HOP: decomposed into %d sub-queries", len(sub_queries))
@@ -147,13 +154,15 @@ class AdaptiveRetriever:
 
         all_results = []
         for sq in sub_queries:
-            results = await rag_engine.retrieve(doc_ids, sq, top_k=3)
+            results = await rag_engine.retrieve(
+                doc_ids, sq, top_k=3, retrieval_config=ret_cfg
+            )
             all_results.extend(results)
 
         merged = rag_engine.deduplicate_results(all_results)
         # 按距离排序，取 top 5
         merged.sort(key=_relevance_sort_key)  # 相关度降序（兼容旧距离）
-        merged = merged[:5]
+        merged = merged[: int(ret_cfg.get("embedding_top_k") or 5)]
 
         thinking_events.append(
             {
@@ -179,6 +188,7 @@ class AdaptiveRetriever:
 
         llm_config = user_config or {}
         llm = LLM.from_config(llm_config)
+        ret_cfg = llm_config.get("retrieval") or {}
 
         entities = await query_decomposer.extract_entities(query, llm)
 
@@ -192,7 +202,9 @@ class AdaptiveRetriever:
                     "detail": "实体提取失败，降级为标准检索",
                 }
             )
-            results = await rag_engine.retrieve(doc_ids, query, top_k=5)
+            results = await rag_engine.retrieve(
+                doc_ids, query, top_k=5, retrieval_config=ret_cfg
+            )
             return results, thinking_events
 
         logger.info("[Adaptive] COMPARE: extracted entities: %s", entities)
@@ -209,12 +221,14 @@ class AdaptiveRetriever:
         for entity in entities:
             # 构造针对每个实体的检索查询
             sub_q = f"{entity} {query}"
-            results = await rag_engine.retrieve(doc_ids, sub_q, top_k=3)
+            results = await rag_engine.retrieve(
+                doc_ids, sub_q, top_k=3, retrieval_config=ret_cfg
+            )
             all_results.extend(results)
 
         merged = rag_engine.deduplicate_results(all_results)
         merged.sort(key=_relevance_sort_key)  # 相关度降序（兼容旧距离）
-        merged = merged[:5]
+        merged = merged[: int(ret_cfg.get("embedding_top_k") or 5)]
 
         thinking_events.append(
             {

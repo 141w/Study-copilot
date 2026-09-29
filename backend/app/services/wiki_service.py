@@ -317,15 +317,13 @@ async def audit_dead_links(db: AsyncSession, user: User) -> dict[str, Any]:
     ).scalars().all()
     all_slugs = {p.slug for p in rows}
 
-    # 收集出链
-    out_links: dict[str, list[str]] = {}
+    # 收集入链（出链仅用于统计 total_links，无需单独建表）
     in_links: dict[str, set[str]] = {s: set() for s in all_slugs}
     total_links = 0
     dead_by_page: list[dict[str, Any]] = []
 
     for p in rows:
         links = extract_links(p.content or "")
-        out_links[p.slug] = links
         total_links += len(links)
         dead = [s for s in links if s not in all_slugs]
         for s in links:
