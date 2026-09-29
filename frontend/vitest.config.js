@@ -25,6 +25,10 @@ export default defineConfig({
           testTimeout: 20000,
           include: ['tests/**/*.{test,spec}.{js,ts}'],
           setupFiles: ['./tests/setup.js'],
+          // 钉住时区：F4 会话时间分组（ChatHistoryPanel）按「本地时区」分桶，
+          // 测试里 setSystemTime 用的是 +08:00 偏移。不钉 TZ 则结果取决于
+          // 跑测试的机器——开发机 CST 全绿，GitHub Runner（UTC）必红。
+          env: { TZ: 'Asia/Shanghai' },
         },
       },
       {
