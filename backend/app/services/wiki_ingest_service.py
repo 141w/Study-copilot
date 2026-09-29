@@ -23,6 +23,19 @@ logger = logging.getLogger(__name__)
 MAX_SOURCE_CHARS = 12000
 MAX_PAGES_PER_RUN = 12
 
+# F14：进程内 slug 锁（单用户；同 slug 读-改-写串行，防双页签丢更）
+_slug_locks: dict[str, object] = {}
+_slug_locks_guard = __import__("asyncio").Lock()
+
+
+async def _slug_lock(slug: str):
+    import asyncio
+
+    async with _slug_locks_guard:
+        if slug not in _slug_locks:
+            _slug_locks[slug] = asyncio.Lock()
+        return _slug_locks[slug]
+
 _INGEST_PROMPT = """你是知识整理助手。请从下面的学习资料中提炼概念页，写成可点的 Wiki。
 
 资料标题：{title}
@@ -130,6 +143,17 @@ async def _list_existing_slugs(db: AsyncSession, user: User) -> str:
 
 
 async def _merge_or_create(
+    db: AsyncSession, user: User, page: dict[str, Any], source_title: str
+) -> dict[str, Any]:
+    """同 slug：合并 summary + 追加来源段落，并写版本快照；否则新建。"""
+    import asyncio
+
+    lock = await _slug_lock(page["slug"])
+    async with lock:
+        return await _merge_or_create_locked(db, user, page, source_title)
+
+
+async def _merge_or_create_locked(
     db: AsyncSession, user: User, page: dict[str, Any], source_title: str
 ) -> dict[str, Any]:
     """同 slug：合并 summary + 追加来源段落，并写版本快照；否则新建。"""
