@@ -13,7 +13,7 @@ from app.api.auth import get_current_user
 from app.core.rate_limit import IPRateLimiter
 from app.core.tts import get_tts_provider
 from app.db import User, get_db
-from app.exceptions import RateLimitError
+from app.exceptions import ExternalServiceError, RateLimitError, ValidationError
 
 router = APIRouter(prefix="/tts", tags=["语音合成"])
 
@@ -81,12 +81,17 @@ async def generate_speech(
 
     from app.core.tts import generate_speech_with_fallback
 
-    filepath = await generate_speech_with_fallback(
-        text=req.text,
-        voice=req.voice,
-        speed=req.speed,
-        config=tts_config,
-    )
+    try:
+        filepath = await generate_speech_with_fallback(
+            text=req.text,
+            voice=req.voice,
+            speed=req.speed,
+            config=tts_config,
+        )
+    except ValueError as e:
+        raise ValidationError(str(e)) from e
+    except Exception as e:
+        raise ExternalServiceError(f"语音生成失败: {e}") from e
 
     filename = os.path.basename(filepath)
     return FileResponse(
@@ -131,12 +136,17 @@ async def openai_compatible_speech(
     elif voice == "fable":
         voice = "zh-CN-XiaoyiNeural"
 
-    filepath = await generate_speech_with_fallback(
-        text=req.input,
-        voice=voice,
-        speed=req.speed,
-        config=tts_config,
-    )
+    try:
+        filepath = await generate_speech_with_fallback(
+            text=req.input,
+            voice=voice,
+            speed=req.speed,
+            config=tts_config,
+        )
+    except ValueError as e:
+        raise ValidationError(str(e)) from e
+    except Exception as e:
+        raise ExternalServiceError(f"语音生成失败: {e}") from e
 
     filename = os.path.basename(filepath)
     return FileResponse(

@@ -28,12 +28,13 @@ commits: 902997f..a50c42b
 - ✅ 坐标语义文档化 + 变长编辑路径测试：坐标=原点区间，等长编辑维持等式，变长后等式不成立属预期（父块重建仍按原点 splice）。
 - ✅ `/health` 增加 `chunk_count_sync` 不变量哨兵（`mismatch:N` → degraded）。
 - ✅ **存量清理 + 重跑 + 前后对比已完成**（2026-09-28）：备份 3.1GB → 删 stale 10463 + dup 150 → reindex ok=16/fail=12 → `ready_mismatch=0`、hit@5 保持 100%。详见 `backend/evaluation/results/reindex-compare-20260928.md`。
+- ✅ **5.2 追问建议已补**（`71a06d3`）+ 二期起始问题（`c2ad0f0`）。
+- ✅ **OCR 四轮评审修复**（`cff141c`…`39fea40`）：检索参数真生效、Wiki 双链安全、切片编辑 CAS、span 幂等、批量事务等，详见二期计划 §15。
 
 ### 待补（勿再按「全交付」字面理解）
-1. **`rag-stress-corpus.pdf` 源文件缺失**：待恢复后单独 reprocess（11 篇空 `t.txt` 残留建议 purge）。
-2. **5.2 追问建议**：计划阶段五子项，明确未做。
-3. **6B/6C 三态全文视图 / 虚拟滚动**：按计划留待迭代。
-4. **hierarchical 子块列级坐标**：目前坐标在 metadata，父块有列级坐标；子块上列级坐标属增强项。
+1. **`rag-stress-corpus.pdf` 源文件缺失**：待恢复后单独 reprocess（11 篇空 `t.txt` 残留已 purge）。
+2. **6B/6C 三态全文视图 / 虚拟滚动**：按计划留待迭代。
+3. **hierarchical 子块列级坐标**：目前坐标在 metadata，父块有列级坐标；子块上列级坐标属增强项。
 
 ## [S1] Problem
 Study Copilot 对照 WeKnora v0.8.0 的 UI/检索体验缺口（详见根目录 `WeKnora吸收-UI升级实施计划.md`）。

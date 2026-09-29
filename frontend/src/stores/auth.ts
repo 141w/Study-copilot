@@ -28,17 +28,23 @@ export const useAuthStore = defineStore('auth', () => {
     return response.data
   }
 
-  async function register(
-    username: string,
-    email: string,
-    password: string,
+  async function register(payload: {
+    username: string
+    email: string
+    password: string
+    confirmPassword?: string
     turnstileToken?: string
-  ): Promise<User> {
+    captchaId?: string
+    captchaAnswer?: string
+  }): Promise<User> {
     const response = await api.post<User>('/auth/register', {
-      username,
-      email,
-      password,
-      turnstile_token: turnstileToken || null
+      username: payload.username,
+      email: payload.email,
+      password: payload.password,
+      confirm_password: payload.confirmPassword ?? payload.password,
+      turnstile_token: payload.turnstileToken || null,
+      captcha_id: payload.captchaId || null,
+      captcha_answer: payload.captchaAnswer ?? null
     })
 
     return response.data

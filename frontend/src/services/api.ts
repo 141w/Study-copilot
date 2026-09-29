@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { useToastStore } from '../stores/toast'
 import { refreshAccessToken, redirectToLogin } from './authRefresh'
+import { isSessionExpiredDetail, shouldToastAuthError } from './authErrorPolicy'
 import { API_BASE } from './base'
 
 // Extend AxiosRequestConfig to include _retry
@@ -97,6 +98,11 @@ api.interceptors.request.use(
 
 // ── Response interceptor (retry + toast) ───────────────────────────────────
 
+/** 是否本地存在（可能已过期的）登录凭证 */
+function hasStoredSession(): boolean {
+  return Boolean(localStorage.getItem('token') || localStorage.getItem('refreshToken'))
+}
+
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error) => {
@@ -106,6 +112,17 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
+      const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail
+
+      // 从未登录：静默失败，不刷新、不跳转、不 toast（公共页/预加载常见）
+      if (!hasStoredSession()) {
+        return Promise.reject(error)
+      }
+
+      // 登录密码错 / 原密码错等：表单内联展示，不要当成会话过期去 refresh/踢登录
+      if (!isSessionExpiredDetail(detail)) {
+        return Promise.reject(error)
+      }
 
       // P1-3：复用共享 refreshAccessToken（与 chat.ts SSE 路径同源）
       const outcome = await refreshAccessToken()
@@ -113,7 +130,9 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${outcome.accessToken}`
         return api(originalRequest)
       }
+      // 刷新失败：authRefresh 已提示；仅在已有登录态时踢回登录
       redirectToLogin()
+      return Promise.reject(error)
     }
 
     // Rate limit (429) / temporary server error (503): retry once with backoff
@@ -130,6 +149,11 @@ api.interceptors.response.use(
 
     // Skip toast for intentional cancellations (cancelAll / AbortController)
     if (error.name === 'CanceledError' || error.message === 'canceled') {
+      return Promise.reject(error)
+    }
+
+    // 认证类 401：交给表单内联提示 / 登录过期提示 / 路由守卫，不全局 toast
+    if (!shouldToastAuthError(error.response?.status)) {
       return Promise.reject(error)
     }
 

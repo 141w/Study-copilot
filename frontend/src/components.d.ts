@@ -11,6 +11,8 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AchievementStage: typeof import('./components/profile/AchievementStage.vue')['default']
+    AchievementWallDropdown: typeof import('./components/profile/AchievementWallDropdown.vue')['default']
     AppHeader: typeof import('./components/common/AppHeader.vue')['default']
     AppSidebar: typeof import('./components/common/AppSidebar.vue')['default']
     ChatAttachments: typeof import('./components/chat/ChatAttachments.vue')['default']
@@ -27,6 +29,7 @@ declare module 'vue' {
     ConfirmDialog: typeof import('./components/common/ConfirmDialog.vue')['default']
     CopilotBotAvatar: typeof import('./components/CopilotBotAvatar.vue')['default']
     CourseCard: typeof import('./components/CourseCard.vue')['default']
+    DocumentBatchTagBar: typeof import('./components/DocumentBatchTagBar.vue')['default']
     DocumentPicker: typeof import('./components/common/DocumentPicker.vue')['default']
     ElButton: typeof import('element-plus/es/components/button/index.mjs')['ElButton']
     ElCard: typeof import('element-plus/es/components/card/index.mjs')['ElCard']
@@ -58,6 +61,8 @@ declare module 'vue' {
     ElTooltip: typeof import('element-plus/es/components/tooltip/index.mjs')['ElTooltip']
     ElTreeSelect: typeof import('element-plus/es/components/tree-select/index.mjs')['ElTreeSelect']
     EmptyState: typeof import('./components/common/EmptyState.vue')['default']
+    EvaluationLab: typeof import('./components/settings/EvaluationLab.vue')['default']
+    FavoriteStar: typeof import('./components/FavoriteStar.vue')['default']
     GenerateClassroomDialog: typeof import('./components/classroom/GenerateClassroomDialog.vue')['default']
     LearningActivityGraph: typeof import('./components/profile/LearningActivityGraph.vue')['default']
     MemoryManager: typeof import('./components/profile/MemoryManager.vue')['default']
@@ -67,8 +72,10 @@ declare module 'vue' {
     NoteViewer: typeof import('./components/NoteViewer.vue')['default']
     NotificationBell: typeof import('./components/common/NotificationBell.vue')['default']
     PageHeader: typeof import('./components/common/PageHeader.vue')['default']
+    ParseTimeline: typeof import('./components/ParseTimeline.vue')['default']
     PersonaManageDialog: typeof import('./components/chat/PersonaManageDialog.vue')['default']
     ProximitySidebar: typeof import('./components/chat/ProximitySidebar.vue')['default']
+    RetrievalSettings: typeof import('./components/settings/RetrievalSettings.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ScopeChips: typeof import('./components/chat/ScopeChips.vue')['default']

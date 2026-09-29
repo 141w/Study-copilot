@@ -65,13 +65,22 @@ describe('Auth Store', () => {
     const registerResponse = { data: { id: 1, username: 'newuser' } }
     api.post.mockResolvedValue(registerResponse)
 
-    const result = await store.register('newuser', 'new@example.com', 'StudyPass9', 'ts-token')
+    const result = await store.register({
+      username: 'newuser',
+      email: 'new@example.com',
+      password: 'StudyPass9',
+      confirmPassword: 'StudyPass9',
+      turnstileToken: 'ts-token'
+    })
 
     expect(api.post).toHaveBeenCalledWith('/auth/register', {
       username: 'newuser',
       email: 'new@example.com',
       password: 'StudyPass9',
+      confirm_password: 'StudyPass9',
       turnstile_token: 'ts-token',
+      captcha_id: null,
+      captcha_answer: null,
     })
     expect(result).toEqual(registerResponse.data)
   })
@@ -80,13 +89,22 @@ describe('Auth Store', () => {
     const registerResponse = { data: { id: 1, username: 'newuser' } }
     api.post.mockResolvedValue(registerResponse)
 
-    await store.register('newuser', 'new@example.com', 'StudyPass9')
+    await store.register({
+      username: 'newuser',
+      email: 'new@example.com',
+      password: 'StudyPass9',
+      captchaId: 'cap-1',
+      captchaAnswer: '7'
+    })
 
     expect(api.post).toHaveBeenCalledWith('/auth/register', {
       username: 'newuser',
       email: 'new@example.com',
       password: 'StudyPass9',
+      confirm_password: 'StudyPass9',
       turnstile_token: null,
+      captcha_id: 'cap-1',
+      captcha_answer: '7',
     })
   })
 

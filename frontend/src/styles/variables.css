@@ -61,6 +61,8 @@
   --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f0f0fa 100%);
   /* 侧栏专用纵向渐变——顶部承接 header 卡片白，向下过渡到页面底色 */
   --gradient-sidebar: linear-gradient(180deg, var(--surface-card) 0%, var(--bg-primary) 26%, var(--bg-secondary) 100%);
+  /* 成就墙点阵点色（亮色） */
+  --dot-grid-color: rgba(15, 23, 42, 0.16);
 
   /* Shadows — 柔和弥散阴影 */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -183,6 +185,8 @@
   --gradient-surface: linear-gradient(180deg, #0a0a0a 0%, #000000 100%);
   /* 暗色侧栏渐变——顶接 header 卡片色，底接页面底色（令牌派生自动适配） */
   --gradient-sidebar: linear-gradient(180deg, var(--surface-card) 0%, var(--bg-primary) 30%, var(--bg-secondary) 100%);
+  /* 成就墙点阵点色（暗色） */
+  --dot-grid-color: rgba(255, 255, 255, 0.32);
 
   /* Shadows —— 精修（批次1e）：暗色阴影收敛（边框为主、阴影为辅，
      原 0.35 透明度黑在深底上发脏） */

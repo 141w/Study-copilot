@@ -67,12 +67,77 @@
                   maxlength="128"
                   required
                 />
-                <p class="mt-1 text-xs text-[var(--text-muted)]">至少 8 位，需同时包含字母和数字</p>
+                <!-- 密码强度指示 -->
+                <div v-if="form.password" class="mt-2 space-y-1">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-[var(--text-muted)]">密码强度</span>
+                    <span :class="passwordStrength.colorClass" class="font-medium">
+                      {{ passwordStrength.text }}
+                    </span>
+                  </div>
+                  <div class="h-1.5 w-full bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                    <div
+                      class="h-full rounded-full transition-all duration-300"
+                      :class="passwordStrength.barClass"
+                      :style="{ width: `${passwordStrength.score}%` }"
+                    />
+                  </div>
+                  <ul v-if="passwordStrength.tips.length" class="text-xs text-[var(--text-muted)] space-y-0.5">
+                    <li v-for="tip in passwordStrength.tips" :key="tip">· {{ tip }}</li>
+                  </ul>
+                </div>
+                <p v-else class="mt-1 text-xs text-[var(--text-muted)]">
+                  至少 8 位，需同时包含字母和数字；建议混用大小写与符号
+                </p>
+              </div>
+
+              <div>
+                <label for="register-password2" class="block text-sm text-[var(--text-secondary)] mb-1">确认密码</label>
+                <el-input
+                  id="register-password2"
+                  v-model="form.confirmPassword"
+                  type="password"
+                  show-password
+                  placeholder="请再次输入密码"
+                  maxlength="128"
+                  required
+                />
+                <p
+                  v-if="form.confirmPassword && form.confirmPassword !== form.password"
+                  class="mt-1 text-xs text-[var(--color-error)]"
+                >
+                  两次输入的密码不一致
+                </p>
               </div>
 
               <!-- Turnstile（服务端配置了 site key 才渲染） -->
               <div v-if="turnstileSiteKey" class="turnstile-box">
                 <div ref="turnstileEl" class="cf-turnstile" :data-sitekey="turnstileSiteKey"></div>
+              </div>
+
+              <!-- 本地算术验证码（Turnstile 未配置时） -->
+              <div v-else-if="captchaMode === 'math'">
+                <label for="register-captcha" class="block text-sm text-[var(--text-secondary)] mb-1">
+                  人机验证
+                </label>
+                <div class="flex items-center gap-2">
+                  <div
+                    class="captcha-q flex-shrink-0 h-10 px-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-tertiary)] flex items-center text-sm font-mono tracking-wide"
+                  >
+                    {{ captcha.question || '…' }}
+                  </div>
+                  <el-button text type="primary" @click="refreshCaptcha" :disabled="loading">
+                    换一题
+                  </el-button>
+                  <el-input
+                    id="register-captcha"
+                    v-model="form.captchaAnswer"
+                    placeholder="答案"
+                    class="flex-1"
+                    inputmode="numeric"
+                    required
+                  />
+                </div>
               </div>
 
               <el-button
@@ -108,7 +173,7 @@ import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
 import { useReducedMotion } from '../composables/useReducedMotion'
-import { validatePassword } from '../utils/passwordPolicy'
+import { validatePassword, passwordStrength as scorePassword } from '../utils/passwordPolicy'
 import api from '../services/api'
 
 const authStore = useAuthStore()
@@ -123,25 +188,34 @@ let ctx: gsap.Context | null = null
 const form = ref({
   username: '',
   email: '',
-  password: ''
+  password: '',
+  confirmPassword: '',
+  captchaAnswer: ''
 })
 const loading = ref(false)
 const error = ref('')
 const turnstileSiteKey = ref('')
 const turnstileToken = ref('')
 const registerAllowed = ref(true)
+const captchaMode = ref<'turnstile' | 'math' | 'none'>('math')
+const captcha = ref<{ id: string; question: string }>({ id: '', question: '' })
 
+const passwordStrength = computed(() => scorePassword(form.value.password))
 const passwordIssue = computed(() =>
   form.value.password ? validatePassword(form.value.password) : null
 )
-const canSubmit = computed(
-  () =>
-    registerAllowed.value &&
-    !!form.value.username &&
-    !!form.value.email &&
-    !!form.value.password &&
-    !passwordIssue.value
-)
+const canSubmit = computed(() => {
+  if (!registerAllowed.value) return false
+  if (!form.value.username || !form.value.email || !form.value.password) return false
+  if (form.value.confirmPassword !== form.value.password) return false
+  if (passwordIssue.value) return false
+  if (captchaMode.value === 'math' && !form.value.captchaAnswer.trim()) return false
+  if (captchaMode.value === 'turnstile' && turnstileSiteKey.value && !turnstileToken.value) {
+    // 允许在 widget 尚未完成时禁用按钮
+    return false
+  }
+  return true
+})
 
 function readTurnstileToken(): void {
   // 官方 widget 渲染后会把 token 写进隐藏 input
@@ -188,12 +262,27 @@ const particles = [
   { left: 88, size: 3, delay: 2, duration: 17 }
 ]
 
+async function refreshCaptcha(): Promise<void> {
+  try {
+    const resp = await api.get<{ id: string; question: string }>('/auth/captcha')
+    captcha.value = { id: resp.data.id, question: resp.data.question }
+    form.value.captchaAnswer = ''
+  } catch {
+    captcha.value = { id: '', question: '加载失败，请点击「换一题」' }
+  }
+}
+
 async function handleRegister(): Promise<void> {
   loading.value = true
   error.value = ''
 
   if (!registerAllowed.value) {
     error.value = '当前未开放注册'
+    loading.value = false
+    return
+  }
+  if (form.value.confirmPassword !== form.value.password) {
+    error.value = '两次输入的密码不一致'
     loading.value = false
     return
   }
@@ -210,19 +299,32 @@ async function handleRegister(): Promise<void> {
       loading.value = false
       return
     }
+  } else if (captchaMode.value === 'math') {
+    if (!captcha.value.id || !form.value.captchaAnswer.trim()) {
+      error.value = '请完成算术人机验证'
+      loading.value = false
+      return
+    }
   }
 
   try {
-    await authStore.register(
-      form.value.username,
-      form.value.email,
-      form.value.password,
-      turnstileToken.value || undefined
-    )
+    await authStore.register({
+      username: form.value.username,
+      email: form.value.email,
+      password: form.value.password,
+      confirmPassword: form.value.confirmPassword,
+      turnstileToken: turnstileToken.value || undefined,
+      captchaId: !turnstileSiteKey.value && captchaMode.value === 'math' ? captcha.value.id : undefined,
+      captchaAnswer:
+        !turnstileSiteKey.value && captchaMode.value === 'math' ? form.value.captchaAnswer : undefined
+    })
     router.push('/login')
   } catch (e) {
     const axiosError = e as AxiosError<{ detail: string }>
     error.value = axiosError.response?.data?.detail || '注册失败，请稍后重试'
+    if (!turnstileSiteKey.value && captchaMode.value === 'math') {
+      void refreshCaptcha()
+    }
   } finally {
     loading.value = false
   }
@@ -233,18 +335,30 @@ onMounted(async () => {
     const resp = await api.get<{
       allow_registration?: boolean
       turnstile_site_key?: string
+      captcha_mode?: 'turnstile' | 'math' | 'none'
     }>('/auth/register-meta')
     registerAllowed.value = resp.data.allow_registration !== false
     turnstileSiteKey.value = resp.data.turnstile_site_key || ''
+    if (resp.data.captcha_mode) {
+      captchaMode.value = resp.data.captcha_mode
+    } else if (turnstileSiteKey.value) {
+      captchaMode.value = 'turnstile'
+    } else {
+      captchaMode.value = 'math'
+    }
+
     if (turnstileSiteKey.value) {
       try {
         await loadTurnstile(turnstileSiteKey.value)
       } catch {
         // 加载失败时仍允许提交，由服务端拒绝
       }
+    } else if (captchaMode.value === 'math') {
+      await refreshCaptcha()
     }
   } catch {
-    // 元数据拉取失败不阻塞表单，服务端仍会校验
+    captchaMode.value = 'math'
+    await refreshCaptcha()
   }
 
   if (prefersReduced.value) return
@@ -392,6 +506,12 @@ html.dark .card-shell {
   display: flex;
   justify-content: center;
   min-height: 65px;
+}
+.captcha-q {
+  min-width: 108px;
+  justify-content: center;
+  color: var(--text-primary);
+  user-select: none;
 }
 .login-btn:hover {
   transform: translateY(-1px);

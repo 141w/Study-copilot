@@ -12,7 +12,7 @@ from openai import AsyncOpenAI
 
 from app.config import settings
 from app.core.tracing import record_generation
-from app.exceptions import LLMNotConfiguredError
+from app.exceptions import LLMNotConfiguredError, classify_llm_error
 
 SUPPORTED_MESSAGE_FORMATS = {"openai", "anthropic", "gemini", "ollama"}
 
@@ -134,6 +134,13 @@ def normalize_message_format(
 _UNCONFIGURED_KEY_PLACEHOLDER = "missing-api-key"
 
 
+def _reraise_llm_error(err: BaseException) -> None:
+    """把 LLM SDK/网络异常转成带中文文案的 AppError，避免落到全局「服务器内部错误」。"""
+    if isinstance(err, LLMNotConfiguredError):
+        raise err
+    raise classify_llm_error(err) from err
+
+
 class LLM:
     def _require_configured(self) -> None:
         """调用前的凭据检查：未配置时给出可操作的中文引导，而非 SDK 认证错误。"""
@@ -217,8 +224,10 @@ class LLM:
                     logger.warning(f"Generate attempt {attempt + 1} failed: {e}. Retrying...")
                     await asyncio.sleep(2**attempt + random.uniform(0, 1))
                 else:
-                    raise
-        raise last_err  # type: ignore[misc]
+                    _reraise_llm_error(e)
+        if last_err is not None:
+            _reraise_llm_error(last_err)
+        return None
 
     async def chat(
         self,
@@ -261,7 +270,7 @@ class LLM:
                 return ""
             except Exception as e:
                 if attempt == max_retries - 1:
-                    raise  # 最后一次重试失败，抛出异常
+                    _reraise_llm_error(e)  # 最后一次重试失败：分类后抛出可展示中文文案
                 logger.warning(f"Chat attempt {attempt + 1} failed: {e}. Retrying...")
                 await asyncio.sleep(2**attempt + random.uniform(0, 1))  # 指数退避 + jitter
         return ""  # 不应该到达这里
@@ -381,15 +390,16 @@ class LLM:
                 return  # 成功完成，退出重试循环
             except Exception as e:
                 if has_yielded:
-                    # 已有 token 发出，重试会导致内容重复，直接抛出
-                    raise
+                    # 已有 token 发出，重试会导致内容重复，直接分类后抛出
+                    _reraise_llm_error(e)
                 last_err = e
                 if attempt < max_retries:
                     logger.warning(f"ChatStream attempt {attempt + 1} failed: {e}. Retrying...")
                     await asyncio.sleep(2**attempt + random.uniform(0, 1))
                 else:
-                    raise
-        raise last_err  # type: ignore[misc]
+                    _reraise_llm_error(e)
+        if last_err is not None:
+            _reraise_llm_error(last_err)
 
     async def chat_with_tools(
         self,
@@ -484,7 +494,7 @@ class LLM:
                 }
             except Exception as e:
                 if attempt == max_retries - 1:
-                    raise
+                    _reraise_llm_error(e)
                 logger.warning(f"ChatWithTools attempt {attempt + 1} failed: {e}. Retrying...")
                 await asyncio.sleep(2**attempt + random.uniform(0, 1))
 

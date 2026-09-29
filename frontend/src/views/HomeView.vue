@@ -329,6 +329,7 @@ import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDocumentStore } from '../stores/document'
 import { useChatStore } from '../stores/chat'
+import { useAuthStore } from '../stores/auth'
 import {
   Upload,
   ChatDotSquare,
@@ -724,9 +725,11 @@ function goToChat(docId: string): void {
 }
 
 onMounted(async () => {
-  // 数据请求 fire-and-forget：失败静默，列表区展示既有空态
-  documentStore.fetchDocuments().catch(() => {})
-  chatStore.fetchSessions().catch(() => {})
+  // 首页是公开落地页：未登录不拉需鉴权接口，避免弹 401 / 被踢去登录
+  if (useAuthStore().isAuthenticated) {
+    documentStore.fetchDocuments().catch(() => {})
+    chatStore.fetchSessions().catch(() => {})
+  }
 
   // 等待 Vue DOM 挂载和页面路由过渡初态
   await nextTick()

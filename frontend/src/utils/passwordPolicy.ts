@@ -59,3 +59,69 @@ export function validatePassword(password: string): string | null {
   }
   return null
 }
+
+export type PasswordStrength = {
+  score: number
+  text: string
+  barClass: string
+  colorClass: string
+  tips: string[]
+}
+
+/** 注册/改密共用强度评分（0–100）。校验过线 ≠ 强度高。 */
+export function passwordStrength(password: string): PasswordStrength {
+  const pwd = password || ''
+  const tips: string[] = []
+  if (!pwd) {
+    return {
+      score: 0,
+      text: '未输入',
+      barClass: 'bg-transparent',
+      colorClass: 'text-[var(--text-muted)]',
+      tips: []
+    }
+  }
+
+  let score = 0
+  if (pwd.length >= 8) score += 25
+  else tips.push(`再加 ${8 - pwd.length} 位`)
+  if (pwd.length >= 12) score += 15
+  if (pwd.length >= 16) score += 10
+  if (/[a-z]/.test(pwd)) score += 10
+  if (/[A-Z]/.test(pwd)) score += 15
+  else tips.push('加入大写字母')
+  if (/\d/.test(pwd)) score += 15
+  if (/[^A-Za-z0-9]/.test(pwd)) score += 15
+  else tips.push('加入符号（如 !@#）')
+  if (/(.)\1{2,}/.test(pwd)) {
+    score = Math.max(0, score - 15)
+    tips.push('避免连续重复字符')
+  }
+
+  score = Math.min(100, score)
+  if (score < 40) {
+    return {
+      score,
+      text: '弱',
+      barClass: 'bg-[var(--color-error)]',
+      colorClass: 'text-[var(--color-error)]',
+      tips
+    }
+  }
+  if (score < 70) {
+    return {
+      score,
+      text: '中等',
+      barClass: 'bg-[var(--color-warning)]',
+      colorClass: 'text-[var(--color-warning)]',
+      tips
+    }
+  }
+  return {
+    score,
+    text: '强',
+    barClass: 'bg-[var(--color-success)]',
+    colorClass: 'text-[var(--color-success)]',
+    tips
+  }
+}

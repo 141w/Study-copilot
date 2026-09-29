@@ -1,5 +1,5 @@
 <template>
-  <header class="fixed top-0 left-0 right-0 h-[var(--layout-header-height)] bg-[var(--surface-card)] border-b border-[var(--border-default)] z-50 transition-colors duration-200">
+  <header class="fixed top-0 left-0 right-0 h-[var(--layout-header-height)] bg-[var(--bg-primary)] border-b border-[var(--border-default)] z-50 transition-colors duration-200">
     <div class="flex items-center justify-between h-full px-4 md:px-6">
       <div class="flex items-center gap-3">
         <button
@@ -93,6 +93,7 @@ import { User, Sunny, Moon, Setting, Fold } from '@/components/icons'
 import CopilotBotAvatar, { type BotMood } from '@/components/CopilotBotAvatar.vue'
 import NotificationBell from '@/components/common/NotificationBell.vue'
 import { useUserPrefs } from '@/composables/useUserPrefs'
+import { useUserAvatar } from '@/composables/useUserAvatar'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 import { takeLoginHandoffRect } from '@/utils/loginHandoff'
 
@@ -162,11 +163,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onActivity)
 })
 
-/** 批次4：头像首字符（用户名首字大写，兜底 "?"） */
-const avatarLetter = computed(() => {
-  const name = authStore.user?.username || ''
-  return name.trim().charAt(0).toUpperCase() || '?'
-})
+/** 批次4：头像首字符（规则见 useUserAvatar，与 ProfileView 同源） */
+const { avatarLetter } = useUserAvatar()
 
 const showSidebar = computed(() => {
   return router.currentRoute.value.path !== '/login' && router.currentRoute.value.path !== '/register'

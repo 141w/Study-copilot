@@ -73,28 +73,6 @@ fi
 ok "依赖检查通过"
 
 # ----------------------------------------------------------
-# 1.5 预下载 AI 模型（首次启动需要）
-# ----------------------------------------------------------
-info "检查 AI 模型..."
-"$CONDA_PYTHON" -c "
-from sentence_transformers import SentenceTransformer
-import os
-os.environ.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')
-try:
-    m = SentenceTransformer('shibing624/text2vec-base-chinese')
-    print('Embedding model OK')
-except Exception as e:
-    print(f'Warning: {e}')
-try:
-    from sentence_transformers import CrossEncoder
-    m = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-    print('Reranker model OK')
-except Exception as e:
-    print(f'Warning: {e}')
-" 2>&1 | while read line; do ok "$line"; done
-ok "AI 模型就绪"
-
-# ----------------------------------------------------------
 # 2. 安装前端依赖（如果需要）
 # ----------------------------------------------------------
 if [ ! -d "$SCRIPT_DIR/frontend/node_modules" ]; then

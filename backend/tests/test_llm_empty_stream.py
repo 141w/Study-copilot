@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.exceptions import ExternalServiceError
+
 
 def _make_empty_stream():
     """构造零 chunk 的异步流（模拟供应商空流）"""
@@ -52,13 +54,13 @@ class TestChatStreamEmptyDetection:
         return llm
 
     async def test_empty_stream_raises(self):
-        """零 chunk 流 -> 抛 RuntimeError（而非静默返回）"""
+        """零 chunk 流 -> 抛 ExternalServiceError（而非静默返回 / 服务器内部错误）"""
         from app.core.llm import LLM
         llm = self._make_llm()
         llm.client.chat.completions.create = AsyncMock(
             side_effect=lambda **kw: _make_empty_stream()
         )
-        with pytest.raises(RuntimeError, match="no content"):
+        with pytest.raises(ExternalServiceError, match="no content"):
             async for _ in llm.chat_stream(
                 [{"role": "user", "content": "hi"}], max_retries=0
             ):
@@ -76,7 +78,7 @@ class TestChatStreamEmptyDetection:
             return _make_empty_stream()
 
         llm.client.chat.completions.create = create
-        with pytest.raises(RuntimeError):
+        with pytest.raises(ExternalServiceError):
             async for _ in llm.chat_stream(
                 [{"role": "user", "content": "hi"}], max_retries=1
             ):
@@ -127,7 +129,7 @@ class TestChatStreamEmptyDetection:
         llm.client.chat.completions.create = AsyncMock(
             side_effect=lambda **kw: _make_chunk_stream(chunks)
         )
-        with pytest.raises(RuntimeError, match="no content"):
+        with pytest.raises(ExternalServiceError, match="no content"):
             async for _ in llm.chat_stream(
                 [{"role": "user", "content": "hi"}], max_retries=0,
                 include_reasoning=False,

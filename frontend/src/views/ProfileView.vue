@@ -1,76 +1,113 @@
 <template>
-  <div class="max-w-4xl mx-auto px-6 py-10">
-    <!-- ── 顶部个人名片 ── -->
-    <div class="card p-6 md:p-8 mb-8 relative overflow-hidden">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6 relative z-10">
-        <div class="flex items-center gap-5">
-          <!-- 头像展示与切换：支持自定义上传、首字母渐变与 Copilot 伴侣机器人 -->
-          <div class="relative group cursor-pointer" @click="triggerAvatarUpload" title="点击更换头像">
-            <img
-              v-if="userPrefs.avatarType === 'custom' && userPrefs.customAvatar"
-              :src="userPrefs.customAvatar"
-              alt="用户头像"
-              class="w-16 h-16 rounded-2xl object-cover border-2 border-[var(--border-default)] shadow-md transition-transform group-hover:scale-105"
-            />
-            <div
-              v-else-if="userPrefs.avatarType === 'letter'"
-              class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)]
-                     flex items-center justify-center text-2xl font-semibold text-[var(--text-inverse)] shadow-md transition-transform group-hover:scale-105"
-            >
-              {{ avatarLetter }}
-            </div>
-            <div
-              v-else
-              class="w-16 h-16 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-default)]
-                     flex items-center justify-center shadow-md transition-transform group-hover:scale-105"
-            >
-              <CopilotBotAvatar ref="profileBot" :size="52" mood="idle" :gaze="userPrefs.botGaze" />
-            </div>
-            <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-center text-[10px] text-[var(--text-muted)] shadow-sm group-hover:text-[var(--text-primary)]">
-              <el-icon><Edit /></el-icon>
-            </span>
-            <!-- 隐藏的图片文件上传 input -->
-            <input
-              ref="avatarInputRef"
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              class="hidden"
-              @change="handleAvatarFileChange"
-            />
-          </div>
+  <div class="profile-page pb-10">
+    <!-- ── 开放通栏成就墙：点阵场 + 可拖拽贴纸 + 身份 ── -->
+    <header class="profile-hero relative mb-10" data-test="profile-hero">
+      <div class="profile-hero__dots pointer-events-none absolute inset-0" aria-hidden="true" />
 
-          <div class="min-w-0">
-            <div class="flex items-center gap-2.5 flex-wrap">
-              <h1 class="text-2xl font-bold text-[var(--text-primary)] truncate">{{ authStore.user?.username || '学习者' }}</h1>
-              <span class="text-xs px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium">
-                本地知识库
+      <!-- 贴纸场与点阵同域：通栏全宽 -->
+      <div class="relative w-full pt-6 sm:pt-8">
+        <AchievementStage
+          class="w-full"
+          :stickers="wallStickers"
+          drop-target
+          @remove="handleStickerRemove"
+          @drop="handleStickerDrop"
+        />
+      </div>
+
+      <!-- 身份与操作对齐内容栏 -->
+      <div class="relative max-w-4xl mx-auto px-6 pb-8">
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-5">
+          <div class="flex items-center gap-4 min-w-0">
+            <div class="relative group cursor-pointer shrink-0" @click="triggerAvatarUpload" title="点击更换头像">
+              <img
+                v-if="userPrefs.avatarType === 'custom' && userPrefs.customAvatar"
+                :src="userPrefs.customAvatar"
+                alt="用户头像"
+                class="w-14 h-14 rounded-2xl object-cover border-2 border-[var(--border-default)] shadow-md transition-transform group-hover:scale-105"
+              />
+              <div
+                v-else-if="userPrefs.avatarType === 'letter'"
+                class="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--color-brand-from)] to-[var(--color-brand-to)]
+                       flex items-center justify-center text-xl font-semibold text-[var(--text-inverse)] shadow-md transition-transform group-hover:scale-105"
+              >
+                {{ avatarLetter }}
+              </div>
+              <div
+                v-else
+                class="w-14 h-14 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-default)]
+                       flex items-center justify-center shadow-md transition-transform group-hover:scale-105"
+              >
+                <CopilotBotAvatar ref="profileBot" :size="46" mood="idle" :gaze="userPrefs.botGaze" />
+              </div>
+              <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[var(--surface-card)] border border-[var(--border-default)] flex items-center justify-center text-[10px] text-[var(--text-muted)] shadow-sm group-hover:text-[var(--text-primary)]">
+                <el-icon><Edit /></el-icon>
               </span>
+              <input
+                ref="avatarInputRef"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                class="hidden"
+                @change="handleAvatarFileChange"
+              />
             </div>
-            <p class="text-sm text-[var(--text-secondary)] mt-1.5 line-clamp-1 italic">
-              "{{ userPrefs.bio }}"
-            </p>
-            <div class="flex items-center gap-4 mt-2 text-xs text-[var(--text-muted)] flex-wrap">
-              <span>{{ authStore.user?.email }}</span>
-              <span>•</span>
-              <span>陪伴学习第 <strong class="text-[var(--text-primary)]">{{ memberDays }}</strong> 天</span>
-              <span>•</span>
-              <span>加入于 {{ memberSince }}</span>
+
+            <div class="min-w-0">
+              <div class="flex items-center gap-2.5 flex-wrap">
+                <h1 class="text-2xl font-bold text-[var(--text-primary)] truncate" data-test="profile-username">
+                  {{ authStore.user?.username || '学习者' }}
+                </h1>
+                <span class="text-xs px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium">
+                  本地知识库
+                </span>
+              </div>
+              <p class="text-sm text-[var(--text-secondary)] mt-1 line-clamp-1" data-test="profile-bio">
+                {{ userPrefs.bio || '未设置' }}
+              </p>
+              <div class="flex items-center gap-3 mt-1.5 text-xs text-[var(--text-muted)] flex-wrap">
+                <span>{{ authStore.user?.email }}</span>
+                <span>•</span>
+                <span>陪伴学习第 <strong class="text-[var(--text-primary)]">{{ memberDays }}</strong> 天</span>
+                <span>•</span>
+                <span>加入于 {{ memberSince }}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="flex sm:flex-col items-center sm:items-end gap-2">
-          <el-button size="small" @click="activeTab = 'profile'">
-            <el-icon class="mr-1"><Edit /></el-icon>编辑资料
-          </el-button>
-          <el-button size="small" type="danger" text @click="handleLogout">
-            退出登录
-          </el-button>
+          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+            <el-button size="small" @click="activeTab = 'profile'">
+              <el-icon class="mr-1"><Edit /></el-icon>编辑
+            </el-button>
+            <el-button size="small" data-test="profile-share" @click="handleShare">
+              分享
+            </el-button>
+            <AchievementWallDropdown
+              v-model="wallVisible"
+              :achievements="visibleList"
+              @select="handleAchievementSelect"
+            >
+              <template #trigger="{ toggle, open }">
+                <el-button
+                  size="small"
+                  type="primary"
+                  data-test="profile-achievement-wall"
+                  :class="{ 'is-active': open }"
+                  @click="toggle"
+                >
+                  成就墙
+                </el-button>
+              </template>
+            </AchievementWallDropdown>
+            <el-button size="small" type="danger" text @click="handleLogout">
+              退出登录
+            </el-button>
+          </div>
         </div>
       </div>
-    </div>
+    </header>
 
     <!-- ── 学习资产数据看板 ── -->
+    <div class="max-w-4xl mx-auto px-6">
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-8">
       <router-link
         to="/documents"
@@ -540,6 +577,7 @@
         </el-tab-pane>
       </el-tabs>
     </div>
+    </div>
   </div>
 </template>
 
@@ -562,7 +600,24 @@ import CopilotBotAvatar from '@/components/CopilotBotAvatar.vue'
 import MemoryManager from '@/components/profile/MemoryManager.vue'
 import TokenUsageDashboard from '@/components/profile/TokenUsageDashboard.vue'
 import LearningActivityGraph from '@/components/profile/LearningActivityGraph.vue'
+import AchievementStage from '@/components/profile/AchievementStage.vue'
+import AchievementWallDropdown from '@/components/profile/AchievementWallDropdown.vue'
+import { getAchievement } from '@/components/profile/achievementCatalog'
+import {
+  ACHIEVEMENT_PLACED_KEY,
+  slotForIndex,
+  type StickerDef
+} from '@/components/profile/achievementStickers'
+import {
+  buildDefaultContext,
+  evaluateUnlocks,
+  loadUnlockedIds,
+  markActiveToday,
+  saveUnlockedIds,
+  visibleAchievements
+} from '@/components/profile/achievementUnlock'
 import { useUserPrefs } from '@/composables/useUserPrefs'
+import { useUserAvatar } from '@/composables/useUserAvatar'
 import { validatePassword } from '@/utils/passwordPolicy'
 import {
   Document, Reading, EditPen, ChatDotSquare, TrendCharts,
@@ -593,6 +648,171 @@ function formatTokenNum(n: number | undefined): string {
 }
 
 const activeTab = ref('profile')
+const wallVisible = ref(false)
+/** 画布贴纸实例（同一成就可重复添加） */
+type PlacedSticker = { uid: string; achId: string }
+const placed = ref<PlacedSticker[]>([])
+/** 仅已解锁成就 id */
+const unlockedIds = ref<string[]>([])
+/** 以实例 uid 为键的落点 */
+const dropPos = ref<Record<string, { x: number; y: number; rot: number }>>({})
+
+/** 用户可见成就 = 已解锁；未解锁永不下发到 UI */
+const visibleList = computed(() => visibleAchievements(unlockedIds.value))
+
+function makeUid(achId: string): string {
+  return `${achId}::${Date.now().toString(36)}::${Math.random().toString(36).slice(2, 7)}`
+}
+
+const wallStickers = computed<StickerDef[]>(() => {
+  return placed.value
+    .map((p) => {
+      const def = getAchievement(p.achId)
+      if (!def || !unlockedIds.value.includes(p.achId)) return null
+      const slot = dropPos.value[p.uid]
+      return {
+        id: p.uid,
+        label: def.name,
+        img: def.image,
+        x: slot?.x ?? 50,
+        y: slot?.y ?? 40,
+        rot: slot?.rot ?? 0
+      } as StickerDef
+    })
+    .filter((s): s is StickerDef => s !== null)
+})
+
+function loadPlacedIds(): void {
+  try {
+    const raw = localStorage.getItem(ACHIEVEMENT_PLACED_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return
+    // 兼容旧格式：string[] → 实例
+    placed.value = parsed
+      .map((item: unknown) => {
+        if (typeof item === 'string') {
+          return { uid: makeUid(item), achId: item } as PlacedSticker
+        }
+        const o = item as { uid?: string; achId?: string; id?: string }
+        const achId = o.achId || o.id
+        if (!achId) return null
+        return { uid: o.uid || makeUid(achId), achId } as PlacedSticker
+      })
+      .filter((x): x is PlacedSticker => x !== null)
+  } catch {
+    placed.value = []
+  }
+}
+
+function savePlacedIds(): void {
+  try {
+    localStorage.setItem(ACHIEVEMENT_PLACED_KEY, JSON.stringify(placed.value))
+  } catch {
+    /* ignore */
+  }
+}
+
+function addPlaced(achId: string, pos?: { x: number; y: number; rot?: number }): void {
+  const uid = makeUid(achId)
+  placed.value = [...placed.value, { uid, achId }]
+  if (pos) {
+    dropPos.value = {
+      ...dropPos.value,
+      [uid]: { x: pos.x, y: pos.y, rot: pos.rot ?? (placed.value.length % 2 === 0 ? 6 : -6) }
+    }
+  } else {
+    const slot = slotForIndex(placed.value.length - 1)
+    dropPos.value = {
+      ...dropPos.value,
+      [uid]: { x: slot.x, y: slot.y, rot: slot.rot }
+    }
+  }
+  savePlacedIds()
+}
+
+function handleAchievementSelect(id: string): void {
+  if (!unlockedIds.value.includes(id)) return
+  // 可重复添加
+  addPlaced(id)
+}
+
+/** 从成就墙拖到画布：新建实例并记录落点 */
+function handleStickerDrop(payload: { id: string; x: number; y: number }): void {
+  const { id, x, y } = payload
+  if (!unlockedIds.value.includes(id)) return
+  addPlaced(id, { x, y })
+}
+
+function handleStickerRemove(uid: string): void {
+  placed.value = placed.value.filter((p) => p.uid !== uid)
+  savePlacedIds()
+}
+
+async function handleShare(): Promise<void> {
+  const name = authStore.user?.username || '学习者'
+  const text = `${name} 的 Study Copilot 学习主页 · 陪伴学习第 ${memberDays.value} 天`
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    toast.success('主页简介已复制到剪贴板')
+  } catch {
+    toast.error('复制失败，请手动分享')
+  }
+}
+
+/** 按当前学习数据求值触发条件，解锁新成就 */
+function refreshAchievements(): void {
+  const streakDays = markActiveToday()
+  const quizStats = quizStore.knowledgeStats
+  const totalQuizzes = Number(quizStats?.total_quizzes || 0)
+  const accuracy = Number(quizStats?.accuracy_rate || 0)
+  const ctx = buildDefaultContext({
+    documentCount: documentStore.documents.length,
+    chatSessionCount: chatStore.sessions.length,
+    noteCount: noteStore.notes.length,
+    streakDays,
+    quizAnswered: totalQuizzes,
+    quizQuestionCount: totalQuizzes,
+    quizAccuracy: accuracy >= 1 ? accuracy / 100 : accuracy,
+    quizPerfect: totalQuizzes > 0 && accuracy >= 100,
+    maxCourseDocCount: Math.max(
+      0,
+      ...courseStore.courses.map((c: { document_count?: number }) => Number(c.document_count || 0))
+    )
+  })
+  const prev = unlockedIds.value
+  const fresh = evaluateUnlocks(ctx, prev)
+  if (fresh.length) {
+    unlockedIds.value = [...prev, ...fresh]
+    saveUnlockedIds(unlockedIds.value)
+    for (const id of fresh) {
+      const def = getAchievement(id)
+      if (def) toast.success(`解锁成就「${def.name}」`)
+    }
+    // 新解锁自动各贴一枚
+    for (const id of fresh) {
+      addPlaced(id)
+    }
+  } else {
+    unlockedIds.value = prev
+  }
+  const unlockedSet = new Set(unlockedIds.value)
+  const cleaned = placed.value.filter((p) => unlockedSet.has(p.achId))
+  if (cleaned.length !== placed.value.length) {
+    placed.value = cleaned
+    savePlacedIds()
+  }
+}
+
 const profileBot = ref<InstanceType<typeof CopilotBotAvatar> | null>(null)
 
 // 切到「界面与伴侣」时用 swirl 呼应设置转场语义（reduced-motion 由组件内部降级）
@@ -712,11 +932,8 @@ const passwordStrength = computed(() => {
   return { score: 100, text: '强', barClass: 'bg-[var(--color-success)]', colorClass: 'text-[var(--color-success)]' }
 })
 
-/** 头像字母：用户名首字符大写 */
-const avatarLetter = computed(() => {
-  const name = authStore.user?.username || ''
-  return name.trim().charAt(0).toUpperCase() || '?'
-})
+/** 头像字母：与 AppHeader 共用 useUserAvatar 口径 */
+const { avatarLetter } = useUserAvatar()
 
 /** 加入时间与陪伴天数 */
 const memberSince = computed(() => {
@@ -748,6 +965,9 @@ const totalChunks = computed(() => {
 })
 
 onMounted(async () => {
+  loadPlacedIds()
+  unlockedIds.value = loadUnlockedIds()
+  refreshAchievements()
   try {
     await Promise.allSettled([
       authStore.fetchUser(),
@@ -769,6 +989,8 @@ onMounted(async () => {
         }
       })
     ])
+    // 数据就绪后再求值一次，避免首屏漏解锁
+    refreshAchievements()
   } catch {
     // ignore
   }
@@ -856,5 +1078,46 @@ function handleLogout(): void {
 }
 .profile-tabs :deep(.el-tabs__active-bar) {
   background-color: var(--color-primary);
+}
+
+/* 开放通栏顶区：与页面同底色，点阵向下淡出 */
+.profile-hero {
+  background-color: transparent;
+  background-image: none;
+}
+
+.profile-hero__dots {
+  background-image: radial-gradient(
+    circle,
+    var(--dot-grid-color, rgba(15, 23, 42, 0.16)) 1px,
+    transparent 1.1px
+  );
+  background-size: 12px 12px;
+  background-repeat: repeat;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.72) 32%,
+    rgba(0, 0, 0, 0.38) 58%,
+    rgba(0, 0, 0, 0.12) 78%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.72) 32%,
+    rgba(0, 0, 0, 0.38) 58%,
+    rgba(0, 0, 0, 0.12) 78%,
+    transparent 100%
+  );
+}
+
+html.dark .profile-hero__dots,
+:global(.dark) .profile-hero__dots {
+  background-image: radial-gradient(
+    circle,
+    var(--dot-grid-color, rgba(255, 255, 255, 0.32)) 1px,
+    transparent 1.1px
+  );
 }
 </style>

@@ -66,7 +66,12 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError) -> 
 
 async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle any unhandled exception."""
-    logger.error("Unhandled error: %s", exc)
+    logger.error(
+        "Unhandled error on %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+    )
     logger.error(traceback.format_exc())
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
