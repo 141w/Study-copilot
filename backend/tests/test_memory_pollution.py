@@ -5,7 +5,6 @@
 问「超时机制」会被召回加涅 task/interest 注入 system prompt，导致跑题。
 根因：CJK 逐字分词 + 高频虚字（及/有/的/中）造成虚假词法匹配。
 """
-import pytest
 
 
 class TestLexicalScoreStopChars:
@@ -59,63 +58,62 @@ class TestLexicalScoreStopChars:
 
 
 class TestRecallNoCrossTopicPollution:
-    """recall 的跨主题污染防护（真实数据库，活跃用户）"""
+    """recall 的跨主题污染防护。
 
-    @pytest.fixture
-    async def _setup(self):
-        # 依赖 conftest 的 db fixture；无则跳过
-        yield
+    原先这两个用例直接 `from app.db import AsyncSessionLocal` 取全局会话工厂，
+    连的是 DATABASE_URL 指向的库：开发机上是个人真实库（有用户、有「加涅」记忆）
+    所以绿，CI 的 ci-test.db 从未 create_all → `no such table: users`。
+    也就是说这道防护只在装了个人数据的那台机器上真的跑过。
 
-    async def test_offtopic_query_excludes_interest(self):
+    改为走 conftest 的 db_session fixture 并自建最小数据，任何环境下都真的断言。
+    """
+
+    USER_ID = "memory-pollution-user"
+
+    async def _seed(self, db) -> None:
+        """一个用户 + 一条「加涅」interest，复现事故时的记忆构成。"""
+        from app.db import MemoryItem, User
+
+        db.add(
+            User(
+                id=self.USER_ID,
+                username="memory_pollution_u",
+                email="memory-pollution@example.com",
+                password_hash="x" * 60,
+            )
+        )
+        db.add(
+            MemoryItem(
+                id="mp-interest-gagne",
+                user_id=self.USER_ID,
+                kind="interest",
+                origin="explicit",
+                status="active",
+                key="interest",
+                content="教育心理学：加涅的学习条件与八类学习层次",
+            )
+        )
+        await db.commit()
+
+    async def test_offtopic_query_excludes_interest(self, db_session):
         """与查询无关的 interest（加涅）不注入信封"""
-        from sqlalchemy import select
-
-        from app.db import AsyncSessionLocal, MemoryItem, User
         from app.services.memory_service import memory_service
 
-        async with AsyncSessionLocal() as db:
-            user = (await db.execute(select(User).limit(1))).scalar_one()
-            # 确认用户有加涅相关记忆（测试前置）
-            items = (
-                await db.execute(
-                    select(MemoryItem).where(
-                        MemoryItem.user_id == user.id,
-                        MemoryItem.status == "active",
-                        MemoryItem.content.like("%加涅%"),
-                    )
-                )
-            ).scalars().all()
-            if not items:
-                pytest.skip("用户无加涅记忆，跳过")
-            r = await memory_service.recall(
-                user.id, "总结文档中所有涉及超时的机制及其超时语义", db
-            )
-            env = r.prompt_envelope or ""
-            # 断言：信封中不出现加涅 task/interest（常驻 profile 不含「加涅」字样即可）
-            assert "加涅" not in env, f"跨主题污染: {env[:200]}"
+        await self._seed(db_session)
+        r = await memory_service.recall(
+            self.USER_ID, "总结文档中所有涉及超时的机制及其超时语义", db_session
+        )
+        env = r.prompt_envelope or ""
+        # 断言：信封中不出现加涅 interest（常驻 profile 不含「加涅」字样即可）
+        assert "加涅" not in env, f"跨主题污染: {env[:200]}"
 
-    async def test_ontopic_query_keeps_interest(self):
-        """相关查询（加涅）仍注入加涅记忆"""
-        from sqlalchemy import select
-
-        from app.db import AsyncSessionLocal, MemoryItem, User
+    async def test_ontopic_query_keeps_interest(self, db_session):
+        """相关查询（加涅）仍注入加涅记忆——防止防护过头把 interest 全砍掉"""
         from app.services.memory_service import memory_service
 
-        async with AsyncSessionLocal() as db:
-            user = (await db.execute(select(User).limit(1))).scalar_one()
-            items = (
-                await db.execute(
-                    select(MemoryItem).where(
-                        MemoryItem.user_id == user.id,
-                        MemoryItem.status == "active",
-                        MemoryItem.content.like("%加涅%"),
-                    )
-                )
-            ).scalars().all()
-            if not items:
-                pytest.skip("用户无加涅记忆，跳过")
-            r = await memory_service.recall(
-                user.id, "加涅学习层次八类分法的教学应用", db
-            )
-            env = r.prompt_envelope or ""
-            assert "加涅" in env, "相关查询应保留加涅记忆"
+        await self._seed(db_session)
+        r = await memory_service.recall(
+            self.USER_ID, "加涅学习层次八类分法的教学应用", db_session
+        )
+        env = r.prompt_envelope or ""
+        assert "加涅" in env, "相关查询应保留加涅记忆"
