@@ -12,10 +12,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 
-def isoformat_utc(dt: datetime | None) -> str | None:
-    """Serialize a datetime as ISO-8601 UTC with trailing Z."""
+def isoformat_utc(dt: datetime | str | None) -> str | None:
+    """Serialize a datetime as ISO-8601 UTC with trailing Z.
+
+    接受 datetime 或已是字符串的值（字符串原样返回，避免对已序列化字段二次处理报错）。
+    """
     if dt is None:
         return None
+    if isinstance(dt, str):
+        return dt
     if dt.tzinfo is None:
         # Naive values in this codebase are UTC
         return dt.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z")
