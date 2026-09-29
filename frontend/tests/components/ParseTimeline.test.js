@@ -35,7 +35,7 @@ describe('ParseTimeline（阶段三）', () => {
     expect(w.find('[data-test="span-chunk"]').attributes('data-status')).toBe('failed')
     expect(w.find('[data-test="span-embed"]').attributes('data-status')).toBe('cancelled')
     expect(w.text()).toContain('内容不足')
-    expect(w.text()).toContain('1/3 阶段完成')  // wait - doneCount only counts done=1, stageCount=3
+    expect(w.text()).toContain('2/4 阶段完成')  // root+3 stage，done=2
   })
 
   it('旧文档无 span 时降级提示', async () => {

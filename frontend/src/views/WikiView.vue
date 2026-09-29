@@ -87,7 +87,7 @@
           clearable
           class="mb-3"
           data-test="wiki-search"
-          @input="loadPages"
+          @input="onSearchInput"
         />
         <div class="card !p-0 divide-y divide-[var(--border-default)] max-h-[70vh] overflow-y-auto">
           <div v-if="loading" class="p-4 text-sm text-[var(--text-muted)]">加载中…</div>
@@ -228,7 +228,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../services/api'
 import { useMarkdown } from '../composables/useMarkdown'
@@ -261,29 +261,57 @@ const audit = ref<{
 } | null>(null)
 const pages = ref<WikiListItem[]>([])
 const current = ref<WikiPage | null>(null)
-const linkStatus = ref<Record<string, string | null>>({})
+/** slug 归一结果 → 解析出的页面 {id,title}；null=死链 */
+const linkStatus = ref<Record<string, { id: string; title: string } | null>>({})
 
 const form = reactive({ id: '' as string, slug: '', title: '', summary: '', content: '' })
 
 const { renderMarkdown } = useMarkdown()
 
-/** 将 [[slug]] 渲染成可点 span（交给 followLink 处理跳转） */
+/** 与后端 wiki_service.normalize_slug 对齐，避免前后端 key 不一致把活链标成死链 */
+function normalizeSlug(raw: string): string {
+  let s = (raw || '').trim().toLowerCase().replace(/\s+/g, '-')
+  s = s.replace(/[^a-z0-9_\-/一-鿿]/g, '')
+  s = s.replace(/-{2,}/g, '-').replace(/\/{2,}/g, '/')
+  return s.replace(/^-+|-+$/g, '').slice(0, 128)
+}
+
+function escapeHtml(v: string): string {
+  return v.replace(
+    /[&<>"']/g,
+    c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+  )
+}
+
+/**
+ * [[slug]] / [[slug|label]] → 可点链接。
+ * 先在 Markdown 源码阶段换成占位符，渲染后再还原成 <a>，
+ * 避免污染已生成 HTML 里的 href/code（OCR High）。
+ */
 const rendered = computed(() => {
   if (!current.value) return ''
-  const html = renderMarkdown(current.value.content || '')
-  return html.replace(
+  const source = (current.value.content || '').replace(
     /\[\[([^\]|#]+)(?:[|#]([^\]]*))?\]\]/g,
-    (_m, slug: string, label?: string) => {
-      const s = String(slug).trim().toLowerCase()
-      const text = label || slug
+    (_m: string, slug: string, label?: string) => {
+      const s = normalizeSlug(slug)
+      const text = (label || slug).trim()
+      return `\n\n<wl-placeholder data-slug="${escapeHtml(s)}">${escapeHtml(text)}</wl-placeholder>\n\n`
+    }
+  )
+  let html = renderMarkdown(source)
+  html = html.replace(
+    /<wl-placeholder data-slug="([^"]*)">([^<]*)<\/wl-placeholder>/g,
+    (_m: string, s: string, text: string) => {
       const ok = !!linkStatus.value[s]
       return `<a href="#" class="wiki-link ${ok ? 'wiki-link-ok' : 'wiki-link-dead'}" data-slug="${s}">${text}</a>`
     }
   )
+  return html
 })
 
 function linkTitle(slug: string): string {
-  return linkStatus.value[slug] || slug
+  return linkStatus.value[slug]?.title || slug
 }
 
 /** 5.3：全局死链巡检 */
@@ -357,18 +385,28 @@ async function ingestFromDocs(): Promise<void> {
   }
 }
 
+let searchSeq = 0
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
 async function loadPages(): Promise<void> {
+  const my = ++searchSeq
   loading.value = true
   try {
     const { data } = await api.get<WikiListItem[]>('/wiki', {
       params: search.value ? { q: search.value } : {}
     })
+    if (my !== searchSeq) return
     pages.value = Array.isArray(data) ? data : []
   } catch {
-    pages.value = []
+    if (my === searchSeq) pages.value = []
   } finally {
-    loading.value = false
+    if (my === searchSeq) loading.value = false
   }
+}
+
+function onSearchInput(): void {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => void loadPages(), 300)
 }
 
 async function openPage(id: string): Promise<void> {
@@ -376,15 +414,18 @@ async function openPage(id: string): Promise<void> {
     const { data } = await api.get<WikiPage>(`/wiki/${id}`)
     current.value = data
     editing.value = false
-    // 解析出链生死
-    const links = data.links || []
+    history.value = null
+    // 解析出链生死（截断防 414）
+    const links = (data.links || []).slice(0, 50)
     if (links.length) {
-      const { data: resolved } = await api.get<Record<string, { title: string } | null>>('/wiki/resolve', {
+      const { data: resolved } = await api.get<
+        Record<string, { id: string; title: string } | null>
+      >('/wiki/resolve', {
         params: { slugs: links.join(',') }
       })
-      const map: Record<string, string | null> = {}
+      const map: Record<string, { id: string; title: string } | null> = {}
       for (const [k, v] of Object.entries(resolved || {})) {
-        map[k] = v?.title || null
+        map[k] = v?.id ? { id: v.id, title: v.title } : null
       }
       linkStatus.value = map
     } else {
@@ -396,11 +437,18 @@ async function openPage(id: string): Promise<void> {
 }
 
 function followLink(slug: string): void {
-  const hit = pages.value.find(p => p.slug === slug)
-  if (hit) {
+  const s = normalizeSlug(slug)
+  // 优先用 resolve 结果里的 id（不受搜索过滤影响）
+  const hit = linkStatus.value[s]
+  if (hit?.id) {
     void openPage(hit.id)
+    return
+  }
+  const listed = pages.value.find(p => p.slug === s)
+  if (listed) {
+    void openPage(listed.id)
   } else {
-    startCreate(slug)
+    startCreate(s)
   }
 }
 
@@ -465,6 +513,8 @@ async function remove(): Promise<void> {
   try {
     await api.delete(`/wiki/${current.value.id}`)
     current.value = null
+    linkStatus.value = {}
+    history.value = null
     ElMessage.success('已删除')
     await loadPages()
   } catch {
@@ -484,6 +534,11 @@ function onBodyClick(e: MouseEvent): void {
 onMounted(() => {
   void loadPages()
   document.addEventListener('click', onBodyClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onBodyClick)
+  if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
 

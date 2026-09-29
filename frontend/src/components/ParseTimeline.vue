@@ -68,7 +68,7 @@ const loading = ref(false)
 const spans = ref<SpanRow[]>([])
 
 const stages = computed(() =>
-  spans.value.filter(s => s.kind === 'stage' || s.kind === 'root' ? s.kind === 'stage' : false)
+  spans.value.filter(s => s.kind === 'stage' || s.kind === 'root')
 )
 const stageCount = computed(() => stages.value.length)
 const doneCount = computed(() => stages.value.filter(s => s.status === 'done').length)
@@ -116,16 +116,21 @@ function duration(s: SpanRow): string {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
+let loadSeq = 0
+
 async function load(): Promise<void> {
   if (!props.docId) return
+  const id = props.docId
+  const my = ++loadSeq
   loading.value = true
   try {
-    const { data } = await api.get<{ spans: SpanRow[] }>(`/documents/${props.docId}/parse-spans`)
+    const { data } = await api.get<{ spans: SpanRow[] }>(`/documents/${id}/parse-spans`)
+    if (my !== loadSeq) return
     spans.value = Array.isArray(data?.spans) ? data.spans : []
   } catch {
-    spans.value = []
+    if (my === loadSeq) spans.value = []
   } finally {
-    loading.value = false
+    if (my === loadSeq) loading.value = false
   }
 }
 

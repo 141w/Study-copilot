@@ -76,6 +76,10 @@ function openTagDialog(): void {
 }
 
 async function applyBatchTag(): Promise<void> {
+  if (!props.selected.length) {
+    ElMessage.warning('请先选择文档')
+    return
+  }
   const names = tagInput.value
     .split(/[,，、]/)
     .map(s => s.trim())
@@ -102,6 +106,10 @@ async function applyBatchTag(): Promise<void> {
 }
 
 async function runAutoTag(): Promise<void> {
+  if (!props.selected.length) {
+    ElMessage.warning('请先选择文档')
+    return
+  }
   autoTagging.value = true
   try {
     const { data } = await api.post('/documents/batch-auto-tag', {

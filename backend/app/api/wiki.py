@@ -33,10 +33,6 @@ class WikiUpdate(BaseModel):
     status: str | None = None
 
 
-class LinkResolveReq(BaseModel):
-    slugs: list[str]
-
-
 @router.get("")
 async def list_wiki_pages(
     q: str | None = Query(default=None),
@@ -123,8 +119,8 @@ async def delete_wiki_page(
 
 
 class WikiIngestReq(BaseModel):
-    document_ids: list[str] | None = None
-    note_ids: list[str] | None = None
+    document_ids: list[str] | None = Field(default=None, max_length=10)
+    note_ids: list[str] | None = Field(default=None, max_length=10)
     max_pages: int = 8
 
 

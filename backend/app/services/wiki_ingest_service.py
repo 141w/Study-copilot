@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import uuid
 from typing import Any
 
@@ -17,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import Document, DocumentChunk, Note, User, WikiPage
 from app.exceptions import ValidationError
-from app.services.wiki_service import extract_links, normalize_slug
+from app.services.wiki_service import normalize_slug
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +202,7 @@ async def ingest_from_sources(
             try:
                 results.append(await _merge_or_create(db, user, page, source_title=title))
             except Exception as exc:
+                await db.rollback()
                 logger.warning("wiki merge failed %s: %s", page.get("slug"), exc)
                 errors.append(f"{page.get('slug')}: {exc}")
 

@@ -12,7 +12,8 @@ import re
 import uuid
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import User, WikiPage, WikiPageRevision
@@ -173,7 +174,11 @@ async def create_page(
         revision=1,
     )
     db.add(p)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ConflictError(f"slug 已存在: {s}") from exc
     await db.refresh(p)
     return await get_page(db, user, p.id)
 
