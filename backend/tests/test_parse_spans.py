@@ -309,3 +309,26 @@ async def test_f2_recover_stale_running_spans(db_session, doc, span_factory):
     assert all(s["status"] == "failed" for s in spans if s["status"] != "cancelled")
     root = next(s for s in spans if s["kind"] == "root")
     assert root["error"] == "进程中断"
+
+
+@pytest.mark.asyncio
+async def test_fail_stage_twice_no_duplicate_cancelled(db_session, doc, span_factory):
+    """OCR High：外层 except 再次 fail_stage 不得重复插 cancelled / 覆盖 done。"""
+    rec = ParseSpanRecorder(doc.id, session_factory=span_factory)
+    await rec.start_root()
+    await rec.start_stage("parse")
+    await rec.end_stage("parse")  # parse 已 done
+    await rec.start_stage("chunk")
+    await rec.fail_stage("chunk", "boom")
+    # 模拟 document_service 外层 except 再调一次
+    await rec.fail_stage("chunk", "boom again")
+
+    spans = await list_parse_spans(db_session, doc.id)
+    stages = [s for s in spans if s["kind"] == "stage"]
+    names = [s["name"] for s in stages]
+    # 每个阶段只应有一行
+    assert len(names) == len(set(names)), names
+    by = {s["name"]: s for s in stages}
+    assert by["parse"]["status"] == "done"  # 不被 cancelled 覆盖
+    assert by["chunk"]["status"] == "failed"
+    assert by["embed"]["status"] == "cancelled"

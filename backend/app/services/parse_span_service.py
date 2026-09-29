@@ -51,6 +51,9 @@ class ParseSpanRecorder:
         self._open: dict[str, str] = {}  # stage name → span id
         self._failed = False
         self.current_stage: str | None = None
+        # 已终结（done/failed/cancelled）的阶段名：防二次 fail_stage 重复级联、
+        # 防对已 done 阶段补插 cancelled（OCR High）
+        self._settled: set[str] = set()
 
     async def _sess(self) -> AsyncSession:
         if self._session is None:
@@ -75,7 +78,7 @@ class ParseSpanRecorder:
         ))
 
     async def start_stage(self, name: str, detail: str | None = None) -> None:
-        if self._failed:
+        if self._failed or name in self._settled:
             return
         self.current_stage = name
         sid = str(uuid.uuid4())
@@ -92,6 +95,7 @@ class ParseSpanRecorder:
 
     async def end_stage(self, name: str, detail: str | None = None) -> None:
         span_id = self._open.pop(name, None)
+        self._settled.add(name)
         self.current_stage = None
         if not span_id:
             return
@@ -99,25 +103,30 @@ class ParseSpanRecorder:
 
     async def fail_stage(self, name: str, error: str) -> None:
         span_id = self._open.pop(name, None)
-        self._failed = True
+        self._settled.add(name)
         self.current_stage = None
         if span_id:
             await self._safe(self._finish(span_id, "failed", error=error))
+        if self._failed:
+            # 级联已写过（外层 except 再调一次），no-op
+            return
+        self._failed = True
         # 其后未开的阶段标 cancelled（语义：上游失败，未执行）
-        # 按 name 去重，避免对已 done 阶段重复插 cancelled
         started = False
         for st in STAGE_ORDER:
             if st == name:
                 started = True
                 continue
-            if started and st not in self._open:
+            if started and st not in self._settled and st not in self._open:
                 await self._safe(self._insert(
                     span_id=str(uuid.uuid4()),
                     kind="stage",
                     name=st,
                     status="cancelled",
+                    started_at=_now(),
                     parent=self.root_id,
                 ))
+                self._settled.add(st)
 
     async def end_root(self, status: str = "done") -> None:
         await self._safe(self._finish(self.root_id, status))

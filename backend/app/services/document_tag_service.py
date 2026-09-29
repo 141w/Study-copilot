@@ -88,10 +88,12 @@ async def set_document_tags(
     # 清空现有关联
     await db.execute(delete(document_tags_table()).where(document_tags_table().c.document_id == doc.id))
     names: list[str] = []
+    seen: set[str] = set()
     for raw in tag_names or []:
         name = (raw or "").strip()
-        if not name:
+        if not name or name in seen:
             continue
+        seen.add(name)
         tag = await _get_or_create_tag(db, user.id, name)
         await db.execute(
             document_tags_table().insert().values(document_id=doc.id, tag_id=tag.id)
@@ -136,7 +138,13 @@ async def batch_add_tags(
     for did in doc_ids:
         try:
             out[did] = await add_document_tags(db, user, did, tag_names)
+        except (NotFoundError, ValidationError):
+            out[did] = []
         except Exception as exc:
+            try:
+                await db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
             logger.warning("batch tag %s failed: %s", did, exc)
             out[did] = []
     return out
@@ -167,18 +175,30 @@ def _parse_auto_tag_response(raw: str | None, valid_names: list[str]) -> list[tu
     for it in items:
         if not isinstance(it, dict):
             continue
-        raw_idx = it.get("idx")
-        if raw_idx is None:
-            continue
         try:
-            idx = int(raw_idx)
-            conf = float(it.get("confidence") or 0)
+            raw_conf = it.get("confidence")
+            conf = 1.0 if raw_conf is None else float(raw_conf)
         except (TypeError, ValueError):
             continue
-        if 0 <= idx < len(valid_names) and conf >= MIN_CONFIDENCE:
+        if conf > 1:  # 兼容 0-100 量纲
+            conf = conf / 100.0
+        raw_name = it.get("name") or it.get("tag")
+        if isinstance(raw_name, str) and raw_name.strip() in valid_names:
+            name = raw_name.strip()
+        else:
+            raw_idx = it.get("idx")
+            if raw_idx is None:
+                continue
+            try:
+                idx = int(raw_idx)
+            except (TypeError, ValueError):
+                continue
+            if not (0 <= idx < len(valid_names)):
+                logger.debug("auto_tag: idx out of range=%s", raw_idx)
+                continue
             name = valid_names[idx]
-            if all(n != name for n, _ in out):
-                out.append((name, conf))
+        if conf >= MIN_CONFIDENCE and all(n != name for n, _ in out):
+            out.append((name, conf))
     return out
 
 
@@ -231,7 +251,9 @@ async def auto_tag_document(
         logger.warning("auto_tag LLM failed for %s: %s", doc_id, exc)
         return []
 
-    picked = _parse_auto_tag_response(raw, valid_names)[:max_tags]
+    picked = sorted(
+        _parse_auto_tag_response(raw, valid_names), key=lambda x: x[1], reverse=True
+    )[:max_tags]
     names = [n for n, _ in picked]
     return await add_document_tags(db, user, doc_id, names)
 
@@ -243,7 +265,13 @@ async def batch_auto_tag(
     for did in doc_ids:
         try:
             out[did] = await auto_tag_document(db, user, did, max_tags=max_tags)
+        except (NotFoundError, ValidationError):
+            out[did] = []
         except Exception as exc:
+            try:
+                await db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
             logger.warning("batch auto-tag %s failed: %s", did, exc)
             out[did] = []
     return out
