@@ -470,6 +470,13 @@ async def delete_document(
 
     doc.deleted_at = datetime.now(UTC).replace(tzinfo=None)
     await db.commit()
+    # F8：清理该文档的收藏行，避免回收站后收藏列表出现孤儿
+    try:
+        from app.services.favorite_service import clear_favorites_for_resource
+
+        await clear_favorites_for_resource(db, user.id, "document", doc_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("clear favorites failed for doc %s", doc_id)
 
 
 async def restore_document(db: AsyncSession, user: User, doc_id: str) -> Document:
