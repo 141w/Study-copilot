@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 
 vi.mock('@/services/api', () => ({
   default: {
@@ -31,8 +31,10 @@ describe('RetrievalSettings（阶段一）', () => {
     const wrapper = mount(RetrievalSettings, {
       global: { stubs: { 'el-slider': true, 'el-button': true } }
     })
-    await wrapper.vm.$nextTick()
-    await wrapper.vm.$nextTick()
+    // 组件在 9de4ba3 之后加载链路变长（拉配置 + 校验 + 落表单），
+    // 原先两次 $nextTick 等不到 loading 落位，v-else 分支尚未渲染。
+    // flushPromises 排空微任务队列，等价于等 await 真正返回。
+    await flushPromises()
     expect(api.get).toHaveBeenCalledWith('/config/retrieval')
     expect(wrapper.find('[data-test="ret-val-embedding_top_k"]').text()).toBe('12')
     expect(wrapper.find('[data-test="ret-val-rrf_k"]').text()).toBe('80')
@@ -44,8 +46,7 @@ describe('RetrievalSettings（阶段一）', () => {
     const wrapper = mount(RetrievalSettings, {
       global: { stubs: { 'el-slider': true, 'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>', emits: ['click'] } } }
     })
-    await wrapper.vm.$nextTick()
-    await wrapper.vm.$nextTick()
+    await flushPromises()
     const saveBtn = wrapper.findAll('button').find(b => b.text().includes('保存'))
     await saveBtn.trigger('click')
     await wrapper.vm.$nextTick()
