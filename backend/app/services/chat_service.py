@@ -735,15 +735,16 @@ async def generate_starter_suggestions(
                 # 每篇取第 1 段前 120 字，最多 10 篇
                 first_paras: list[str] = []
                 for did in owned[:10]:
-                    chunk = (
+                    rows = (
                         await db.execute(
                             select(DocumentChunk.content)
                             .where(DocumentChunk.document_id == did)
                             .order_by(DocumentChunk.chunk_index)
                             .limit(1)
                         )
-                    ).first()
-                    para = ((chunk[0] if chunk else "") or "").split("\n")[0][:120]
+                    ).all()
+                    chunk = rows[0][0] if rows else ""
+                    para = (chunk or "").split("\n")[0][:120]
                     if para:
                         first_paras.append(para)
                 if first_paras:
