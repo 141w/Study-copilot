@@ -95,11 +95,33 @@ async def _fake_embedder_in_ci(monkeypatch):
     yield
 
 
+def _sqlite_engine():
+    # timeout：并发会话（span recorder 独立会话等）下避免 "database is locked"
+    return create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        connect_args={"timeout": 30},
+    )
+
+
+async def _ensure_schema(engine) -> None:
+    """create_all 幂等；表被意外 drop（历史上 cov 全量跑偶发塌表）时自动补齐。"""
+    from sqlalchemy import inspect
+
+    async with engine.begin() as conn:
+        def _missing(sync_conn):
+            have = set(inspect(sync_conn).get_table_names())
+            return [t.name for t in Base.metadata.sorted_tables if t.name not in have]
+
+        missing = await conn.run_sync(_missing)
+        if missing:
+            await conn.run_sync(Base.metadata.create_all)
+
+
 @pytest.fixture(scope="session")
 async def test_engine():
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    engine = _sqlite_engine()
+    await _ensure_schema(engine)
     yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -115,7 +137,9 @@ async def _clean_tables(test_engine):
     UNIQUE/FK 约束，且只在全量跑时暴露（单文件跑是干净库，
     这正是 2026-08-27 之前"单独绿、全量炸"的根因）。
     """
+    await _ensure_schema(test_engine)
     yield
+    await _ensure_schema(test_engine)
     async with test_engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             await conn.execute(table.delete())

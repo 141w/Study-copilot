@@ -28,25 +28,21 @@ def test_citation_coverage_rule_based():
     assert cov["coverage"] >= 0.5
 
 
-def test_citation_coverage_forces_fail_on_low_overlap():
-    import asyncio
-
+@pytest.mark.asyncio
+async def test_citation_coverage_forces_fail_on_low_overlap():
     from app.core.answer_reflector import AnswerReflector
 
-    async def _run():
-        llm = MagicMock()
-        llm.chat = AsyncMock(return_value=json.dumps({"pass": True, "score": 95, "reason": "ok"}))
-        ref = AnswerReflector()
-        result = await ref.evaluate(
-            "问题",
-            "文档里只有猫粮成分表。",
-            "量子纠缠的香蕉在月球跳舞。\n另一句完全无关的恐龙议会。",
-            llm,
-        )
-        assert result["pass"] is False
-        assert result["citation_coverage"]["coverage"] < 0.34
-
-    asyncio.run(_run())
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value=json.dumps({"pass": True, "score": 95, "reason": "ok"}))
+    ref = AnswerReflector()
+    result = await ref.evaluate(
+        "问题",
+        "文档里只有猫粮成分表。",
+        "量子纠缠的香蕉在月球跳舞。\n另一句完全无关的恐龙议会。",
+        llm,
+    )
+    assert result["pass"] is False
+    assert result["citation_coverage"]["coverage"] < 0.34
 
 
 # ── #8 structured compactor facts ────────────────────────────────────────────

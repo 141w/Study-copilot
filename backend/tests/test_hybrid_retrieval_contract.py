@@ -4,8 +4,9 @@
 以及 result_relevance 助手的回退语义。
 """
 
-import asyncio
 from unittest.mock import patch
+
+import pytest
 
 from app.core.rag_engine import rag_engine
 from app.core.vector_store import result_relevance
@@ -30,11 +31,12 @@ class FakePgVectorStore:
         return results[:top_k]
 
 
-def test_pgvector_results_survive_retrieve_filter():
+@pytest.mark.asyncio
+async def test_pgvector_results_survive_retrieve_filter():
     """PgVectorStore 批内归一结果必须通过 retrieve() 的相关性过滤。"""
     with patch.object(rag_engine, "_get_pg_vector_store") as mock_get:
         mock_get.return_value = FakePgVectorStore()
-        got = asyncio.run(rag_engine.retrieve(["fake-doc"], "测试查询", top_k=5))
+        got = await rag_engine.retrieve(["fake-doc"], "测试查询", top_k=5)
     # 两个结果的 relevance 经批内归一后均 > 1e-6，不应被误杀
     assert len(got) >= 1, "PgVectorStore 结果被相关性阈值误杀——回归了！"
 
