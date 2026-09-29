@@ -9,6 +9,19 @@ from app.main import app
 
 # 使用 SQLite 作为测试数据库（无需 PostgreSQL）
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+
+
+def captcha_payload() -> dict:
+    """注册用本地算术人机验证字段（与 test_captcha 同款求解）。"""
+    import re
+
+    from app.core.captcha import issue_captcha
+
+    item = issue_captcha()
+    m = re.match(r"(\d+)\s*([+−-])\s*(\d+)", item["question"])
+    a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
+    answer = a + b if op == "+" else a - b
+    return {"captcha_id": item["id"], "captcha_answer": str(answer)}
 # 与 settings.embedding_dimension / 文档向量列一致
 FAKE_EMBED_DIM = 768
 

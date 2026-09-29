@@ -12,6 +12,8 @@ from app.core.llm import LLM
 from app.db import Document, DocumentChunk, User
 from app.services import document_service
 
+from .conftest import captcha_payload
+
 
 @pytest.fixture
 async def user(db_session: AsyncSession) -> User:
@@ -37,6 +39,7 @@ async def test_register_open_by_default(client: AsyncClient):
             "username": f"u{uuid.uuid4().hex[:8]}",
             "email": f"u{uuid.uuid4().hex[:8]}@example.com",
             "password": "StudyPass9",
+            **captcha_payload(),
         },
     )
     assert resp.status_code in (200, 201)

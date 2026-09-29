@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core import task_worker
 from app.db import Quiz
 
+from .conftest import captcha_payload
+
 
 class FakeQuizGenerator:
     """替身：按请求的数量返回固定题目，不触网。"""
@@ -92,6 +94,7 @@ async def test_quiz_generate_task_full_chain(
             "username": f"qtask_{suffix}",
             "email": f"qtask_{suffix}@t.com",
             "password": "Qt#123456",
+            **captcha_payload(),
         },
     )
     assert reg.status_code == 200, reg.text

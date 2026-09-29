@@ -4,9 +4,10 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import password_policy, turnstile
+from app.core import captcha, password_policy, turnstile
 from app.core.rate_limit import IPRateLimiter, resolve_client_ip
 from app.db import User, get_db
+from app.exceptions import ValidationError
 from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["认证"])
@@ -29,8 +30,13 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    # 前端二次确认（服务端也拦）
+    confirm_password: str | None = None
     # Turnstile token；服务端配置了 SECRET 时必填
     turnstile_token: str | None = None
+    # 本地算术人机验证（Turnstile 未配置时的免费兜底）
+    captcha_id: str | None = None
+    captcha_answer: str | int | None = None
 
 
 class Token(BaseModel):
@@ -84,12 +90,21 @@ async def get_optional_user(
 
 @router.get("/register-meta")
 async def register_meta() -> dict:
-    """注册页公开元数据（无需登录）：开关、Turnstile site key、密码策略。"""
+    """注册页公开元数据（无需登录）：开关、人机验证模式、密码策略。"""
+    ts_enabled = turnstile.turnstile_enabled()
     return {
         "allow_registration": settings.allow_registration,
         "turnstile_site_key": turnstile.site_key(),
+        # captcha: turnstile | math | none
+        "captcha_mode": "turnstile" if ts_enabled else ("math" if settings.allow_registration else "none"),
         "password": password_policy.POLICY,
     }
+
+
+@router.get("/captcha")
+async def get_captcha() -> dict:
+    """发放本地算术验证码（id + 题面，不含答案）。"""
+    return captcha.issue_captcha()
 
 
 @router.post("/register", response_model=UserResponse)
@@ -99,9 +114,22 @@ async def register(
     _enforce_auth_rate_limit(request)
     if not settings.allow_registration:
         raise HTTPException(status_code=403, detail="当前未开放注册，请联系管理员")
-    await turnstile.verify_turnstile_token(
-        user_data.turnstile_token, remote_ip=resolve_client_ip(request)
-    )
+
+    # 前端二次确认（服务端也拦，避免只靠前端）
+    if user_data.confirm_password is not None and user_data.confirm_password != user_data.password:
+        raise HTTPException(status_code=422, detail="两次输入的密码不一致")
+
+    # 先做密码策略，错误提示更友好（避免“验证码错了”掩盖密码问题）
+    password_policy.validate_password(user_data.password)
+
+    if turnstile.turnstile_enabled():
+        await turnstile.verify_turnstile_token(
+            user_data.turnstile_token, remote_ip=resolve_client_ip(request)
+        )
+    else:
+        # 免费本地人机验证，挡脚本批量注册
+        captcha.verify_captcha(user_data.captcha_id, user_data.captcha_answer)
+
     new_user = await auth_service.register_user(
         db, user_data.username, user_data.email, user_data.password
     )
