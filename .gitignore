@@ -134,3 +134,20 @@ backend/evaluation/data/
 .agents/skills/fluid-orb/
 .claude/skills/fluid-orb/
 .mimocode/
+
+# ==================== 2026-09-29 工作区清理 ====================
+# 一次性调试转储（scratch/ 下 167 个 grep/pytest/vitest 输出片段，非产物非源码）
+scratch/
+
+# 外部项目解压件（Semantica 上游仓库 + 其 tar 包，共 50M / 1366 文件，
+# 与 WeKnora/ 同类：参照用，不属于本代码库）
+semantica-explore/
+semantica.tar.gz
+
+# 成就墙顶区的 AI 一次性原型页。功能已由 AchievementStage.vue + 真实 PNG 落地，
+# 原型里的 emoji 贴纸与 7 枚落点方案均已被推翻，不再作为规格依据。
+/index.html
+
+# Agent 并行会话的 git worktree 根（1GB 量级）。git status 目前不显示它，
+# 但显式忽略可防止 `git add -A` 把整棵 worktree 卷进提交。
+.worktrees/
