@@ -1,16 +1,24 @@
-"""阶段三：解析阶段时间线 recorder（轻量，失败不阻断主流程）。"""
+"""阶段三：解析阶段时间线 recorder（轻量，失败不阻断主流程）。
+
+F2 事务边界：span 写入走**独立会话**、每条状态转移立即 commit。
+理由：失败 span 必须在主事务 rollback 之后仍可读（SAVEPOINT 嵌在主事务里，
+主事务一并回滚就没了）；且 _safe 不得再碰共享 session，否则一次 span
+写入失败会把已 flush 的主流程数据一并冲掉。
+"""
 
 from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import DocumentParseSpan
+from app.db.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +31,39 @@ def _now() -> datetime:
 
 
 class ParseSpanRecorder:
-    """按 attempt 记录一次文档处理的阶段 span。出错时只写库，不抛。"""
+    """按 attempt 记录一次文档处理的阶段 span。
 
-    def __init__(self, db: AsyncSession, document_id: str, attempt: int = 1):
-        self.db = db
+    写入使用独立会话并立即 commit；出错时只记日志，不抛、不影响主事务。
+    """
+
+    def __init__(
+        self,
+        document_id: str,
+        attempt: int = 1,
+        *,
+        session_factory: Callable[[], AsyncSession] | None = None,
+    ):
         self.document_id = document_id
         self.attempt = attempt
+        self._factory = session_factory or AsyncSessionLocal
+        self._session: AsyncSession | None = None
         self.root_id = str(uuid.uuid4())
-        self._open: dict[str, DocumentParseSpan] = {}
+        self._open: dict[str, str] = {}  # stage name → span id
         self._failed = False
         self.current_stage: str | None = None
+
+    async def _sess(self) -> AsyncSession:
+        if self._session is None:
+            self._session = self._factory()
+        return self._session
+
+    async def close(self) -> None:
+        if self._session is not None:
+            try:
+                await self._session.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._session = None
 
     async def start_root(self) -> None:
         await self._safe(self._insert(
@@ -57,21 +88,23 @@ class ParseSpanRecorder:
             detail=detail,
             parent=self.root_id,
         ))
-        self._open[name] = DocumentParseSpan(id=sid)  # 轻量占位，仅用 id
+        self._open[name] = sid
 
     async def end_stage(self, name: str, detail: str | None = None) -> None:
-        placeholder = self._open.pop(name, None)
+        span_id = self._open.pop(name, None)
         self.current_stage = None
-        if not placeholder:
+        if not span_id:
             return
-        await self._safe(self._finish(placeholder.id, "done", detail=detail))
+        await self._safe(self._finish(span_id, "done", detail=detail))
 
     async def fail_stage(self, name: str, error: str) -> None:
-        placeholder = self._open.pop(name, None)
+        span_id = self._open.pop(name, None)
         self._failed = True
-        if placeholder:
-            await self._safe(self._finish(placeholder.id, "failed", error=error))
+        self.current_stage = None
+        if span_id:
+            await self._safe(self._finish(span_id, "failed", error=error))
         # 其后未开的阶段标 cancelled（语义：上游失败，未执行）
+        # 按 name 去重，避免对已 done 阶段重复插 cancelled
         started = False
         for st in STAGE_ORDER:
             if st == name:
@@ -99,7 +132,8 @@ class ParseSpanRecorder:
         detail: str | None = None,
         parent: str | None = None,
     ) -> None:
-        self.db.add(
+        sess = await self._sess()
+        sess.add(
             DocumentParseSpan(
                 id=span_id,
                 document_id=self.document_id,
@@ -113,13 +147,14 @@ class ParseSpanRecorder:
                 detail=detail,
             )
         )
-        await self.db.flush()
+        await sess.commit()
 
     async def _finish(
         self, span_id: str, status: str, error: str | None = None, detail: str | None = None
     ) -> None:
+        sess = await self._sess()
         row = (
-            await self.db.execute(
+            await sess.execute(
                 select(DocumentParseSpan).where(DocumentParseSpan.id == span_id)
             )
         ).scalar_one_or_none()
@@ -131,17 +166,20 @@ class ParseSpanRecorder:
             row.error = error[:2000]
         if detail:
             row.detail = detail
-        await self.db.flush()
+        await sess.commit()
 
     async def _safe(self, coro: Any) -> None:
+        """span 写入失败只记日志。绝不 rollback 主流程 session。"""
         try:
             await coro
         except Exception as exc:  # noqa: BLE001 — 时间线是增强项
             logger.debug("span write skipped: %s", exc)
-            try:
-                await self.db.rollback()
-            except Exception:  # noqa: BLE001
-                pass
+            # 独立会话若进入坏状态，丢弃重建，不影响主事务
+            if self._session is not None:
+                try:
+                    await self._session.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
 
 
 async def list_parse_spans(
@@ -176,3 +214,28 @@ async def list_parse_spans(
             }
         )
     return out
+
+
+async def recover_stale_spans(db: AsyncSession) -> int:
+    """进程重启/崩溃后，把残留 running 的 span 归为 failed（进程中断）。
+
+    挂在应用启动引导（lifespan）里。返回受影响行数。
+    """
+    from sqlalchemy import func
+
+    # 先数后改，避开 Result.rowcount 在部分方言上的类型缺失
+    n = (
+        await db.execute(
+            select(func.count())
+            .select_from(DocumentParseSpan)
+            .where(DocumentParseSpan.status == "running")
+        )
+    ).scalar_one()
+    if n:
+        await db.execute(
+            update(DocumentParseSpan)
+            .where(DocumentParseSpan.status == "running")
+            .values(status="failed", ended_at=_now(), error="进程中断")
+        )
+        await db.commit()
+    return int(n or 0)

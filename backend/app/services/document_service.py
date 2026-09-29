@@ -193,7 +193,7 @@ async def _do_process_document(
 
     from app.services.parse_span_service import ParseSpanRecorder
 
-    spans = ParseSpanRecorder(db, doc_id, attempt=1)
+    spans = ParseSpanRecorder(doc_id, attempt=1)
     await spans.start_root()
 
     try:
@@ -279,6 +279,7 @@ async def _do_process_document(
         doc.status = "ready"
         doc.chunk_count = len(chunks)
         await db.commit()
+        # F2：收尾 span 走独立会话并立即 commit，不再落入无人提交的新事务
         await spans.end_stage("finalize", "ready")
         await spans.end_root("done")
         if progress_callback:
@@ -289,18 +290,23 @@ async def _do_process_document(
     except Exception as e:
         try:
             stage = spans.current_stage or "parse"
+            # F2：失败 span 先落库（独立会话），再回滚主事务
             await spans.fail_stage(stage, str(e)[:500])
             await spans.end_root("failed")
         except Exception:  # noqa: BLE001
             pass
         await db.rollback()
         # Mark the document as failed
-        doc.status = "error"
-        await db.commit()
+        doc = await db.get(Document, doc_id)
+        if doc is not None:
+            doc.status = "error"
+            await db.commit()
         if isinstance(e, AppError):
             raise
         logger.error("document processing: %s", e, exc_info=True)
         raise ExternalServiceError(str(e))
+    finally:
+        await spans.close()
 
 
 async def reprocess_document(

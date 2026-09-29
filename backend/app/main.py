@@ -92,10 +92,14 @@ async def lifespan(app: FastAPI):
 
     # 把上次进程遗留的 pending/running 任务标记为 failed（内存队列重启即丢失）
     from app.db import AsyncSessionLocal
+    from app.services.parse_span_service import recover_stale_spans
     from app.services.task_service import recover_interrupted_tasks
 
     async with AsyncSessionLocal() as db:
         await recover_interrupted_tasks(db)
+        stale = await recover_stale_spans(db)
+        if stale:
+            logger.info("Recovered %d stale parse spans (running → failed).", stale)
         try:
             from app.services.classroom_service import sync_classroom_providers
 

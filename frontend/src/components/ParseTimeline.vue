@@ -9,7 +9,7 @@
         <ArrowRight />
       </el-icon>
       <span class="text-xs font-medium text-[var(--text-secondary)]">解析时间线</span>
-      <span v-if="spans.length" class="text-[10px] text-[var(--text-muted)]">
+      <span v-if="stages.length" class="text-[10px] text-[var(--text-muted)]">
         {{ doneCount }}/{{ stageCount }} 阶段完成
       </span>
     </button>
@@ -37,7 +37,7 @@
             <span v-if="duration(s)" class="text-[10px] text-[var(--text-muted)] tabular-nums">{{ duration(s) }}</span>
           </div>
           <p v-if="s.detail" class="text-[10px] text-[var(--text-muted)] truncate">{{ s.detail }}</p>
-          <p v-if="s.error" class="text-[10px] text-[var(--color-error)]">{{ s.error }}</p>
+          <p v-if="s.error" class="text-[10px] text-[var(--color-error)]" data-test="span-error">{{ s.error }}</p>
         </div>
       </div>
     </div>
@@ -67,19 +67,29 @@ const open = ref(false)
 const loading = ref(false)
 const spans = ref<SpanRow[]>([])
 
-const stages = computed(() =>
-  spans.value.filter(s => s.kind === 'stage' || s.kind === 'root')
-)
+/** 只呈现最近 attempt（历史 attempt 由 F13 提供折叠入口） */
+const latestAttempt = computed(() => {
+  if (!spans.value.length) return null
+  return Math.max(...spans.value.map(s => s.attempt || 1))
+})
+
+/** 只统计 stage，不含 root（root 计入会显示成 6/6 误导） */
+const stages = computed(() => {
+  const maxA = latestAttempt.value
+  return spans.value.filter(
+    s => s.kind === 'stage' && (maxA === null || (s.attempt || 1) === maxA)
+  )
+})
 const stageCount = computed(() => stages.value.length)
 const doneCount = computed(() => stages.value.filter(s => s.status === 'done').length)
 
 const LABELS: Record<string, string> = {
-  parse: '文档解析',
-  profile: '画像分析',
-  chunk: '分块策略',
-  embed: '向量与索引',
-  index: '索引',
-  finalize: '落库完成',
+  parse: '文本解析',
+  profile: '文档画像',
+  chunk: '分块',
+  embed: '向量化',
+  index: '索引写入',
+  finalize: '完成入库',
   process: '整体'
 }
 
@@ -88,15 +98,24 @@ function stageLabel(n: string): string {
 }
 
 function statusLabel(s: string): string {
-  return ({ done: '完成', failed: '失败', cancelled: '未执行', running: '进行中', pending: '等待', skipped: '跳过' } as Record<string, string>)[s] || s
+  return ({
+    done: '完成',
+    failed: '失败',
+    cancelled: '未执行（上游失败）',
+    skipped: '未执行（上游失败）',
+    running: '进行中',
+    pending: '未开始'
+  } as Record<string, string>)[s] || s
 }
 
 function statusDot(s: string): string {
+  // 四态：完成=实色对勾感 / 进行中=主题色脉冲（唯一常驻动画）/ 失败=红 / 取消跳过=灰虚线
   return {
     done: 'bg-emerald-500',
     failed: 'bg-red-500',
-    cancelled: 'bg-zinc-400',
-    running: 'bg-amber-500 animate-pulse'
+    cancelled: 'bg-transparent border border-dashed border-zinc-400',
+    skipped: 'bg-transparent border border-dashed border-zinc-400',
+    running: 'bg-[var(--color-primary,#f59e0b)] animate-pulse'
   }[s] || 'bg-zinc-300'
 }
 
@@ -105,14 +124,17 @@ function statusChip(s: string): string {
     done: 'bg-emerald-500/10 text-emerald-600',
     failed: 'bg-red-500/10 text-red-600',
     cancelled: 'bg-zinc-500/10 text-zinc-500',
-    running: 'bg-amber-500/10 text-amber-600'
+    skipped: 'bg-zinc-500/10 text-zinc-500',
+    running: 'bg-[var(--color-primary,#f59e0b)]/10 text-[var(--color-primary,#d97706)]'
   }[s] || 'bg-zinc-500/10 text-zinc-500'
 }
 
 function duration(s: SpanRow): string {
   if (!s.started_at || !s.ended_at) return ''
-  const ms = new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()
-  if (!Number.isFinite(ms) || ms < 0) return ''
+  const a = Date.parse(s.started_at)
+  const b = Date.parse(s.ended_at)
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return ''
+  const ms = b - a
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
