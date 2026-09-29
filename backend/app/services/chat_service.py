@@ -712,16 +712,37 @@ async def generate_starter_suggestions(
     document_ids: list[str] | None = None,
     n: int = 3,
 ) -> list[str]:
-    """空态 / 新会话的起始问题引导（P0-A）。有文档时基于文档名生成。"""
+    """空态 / 新会话的起始问题引导（P0-A）。有文档时基于文件名+摘要首段生成。"""
     n = max(1, min(int(n or 3), 5))
     doc_names: list[str] = []
     if document_ids:
+        # F9：长度上限
+        document_ids = list(document_ids)[:20]
         owned = await _validate_document_ids(db, user.id, document_ids)
         if owned:
             rows = (
-                await db.execute(select(Document.filename).where(Document.id.in_(owned)))
+                await db.execute(
+                    select(Document.filename, Document.chunk_count).where(
+                        Document.id.in_(owned)
+                    )
+                )
             ).all()
             doc_names = [r[0] or "未命名文档" for r in rows]
+            # F9：上下文扩到文件名 + 摘要首段（每篇取一段，控 token）
+            if owned:
+                from app.db.database import DocumentChunk
+
+                chunks = (
+                    await db.execute(
+                        select(DocumentChunk.content)
+                        .where(DocumentChunk.document_id.in_(owned[:5]))
+                        .order_by(DocumentChunk.chunk_index)
+                        .limit(5)
+                    )
+                ).all()
+                first_paras = [((r[0] or "").split("\n")[0] or "")[:120] for r in chunks]
+                if any(first_paras):
+                    doc_names = doc_names + [f"摘要：{p}" for p in first_paras if p]
 
     if doc_names:
         ctx = "、".join(doc_names[:10])

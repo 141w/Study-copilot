@@ -181,7 +181,7 @@
           </div>
           <!-- P0-A 起始问题 -->
           <div
-            v-if="!startersDismissed && (chatStore.starterSuggestions.length || chatStore.starterSuggestionsLoading)"
+            v-if="!startersDismissed && (chatStore.starterSuggestions.length || chatStore.starterSuggestionsLoading || chatStore.starterSuggestionsError)"
             class="mt-8 max-w-xl mx-auto"
             data-test="starter-suggestions"
           >
@@ -199,7 +199,21 @@
                 不再显示
               </button>
             </div>
-            <div class="flex flex-wrap justify-center gap-2">
+            <!-- F9：失败可见重试，不整块静默消失 -->
+            <div
+              v-if="chatStore.starterSuggestionsError && !chatStore.starterSuggestionsLoading"
+              class="text-center text-xs text-[var(--text-muted)]"
+              data-test="starter-retry"
+            >
+              暂时没想到合适的问题，
+              <button
+                type="button"
+                class="underline text-[var(--color-primary)] cursor-pointer"
+                data-test="starter-retry-btn"
+                @click="void chatStore.loadStarterSuggestions(selectedDocs)"
+              >点这里重试</button>
+            </div>
+            <div v-else class="flex flex-wrap justify-center gap-2">
               <button
                 v-for="(s, i) in chatStore.starterSuggestions"
                 :key="i"
@@ -1463,6 +1477,16 @@ onMounted(async () => {
   if (!startersDismissed.value && chatStore.messages.length === 0) {
     void chatStore.loadStarterSuggestions(selectedDocs.value)
   }
+
+  // F9：选中文档集合变化 → 旧问题清空并按新集合重生成（缓存键含 doc ids）
+  watch(
+    () => [...selectedDocs.value].sort().join(','),
+    () => {
+      if (startersDismissed.value) return
+      if (chatStore.messages.length > 0) return
+      void chatStore.loadStarterSuggestions(selectedDocs.value)
+    }
+  )
 
   const contextQuery = route.query.context
   const docId = route.query.docId

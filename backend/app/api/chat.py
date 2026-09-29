@@ -52,7 +52,8 @@ class FollowupSuggestResponse(BaseModel):
 class StarterSuggestRequest(BaseModel):
     """P0-A 起始问题：空态 / 新会话引导。"""
 
-    document_ids: list[str] | None = None
+    # F9：长度上限，防超长 IN 子句
+    document_ids: list[str] | None = Field(default=None, max_length=20)
     n: int = Field(3, ge=1, le=5)
 
 

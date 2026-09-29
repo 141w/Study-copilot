@@ -307,3 +307,41 @@ describe('追问建议按 id 定位（OCR M4）', () => {
     expect(store.messages[0].suggestions).toBeUndefined()
   })
 })
+
+
+/**
+ * F9 · 起始问题缓存与失效（fix(phase2-audit): F9）
+ */
+describe('chat store F9 起始问题', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    sessionStorage.clear()
+  })
+
+  it('同文档集合重复调用不二次请求模型', async () => {
+    const store = useChatStore()
+    api.post.mockResolvedValue({ data: { suggestions: ['Q1', 'Q2'] } })
+    await store.loadStarterSuggestions(['d1'])
+    await store.loadStarterSuggestions(['d1'])
+    expect(api.post).toHaveBeenCalledTimes(1)
+    expect(store.starterSuggestions).toEqual(['Q1', 'Q2'])
+  })
+
+  it('切换文档集合后失效并重新生成', async () => {
+    const store = useChatStore()
+    api.post.mockResolvedValue({ data: { suggestions: ['A'] } })
+    await store.loadStarterSuggestions(['d1'])
+    api.post.mockResolvedValue({ data: { suggestions: ['B'] } })
+    await store.loadStarterSuggestions(['d1', 'd2'])
+    expect(api.post).toHaveBeenCalledTimes(2)
+    expect(store.starterSuggestions).toEqual(['B'])
+  })
+
+  it('失败时保留错误标记供 UI 显示重试', async () => {
+    const store = useChatStore()
+    api.post.mockRejectedValue(new Error('boom'))
+    await store.loadStarterSuggestions(['d1'])
+    expect(store.starterSuggestionsError).toBe(true)
+  })
+})

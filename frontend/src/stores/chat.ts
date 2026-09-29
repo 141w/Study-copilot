@@ -129,6 +129,52 @@ export const useChatStore = defineStore('chat', () => {
   /** P0-A 空态起始问题 */
   const starterSuggestions = ref<string[]>([])
   const starterSuggestionsLoading = ref(false)
+  /** F9：失败标记，UI 显示重试入口而非整块静默消失 */
+  const starterSuggestionsError = ref(false)
+
+  function starterCacheKey(documentIds: string[]): string {
+    const sorted = [...documentIds].sort().join(',')
+    return `starter:${sorted}`
+  }
+
+  /** P0-A：空态起始问题。F9：sessionStorage 缓存，切文档集合即失效。 */
+  async function loadStarterSuggestions(documentIds: string[] = []): Promise<void> {
+    const key = starterCacheKey(documentIds)
+    // 命中缓存 → 不调模型
+    try {
+      const cached = sessionStorage.getItem(key)
+      if (cached) {
+        starterSuggestions.value = JSON.parse(cached)
+        starterSuggestionsError.value = false
+        return
+      }
+    } catch {
+      /* sessionStorage 不可用则忽略 */
+    }
+    // 请求去重：同一时刻只允许一个在飞
+    if (starterSuggestionsLoading.value) return
+    starterSuggestionsLoading.value = true
+    starterSuggestionsError.value = false
+    try {
+      const { data } = await api.post<{ suggestions: string[] }>('/chat/suggest-starters', {
+        document_ids: documentIds.length ? documentIds.slice(0, 20) : undefined,
+        n: 3
+      })
+      starterSuggestions.value = Array.isArray(data?.suggestions)
+        ? data.suggestions.filter(Boolean)
+        : []
+      try {
+        sessionStorage.setItem(key, JSON.stringify(starterSuggestions.value))
+      } catch {
+        /* quota */
+      }
+    } catch {
+      starterSuggestions.value = []
+      starterSuggestionsError.value = true
+    } finally {
+      starterSuggestionsLoading.value = false
+    }
+  }
   const currentSession = ref<string | null>(null)
   const currentSessionTitle = ref('')
   const loading = ref(false)
@@ -754,23 +800,6 @@ export const useChatStore = defineStore('chat', () => {
     searchQuery.value = ''
   }
 
-  /** P0-A：空态起始问题（有/无文档均可；失败静默） */
-  async function loadStarterSuggestions(documentIds: string[] = []): Promise<void> {
-    if (starterSuggestionsLoading.value) return
-    starterSuggestionsLoading.value = true
-    try {
-      const { data } = await api.post<{ suggestions: string[] }>('/chat/suggest-starters', {
-        document_ids: documentIds.length ? documentIds : undefined,
-        n: 3
-      })
-      starterSuggestions.value = Array.isArray(data?.suggestions) ? data.suggestions.filter(Boolean) : []
-    } catch {
-      starterSuggestions.value = []
-    } finally {
-      starterSuggestionsLoading.value = false
-    }
-  }
-
   /** 5.2 追问建议：按问题+回答向服务端取 3 条可点后续问题并挂到消息上 */
   /** 5.2 追问建议：按问题+回答向服务端取 3 条可点后续问题并挂到消息上（按 id 定位） */
   async function loadFollowupSuggestions(
@@ -831,6 +860,7 @@ export const useChatStore = defineStore('chat', () => {
     searchQuery,
     isSearching,
     starterSuggestions,
+    starterSuggestionsError,
     starterSuggestionsLoading,
     fetchSessions,
     fetchHistory,
