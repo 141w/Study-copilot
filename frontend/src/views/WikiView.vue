@@ -285,9 +285,12 @@ function escapeHtml(v: string): string {
 }
 
 /**
- * [[slug]] / [[slug|label]] → 可点链接。
- * 先在 Markdown 源码阶段换成占位符，渲染后再还原成 <a>，
- * 避免污染已生成 HTML 里的 href/code（OCR High）。
+ * [[slug]] / [[slug|label]] → 可点链接（F1：废弃 HTML 占位符方案）。
+ *
+ * 源码阶段换成标准 Markdown 链接 `[label](wiki:slug)`（行内、不加 \n\n，
+ * 避免把句子切成多段）；渲染完成后按 href 前缀 `wiki:` 定位 <a> 改写
+ * class / data-slug / title。全局 useMarkdown 配置不动。
+ * markdown-it 会对 href 做 URI 编码，读取时 decodeURIComponent 还原。
  */
 const rendered = computed(() => {
   if (!current.value) return ''
@@ -295,18 +298,22 @@ const rendered = computed(() => {
     /\[\[([^\]|#]+)(?:[|#]([^\]]*))?\]\]/g,
     (_m: string, slug: string, label?: string) => {
       const s = normalizeSlug(slug)
-      const text = (label || slug).trim()
-      return `\n\n<wl-placeholder data-slug="${escapeHtml(s)}">${escapeHtml(text)}</wl-placeholder>\n\n`
+      const text = (label || slug).trim().replace(/([\[\]])/g, '\\$1')
+      return `[${text}](wiki:${s})`
     }
   )
   let html = renderMarkdown(source)
-  html = html.replace(
-    /<wl-placeholder data-slug="([^"]*)">([^<]*)<\/wl-placeholder>/g,
-    (_m: string, s: string, text: string) => {
-      const ok = !!linkStatus.value[s]
-      return `<a href="#" class="wiki-link ${ok ? 'wiki-link-ok' : 'wiki-link-dead'}" data-slug="${s}">${text}</a>`
+  html = html.replace(/<a href="wiki:([^"]*)">([\s\S]*?)<\/a>/g, (_m: string, href: string, inner: string) => {
+    let slug = href
+    try {
+      slug = decodeURIComponent(href)
+    } catch {
+      /* 保留原始 href 片段 */
     }
-  )
+    const ok = !!linkStatus.value[slug]
+    const title = ok ? '' : ` title="概念页「${escapeHtml(slug)}」尚未创建，点击创建"`
+    return `<a href="#" class="wiki-link ${ok ? 'wiki-link-ok' : 'wiki-link-dead'}" data-slug="${escapeHtml(slug)}"${title}>${inner}</a>`
+  })
   return html
 })
 
@@ -447,9 +454,20 @@ function followLink(slug: string): void {
   const listed = pages.value.find(p => p.slug === s)
   if (listed) {
     void openPage(listed.id)
-  } else {
-    startCreate(s)
+    return
   }
+  // 死链：确认后以该 slug 建空页并回填
+  void ElMessageBox.confirm(
+    `概念页「${s}」尚未创建，点击创建`,
+    '创建概念页',
+    { type: 'info', confirmButtonText: '创建', cancelButtonText: '取消' }
+  )
+    .then(() => {
+      startCreate(s)
+    })
+    .catch(() => {
+      /* 用户取消 */
+    })
 }
 
 function startCreate(slugHint = ''): void {
@@ -543,14 +561,20 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* F1 视觉规格：行内双链与正文字号/行高/字重一致，不做 chip 形态 */
 .wiki-body :deep(.wiki-link) {
-  color: var(--color-primary);
+  color: inherit;
+  font: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
   cursor: pointer;
 }
+.wiki-body :deep(.wiki-link:hover) {
+  text-decoration-thickness: 2px;
+}
 .wiki-body :deep(.wiki-link-dead) {
-  color: #d97706;
+  color: var(--el-text-color-secondary, #909399);
   text-decoration-style: dashed;
 }
 </style>

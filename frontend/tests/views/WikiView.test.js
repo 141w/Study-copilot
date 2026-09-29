@@ -77,6 +77,90 @@ describe('WikiView 5.1', () => {
   })
 })
 
+/**
+ * F1 · 概念页双链渲染产物断言（fix(phase2-audit): F1）
+ *
+ * 原测试（本文件上方 5.1 用例）只断言侧栏死链文案 `w.text()` 含 `[[missing]]`，
+ * 从未检查 `.wiki-body` 的 v-html 渲染产物，因此 `html:false` 把占位符转义成
+ * 字面文本时仍然全绿——这正是漏检原因。本组断言产物 HTML 本身。
+ */
+describe('WikiView F1 双链渲染产物', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  async function mountWithContent(content, resolveMap = {}) {
+    api.get.mockImplementation(url => {
+      if (url === '/wiki') return Promise.resolve({ data: list })
+      if (url === '/wiki/p1') {
+        return Promise.resolve({
+          data: { ...page, content, links: Object.keys(resolveMap), dead_links: [] }
+        })
+      }
+      if (url === '/wiki/resolve') return Promise.resolve({ data: resolveMap })
+      return Promise.resolve({ data: [] })
+    })
+    const w = mountView()
+    await w.vm.$nextTick()
+    await w.vm.$nextTick()
+    await w.find('[data-test="wiki-item-gd"]').trigger('click')
+    await w.vm.$nextTick()
+    await w.vm.$nextTick()
+    return w
+  }
+
+  it('[[slug]] 渲染为可点 <a data-slug>，且不残留占位符/转义实体', async () => {
+    const w = await mountWithContent('前句 [[梯度下降]] 后句仍在。', {
+      '梯度下降': { id: 'p-gd', title: '梯度下降' }
+    })
+    const body = w.find('.wiki-body')
+    expect(body.exists()).toBe(true)
+    const html = body.html()
+
+    // 产物中必须有真正的锚点
+    expect(html).toMatch(/<a[^>]*data-slug="[^"]*梯度下降[^"]*"[^>]*>梯度下降<\/a>/)
+    // 不得残留 HTML 占位符字面量或被转义的标签
+    expect(html).not.toContain('wl-placeholder')
+    expect(html).not.toContain('&lt;')
+    expect(html).not.toContain('＜')
+  })
+
+  it('行内双链不得把句子切成多个段落', async () => {
+    const w = await mountWithContent('前句 [[梯度下降]] 后句仍在。', {
+      '梯度下降': { id: 'p-gd', title: '梯度下降' }
+    })
+    const body = w.find('.wiki-body')
+    const ps = body.element.querySelectorAll('p')
+    // 同一句必须在同一个 <p> 内
+    expect(ps.length).toBe(1)
+    expect(ps[0].textContent).toContain('前句')
+    expect(ps[0].textContent).toContain('梯度下降')
+    expect(ps[0].textContent).toContain('后句仍在')
+  })
+
+  it('活链带 wiki-link-ok，死链带 wiki-link-dead 与创建提示 title', async () => {
+    const w = await mountWithContent('用 [[梯度下降]] 和 [[不存在的概念]] 做对比。', {
+      '梯度下降': { id: 'p-gd', title: '梯度下降' },
+      '不存在的概念': null
+    })
+    const body = w.find('.wiki-body')
+    const ok = body.element.querySelector('a.wiki-link-ok, a[data-slug="梯度下降"]')
+    const dead = body.element.querySelector('a.wiki-link-dead')
+    expect(ok).toBeTruthy()
+    expect(dead).toBeTruthy()
+    // 死链需要可见的创建提示
+    const deadTitle = dead.getAttribute('title') || dead.getAttribute('data-tooltip') || ''
+    expect(deadTitle).toContain('尚未创建')
+  })
+
+  it('[[slug|label]] 自定义链接文本', async () => {
+    const w = await mountWithContent('见 [[梯度下降|GD 算法]] 的细节。', {
+      '梯度下降': { id: 'p-gd', title: '梯度下降' }
+    })
+    const html = w.find('.wiki-body').html()
+    expect(html).toMatch(/<a[^>]*>GD 算法<\/a>/)
+    expect(html).not.toContain('wl-placeholder')
+  })
+})
+
 describe('WikiView 5.3 死链巡检', () => {
   beforeEach(() => vi.clearAllMocks())
 
