@@ -83,8 +83,14 @@ async def _claim_next_job():
             .order_by(AsyncTask.created_at.asc())
             .limit(1)
         )
-        # 行锁仅 PG 有意义；SQLite 加该子句会静默返回空集，故按方言条件启用
-        if db.bind.dialect.name == "postgresql":
+        # 行锁仅 PG 有意义；SQLite 加该子句会静默返回空集，故按方言条件启用。
+        # db.bind 在 SQLAlchemy 的类型标注里可为 None（未绑定引擎的会话）：
+        # 运行时经 AsyncSessionLocal() 拿到的会话一定有 bind，但 mypy 按标注
+        # 判 union-attr。不同 SQLAlchemy 版本对该属性可空性标注不同，
+        # 本地与 CI 用 uv 解析出的版本不一致，故出现过「本地绿 / CI 红」；
+        # 先判空在两种版本下都成立，行为不变。
+        bind_dialect = db.bind.dialect.name if db.bind is not None else ""
+        if bind_dialect == "postgresql":
             query = query.with_for_update(skip_locked=True)
         result = await db.execute(query)
         task = result.scalar_one_or_none()
