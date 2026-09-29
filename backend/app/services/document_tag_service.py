@@ -31,16 +31,18 @@ _AUTO_TAG_PROMPT = """你是文档标签匹配器。从下面的「已有标签�
 
 规则：
 1. **只能**从已有标签里选，禁止发明新标签
-2. 输出 JSON 对象：{{"tags": [{{"idx": 0, "confidence": 0.9}}], "reason": "简述"}}
-3. confidence 为 0~1；低于 {min_conf} 的不要输出
-4. 最多选 {max_tags} 个；宁缺毋滥
+2. 输出 JSON 对象：{{"tags": [{{"idx": 1, "confidence": 0.9}}], "reason": "简述"}}
+3. **idx 从 1 开始**（对应下方候选表的行号，不要用 0）
+4. confidence 为 0~1；低于 {min_conf} 的不要输出
+5. 最多选 {max_tags} 个；宁缺毋滥
 
 已有标签（idx: 名称）：
 {candidates}
 
 文档标题：{title}
-文档内容节选：
+<document>
 {content}
+</document>
 """
 
 
@@ -193,12 +195,15 @@ def _parse_auto_tag_response(raw: str | None, valid_names: list[str]) -> list[tu
                 idx = int(raw_idx)
             except (TypeError, ValueError):
                 continue
-            if not (0 <= idx < len(valid_names)):
+            # F7：idx 1-based（模型天然按 1 数数），idx:1 → valid_names[0]
+            if idx < 1 or idx > len(valid_names):
                 logger.debug("auto_tag: idx out of range=%s", raw_idx)
                 continue
-            name = valid_names[idx]
+            name = valid_names[idx - 1]
         if conf >= MIN_CONFIDENCE and all(n != name for n, _ in out):
             out.append((name, conf))
+    # 先按分数降序，截断才不会「留 0.76 丢 0.99」
+    out.sort(key=lambda x: x[1], reverse=True)
     return out
 
 
@@ -207,9 +212,19 @@ async def auto_tag_document(
     user: User,
     doc_id: str,
     max_tags: int = 5,
+    *,
+    skip_if_tagged: bool = False,
 ) -> list[str]:
-    """从用户已有标签池为文档自动匹配标签（只增不覆盖）。标签池为空则返回 []。"""
+    """从用户已有标签池为文档自动匹配标签（只增不覆盖）。
+
+    skip_if_tagged=True 时，已有标签则 0 成本跳过（不调模型）。
+    LLM 失败抛出异常（由任务层回传），不再静默 return []。
+    """
     doc = await _owned_document(db, user, doc_id)
+    if skip_if_tagged:
+        existing = await list_document_tag_names(db, user, doc_id)
+        if existing:
+            return []
     tag_rows = (
         await db.execute(select(Tag).where(Tag.user_id == user.id).order_by(Tag.name))
     ).scalars().all()
@@ -217,7 +232,12 @@ async def auto_tag_document(
         return []
     candidates = [(t.id, t.name) for t in tag_rows[:MAX_CANDIDATES]]
     valid_names = [n for _, n in candidates]
-    candidate_text = "\n".join(f"{i}: {n}" for i, n in enumerate(valid_names))
+    # F7：1-based 行号；截断超 MAX_CANDIDATES 时标注
+    truncated = len(tag_rows) > MAX_CANDIDATES
+    lines = [f"{i + 1}: {n}" for i, n in enumerate(valid_names)]
+    if truncated:
+        lines.append(f"…（仅展示前 {MAX_CANDIDATES} 个标签）")
+    candidate_text = "\n".join(lines)
 
     from app.db.database import DocumentChunk
 
@@ -243,13 +263,10 @@ async def auto_tag_document(
         title=doc.filename or "",
         content=content or "（无正文）",
     )
-    try:
-        raw = await llm.chat(
-            [{"role": "user", "content": prompt}], temperature=0.1, max_tokens=400
-        )
-    except Exception as exc:
-        logger.warning("auto_tag LLM failed for %s: %s", doc_id, exc)
-        return []
+    # F7：失败向上抛，由任务层回传「N 成功 / M 失败」；不再静默 return []
+    raw = await llm.chat(
+        [{"role": "user", "content": prompt}], temperature=0.1, max_tokens=400
+    )
 
     picked = sorted(
         _parse_auto_tag_response(raw, valid_names), key=lambda x: x[1], reverse=True
@@ -261,17 +278,17 @@ async def auto_tag_document(
 async def batch_auto_tag(
     db: AsyncSession, user: User, doc_ids: list[str], max_tags: int = 5
 ) -> dict[str, list[str]]:
+    """批量自动打标；单篇失败不影响其他（SAVEPOINT 隔离）。"""
     out: dict[str, list[str]] = {}
     for did in doc_ids:
         try:
-            out[did] = await auto_tag_document(db, user, did, max_tags=max_tags)
-        except (NotFoundError, ValidationError):
+            # F7：批量按篇 begin_nested，一篇抛错不毒化整批
+            async with db.begin_nested():
+                out[did] = await auto_tag_document(db, user, did, max_tags=max_tags)
+        except (NotFoundError, ValidationError) as exc:
             out[did] = []
-        except Exception as exc:
-            try:
-                await db.rollback()
-            except Exception:  # noqa: BLE001
-                pass
+            logger.info("batch auto-tag skip %s: %s", did, exc)
+        except Exception as exc:  # noqa: BLE001
             logger.warning("batch auto-tag %s failed: %s", did, exc)
             out[did] = []
     return out

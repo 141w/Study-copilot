@@ -140,6 +140,11 @@ async def _execute_job(job):
                 result = await asyncio.wait_for(
                     _run_classroom_generate(job, db), timeout=timeout
                 )
+            elif job.task_type == "document_auto_tag":
+                timeout = 120
+                result = await asyncio.wait_for(
+                    _run_document_auto_tag(job, db), timeout=timeout
+                )
             else:
                 raise ValueError(f"Unknown type: {job.task_type}")
             await update_task(
@@ -230,7 +235,52 @@ async def _run_document_process(job, db):
     chunk_count, method = await _do_process_document(
         db, user, doc_id, progress_callback=progress_cb
     )
+    # F7：解析成功后入队自动打标（失败不阻断文档 ready）
+    try:
+        from app.core.task_worker import enqueue as enqueue_task
+        from app.services.task_service import create_task as create_async_task
+
+        payload = {"doc_id": doc_id, "skip_if_tagged": True}
+        atask = await create_async_task(
+            db, job.user_id, "document_auto_tag", payload
+        )
+        await enqueue_task(atask.id, job.user_id, "document_auto_tag", payload)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("enqueue auto-tag failed for %s: %s", doc_id, exc)
     return {"doc_id": doc_id, "filename": filename, "chunk_count": chunk_count, "method": method}
+
+
+async def _run_document_auto_tag(job, db):
+    """F7：解析完成后自动打标。失败可见，不阻断文档 ready。"""
+    from sqlalchemy import select
+
+    from app.db import User
+    from app.services.document_tag_service import auto_tag_document
+
+    doc_id = job.payload.get("doc_id")
+    skip_if_tagged = bool(job.payload.get("skip_if_tagged", True))
+    result = await db.execute(select(User).where(User.id == job.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise ValueError("User not found")
+
+    try:
+        picked = await auto_tag_document(
+            db, user, doc_id, skip_if_tagged=skip_if_tagged
+        )
+        return {
+            "doc_id": doc_id,
+            "picked": list(picked) if picked else [],
+            "status": "ok",
+        }
+    except Exception as exc:  # noqa: BLE001 — 失败要回传，不能吞
+        logger.warning("auto_tag task failed for %s: %s", doc_id, exc)
+        return {
+            "doc_id": doc_id,
+            "picked": [],
+            "status": "failed",
+            "error": str(exc)[:500],
+        }
 
 
 async def _run_quiz_generate(job, db):
