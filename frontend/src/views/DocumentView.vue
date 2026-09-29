@@ -287,6 +287,7 @@
       v-model:visible="showChunkHistory"
       :doc-id="selectedDoc?.id || ''"
       :chunk-id="historyChunkId"
+      :content-revision="historyChunkRevision"
       @reverted="onChunkReverted"
     />
 
@@ -442,6 +443,7 @@ const showClassroomDialog = ref(false)
 const showChunkEdit = ref(false)
 const showChunkHistory = ref(false)
 const historyChunkId = ref('')
+const historyChunkRevision = ref(0)
 const editTarget = ref<{ id: string; content: string; contentRevision: number } | null>(null)
 
 function openChunkEdit(chunk: DocChunk): void {
@@ -457,6 +459,7 @@ function openChunkEdit(chunk: DocChunk): void {
 function openChunkHistory(chunk: DocChunk): void {
   if (!chunk.id) return
   historyChunkId.value = chunk.id
+  historyChunkRevision.value = chunk.content_revision ?? 0
   showChunkHistory.value = true
 }
 
@@ -475,6 +478,12 @@ function onChunkReverted(payload: { content: string; contentRevision: number; in
     target.text = payload.content
     target.content_revision = payload.contentRevision
     target.index_status = payload.indexStatus
+  }
+  historyChunkRevision.value = payload.contentRevision
+  // 若编辑框正开着同一块，同步草稿与 expected_revision，避免下次保存 409
+  if (editTarget.value?.id === historyChunkId.value) {
+    editTarget.value.content = payload.content
+    editTarget.value.contentRevision = payload.contentRevision
   }
 }
 

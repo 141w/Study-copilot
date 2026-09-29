@@ -41,7 +41,14 @@
         <template v-else-if="indexStatus === 'failed'">
           <el-icon class="text-[var(--color-error)]"><CircleCloseFilled /></el-icon>
           <span data-test="status-failed" class="text-[var(--color-error)]">索引失败</span>
-          <el-button size="small" type="danger" data-test="retry-index" @click="save">
+          <el-button
+            size="small"
+            type="danger"
+            data-test="retry-index"
+            :loading="saving"
+            :disabled="saving"
+            @click="save"
+          >
             重试
           </el-button>
         </template>

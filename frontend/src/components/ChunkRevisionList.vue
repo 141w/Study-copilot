@@ -64,6 +64,8 @@ const props = defineProps<{
   visible: boolean
   docId: string
   chunkId: string
+  /** 当前 content_revision，用于回滚时的乐观并发校验 */
+  contentRevision?: number
 }>()
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void
@@ -118,6 +120,10 @@ async function revert(rev: ChunkRevisionItem): Promise<void> {
   try {
     const res = await api.post(`/documents/${props.docId}/chunks/${props.chunkId}/revert`, {
       revision: rev.revision,
+      // 回滚=一次编辑：带上当前 revision 做乐观并发，避免静默覆盖
+      ...(props.contentRevision !== undefined
+        ? { expected_revision: props.contentRevision }
+        : {}),
     })
     const data = res.data as { content: string; content_revision: number; index_status: string }
     emit('reverted', {
@@ -127,8 +133,12 @@ async function revert(rev: ChunkRevisionItem): Promise<void> {
     })
     visible.value = false
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    revertError.value = err.response?.data?.detail || '回滚失败'
+    const err = e as { response?: { status?: number; data?: { detail?: string } } }
+    if (err.response?.status === 409) {
+      revertError.value = '版本已变化，请刷新后重试'
+    } else {
+      revertError.value = err.response?.data?.detail || '回滚失败'
+    }
   } finally {
     revertingId.value = ''
   }

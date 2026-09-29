@@ -290,12 +290,46 @@ async def update_chunk(
             return await _reindex_chunk(db, user, chunk)
         return _chunk_to_dict(chunk)
 
-    # Snapshot the version being replaced
+    base_revision = chunk.content_revision or 0
+    # 坐标不变量：等长就地改写 source_content；变长保持原点坐标不动
+    new_source = chunk.source_content
+    if (
+        chunk.char_start is not None
+        and chunk.char_end is not None
+        and chunk.source_content is not None
+        and len(new_content) == chunk.char_end - chunk.char_start
+    ):
+        s, e = chunk.char_start, chunk.char_end
+        new_source = chunk.source_content[:s] + new_content + chunk.source_content[e:]
+
+    # 原子 CAS：以读到的 revision 为条件自增，避免并发双写同一快照触发
+    # UNIQUE(chunk_id,revision) → 500（OCR Medium）
+    from sqlalchemy import update as sa_update
+
+    res = await db.execute(
+        sa_update(DocumentChunk)
+        .where(
+            DocumentChunk.id == chunk.id,
+            DocumentChunk.content_revision == base_revision,
+        )
+        .values(
+            content=new_content,
+            content_revision=base_revision + 1,
+            last_editor_id=user.id,
+            index_status="processing",
+            source_content=new_source,
+        )
+    )
+    if getattr(res, "rowcount", 0) != 1:
+        await db.rollback()
+        raise ConflictError("版本冲突：切片已被修改，请刷新后重试")
+
+    # Snapshot the version being replaced（仅 CAS 成功后写入）
     db.add(
         ChunkRevision(
             id=str(uuid.uuid4()),
             chunk_id=chunk.id,
-            revision=chunk.content_revision,
+            revision=base_revision,
             content=current,
             editor_id=chunk.last_editor_id,
             edited_at=_utcnow(),
@@ -303,10 +337,11 @@ async def update_chunk(
         )
     )
     chunk.content = new_content
-    chunk.content_revision += 1
+    chunk.content_revision = base_revision + 1
     chunk.last_editor_id = user.id
     chunk.index_status = "processing"
-    _preserve_invariant_if_possible(chunk, new_content)
+    if new_source is not chunk.source_content:
+        chunk.source_content = new_source
     await db.commit()
 
     # Parent rebuild is best-effort; failure must not block reindex of the child.
