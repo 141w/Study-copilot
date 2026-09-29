@@ -131,8 +131,14 @@ function statusChip(s: string): string {
 
 function duration(s: SpanRow): string {
   if (!s.started_at || !s.ended_at) return ''
-  const a = Date.parse(s.started_at)
-  const b = Date.parse(s.ended_at)
+  // 后端已输出带 Z 的 ISO；兼容旧空格格式按 UTC 解析
+  const parse = (v: string): number => {
+    const m = /^(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/.exec(v)
+    const d = m ? new Date(`${m[1]}T${m[2]}Z`) : new Date(v)
+    return d.getTime()
+  }
+  const a = parse(s.started_at)
+  const b = parse(s.ended_at)
   if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return ''
   const ms = b - a
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`

@@ -17,10 +17,59 @@
         >
           导出 JSON
         </el-button>
+        <el-button
+          v-if="history.length >= 2"
+          size="small"
+          data-test="eval-compare"
+          @click="comparing = !comparing"
+        >
+          {{ comparing ? '关闭对比' : '对比两次' }}
+        </el-button>
         <el-button size="small" type="primary" :loading="running" data-test="eval-run" @click="run">
           运行评测
         </el-button>
       </div>
+    </div>
+
+    <!-- 运行留存 + 两次对比 -->
+    <div v-if="history.length" class="mb-3" data-test="eval-history">
+      <div class="text-[10px] text-[var(--text-muted)] mb-1">本次会话运行（勾选两次可对比）</div>
+      <div class="flex flex-wrap gap-2">
+        <label
+          v-for="(h, i) in history"
+          :key="h.id"
+          class="flex items-center gap-1 text-[10px] px-2 py-1 rounded border cursor-pointer"
+          :class="compareIds.includes(h.id) ? 'border-[var(--color-primary)]' : 'border-[var(--border-default)]'"
+        >
+          <input
+            type="checkbox"
+            :value="h.id"
+            :checked="compareIds.includes(h.id)"
+            data-test="eval-history-pick"
+            @change="toggleCompare(h.id)"
+          />
+          #{{ i + 1 }} {{ h.label }}
+        </label>
+      </div>
+    </div>
+
+    <div v-if="comparing && comparePair" class="mb-4 overflow-x-auto" data-test="eval-compare-panel">
+      <table class="w-full text-xs border border-[var(--border-default)]">
+        <thead>
+          <tr class="text-left text-[var(--text-muted)] bg-[var(--bg-secondary)]">
+            <th class="py-1.5 px-2">指标</th>
+            <th class="py-1.5 px-2">运行 A</th>
+            <th class="py-1.5 px-2">运行 B</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="k in compareKeys" :key="k" class="border-t border-[var(--border-default)]">
+            <td class="py-1 px-2 text-[var(--text-secondary)]">{{ k }}</td>
+            <td class="py-1 px-2 tabular-nums">{{ comparePair[0].meta[k] ?? '—' }}</td>
+            <td class="py-1 px-2 tabular-nums">{{ comparePair[1].meta[k] ?? '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -185,6 +234,38 @@ const questionText = ref('')
 const running = ref(false)
 const report = ref<EvalReport | null>(null)
 
+/** 运行留存（会话内，最多 5 条）— F3.5 */
+const history = ref<{ id: string; label: string; report: EvalReport }[]>([])
+const compareIds = ref<string[]>([])
+const comparing = ref(false)
+
+const comparePair = computed(() => {
+  const picked = compareIds.value
+    .map(id => history.value.find(h => h.id === id))
+    .filter(Boolean)
+    .slice(0, 2) as { id: string; label: string; report: EvalReport }[]
+  return picked.length === 2 ? [picked[0].report, picked[1].report] : null
+})
+const compareKeys = [
+  'n_questions',
+  'top_k',
+  'hit_rate@1',
+  'hit_rate@5',
+  'recall@5',
+  'mrr@5',
+  'embedding_model',
+  'fts_config'
+]
+
+function toggleCompare(id: string): void {
+  const i = compareIds.value.indexOf(id)
+  if (i >= 0) compareIds.value.splice(i, 1)
+  else {
+    compareIds.value.push(id)
+    if (compareIds.value.length > 2) compareIds.value.shift()
+  }
+}
+
 const hasAnyExpected = computed(() =>
   parseQuestions().some(p => p.expected.length > 0)
 )
@@ -239,6 +320,12 @@ async function run(): Promise<void> {
       top_k: 5
     })
     report.value = data
+    history.value.unshift({
+      id: `run-${Date.now()}`,
+      label: `${parsed.length} 题 · top_k=${data.meta.top_k ?? 5}`,
+      report: data
+    })
+    if (history.value.length > 5) history.value.pop()
     if (!parsed.some(p => p.expected.length)) {
       ElMessage.warning('未录入期望答案，指标不可用于比较')
     } else {

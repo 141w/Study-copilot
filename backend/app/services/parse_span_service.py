@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import DocumentParseSpan
 from app.db.database import AsyncSessionLocal
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -216,8 +217,8 @@ async def list_parse_spans(
                 "kind": r.kind,
                 "name": r.name,
                 "status": r.status,
-                "started_at": str(r.started_at) if r.started_at else None,
-                "ended_at": str(r.ended_at) if r.ended_at else None,
+                "started_at": isoformat_utc(r.started_at),
+                "ended_at": isoformat_utc(r.ended_at),
                 "error": r.error,
                 "detail": r.detail,
             }

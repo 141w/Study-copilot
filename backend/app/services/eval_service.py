@@ -31,11 +31,12 @@ from evaluation.harness import (  # noqa: E402
 async def _load_retrieval_fingerprint(retrieval_config: dict[str, Any] | None) -> dict[str, Any]:
     """生效参数指纹（跨次结果可比）。"""
     cfg = dict(retrieval_config or {})
+    # 真实 FTS 模式在 pgvector_store 的探测缓存里，不在 settings
     fts = "unknown"
     try:
-        from app.config import settings
+        from app.core.pgvector_store import get_fts_config_status
 
-        fts = getattr(settings, "fts_config", None) or "simple"
+        fts = get_fts_config_status() or "unknown"
     except Exception:  # noqa: BLE001
         pass
     embedding_model = None
@@ -97,6 +98,9 @@ async def run_retrieval_eval(
         raise ValidationError("未录入期望答案，指标不可用于比较")
     if len(expected) != len(questions):
         raise ValidationError("期望答案条数必须与问题数一致")
+    # 全部为空的期望也不得出百分比
+    if not any(e for e in expected):
+        raise ValidationError("未录入期望答案，指标不可用于比较")
 
     # 归属校验
     from sqlalchemy import select as sa_select
@@ -149,13 +153,17 @@ async def run_retrieval_eval(
         )
         top = []
         ranked_ids: list[str] = []
+        seen_keys: set[str] = set()
         for h in hits:
             chunk = h.get("chunk", {})
             did = chunk.get("document_id", "")
             cid = chunk.get("chunk_id") or chunk.get("id") or ""
             # 命中键：优先用期望集里出现的那个 id
             key = cid if cid in exp_set else did
-            ranked_ids.append(key)
+            # 文档级 key 会出现同文档多切片；Recall 按成员计数，必须去重否则 >1
+            if key not in seen_keys:
+                seen_keys.add(key)
+                ranked_ids.append(key)
             top.append(
                 {
                     "document_id": did,

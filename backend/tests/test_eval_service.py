@@ -94,7 +94,7 @@ async def test_eval_miss_when_empty_search(db_session, user, doc):
     fake = _FakeEngine([])
     with patch("app.core.rag_engine.rag_engine.retrieve", new=fake.retrieve):
         out = await eval_service.run_retrieval_eval(
-            db_session, user, [doc.id], ["没命中？"], expected=[[]], top_k=5
+            db_session, user, [doc.id], ["没命中？"], expected=[[doc.id]], top_k=5
         )
     assert out["meta"]["hit_rate@1"] == 0.0
     assert out["results"][0]["hit@1"] is False
@@ -152,6 +152,24 @@ async def test_f3_expected_required(db_session, user, doc):
         await eval_service.run_retrieval_eval(
             db_session, user, [doc.id], ["q1", "q2"], expected=[["x"]], top_k=5  # 长度不匹配
         )
+    with pytest.raises(ValidationError):
+        await eval_service.run_retrieval_eval(
+            db_session, user, [doc.id], ["q？"], expected=[[]], top_k=5  # 全空
+        )
+
+
+@pytest.mark.asyncio
+async def test_f3_recall_not_inflated_by_duplicate_doc_keys(db_session, user, doc):
+    """文档级 key 同文档多切片不得把 Recall 顶到 >1。"""
+    hits = [_hit(doc.id, f"c{i}", f"chunk{i}") for i in range(5)]
+    fake = _FakeEngine(hits)
+    with patch("app.core.rag_engine.rag_engine.retrieve", new=fake.retrieve):
+        out = await eval_service.run_retrieval_eval(
+            db_session, user, [doc.id], ["q？"], expected=[[doc.id]], top_k=5
+        )
+    r = out["meta"]["recall@5"]
+    assert 0.0 <= r <= 1.0, f"recall@5 越界: {r}"
+    assert r == 1.0
 
 
 @pytest.mark.asyncio
