@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.encryption import get_encryption_service
 from app.db import User, UserLLMConfig
 from app.exceptions import NotFoundError
+from app.utils.timefmt import isoformat_utc
 
 
 async def get_llm_config(
@@ -412,8 +413,8 @@ def _config_to_dict(config: UserLLMConfig) -> dict:
         "embedding_dimension": config.embedding_dimension,
         "message_format": config.message_format,
         "classroom_config": classroom_cfg,
-        "created_at": str(config.created_at),
-        "updated_at": str(config.updated_at),
+        "created_at": isoformat_utc(config.created_at),
+        "updated_at": isoformat_utc(config.updated_at),
     }
 
 

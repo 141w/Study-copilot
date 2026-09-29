@@ -14,6 +14,7 @@ from app.core.rate_limit import IPRateLimiter
 from app.db import CustomPersona, Document, Message, User, get_db
 from app.exceptions import NotFoundError, RateLimitError, ValidationError
 from app.services import chat_service
+from app.utils.timefmt import isoformat_utc
 
 router = APIRouter(prefix="/chat", tags=["问答"])
 logger = logging.getLogger(__name__)
@@ -360,7 +361,7 @@ async def get_sessions(
             session_id=s.id,
             title=s.title or "新对话",
             messages=[],
-            created_at=str(s.created_at),
+            created_at=isoformat_utc(s.created_at),
         )
         for s in sessions
     ]
@@ -431,7 +432,7 @@ async def get_history(
                 saved_note=saved_note,
                 savedNote=saved_note,
                 incomplete=incomplete,
-                created_at=str(m.created_at),
+                created_at=isoformat_utc(m.created_at),
             )
         )
 
@@ -439,7 +440,7 @@ async def get_history(
         session_id=session.id,
         title=session.title or "新对话",
         messages=messages_resp,
-        created_at=str(session.created_at),
+        created_at=isoformat_utc(session.created_at),
     )
 
 

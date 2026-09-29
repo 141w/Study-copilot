@@ -24,6 +24,7 @@ from app.exceptions import ContentTooLargeError, NotFoundError, ValidationError
 from app.pipeline import execute_chat_pipeline, execute_chat_pipeline_stream
 from app.services import note_service
 from app.services.config_service import get_llm_config_with_secret
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -918,7 +919,7 @@ async def search_messages(
             "role": row.role,
             "content": row.content,
             "similarity": round(float(row.similarity), 4),
-            "created_at": str(row.created_at),
+            "created_at": isoformat_utc(row.created_at),
         }
         for row in rows
     ]

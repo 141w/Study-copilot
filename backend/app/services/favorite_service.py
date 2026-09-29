@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import User, UserFavorite
 from app.exceptions import NotFoundError, ValidationError
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def _fav_to_dict(f: UserFavorite) -> dict[str, Any]:
         "id": f.id,
         "resource_type": f.resource_type,
         "resource_id": f.resource_id,
-        "created_at": str(f.created_at) if f.created_at else None,
+        "created_at": isoformat_utc(f.created_at) if f.created_at else None,
     }
 
 

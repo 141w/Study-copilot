@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import User, WikiPage, WikiPageRevision
 from app.exceptions import ConflictError, NotFoundError, ValidationError
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,8 @@ def _page_to_dict(p: WikiPage, *, dead_links: list[str] | None = None) -> dict[s
         "content": p.content,
         "summary": p.summary,
         "revision": p.revision,
-        "created_at": str(p.created_at) if p.created_at else None,
-        "updated_at": str(p.updated_at) if p.updated_at else None,
+        "created_at": isoformat_utc(p.created_at) if p.created_at else None,
+        "updated_at": isoformat_utc(p.updated_at) if p.updated_at else None,
         "links": extract_links(p.content or ""),
         "dead_links": dead_links or [],
     }
@@ -103,7 +104,7 @@ async def list_pages(
             "page_type": p.page_type,
             "status": p.status,
             "summary": p.summary,
-            "updated_at": str(p.updated_at) if p.updated_at else None,
+            "updated_at": isoformat_utc(p.updated_at) if p.updated_at else None,
         }
         for p in rows
     ]
@@ -252,7 +253,7 @@ async def list_revisions(db: AsyncSession, user: User, page_id: str) -> list[dic
             "revision": r.revision,
             "title": r.title,
             "summary": r.summary,
-            "created_at": str(r.created_at) if r.created_at else None,
+            "created_at": isoformat_utc(r.created_at) if r.created_at else None,
             "content_preview": (r.content or "")[:120],
         }
         for r in rows
@@ -379,7 +380,7 @@ async def wiki_index(db: AsyncSession, user: User) -> dict[str, Any]:
                 "slug": p.slug,
                 "title": p.title,
                 "summary": p.summary,
-                "updated_at": str(p.updated_at) if p.updated_at else None,
+                "updated_at": isoformat_utc(p.updated_at) if p.updated_at else None,
             }
         )
     return {
@@ -390,7 +391,7 @@ async def wiki_index(db: AsyncSession, user: User) -> dict[str, Any]:
                 "id": p.id,
                 "slug": p.slug,
                 "title": p.title,
-                "updated_at": str(p.updated_at) if p.updated_at else None,
+                "updated_at": isoformat_utc(p.updated_at) if p.updated_at else None,
             }
             for p in rows[:10]
         ],

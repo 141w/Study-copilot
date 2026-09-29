@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.db import User, get_db
 from app.services import course_service
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +71,8 @@ async def create_course(
         name=course.name,
         description=course.description,
         color=course.color,
-        created_at=str(course.created_at),
-        updated_at=str(course.updated_at),
+        created_at=isoformat_utc(course.created_at),
+        updated_at=isoformat_utc(course.updated_at),
         document_count=counts.get(course.id, {}).get("document_count", 0),
         note_count=counts.get(course.id, {}).get("note_count", 0),
     )
@@ -90,8 +91,8 @@ async def list_courses(
             name=c.name,
             description=c.description,
             color=c.color,
-            created_at=str(c.created_at),
-            updated_at=str(c.updated_at),
+            created_at=isoformat_utc(c.created_at),
+            updated_at=isoformat_utc(c.updated_at),
             document_count=counts.get(c.id, {}).get("document_count", 0),
             note_count=counts.get(c.id, {}).get("note_count", 0),
         )
@@ -112,8 +113,8 @@ async def get_course(
         name=course.name,
         description=course.description,
         color=course.color,
-        created_at=str(course.created_at),
-        updated_at=str(course.updated_at),
+        created_at=isoformat_utc(course.created_at),
+        updated_at=isoformat_utc(course.updated_at),
         document_count=counts.get(course.id, {}).get("document_count", 0),
         note_count=counts.get(course.id, {}).get("note_count", 0),
     )
@@ -135,8 +136,8 @@ async def update_course(
         name=course.name,
         description=course.description,
         color=course.color,
-        created_at=str(course.created_at),
-        updated_at=str(course.updated_at),
+        created_at=isoformat_utc(course.created_at),
+        updated_at=isoformat_utc(course.updated_at),
         document_count=counts.get(course.id, {}).get("document_count", 0),
         note_count=counts.get(course.id, {}).get("note_count", 0),
     )
@@ -170,7 +171,7 @@ async def get_course_documents(
             status=d.status,
             chunk_count=d.chunk_count,
             file_size=d.file_size,
-            created_at=str(d.created_at),
+            created_at=isoformat_utc(d.created_at),
         )
         for d in docs
     ]

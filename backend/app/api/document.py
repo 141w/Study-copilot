@@ -8,6 +8,7 @@ from app.core.url_extractor import extract_from_url
 from app.db import User, get_db
 from app.exceptions import RateLimitError
 from app.services import document_service
+from app.utils.timefmt import isoformat_utc
 
 router = APIRouter(prefix="/documents", tags=["文档"])
 
@@ -170,7 +171,7 @@ async def list_docs(
             status=d.status,
             chunk_count=d.chunk_count,
             file_size=d.file_size,
-            created_at=str(d.created_at),
+            created_at=isoformat_utc(d.created_at),
             tag_names=sorted(tags_by_doc.get(d.id, [])),
         )
         for d in docs

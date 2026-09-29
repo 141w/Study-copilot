@@ -12,6 +12,7 @@ from app.agent.tools.base import Tool, ToolResult
 from app.core.rag_engine import rag_engine
 from app.db import AsyncSessionLocal, Document, DocumentChunk
 from app.services.memory_service import memory_service
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -319,7 +320,7 @@ class GetDocumentInfoTool(Tool):
                     "chunk_count": doc.chunk_count,
                     "file_size": doc.file_size,
                     "status": doc.status,
-                    "created_at": str(doc.created_at),
+                    "created_at": isoformat_utc(doc.created_at),
                 }
                 return ToolResult(
                     success=True, output=json.dumps(info, ensure_ascii=False, indent=2), data=info

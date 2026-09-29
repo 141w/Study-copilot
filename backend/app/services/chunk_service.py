@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.pgvector_store import PgVectorStore
 from app.db import ChunkRevision, Document, DocumentChunk, User
 from app.exceptions import ConflictError, NotFoundError, ValidationError
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def _chunk_to_dict(c: DocumentChunk) -> dict[str, Any]:
         "is_parent": bool(c.is_parent),
         "chunk_metadata": c.chunk_metadata or {},
         "chunk_index": c.chunk_index,
-        "created_at": str(c.created_at) if c.created_at else None,
+        "created_at": isoformat_utc(c.created_at) if c.created_at else None,
     }
 
 

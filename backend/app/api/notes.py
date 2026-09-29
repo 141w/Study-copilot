@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.db import User, get_db
 from app.services import note_service
+from app.utils.timefmt import isoformat_utc
 
 router = APIRouter(prefix="/notes", tags=["笔记"])
 
@@ -72,7 +73,7 @@ class NoteBrief(BaseModel):
 
 
 def _tag_to_response(tag) -> TagResponse:
-    return TagResponse(id=tag.id, name=tag.name, created_at=str(tag.created_at))
+    return TagResponse(id=tag.id, name=tag.name, created_at=isoformat_utc(tag.created_at))
 
 
 def _note_to_response(note) -> NoteResponse:
@@ -84,8 +85,8 @@ def _note_to_response(note) -> NoteResponse:
         note_type=note.note_type,
         is_pinned=note.is_pinned,
         tags=[_tag_to_response(t) for t in note.tags],
-        created_at=str(note.created_at),
-        updated_at=str(note.updated_at),
+        created_at=isoformat_utc(note.created_at),
+        updated_at=isoformat_utc(note.updated_at),
     )
 
 
@@ -98,8 +99,8 @@ def _note_to_brief(note) -> NoteBrief:
         note_type=note.note_type,
         is_pinned=note.is_pinned,
         tags=[t.name for t in (note.tags or [])],
-        created_at=str(note.created_at),
-        updated_at=str(note.updated_at),
+        created_at=isoformat_utc(note.created_at),
+        updated_at=isoformat_utc(note.updated_at),
     )
 
 

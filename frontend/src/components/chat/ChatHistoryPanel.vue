@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
 import { ElMessage } from 'element-plus'
 import { Close, EditPen, Search } from '@/components/icons'
+import { localDayKey, parseTimestamp } from '@/utils/parseTime'
 import type { ChatSessionSummary } from '../../stores/chat'
 
 const props = defineProps<{ visible: boolean }>()
@@ -31,15 +32,8 @@ const searchInput = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 function dayKey(ts: string): 'today' | 'yesterday' | 'week' | 'older' {
-  if (!ts) return 'older'
-  const d = new Date(ts)
-  const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const t = d.getTime()
-  if (t >= startOfToday) return 'today'
-  if (t >= startOfToday - 86400000) return 'yesterday'
-  if (t >= startOfToday - 7 * 86400000) return 'week'
-  return 'older'
+  // F4：统一走 parseTime（后端 naive UTC 空格格式 + ISO），分组边界按本地 0 点
+  return localDayKey(ts)
 }
 
 const filteredSessions = computed(() => {
@@ -66,7 +60,8 @@ const groupedSessions = computed(() => {
 // P2-1：formatDate 由 useFormat.formatRelativeTime 替换（原为平行实现之一）
 const formatDate = (ts: string) => {
   if (!ts) return ''
-  const d = new Date(ts)
+  const d = parseTimestamp(ts)
+  if (!d) return ts // 解析失败显示原始串，禁止 Invalid Date
   const now = new Date()
   const diff = now.getTime() - d.getTime()
   const mins = Math.floor(diff / 60000)

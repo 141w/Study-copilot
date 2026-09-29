@@ -35,6 +35,7 @@ from app.exceptions import (
     ValidationError,
 )
 from app.services import task_service
+from app.utils.timefmt import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -440,7 +441,7 @@ async def get_document(
         "status": doc.status,
         "chunk_count": doc.chunk_count,
         "file_size": doc.file_size,
-        "created_at": str(doc.created_at),
+        "created_at": isoformat_utc(doc.created_at),
         "chunks": chunks,
     }
 
