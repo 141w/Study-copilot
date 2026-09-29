@@ -29,11 +29,13 @@ _INGEST_PROMPT = """你是知识整理助手。请从下面的学习资料中提
 资料正文：
 {content}
 
+{existing_section}
 要求：
 1. 提炼 3~{max_pages} 个**核心概念**（不要流水账、不要整章照搬）
 2. 每个概念给出 slug（小写英文或中文，可用 - 连接）、title、summary（1 句）、content（Markdown，80~400 字）
 3. content 里若提到其他已提炼概念，用 [[slug]] 互相链接
-4. 只输出 JSON 数组，不要解释：
+4. **若资料涉及下方已有概念，优先复用其 slug，不要另造中英文两套**
+5. 只输出 JSON 数组，不要解释：
 [{{"slug":"...","title":"...","summary":"...","content":"..."}}]
 """
 
@@ -111,10 +113,28 @@ async def _gather_note_text(db: AsyncSession, user: User, note_id: str) -> tuple
     return note.title or note_id, (note.content or "")[:MAX_SOURCE_CHARS]
 
 
+async def _list_existing_slugs(db: AsyncSession, user: User) -> str:
+    """已有 slug + title 清单，注入提示词，要求模型优先复用（F5）。"""
+    rows = (
+        await db.execute(
+            select(WikiPage.slug, WikiPage.title)
+            .where(WikiPage.user_id == user.id)
+            .order_by(WikiPage.updated_at.desc())
+            .limit(80)
+        )
+    ).all()
+    if not rows:
+        return "已有概念页：（无）\n"
+    lines = "\n".join(f"- {s}  （{t}）" for s, t in rows)
+    return f"已有概念页（优先复用 slug，避免同概念拆成中英文两页）：\n{lines}\n"
+
+
 async def _merge_or_create(
     db: AsyncSession, user: User, page: dict[str, Any], source_title: str
 ) -> dict[str, Any]:
-    """同 slug：合并 summary + 在正文末尾追加「来源」段；否则新建。"""
+    """同 slug：合并 summary + 追加来源段落，并写版本快照；否则新建。"""
+    from app.services.wiki_service import MAX_CONTENT
+
     existing = (
         await db.execute(
             select(WikiPage).where(WikiPage.user_id == user.id, WikiPage.slug == page["slug"])
@@ -124,8 +144,25 @@ async def _merge_or_create(
     if existing:
         body = existing.content or ""
         if snippet and snippet not in body:
-            body = f"{body.rstrip()}\n\n---\n\n## 来源摘录（{source_title}）\n\n{snippet}"
-            existing.content = body
+            new_body = f"{body.rstrip()}\n\n---\n\n## 来源摘录（{source_title}）\n\n{snippet}"
+            if len(new_body) > MAX_CONTENT:
+                raise ValidationError(
+                    f"合并后内容过长（{len(new_body)} > {MAX_CONTENT}），已跳过"
+                )
+            # F5：先写被取代版本的快照，再改内容、抬 revision
+            from app.db import WikiPageRevision
+
+            db.add(
+                WikiPageRevision(
+                    id=str(uuid.uuid4()),
+                    page_id=existing.id,
+                    revision=existing.revision or 1,
+                    title=existing.title,
+                    content=body,
+                    summary=existing.summary or "",
+                )
+            )
+            existing.content = new_body
             existing.revision = (existing.revision or 1) + 1
         if page["summary"] and not existing.summary:
             existing.summary = page["summary"]
@@ -179,6 +216,7 @@ async def ingest_from_sources(
 
     user_config = await get_llm_config_with_secret(db, user)
     llm = LLM.from_config(user_config)
+    existing_section = await _list_existing_slugs(db, user)
 
     results: list[dict[str, Any]] = []
     errors: list[str] = []
@@ -187,7 +225,10 @@ async def ingest_from_sources(
             errors.append(f"{title}: 内容为空")
             continue
         prompt = _INGEST_PROMPT.format(
-            title=title[:200], content=text, max_pages=max_pages
+            title=title[:200],
+            content=text,
+            max_pages=max_pages,
+            existing_section=existing_section,
         )
         try:
             raw = await llm.chat(

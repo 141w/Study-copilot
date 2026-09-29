@@ -164,3 +164,33 @@ async def test_wiki_index_groups_by_type(db_session, user):
     assert idx["total"] == 2
     assert set(idx["by_type"].keys()) == {"concept", "entity"}
     assert len(idx["recent"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# F6 · 版本全文接口（fix(phase2-audit): F6）
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_f6_get_revision_full_content(db_session, user):
+    """GET 单条 revision 必须返回全文，而非 120 字预览——否则回滚是盲选。"""
+    p = await wiki_service.create_page(
+        db_session, user, slug="f6", title="F6", content="第一版正文" + "补" * 200
+    )
+    await wiki_service.update_page(
+        db_session, user, p["id"], content="第二版正文" + "充" * 200
+    )
+    # 应有按 revision 取全文的能力（服务层）
+    assert hasattr(wiki_service, "get_revision"), "缺少 get_revision（全文）"
+    rev1 = await wiki_service.get_revision(db_session, user, p["id"], 1)
+    assert rev1["content"] == "第一版正文" + "补" * 200
+    assert rev1["revision"] == 1
+
+
+@pytest.mark.asyncio
+async def test_f6_missing_snapshot_is_explicit(db_session, user):
+    """F5 之前产生的版本可能无快照——必须显式标注而非返回空串。"""
+    from app.exceptions import NotFoundError
+
+    p = await wiki_service.create_page(db_session, user, slug="f6b", title="x", content="y")
+    with pytest.raises(NotFoundError, match="无快照"):
+        await wiki_service.get_revision(db_session, user, p["id"], 99)

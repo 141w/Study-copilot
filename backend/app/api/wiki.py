@@ -151,6 +151,17 @@ async def list_wiki_revisions(
     return await wiki_service.list_revisions(db, current_user, page_id)
 
 
+@router.get("/{page_id}/revisions/{revision}")
+async def get_wiki_revision(
+    page_id: str,
+    revision: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """F6：取该版全文（供 diff / 回滚前预览）。"""
+    return await wiki_service.get_revision(db, current_user, page_id, revision)
+
+
 @router.post("/{page_id}/revert")
 async def revert_wiki_page(
     page_id: str,

@@ -197,23 +197,59 @@
 
           <!-- 5.4 版本历史 -->
           <div v-if="history?.length" class="mt-6 pt-4 border-t border-[var(--border-default)]" data-test="wiki-history-list">
-            <div class="text-xs text-[var(--text-muted)] mb-2">版本历史</div>
+            <div class="text-xs text-[var(--text-muted)] mb-2">
+              版本历史
+              <span class="ml-2">回滚后当前内容会存为新版本，仍可再次回滚</span>
+            </div>
             <div class="space-y-1.5">
               <div
                 v-for="h in history"
                 :key="h.id"
-                class="flex items-center justify-between text-xs"
+                class="text-xs"
               >
-                <div class="min-w-0">
-                  <span class="text-[var(--text-primary)]">rev {{ h.revision }}</span>
-                  <span class="text-[var(--text-muted)] ml-2 truncate">{{ h.title }}</span>
+                <div class="flex items-center justify-between">
+                  <div class="min-w-0">
+                    <span class="text-[var(--text-primary)]">rev {{ h.revision }}</span>
+                    <span class="text-[var(--text-muted)] ml-2 truncate">{{ h.title }}</span>
+                  </div>
+                  <div class="flex gap-1">
+                    <el-button
+                      size="small"
+                      text
+                      :data-test="`wiki-diff-${h.revision}`"
+                      @click="toggleDiff(h.revision)"
+                    >{{ diffRev === h.revision ? '收起对比' : '对比' }}</el-button>
+                    <el-button
+                      size="small"
+                      text
+                      :data-test="`wiki-revert-${h.revision}`"
+                      @click="revert(h.revision)"
+                    >回滚</el-button>
+                  </div>
                 </div>
-                <el-button
-                  size="small"
-                  text
-                  :data-test="`wiki-revert-${h.revision}`"
-                  @click="revert(h.revision)"
-                >回滚</el-button>
+                <!-- F6：行级 diff -->
+                <div
+                  v-if="diffRev === h.revision"
+                  class="mt-2 rounded border border-[var(--border-default)] p-2 space-y-0.5 max-h-64 overflow-y-auto"
+                  data-test="wiki-diff-panel"
+                >
+                  <div v-if="diffLoading" class="text-[var(--text-muted)]">加载中…</div>
+                  <div v-else-if="diffError" class="text-amber-600" data-test="wiki-diff-missing">
+                    {{ diffError }}
+                  </div>
+                  <template v-else>
+                    <div
+                      v-for="(line, i) in diffLines"
+                      :key="i"
+                      class="text-[11px] font-mono px-1 rounded"
+                      :class="line.type === 'add'
+                        ? 'bg-emerald-500/10 text-emerald-700'
+                        : line.type === 'del'
+                          ? 'bg-red-500/10 text-red-600'
+                          : 'text-[var(--text-muted)]'"
+                    >{{ line.type === 'add' ? '+ ' : line.type === 'del' ? '- ' : '  ' }}{{ line.text }}</div>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
@@ -253,6 +289,70 @@ const saving = ref(false)
 const editing = ref(false)
 const ingesting = ref(false)
 const history = ref<{ id: string; revision: number; title: string }[] | null>(null)
+/** F6：当前展开 diff 的 revision */
+const diffRev = ref<number | null>(null)
+const diffLoading = ref(false)
+const diffError = ref('')
+const diffLines = ref<{ type: 'add' | 'del' | 'same'; text: string }[]>([])
+
+async function toggleDiff(revision: number): Promise<void> {
+  if (diffRev.value === revision) {
+    diffRev.value = null
+    return
+  }
+  if (!current.value) return
+  diffRev.value = revision
+  diffLoading.value = true
+  diffError.value = ''
+  diffLines.value = []
+  try {
+    const { data } = await api.get<{ content: string }>(
+      `/wiki/${current.value.id}/revisions/${revision}`
+    )
+    const oldLines = (data?.content || '').split('\n')
+    const newLines = (current.value.content || '').split('\n')
+    diffLines.value = diffLinesFn(oldLines, newLines)
+  } catch {
+    diffError.value = '该版本无快照（可能产生于版本机制上线前）'
+  } finally {
+    diffLoading.value = false
+  }
+}
+
+/** 行级 diff（LCS 简化：按行对齐，删旧增新） */
+function diffLinesFn(
+  oldLines: string[],
+  newLines: string[]
+): { type: 'add' | 'del' | 'same'; text: string }[] {
+  // 简易 LCS
+  const m = oldLines.length
+  const n = newLines.length
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = oldLines[i] === newLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+  const out: { type: 'add' | 'del' | 'same'; text: string }[] = []
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    if (oldLines[i] === newLines[j]) {
+      out.push({ type: 'same', text: oldLines[i] })
+      i++
+      j++
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.push({ type: 'del', text: oldLines[i] })
+      i++
+    } else {
+      out.push({ type: 'add', text: newLines[j] })
+      j++
+    }
+  }
+  while (i < m) out.push({ type: 'del', text: oldLines[i++] })
+  while (j < n) out.push({ type: 'add', text: newLines[j++] })
+  return out
+}
 const auditing = ref(false)
 const audit = ref<{
   stats: { pages: number; links: number; dead_links: number; orphan_pages: number }

@@ -260,6 +260,31 @@ async def list_revisions(db: AsyncSession, user: User, page_id: str) -> list[dic
     ]
 
 
+async def get_revision(
+    db: AsyncSession, user: User, page_id: str, revision: int
+) -> dict[str, Any]:
+    """取某版**全文**（F6：回滚前可 diff，不再是盲选）。"""
+    await _get_owned(db, user, page_id)
+    hist = (
+        await db.execute(
+            select(WikiPageRevision).where(
+                WikiPageRevision.page_id == page_id,
+                WikiPageRevision.revision == revision,
+            )
+        )
+    ).scalar_one_or_none()
+    if not hist:
+        raise NotFoundError("该版本无快照（可能产生于版本机制上线前）")
+    return {
+        "id": hist.id,
+        "revision": hist.revision,
+        "title": hist.title,
+        "summary": hist.summary,
+        "content": hist.content or "",
+        "created_at": isoformat_utc(hist.created_at) if hist.created_at else None,
+    }
+
+
 async def revert_page(
     db: AsyncSession, user: User, page_id: str, revision: int
 ) -> dict[str, Any]:
