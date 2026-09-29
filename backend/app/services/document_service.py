@@ -192,9 +192,11 @@ async def _do_process_document(
     fp = doc.file_path
     method = "fixed"
 
-    from app.services.parse_span_service import ParseSpanRecorder
+    from app.services.parse_span_service import ParseSpanRecorder, next_attempt
 
-    spans = ParseSpanRecorder(doc_id, attempt=1)
+    # F13：重解析递增 attempt，列表/前端默认只渲染最近 attempt
+    attempt = await next_attempt(db, doc_id)
+    spans = ParseSpanRecorder(doc_id, attempt=attempt)
     await spans.start_root()
 
     try:

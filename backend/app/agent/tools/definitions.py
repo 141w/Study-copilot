@@ -82,9 +82,13 @@ class KnowledgeSearchTool(Tool):
         query = kwargs.get("query", "")
         doc_ids = kwargs.get("doc_ids") or []
         top_k = kwargs.get("top_k", 5)
+        # F12：用户检索参数（引擎注入；模型显式 top_k 优先于配置里的 embedding_top_k）
+        retrieval_config = kwargs.get("retrieval_config") or None
 
         try:
-            results = await rag_engine.retrieve(doc_ids, query, top_k=top_k)
+            results = await rag_engine.retrieve(
+                doc_ids, query, top_k=top_k, retrieval_config=retrieval_config
+            )
             if not results:
                 return ToolResult(success=True, output="未检索到任何相关的文档段落。", data=[])
 

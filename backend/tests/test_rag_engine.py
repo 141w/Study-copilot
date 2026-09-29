@@ -225,6 +225,7 @@ class TestRAGEngineAsync:
             rrf_k=None,
             vector_weight=None,
             keyword_weight=None,
+            keyword_threshold=0.0,
         )
         assert len(results) <= 3
 

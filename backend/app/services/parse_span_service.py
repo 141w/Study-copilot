@@ -192,6 +192,20 @@ class ParseSpanRecorder:
                     pass
 
 
+async def next_attempt(db: AsyncSession, document_id: str) -> int:
+    """重解析入口：attempt 递增（F13），避免往同一 attempt 追加重复行。"""
+    from sqlalchemy import func
+
+    n = (
+        await db.execute(
+            select(func.max(DocumentParseSpan.attempt)).where(
+                DocumentParseSpan.document_id == document_id
+            )
+        )
+    ).scalar_one()
+    return int(n or 0) + 1
+
+
 async def list_parse_spans(
     db: AsyncSession, document_id: str, limit_attempts: int = 3
 ) -> list[dict[str, Any]]:

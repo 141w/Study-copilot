@@ -565,6 +565,9 @@ class AgentEngine:
 
                 # Force-bind trusted identity/scope; model cannot override user_id/doc_ids
                 args = _bind_trusted_tool_args(args, user_id=user_id, doc_ids=doc_ids)
+                # F12：透传用户检索参数（模型不可覆盖，与生产问答路径一致）
+                if fn_name == "knowledge_search":
+                    args["retrieval_config"] = cfg.get("retrieval") or {}
 
                 # Tool-call stall fuse: same (name, args) repeatedly
                 tool_key = _tool_call_key(fn_name, args)

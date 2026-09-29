@@ -471,6 +471,7 @@ class RAGEngine:
         else:
             effective_top = top_k
         vector_threshold = float(cfg.get("vector_threshold") or 0.0)
+        keyword_threshold = float(cfg.get("keyword_threshold") or 0.0)
         store = self._get_pg_vector_store()
         all_results = await store.search(
             query,
@@ -479,6 +480,7 @@ class RAGEngine:
             rrf_k=cfg.get("rrf_k"),
             vector_weight=cfg.get("rrf_vector_weight"),
             keyword_weight=cfg.get("rrf_keyword_weight"),
+            keyword_threshold=keyword_threshold,
         )
 
         if not all_results:
@@ -513,6 +515,14 @@ class RAGEngine:
 
         for r in all_results:
             r["reranked"] = reranked
+
+        # F11：rerank_threshold 在 rerank 阶段生效（对 reranker_score 过滤）
+        if reranked:
+            rr_thr = float(cfg.get("rerank_threshold") or 0.0)
+            if rr_thr > 0:
+                all_results = [
+                    r for r in all_results if float(r.get("reranker_score") or 0) >= rr_thr
+                ]
 
         final_n = effective_top
         rerank_top_k = int(cfg.get("rerank_top_k") or 0)

@@ -22,12 +22,19 @@
           </span>
         </div>
         <p class="text-[11px] text-[var(--text-muted)] mb-1.5 leading-snug">{{ f.hint }}</p>
+        <p
+          v-if="f.needsRerank && !rerankEnabled"
+          class="text-[10px] text-[var(--text-muted)] mb-1"
+          :data-test="`ret-rerank-off-${f.key}`"
+        >
+          当前重排已关闭，此项不生效
+        </p>
         <el-slider
           v-model="form[f.key]"
           :min="f.min"
           :max="f.max"
           :step="f.step"
-          :disabled="saving"
+          :disabled="saving || (Boolean(f.needsRerank) && !rerankEnabled)"
           @change="dirty = true"
         />
       </div>
@@ -71,7 +78,7 @@ const fields = [
   {
     key: 'embedding_top_k' as const,
     label: '召回条数 Top-K',
-    hint: '向量+全文混合检索返回的切片上限',
+    hint: '向量+全文混合检索返回的切片上限。仅作用于常规问答路径（top_k≤10 的调用）；全篇总结等批量调用不受影响',
     min: 1,
     max: 50,
     step: 1
@@ -101,27 +108,55 @@ const fields = [
     step: 0.1
   },
   {
+    key: 'keyword_threshold' as const,
+    label: '关键词阈值',
+    hint: '词法通道 ts_rank 低于该值的片段不进融合（0 = 不过滤）',
+    min: 0,
+    max: 1,
+    step: 0.05
+  },
+  {
     key: 'rerank_top_k' as const,
     label: '重排后条数',
     hint: 'CrossEncoder 重排后保留的结果数',
     min: 1,
     max: 30,
-    step: 1
+    step: 1,
+    needsRerank: true
+  },
+  {
+    key: 'rerank_threshold' as const,
+    label: '重排分数阈值',
+    hint: '重排分数低于该值被过滤（0 = 不过滤）',
+    min: 0,
+    max: 1,
+    step: 0.05,
+    needsRerank: true
   },
   {
     key: 'vector_threshold' as const,
     label: '向量相似度阈值',
-    hint: '低于该相似度的结果被过滤（0 = 不过滤）',
+    hint: '作用在融合后归一分（批次内最高分为 1.0）；第一名恒为 1.0，无法用它做拒答。0 = 不过滤',
     min: 0,
     max: 1,
     step: 0.05
   }
-]
+] as {
+  key: keyof RetrievalForm
+  label: string
+  hint: string
+  min: number
+  max: number
+  step: number
+  needsRerank?: boolean
+}[]
 
 const form = reactive<RetrievalForm>({ ...DEFAULTS })
 const loading = ref(true)
 const saving = ref(false)
 const dirty = ref(false)
+/** F11：reranker 未启用时，rerank 两条滑杆置灰 */
+const rerankEnabled = ref(true)
 
 function display(f: (typeof fields)[number]): string {
   const v = form[f.key]
@@ -141,6 +176,13 @@ async function load(): Promise<void> {
   try {
     const { data } = await api.get<Partial<RetrievalForm>>('/config/retrieval')
     apply(data || {})
+    // F11：读取 reranker 开关（关闭时 rerank 滑杆置灰）
+    try {
+      const st = await api.get<{ reranker_enabled?: boolean }>('/config/status')
+      rerankEnabled.value = st.data?.reranker_enabled !== false
+    } catch {
+      rerankEnabled.value = true
+    }
     dirty.value = false
   } catch {
     ElMessage.error('检索参数加载失败')

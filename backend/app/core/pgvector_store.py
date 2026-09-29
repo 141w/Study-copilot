@@ -269,6 +269,7 @@ class PgVectorStore:
         rrf_k: int | None = None,
         vector_weight: float | None = None,
         keyword_weight: float | None = None,
+        keyword_threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         """混合检索：向量相似度 + PostgreSQL 全文搜索，RRF 融合。
 
@@ -280,6 +281,8 @@ class PgVectorStore:
             top_k: 返回结果数。
             rrf_k: RRF 平滑常数（默认 60，与历史行为一致）。
             vector_weight / keyword_weight: 两路 RRF 权重（默认 1.0/1.0=等权求和）。
+            keyword_threshold: 词法通道 ts_rank 阈值（0~1），低于该值的片段
+                不进入融合。默认 0 = 不过滤（保持旧��为）。
 
         Returns:
             按融合分数降序排列的结果列表，每项含 ``chunk``、``relevance``、``retrieval_type``。
@@ -290,12 +293,25 @@ class PgVectorStore:
         rrf = int(rrf_k or _RRF_K)
         w_v = float(vector_weight if vector_weight is not None else 1.0)
         w_k = float(keyword_weight if keyword_weight is not None else 1.0)
+        # F10：词法阈值（0 = 不过滤，延续旧行为）
+        k_thr = float(keyword_threshold if keyword_threshold is not None else 0.0)
 
         q_emb = await embedder.embed_query(query)
         q_emb_list = q_emb.tolist() if hasattr(q_emb, "tolist") else list(q_emb)
 
         async with AsyncSessionLocal() as db:
             fts_cfg = await _get_fts_config(db)
+
+        # F10：text_results 加 @@ 命中过滤 + ts_rank 阈值，未命中片段不进融合
+        if k_thr > 0:
+            text_filter = f"""
+              AND to_tsvector('{fts_cfg}', content) @@ plainto_tsquery('{fts_cfg}', :query)
+              AND ts_rank(to_tsvector('{fts_cfg}', content), plainto_tsquery('{fts_cfg}', :query)) >= :k_thr
+            """
+        else:
+            text_filter = f"""
+              AND to_tsvector('{fts_cfg}', content) @@ plainto_tsquery('{fts_cfg}', :query)
+            """
 
         sql = f"""
         WITH vector_results AS (
@@ -313,11 +329,11 @@ class PgVectorStore:
                    1.0 / ({rrf} + ROW_NUMBER() OVER (
                        ORDER BY ts_rank(to_tsvector('{fts_cfg}', content), plainto_tsquery('{fts_cfg}', :query)) DESC
                    )) AS t_score
-            FROM document_chunks,
-                 plainto_tsquery('{fts_cfg}', :query) AS query
+            FROM document_chunks
             WHERE document_id = ANY(:doc_ids)
               AND (is_parent IS NOT TRUE)
-            ORDER BY ts_rank(to_tsvector('{fts_cfg}', content), query) DESC
+              {text_filter}
+            ORDER BY ts_rank(to_tsvector('{fts_cfg}', content), plainto_tsquery('{fts_cfg}', :query)) DESC
             LIMIT :overfetch
         ),
         fused AS (
@@ -347,6 +363,7 @@ class PgVectorStore:
                     "query": query,
                     "overfetch": overfetch,
                     "top_k": top_k,
+                    "k_thr": k_thr,
                 },
             )
             rows = cursor.fetchall()

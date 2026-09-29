@@ -332,3 +332,31 @@ async def test_fail_stage_twice_no_duplicate_cancelled(db_session, doc, span_fac
     assert by["parse"]["status"] == "done"  # 不被 cancelled 覆盖
     assert by["chunk"]["status"] == "failed"
     assert by["embed"]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_f13_attempt_increments_on_reprocess(db_session, doc, span_factory):
+    """重解析 attempt 递增，不往同一 attempt 追加重复行。"""
+    from app.services.parse_span_service import next_attempt
+
+    a1 = await next_attempt(db_session, doc.id)
+    assert a1 == 1
+    rec = ParseSpanRecorder(doc.id, attempt=a1, session_factory=span_factory)
+    await rec.start_root()
+    await rec.start_stage("parse")
+    await rec.end_stage("parse")
+    await rec.end_root("done")
+    await rec.close()
+
+    a2 = await next_attempt(db_session, doc.id)
+    assert a2 == 2
+    rec2 = ParseSpanRecorder(doc.id, attempt=a2, session_factory=span_factory)
+    await rec2.start_root()
+    await rec2.start_stage("parse")
+    await rec2.end_stage("parse")
+    await rec2.end_root("done")
+    await rec2.close()
+
+    spans = await list_parse_spans(db_session, doc.id)
+    parse_rows = [s for s in spans if s["name"] == "parse"]
+    assert {s["attempt"] for s in parse_rows} == {1, 2}
