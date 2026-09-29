@@ -728,21 +728,26 @@ async def generate_starter_suggestions(
                 )
             ).all()
             doc_names = [r[0] or "未命名文档" for r in rows]
-            # F9：上下文扩到文件名 + 摘要首段（每篇取一段，控 token）
+            # F9：上下文扩到文件名 + 摘要首段（每篇取首段，控 token）
             if owned:
                 from app.db.database import DocumentChunk
 
-                chunks = (
-                    await db.execute(
-                        select(DocumentChunk.content)
-                        .where(DocumentChunk.document_id.in_(owned[:5]))
-                        .order_by(DocumentChunk.chunk_index)
-                        .limit(5)
-                    )
-                ).all()
-                first_paras = [((r[0] or "").split("\n")[0] or "")[:120] for r in chunks]
-                if any(first_paras):
-                    doc_names = doc_names + [f"摘要：{p}" for p in first_paras if p]
+                # 每篇取第 1 段前 120 字，最多 10 篇
+                first_paras: list[str] = []
+                for did in owned[:10]:
+                    chunk = (
+                        await db.execute(
+                            select(DocumentChunk.content)
+                            .where(DocumentChunk.document_id == did)
+                            .order_by(DocumentChunk.chunk_index)
+                            .limit(1)
+                        )
+                    ).first()
+                    para = ((chunk[0] if chunk else "") or "").split("\n")[0][:120]
+                    if para:
+                        first_paras.append(para)
+                if first_paras:
+                    doc_names = doc_names + [f"摘要：{p}" for p in first_paras]
 
     if doc_names:
         ctx = "、".join(doc_names[:10])

@@ -482,6 +482,44 @@ function getTaskInfo(task: Task): TaskDisplayInfo {
     }
   }
 
+  if (task.task_type === 'document_auto_tag') {
+    const docId = (res.doc_id as string) || ''
+    const cachedDoc = docId ? documentStore.documents.find(d => d.id === docId) : undefined
+    const filename =
+      (res.filename as string) ||
+      cachedDoc?.filename ||
+      ((cachedDoc as any)?.title) ||
+      (docId ? `文档 ${docId.slice(0, 8)}` : '本地文档')
+    const picked = Array.isArray(res.picked) ? (res.picked as string[]) : []
+    const failCount = res.status === 'failed' ? 1 : 0
+    const okCount = res.status === 'failed' ? 0 : picked.length
+
+    let subtitle = ''
+    if (task.status === 'completed') {
+      if (res.status === 'failed') {
+        subtitle = `自动打标失败：${(res.error as string) || '模型异常'}`
+      } else if (picked.length) {
+        subtitle = `自动打标完成：${okCount} 成功${failCount ? ` / ${failCount} 失败` : ''} · ${picked.join('、')}`
+      } else {
+        subtitle = '自动打标完成：未匹配到合适标签'
+      }
+    } else if (task.status === 'running') {
+      subtitle = '正在从标签池匹配…'
+    } else if (task.status === 'failed') {
+      subtitle = task.error || '自动打标任务异常中止'
+    } else {
+      subtitle = '等待后台 Worker 认领'
+    }
+
+    return {
+      title: `《${filename}》· 自动打标`,
+      subtitle,
+      taskBadge: '自动打标',
+      targetDocId: docId || undefined,
+      durationText: duration
+    }
+  }
+
   if (task.task_type === 'quiz_generate') {
     const docNames = Array.isArray(res.document_names) && res.document_names.length > 0
       ? res.document_names.map((n: string) => `《${n}》`).join('、')
