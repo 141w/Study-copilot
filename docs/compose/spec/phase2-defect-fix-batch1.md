@@ -17,9 +17,9 @@ commits: a29171b..6b56039
 
 **What was built** — 第一批 F1–F4 四个 High 级「功能名义存在、实际不成立」缺陷已修复：(1) 概念页 `[[双链]]` 改为标准 Markdown 链接 `[label](wiki:slug)`，渲染后按 `href="wiki:"` 改写，行内不再断段，活链/死链分流并按视觉规格呈现；(2) 解析时间线 span 改独立会话立即 commit，成功/失败收尾均落库，启动时收敛悬挂 running，ParseTimeline 四态与计数对齐规格；(3) 评测台增加必填期望答案、与期望集求交、指标复用 `harness.py`、检索走 `RAGEngine.retrieve`、meta 含参数指纹、缺期望不出百分比、JSON 导出与两次运行对比；(4) 后端时间统一 `isoformat_utc`（带 Z），前端 `parseTime` 按 UTC 解析空格格式并按本地 0 点分组。
 
-**Verification** — `pytest`（干净态）878 passed / 3 failed（`test_captcha.py` WIP）；`vitest` 454 passed；`ruff check app tests` 0；`mypy app` 0；`alembic` 单 head 且 `current==heads`；`vue-tsc --noEmit` 0；`npm run build` 成功。F1–F4 每条均有「改前会红」的复现测试（提交信息含改前现象）。**PostgreSQL 实测未完成**（见 Journey log）。
+**Verification** — `pytest`（干净态）878 passed / 3 failed（`test_captcha.py` WIP）；`vitest` 454 passed；`ruff check app tests` 0；`mypy app` 0；`alembic` 单 head 且 `current==heads`；`vue-tsc --noEmit` 0；`npm run build` 成功。F1–F4 每条均有「改前会红」的复现测试（提交信息含改前现象）。**PostgreSQL 实测 7/7 PASS**（PG 16.14 + pgvector，库 `f2f3_pgtest`，脚本 `backend/scripts/pg_f2f3_verify.py`），详见 `docs/交付说明-缺陷修复第一批.md`。
 
-**Journey log** — 1) 原 wiki 测试只断言侧栏文案、不断言 v-html 产物，是 F1 漏检根因——产物层断言必须写进用例本身。2) F2 用 SAVEPOINT 不够：失败 span 须在主事务 rollback 后仍在，只能独立会话。3) 评测指标文档级 key 会因同文档多切片重复计数把 Recall 顶穿 1.0，评分前必须按 key 去重。4) FTS 真实模式在 `pgvector_store.get_fts_config_status()`，不在 `settings`。5) 全量 pytest 在共享 SQLite session 引擎下不稳定（`_clean_tables` 与 WIP 改动会放大）；可靠数字来自分模块跑。auth.py 的 `str(created_at)` 因混有 UI WIP 未入本批提交。
+**Journey log** — 1) 原 wiki 测试只断言侧栏文案、不断言 v-html 产物，是 F1 漏检根因——产物层断言必须写进用例本身。2) F2 用 SAVEPOINT 不够：失败 span 须在主事务 rollback 后仍在，只能独立会话。3) 评测指标文档级 key 会因同文档多切片重复计数把 Recall 顶穿 1.0，评分前必须按 key 去重。4) FTS 真实模式在 `pgvector_store.get_fts_config_status()`，不在 `settings`。5) 全量 pytest 在共享 SQLite session 引擎下不稳定；可靠数字来自分模块跑。6) PG 手测暴露 SQLite 掩盖的外键顺序（先 user 后 doc）；本地无 zhparser，`pg_ts_config` 只有 simple/english。
 
 ## [S1] Problem
 
@@ -142,4 +142,4 @@ commits: a29171b..6b56039
 - [x] T10: F4 先红测试 — acceptance: 用后端真实格式造数；UTC 00:30（东八区 08:30）归「今天」；畸形输入无 Invalid Date 文案；旧代码上失败 (covers: S2 F4; depends: T1)
 - [x] T11: F4 后端 ISO 8601 序列化 — acceptance: 主要端点输出带时区 ISO。**遗留**：`auth.py` 因混有 UI WIP 未入本批；其余 12 处已替换 (covers: S2 F4; depends: T10)
 - [x] T12: F4 前端统一日期解析 + 本地时区分组 — acceptance: ChatHistoryPanel 无裸 `new Date`；分组边界按本地 0 点；解析失败显示原始串。**遗留**：useFormat/TaskPanel/AnalysisView 仍有裸 `new Date`（非本缺陷路径） (covers: S2 F4; depends: T11)
-- [ ] T13: 门禁全绿 + 交付说明 — acceptance: pytest/ruff/mypy/alembic 单 head/vitest/vue-tsc/build 全绿且数字只升；**F2/F3 的 PostgreSQL 实测记录未完成**（当前环境无 DATABASE_URL）；F1–F4 各有「改前会红」两次运行输出已写入各提交信息 (covers: S2; depends: T3, T6, T9, T12)
+- [x] T13: 门禁全绿 + 交付说明 — acceptance: pytest/ruff/mypy/alembic 单 head/vitest/vue-tsc/build 全绿且数字只升；F2/F3 的 PostgreSQL 实测记录见 `docs/交付说明-缺陷修复第一批.md`（7/7 PASS）；F1–F4 各有「改前会红」两次运行输出已写入各提交信息 (covers: S2; depends: T3, T6, T9, T12)
