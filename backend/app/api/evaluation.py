@@ -33,17 +33,12 @@ async def run_eval(
     from app.services import eval_service
 
     # 透传用户检索参数（与生产问答路径一致）
-    user_cfg = getattr(current_user, "llm_config", None) or {}
-    retrieval_config = (user_cfg or {}).get("retrieval") if isinstance(user_cfg, dict) else None
-    # 兼容：UserLLMConfig.extra_config.retrieval
-    if retrieval_config is None:
-        try:
-            from app.services.config_service import get_config
+    try:
+        from app.services.config_service import get_retrieval_config
 
-            cfg = await get_config(db, current_user)
-            retrieval_config = (cfg or {}).get("retrieval")
-        except Exception:  # noqa: BLE001
-            retrieval_config = None
+        retrieval_config = await get_retrieval_config(db, current_user)
+    except Exception:  # noqa: BLE001
+        retrieval_config = None
 
     return await eval_service.run_retrieval_eval(
         db,
