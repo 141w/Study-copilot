@@ -217,6 +217,33 @@ body {
   box-sizing: border-box;
 }
 
+/* ==================== Tailwind ring-* 工具类的变量底座 ====================
+   本项目 global.css 只引入了 `@tailwind utilities`，没有 `@tailwind base`
+   （preflight 被刻意关掉，各组件改用手写 appearance:none 复位）。
+   但 Tailwind 的 ring 工具类依赖 preflight 在 * 上初始化的一组变量：
+   .ring-2 { --tw-ring-shadow: var(--tw-ring-inset) 0 0 0
+               calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color) }
+   其中 --tw-ring-offset-width 没有 fallback，未初始化时 calc() 整条失效 →
+   --tw-ring-shadow 计算期无效 → 连带 box-shadow 全条作废。
+   后果：全站 ring-1/ring-2 选中态与聚焦态一个都画不出来，
+   且同元素上的 shadow-sm 也被一起吃掉。
+   这里只补 ring 相关变量，不开 preflight（避免全局 reset 冲击既有样式）。
+   注意：--tw-ring-color 故意不设默认值——全站 14 处 ring 均显式配了
+   ring-[var(--color-primary)]，不需要兜底色，也不该引入 Tailwind 的蓝色默认。 */
+*,
+*::before,
+*::after {
+  --tw-ring-inset: ;
+  --tw-ring-offset-width: 0px;
+  /* Tailwind preflight 此处硬编码 #fff。offset 宽度为 0 时它不可见，
+     但一旦有元素用 ring-offset-N（如 PersonaManageDialog 的主题色板
+     用 ring-2 ring-offset-2），暗色下就会露出一圈不该出现的白边。
+     改挂 surface-card，随主题令牌自动反转。 */
+  --tw-ring-offset-color: var(--surface-card);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
 a {
   text-decoration: none;
   color: inherit;
